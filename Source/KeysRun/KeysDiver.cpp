@@ -250,7 +250,7 @@ void AKeysDiver::EnterWater(double BoatX, double BoatZ, double BoatH)
 	if (bDiving) return;
 	// over the side: offset to starboard so the diver doesn't start inside the hull
 	const double RX = FMath::Cos(BoatH), RZ = -FMath::Sin(BoatH);
-	S = CreateState(BoatX + RX * 4, -.2, BoatZ + RZ * 4, BoatH, AirMax);
+	S = CreateState(BoatX + RX * 4, -.2, BoatZ + RZ * 4, BoatH, AirMax * AirMul);
 	CamYaw = PrevYaw = BoatH; CamPitch = -.15; CamMode = bDefaultChase ? 1 : 0; YawRate = 0;
 	bDiving = true; bCanReboard = false; WakingT = 0; Acc = 0;
 	Gun = FGun();

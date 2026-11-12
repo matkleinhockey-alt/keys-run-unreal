@@ -44,7 +44,6 @@ public:
 
 private:
 	void BuildTerrain();
-	void BuildBridges();
 	void BuildScenery();
 	void UpdateWater();
 	void ApplySun(double K);

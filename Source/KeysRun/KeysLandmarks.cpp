@@ -50,6 +50,7 @@ void AKeysLandmarks::BeginPlay()
 	SetActorLocation(FVector::ZeroVector);
 	FTownBatch B, G;
 	BuildMarinas(B);
+	BuildBridges(B);
 	BuildLighthouse(B, G);
 	BuildPiers(B);
 	BuildEstates(B);
@@ -143,6 +144,106 @@ void AKeysLandmarks::BuildMarinas(FTownBatch& B)
 		B.Cyl(M.SX + 2, 1.4, Zo(-4), .05, .07, 8, 0xe8ebee, 6);
 		B.Box(M.SX + 2 - .7, 8.8, Zo(-4), 1.4, .9, .03, 0xc23a3a);
 	}
+}
+
+// ---------------------------------------------------------------- US-1 and the Seven Mile Bridge (world/bridge.ts)
+void AKeysLandmarks::BuildBridges(FTownBatch& B)
+{
+	using namespace KeysGeo;
+	const double Step = 24, GapX0 = -3200, GapX1 = -3080, HumpX = (GapX0 + GapX1) / 2, HumpHalf = 320, HumpRise = 12;
+	auto SS = [](double A, double Bb, double X) { const double T = FMath::Clamp((X - A) / (Bb - A), 0.0, 1.0); return T * T * (3 - 2 * T); };
+	auto Hump = [&](double X) { const double T = FMath::Max(0.0, 1 - FMath::Abs(X - HumpX) / HumpHalf); return HumpRise * T * T * (3 - 2 * T); };
+	// the new bridge's deck height along x, so the bents can meet it
+	auto NewDeckH = [&](double X)
+	{
+		const double Z = ChainZ(X), SD = ShoreInfo(X, Z).D;
+		return (SD < 0 ? 5.6 : 2.6 + (7.2 - 2.6) * SS(0, 70, SD)) + Hump(X);
+	};
+	for (int32 Old = 0; Old <= 1; Old++)
+	{
+		const double X0 = Old ? -3820 : WBX0, X1 = Old ? -2010 : WBX1, DZ = Old ? -58 : 0;
+		int32 i = 0;
+		for (double X = X0; X < X1; X += Step, i++)
+		{
+			const double XA = X, XB = X + Step;
+			if (Old && XB > GapX0 && XA < GapX1) continue;
+			const double ZA = ChainZ(XA) + DZ, ZB = ChainZ(XB) + DZ, MX = (XA + XB) / 2, MZ = (ZA + ZB) / 2;
+			const double Ang = FMath::Atan2(ZB - ZA, XB - XA), Len = FMath::Sqrt(FMath::Square(XB - XA) + FMath::Square(ZB - ZA));
+			const double SD = ShoreInfo(MX, MZ).D, LH = LandH(MX, MZ);
+			const double PX = -FMath::Sin(Ang), PZ = FMath::Cos(Ang);
+			if (LH > .9 && SD < -4)
+			{
+				// US-1 across the keys: asphalt with its lines, on the ground
+				if (!Old)
+				{
+					B.Box(MX, LH + .08, MZ, Len + .3, .16, 9, 0x3e4146, 0, -Ang);
+					B.Box(MX, LH + .17, MZ, Len + .3, .02, .2, 0xe8c43a, 0, -Ang);
+					for (int32 sg = -1; sg <= 1; sg += 2) B.Box(MX + PX * 3.9 * sg, LH + .17, MZ + PZ * 3.9 * sg, Len + .3, .02, .18, 0xf4f1e8, 0, -Ang);
+				}
+				continue;
+			}
+			if (Old)
+			{
+				// the old bridge: lower, narrower, weathered; an arch rib under each span
+				const double H = 5.0;
+				const FLinearColor C = Hex(0xb9ad98) * float(.88 + .22 * Hc(MX, MZ));
+				B.BoxC(MX, H, MZ, Len + .4, .8, 7.5, C, 0, -Ang);
+				for (int32 sg = -1; sg <= 1; sg += 2) B.Box(MX + PX * 3.55 * sg, H + .7, MZ + PZ * 3.55 * sg, Len + .4, .6, .25, 0xa89c86, 0, -Ang);
+				if (SD > 1)
+					for (int32 sg = -1; sg <= 1; sg += 2)
+					{
+						// the arch: a half ring from pier to pier, rising to the deck
+						const FVector Ctr(MX + PX * 2.6 * sg, H - .4, MZ + PZ * 2.6 * sg);
+						const FVector Along(FMath::Cos(Ang), 0, FMath::Sin(Ang));
+						FVector Prev = Ctr - Along * (Len / 2) - FVector(0, 3.0, 0);
+						for (int32 k = 1; k <= 8; k++)
+						{
+							const double T = k / 8.0, A = PI * T;
+							const FVector Pt = Ctr - Along * (Len / 2 * FMath::Cos(A)) - FVector(0, 3.0 * (1 - FMath::Sin(A)), 0);
+							B.Tube3(Prev, Pt, .32, .32, 5, 0xa39883);
+							Prev = Pt;
+						}
+					}
+				continue;
+			}
+			// the new bridge: deck, barrier walls, striping, and a bent (two columns and a cap) every other span
+			const double H = (SD < 0 ? 5.6 : 2.6 + (7.2 - 2.6) * SS(0, 70, SD)) + Hump(MX);
+			const double HA = NewDeckH(XA), HB = NewDeckH(XB), Pitch = FMath::Atan2(HB - HA, Len);
+			const FLinearColor C = Hex(0xe2dccb) * float(.88 + .22 * Hc(MX, MZ));
+			B.BoxC(MX, (HA + HB) / 2, MZ, Len + .4, 1.0, 10, C, 0, -Ang, Pitch);
+			for (int32 sg = -1; sg <= 1; sg += 2)
+			{
+				B.Box(MX + PX * 4.85 * sg, (HA + HB) / 2 + .92, MZ + PZ * 4.85 * sg, Len + .4, .84, .38, 0xf0ebdd, 0, -Ang, Pitch);
+				B.Box(MX + PX * 3.9 * sg, (HA + HB) / 2 + .52, MZ + PZ * 3.9 * sg, Len + .4, .05, .22, 0xf4f1e8, 0, -Ang, Pitch);
+			}
+			B.Box(MX, (HA + HB) / 2 + .52, MZ, Len + .4, .05, .22, 0xe8c43a, 0, -Ang, Pitch);
+			(void)H;
+		}
+	}
+	// the new bridge's bents, where the boat collides with them (KeysGeo pillars come in pairs either side of the deck)
+	for (const FPillar& Pl : Pillars())
+	{
+		if (Pl.bOld)
+		{
+			const double Ang = FMath::Atan(.000024 * Pl.X);
+			B.Box(Pl.X, (5.0 - .4 - 3) / 2, Pl.Z, 1.8, 5.0 - .4 + 3, 6.6, 0x9c9382, 0, -Ang);
+			B.Cyl(Pl.X, -.4, Pl.Z, 2.1, 2.1, 1.5, 0x3c4230, 6);
+			continue;
+		}
+		const double CZ = ChainZ(Pl.X), Side = Pl.Z > CZ ? 1 : -1;
+		if (Side < 0) continue;   // one bent per pair
+		const double Ang = FMath::Atan(.000024 * Pl.X), Top = NewDeckH(Pl.X) - .5;
+		const double PX = -FMath::Sin(Ang), PZ = FMath::Cos(Ang);
+		for (int32 sg = -1; sg <= 1; sg += 2)
+		{
+			const double X = Pl.X + PX * 4.5 * sg, Z = CZ + PZ * 4.5 * sg;
+			B.Box(X, (Top - .55 - 3) / 2, Z, 1.6, Top - .55 + 3, 1.6, 0xd6cfbd, 0, -Ang);
+			B.Cyl(X, -.4, Z, 1.5, 1.5, 1.5, 0x3c4230, 6);
+		}
+		B.Box(Pl.X, Top - .28, CZ, 2.0, .55, 11.6, 0xe0dacb, 0, -Ang);
+	}
+	// broken stubs where the old swing span was taken out
+	for (double X = GapX0 + 10; X < GapX1; X += 30) B.Box(X, -.6, ChainZ(X) - 58, 1.8, 2.4 + Hc(X, 3) * 1.6, 2.6, 0x8c8474, Hc(X, 1) * .2 - .1, 0, Hc(X, 2) * .2 - .1);
 }
 
 // ---------------------------------------------------------------- Sombrero Key Light (world/lighthouse.ts) and Faro Blanco's tower (landmarks.ts)

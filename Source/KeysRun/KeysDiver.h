@@ -76,6 +76,8 @@ public:
 
 	// ---- tuning from the Settings menu
 	double UnderwaterHaze = 1;   // the haze brightness
+	// ---- the dive shop's gear (set by the pawn before going over): the pony bottle, wetsuit and fins stretch the breath hold
+	double AirMul = 1;
 
 private:
 	struct FSpeared

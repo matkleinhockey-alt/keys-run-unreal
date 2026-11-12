@@ -560,6 +560,7 @@ void AKeysBoatPawn::ToggleDive()
 		bTrimMode = false;
 		D->SetDefaultChase(bDiveChase);
 		D->UnderwaterHaze = UnderwaterHaze;
+		D->AirMul = (HasGear(TEXT("dive.tank")) ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1);
 		D->EnterWater(X, Z, H);
 		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to climb back aboard."), 6);
 	}
@@ -648,6 +649,7 @@ void AKeysBoatPawn::ToggleAshore()
 		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 		bTrimMode = false;
 		PinX = X; PinZ = Z; PinH = H;
+		ApplyOutfit();
 		Thr = Speed = 0;
 		ShowToast(FString::Printf(TEXT("Tied up at %s. WASD and the mouse to walk, Shift to run, F at a counter or a door, 1 for the view, Q back aboard."), *Why), 6);
 		return;

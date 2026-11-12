@@ -127,7 +127,6 @@ void AKeysWorld::BeginPlay()
 	ApplySun(0);
 
 	BuildTerrain();
-	BuildBridges();
 	BuildScenery();
 	UpdateWater();
 }
@@ -236,47 +235,6 @@ void AKeysWorld::BuildTerrain()
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: terrain built with %d chunks"), Section);
 }
 
-// ---------------------------------------------------------------- bridges
-void AKeysWorld::BuildBridges()
-{
-	using namespace KeysGeo;
-	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
-	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (!Cube || !Cyl) return;
-	UInstancedStaticMeshComponent* Deck = MakeISM(TEXT("BridgeDeck"), Cube, Srgb(.8, .79, .75), .9);
-	UInstancedStaticMeshComponent* Rail = MakeISM(TEXT("BridgeRail"), Cube, Srgb(.88, .87, .84), .9);
-	UInstancedStaticMeshComponent* OldDeck = MakeISM(TEXT("OldBridgeDeck"), Cube, Srgb(.62, .58, .52), .95);
-	UInstancedStaticMeshComponent* Piles = MakeISM(TEXT("Pilings"), Cyl, Srgb(.72, .7, .66), .95);
-
-	const double Seg = 30, DeckY = 6, OldY = 4.6;
-	auto Span = [&](UInstancedStaticMeshComponent* ISM, double X0, double DZ, double Y, double W, bool bRails)
-	{
-		const double XC = X0 + Seg * .5, Z = ChainZ(XC) + DZ;
-		const double Slope = 0.000024 * XC;
-		if (LandH(XC, Z) > -.2 && LandH(X0, ChainZ(X0) + DZ) > -.2 && LandH(X0 + Seg, ChainZ(X0 + Seg) + DZ) > -.2) return;
-		const double Len = Seg * FMath::Sqrt(1 + Slope * Slope) + .3;
-		const FRotator Rot(0, FMath::RadiansToDegrees(FMath::Atan(Slope)), 0);
-		ISM->AddInstance(FTransform(Rot, ToUE(XC, Y, Z), FVector(Len, W, .9)));
-		if (bRails)
-		{
-			const FVector Side = Rot.RotateVector(FVector(0, 1, 0));
-			for (int32 s = -1; s <= 1; s += 2)
-				Rail->AddInstance(FTransform(Rot, ToUE(XC, Y + .85, Z) + Side * s * (W * 50 - 20), FVector(Len, .3, .8)));
-		}
-	};
-	for (double X = WBX0; X < WBX1; X += Seg) Span(Deck, X, 0, DeckY, 11, true);
-	for (double X = -3820; X < -2010; X += Seg)
-	{
-		if (X + Seg > -3200 && X < -3080) continue;   // the swing span is gone
-		Span(OldDeck, X, -58, OldY, 7.5, false);
-	}
-	for (const FPillar& P : Pillars())
-	{
-		const double Top = P.bOld ? OldY : DeckY, Bot = -4;
-		Piles->AddInstance(FTransform(FRotator::ZeroRotator, ToUE(P.X, (Top + Bot) * .5, P.Z), FVector(P.R * 2, P.R * 2, Top - Bot)));
-	}
-}
-
 // ---------------------------------------------------------------- palms, houses, Miami
 void AKeysWorld::BuildScenery()
 {
@@ -287,8 +245,10 @@ void AKeysWorld::BuildScenery()
 	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
 	if (!Cube || !Cyl || !Sph) return;
 
-	UInstancedStaticMeshComponent* Trunks = MakeISM(TEXT("PalmTrunks"), Cyl, Srgb(.52, .43, .32), .95);
-	UInstancedStaticMeshComponent* Fronds = MakeISM(TEXT("PalmFronds"), Cone ? Cone : Sph, Srgb(.24, .45, .2), .85);
+	// palms and conch houses go into vertex-coloured meshes in 1.2 km chunks (so the far ones cull)
+	TMap<int64, FTownBatch> HouseChunks;
+	auto ChunkOf = [](double X, double Z) { return (int64(FMath::FloorToInt(X / 1200)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 1200))); };
+	static const uint32 FrondC[] = {0x3f8a35, 0x4f9a3c, 0x58a443, 0x467f30};
 	UInstancedStaticMeshComponent* Mangroves = MakeISM(TEXT("Mangroves"), Sph, Srgb(.14, .29, .13), .95);
 	UInstancedStaticMeshComponent* Glass = MakeISM(TEXT("Towers"), Cube, Srgb(.42, .55, .66), .15);
 	UInstancedStaticMeshComponent* Concrete = MakeISM(TEXT("TowersWhite"), Cube, Srgb(.88, .88, .86), .5);
@@ -304,7 +264,7 @@ void AKeysWorld::BuildScenery()
 			const double R = Hash2(JX * 1.3, JZ * .7);
 			const FShore S = ShoreInfo(JX, JZ);
 			const double Density = S.Isl->bMainland ? .05 : S.Isl->bMiami ? .2 : .4;
-			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6)) continue;
+			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6) || FMath::Abs(JZ - ChainZ(JX)) < 9) continue;
 			if (H < .9 && S.E > .93 && !S.Isl->bMiami)
 			{
 				// mangrove fringe at the water's edge
@@ -313,19 +273,27 @@ void AKeysWorld::BuildScenery()
 				continue;
 			}
 			if (H < .7) continue;
+			// a palm (town props.ts, lighter): a leaning, curving trunk and a crown of fronds that rise and droop
 			const double Tall = 6 + Hash2(JZ, JX * 2) * 5;
-			const double Lean = (Hash2(JX * 3, JZ) - .5) * 14;
-			const FRotator Rot(Lean, Hash2(JX, JZ * 3) * 360, 0);
-			const FVector Base = ToUE(JX, H, JZ);
-			const FVector Up = Rot.RotateVector(FVector(0, 0, 1));
-			Trunks->AddInstance(FTransform(Rot, Base + Up * Tall * 50, FVector(.32, .32, Tall)));
-			Fronds->AddInstance(FTransform(FRotator(0, Rot.Yaw, 0), Base + Up * Tall * 100 + FVector(0, 0, 30), FVector(5.5, 5.5, 1.2)));
+			const double Lean = (Hash2(JX * 3, JZ) - .5) * .5, LeanA = Hash2(JX, JZ * 3) * 2 * PI;
+			FTownBatch& PB = HouseChunks.FindOrAdd(ChunkOf(JX, JZ));
+			auto TrunkAt = [&](double F) { return FVector(JX + FMath::Cos(LeanA) * Lean * Tall * .35 * F * F, H + Tall * F, JZ + FMath::Sin(LeanA) * Lean * Tall * .35 * F * F); };
+			for (int32 k = 0; k < 4; k++) PB.Tube3(TrunkAt(k / 4.0), TrunkAt((k + 1) / 4.0), .26 - .04 * k, .22 - .04 * k, 5, k % 2 ? 0x8c7758 : 0x7a6648);
+			const FVector Top = TrunkAt(1);
+			const int32 NF = 9;
+			for (int32 k = 0; k < NF; k++)
+			{
+				const double Ang = k * 2 * PI / NF + R * 7, Len = 3.0 + Hash2(JX + k, JZ) * 1.4;
+				const FVector Dir(FMath::Sin(Ang), 0, FMath::Cos(Ang)), Side(FMath::Cos(Ang), 0, -FMath::Sin(Ang));
+				const FLinearColor C = KeysTownPaint::Hex(FrondC[(k + int32(R * 9)) % 4]);
+				const FVector A = Top, Bm = Top + Dir * Len * .5 + FVector(0, .35, 0), Cd = Top + Dir * Len - FVector(0, .9 + .3 * (k % 2), 0);
+				PB.Quad3(A - Side * .15, A + Side * .15, Bm + Side * .5, Bm - Side * .5, FVector(0, 1, 0) + Dir * .2, C);
+				PB.Quad3(Bm - Side * .5, Bm + Side * .5, Cd + Side * .08, Cd - Side * .08, FVector(0, 1, 0) + Dir * .5, C * .9f);
+			}
 		}
 
 	// Conch houses (web world/islands.ts): each with its own footprint, wall height and roof pitch, a hip roof of silver tin,
-	// a porch across the front, windows with shutters and a door, and a third of them up on piers. Built as vertex-coloured
-	// meshes in 1.2 km chunks so the far ones cull.
-	TMap<int64, FTownBatch> HouseChunks;
+	// a porch across the front, windows with shutters and a door, and a third of them up on piers.
 	static const uint32 Pastel[] = {0xf7c6d0, 0xfde2a7, 0xa8e0d8, 0xb9d4f5, 0xf9f3e3, 0xd8c6f0, 0xffffff, 0xc9e8c2};
 	static const uint32 Shutter[] = {0x2bb3a8, 0x1f4f8c, 0xffffff, 0x3f8a5a, 0xe4572e};
 	const double HS = 34;
@@ -336,7 +304,7 @@ void AKeysWorld::BuildScenery()
 			const double H = LandH(JX, JZ);
 			if (H < 1.15) continue;
 			const FShore S = ShoreInfo(JX, JZ);
-			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || KeysTown::InFootprint(JX, JZ, 14)) continue;
+			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || KeysTown::InFootprint(JX, JZ, 14) || FMath::Abs(JZ - ChainZ(JX)) < 16) continue;
 			bool bNearMarina = false;
 			for (const FMarina& Mr : Marinas()) bNearMarina |= FMath::Abs(JX - Mr.SX) < 30 && FMath::Abs(JZ - Mr.SZ) < 30;
 			if (bNearMarina) continue;

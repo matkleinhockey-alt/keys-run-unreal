@@ -10,6 +10,8 @@ class UTextRenderComponent;
 class UPointLightComponent;
 
 // The world's landmarks and waterfront, ported from the web game:
+//   world/bridge.ts         US-1 and the Seven Mile Bridge (barriers, striping, bents with caps, the hump over the channel)
+//                           and the old bridge (lower and narrower, arch ribs, the missing swing span, broken stubs)
 //   world/marinas.ts        the four marinas' docks (main pier, T-head, finger piers, pilings), harbourmaster sheds, dry-stack
 //                           racks and the boats tied up in the slips
 //   world/lighthouse.ts     Sombrero Key Light: the skeletal iron pyramid on the reef crest with the keeper's house and lantern
@@ -34,6 +36,7 @@ private:
 	void BuildPiers(struct FTownBatch& B);
 	void BuildEstates(struct FTownBatch& B);
 	void BuildBuoys();
+	void BuildBridges(struct FTownBatch& B);
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Static;
