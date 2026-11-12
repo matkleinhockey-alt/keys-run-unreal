@@ -157,7 +157,26 @@ public:
 	bool IsAshore() const;
 	int64 Cash = 0;            // dollars: fillets sold at weigh-in, spent in the shops
 	TSet<FString> Owned;       // shop items you own (gear, cosmetics)
-	TArray<FString> Estates;   // Harbor Row lots you own
+	TArray<FString> Estates;   // parcels you own (Harbor Row and the Keys Run Estates plat)
+	TMap<FString, int32> Counts;            // consumables by count: handgun.ammo, safety.flare, spear.shafts
+	TMap<FString, FString> Wearing;         // cosmetic slot -> key (shirt, cap, glasses, flag)
+	TArray<FString> TreasureOpened;         // wreck containers emptied
+	TMap<FString, FString> EstateBuilds;    // parcel id -> build sheet
+	int64 Spins = 0;                        // slot pulls, for the seeded draw
+	int32 CountOf(const TCHAR* K) const { const int32* N = Counts.Find(K); return N ? *N : 0; }
+	bool UseOne(const TCHAR* K) { int32* N = Counts.Find(K); if (!N || *N <= 0) return false; (*N)--; return true; }
+	void AddCount(const TCHAR* K, int32 N) { Counts.FindOrAdd(K) += N; }
+	void Credit(int64 N) { Cash += N; SaveEconomy(); }
+	bool Debit(int64 N) { if (Cash < N) return false; Cash -= N; SaveEconomy(); return true; }
+	void SaveEconomy();
+	void ApplyOutfit();
+	bool IsBusy(FString& Why) const;        // something that leaving the helm would spoil (a fish on, a catch card, a race)
+	void ToastMsg(const FString& Msg, double Secs = 3.2) { ShowToast(Msg, Secs); }
+	// leaving the helm for the pistol (or anything else): reel in, bring the spread in, let go of the throttle
+	void PrepareToLeaveHelm();
+	// another system's camera this frame (the pistol, the tournament's titles and ceremony); false for the boat's own
+	bool ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const;
+	bool bExtCam = false;
 	bool HasGear(const TCHAR* Effect) const { return Owned.Contains(Effect); }
 	void ShopBuy(int32 Index);
 	void ShopClose();
@@ -244,8 +263,6 @@ private:
 	void ToggleAshore();
 	void HandleWalkInput(class APlayerController* PC, float Dt);
 	void WalkInteract();
-	void SaveEconomy();
-	void ApplyOutfit();
 	// trolling (KeysTroll.cpp; web game/fishing/trolling.ts, troll-spread.ts, troll-raise.ts, shared sim/troll.ts)
 	void ToggleTroll();
 	void StopTroll(bool bQuiet);

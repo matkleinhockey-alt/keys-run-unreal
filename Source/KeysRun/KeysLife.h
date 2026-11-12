@@ -58,7 +58,11 @@ struct FKeysBird
 	// a plunge dive
 	bool bDive = false, bSpl = false, bWX = false;
 	double DT = 0, DX = 0, DZ = 0, WX = 0, WZ = 0;
+	double DownUntil = -1;   // shot down or scared off by the pistol: gone until then (web seabirds.ts scareBird / shootBird)
 };
+
+// a bird the boat pistol can see (web life.shootableBirds)
+struct FKeysBirdTarget { FKeysBird* Ref = nullptr; FVector Pos = FVector::ZeroVector; uint8 Kind = 0; };
 
 struct FKeysWeedBit { double OX, OZ, S, Rot; int32 Col; };
 
@@ -201,6 +205,9 @@ public:
 	void TakeSpeared(int32 TargetId);
 	// a shaft hissed past here: schools nearby bolt
 	void SpookAt(double X, double Z);
+	// ---- the boat pistol (web sim/handgun.ts, seabirds.ts): the seabirds in range, and what a shot does to one
+	void ShootableBirds(double X, double Z, double R, TArray<FKeysBirdTarget>& Out);
+	void DownBird(FKeysBird* B, double Secs);
 	// test hook: bring the nearest spearable school to (X, Z) and keep it there
 	void DebugBringSchool(double X, double Z);
 

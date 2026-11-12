@@ -900,8 +900,27 @@ void AKeysLife::MoveBird(FKeysBird& B, double X, double Y, double Z, double Dt)
 	B.bPrev = true;
 }
 
+void AKeysLife::ShootableBirds(double X, double Z, double R, TArray<FKeysBirdTarget>& Out)
+{
+	auto Try = [&](FKeysBird& B)
+	{
+		if (!B.bPrev || B.DownUntil > NowT) return;
+		if (FMath::Square(B.PX - X) + FMath::Square(B.PZ - Z) > R * R) return;
+		Out.Add({&B, FVector(B.PX, B.PY, B.PZ), B.Kind});
+	};
+	for (FKeysHotspot& H : Hotspots) for (FKeysBird& B : H.Birds) Try(B);
+	for (FKeysWeedline& W : Weeds) for (FKeysBird& B : W.Birds) Try(B);
+	for (FKeysPelicanFlock& F : Pelicans) for (FKeysBird& B : F.Birds) Try(B);
+}
+
+void AKeysLife::DownBird(FKeysBird* B, double Secs)
+{
+	if (B) B->DownUntil = NowT + Secs;
+}
+
 void AKeysLife::EmitBird(const FKeysBird& B)
 {
+	if (B.DownUntil > NowT) return;
 	const FLifeBirdTpl& K = LifeBirdTpl(B.Kind);
 	const FLifeR3 R = FLifeR3::YXZ(B.Pitch, B.Yaw, B.Roll);
 	const FVector Pos(B.PX, B.PY, B.PZ);

@@ -812,10 +812,15 @@ namespace KeysTown
 				 {TEXT("bait-ballyhoo"), TEXT("Rigged ballyhoo"), TEXT("Trolling bait for mahi and wahoo."), 18, TEXT("bait.ballyhoo")},
 				 {TEXT("ice-bag"), TEXT("Bag of ice"), TEXT("Keeps the cooler honest."), 4, TEXT("cooler.ice")}}});
 			A.Add({TEXT("guns"), TEXT("Deadeye Guns & Ammo"), TEXT("Firearms - Ammunition - Spearguns - Pawn"),
-				{TEXT("Spearguns on the left, the serious stuff behind the cage. Look with your eyes."), TEXT("Shafts, bands, flopper tips. What did you break this time?")},
+				{TEXT("Spearguns are on the left. Everything on the right is not for fish, and not for you today."), TEXT("Browsing is free. Dropping things is not."),
+				 TEXT("We do spearguns, flare guns and a very good lecture on both.")},
 				{{TEXT("spear-shaft"), TEXT("Stainless spear shafts (3)"), TEXT("Replacement shafts for the diver's speargun."), 45, TEXT("spear.shafts")},
 				 {TEXT("spear-long"), TEXT("Long-range band gun"), TEXT("Longer effective range underwater."), 2200, TEXT("spear.long")},
-				 {TEXT("flare"), TEXT("Marine flare kit"), TEXT("Required by the Coast Guard, best after sunset."), 38, TEXT("safety.flare")}}});
+				 {TEXT("spear-reel"), TEXT("Reel-line conversion"), TEXT("A fish on the spear runs less far before you can haul."), 1400, TEXT("spear.reel")},
+				 {TEXT("pistol-ammo"), TEXT("9 mm range ammo (50)"), TEXT("A box for the boat pistol. Fish, gulls and the horizon not included."), 75, TEXT("handgun.ammo")},
+				 {TEXT("pistol-extmag"), TEXT("Extended magazine"), TEXT("Six more rounds before you have to stop and reload."), 1100, TEXT("handgun.extmag")},
+				 {TEXT("pistol-dot"), TEXT("Red-dot sight"), TEXT("A tighter group at range, for people who do not like gulls laughing."), 1600, TEXT("handgun.dot")},
+				 {TEXT("flare"), TEXT("Marine flare kit"), TEXT("Three parachute flares, fired from the pistol grip (Z). Required by the Coast Guard, best after sunset."), 38, TEXT("safety.flare")}}});
 			const TArray<FShelfItem> Bar = {
 				{TEXT("beer"), TEXT("Cold one"), TEXT("Lowers your cast accuracy, raises the crowd's opinion of you."), 5, TEXT("bar.beer")},
 				{TEXT("round"), TEXT("A round for the bar"), TEXT("Money out, reputation in."), 250, TEXT("bar.round")},

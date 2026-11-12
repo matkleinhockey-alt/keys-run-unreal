@@ -11,6 +11,7 @@
 #include "KeysWalker.h"
 #include "KeysVisitors.h"
 #include "KeysLocals.h"
+#include "KeysHandgun.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -121,7 +122,15 @@ void AKeysBoatPawn::BeginPlay()
 		Cash = Save->Cash;
 		for (const FString& O : Save->Owned) Owned.Add(O);
 		Estates = Save->Estates;
+		Counts = Save->Counts;
+		Wearing = Save->Wearing;
+		TreasureOpened = Save->TreasureOpened;
+		EstateBuilds = Save->EstateBuilds;
+		Spins = Save->Spins;
+		// every boat in the Keys has a pistol in the console: the starter kit is two magazines' worth and three shafts (sim/shop.ts)
+		if (!Save->bStarterKit) { Counts.FindOrAdd(TEXT("handgun.ammo")) += 24; Counts.FindOrAdd(TEXT("spear.shafts")) += 3; Save->bStarterKit = true; }
 	}
+	else { Counts.Add(TEXT("handgun.ammo"), 24); Counts.Add(TEXT("spear.shafts"), 3); }
 	if (AKeysTown* Tn = AKeysTown::Get(this)) Tn->SetOwnedEstates(Estates);
 	ApplyOutfit();
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -599,6 +608,26 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
 		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *Lc->DebugCmd(Cmd.Mid(3))); }
+		else if (Cmd.StartsWith(TEXT("give=")))
+		{
+			// give=safety.flare,3: consumables as if bought; give=handgun.dot: gear
+			FString K, N;
+			if (!Cmd.Mid(5).Split(TEXT(","), &K, &N)) { K = Cmd.Mid(5); N.Empty(); }
+			if (N.IsEmpty()) Owned.Add(K); else AddCount(*K, FCString::Atoi(*N));
+		}
+		else if (Cmd == TEXT("flare")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->DebugFlare(); }
+		else if (Cmd == TEXT("gun")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle(); }
+		else if (Cmd.StartsWith(TEXT("gunlook=")) || Cmd.StartsWith(TEXT("fire=")))
+		{
+			// gunlook=yaw,pitch / fire=yaw,pitch (radians, yaw relative to the bow)
+			TArray<FString> Pp;
+			Cmd.Mid(Cmd.Find(TEXT("=")) + 1).ParseIntoArray(Pp, TEXT(","));
+			if (AKeysHandgun* Gun = AKeysHandgun::Get(this); Gun && Pp.Num() >= 2)
+			{
+				if (Cmd.StartsWith(TEXT("fire="))) Gun->DebugFire(FCString::Atod(*Pp[0]), FCString::Atod(*Pp[1]));
+				else Gun->DebugLook(FCString::Atod(*Pp[0]), FCString::Atod(*Pp[1]));
+			}
+		}
 		else if (Cmd == TEXT("banner")) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->StartBanner(); }
 		else if (Cmd.StartsWith(TEXT("indoorev="))) AKeysWalker::IndoorEV = FCString::Atod(*Cmd.Mid(9));
 		else if (Cmd == TEXT("ownall")) { for (const FBoatSpec& B : Boats()) Owned.Add(TEXT("boat.") + B.Id); }
@@ -851,7 +880,8 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	if (!V || !V->Sells.IsValidIndex(Index)) return;
 	const KeysTown::FShelfItem& It = V->Sells[Index];
 	const FString Eff = It.Effect;
-	const bool bGear = Eff.StartsWith(TEXT("rod.")) || Eff.StartsWith(TEXT("reel.")) || Eff.StartsWith(TEXT("dive.")) || Eff.StartsWith(TEXT("spear.long")) || Eff.StartsWith(TEXT("cosmetic."));
+	const bool bGear = Eff.StartsWith(TEXT("rod.")) || Eff.StartsWith(TEXT("reel.")) || Eff.StartsWith(TEXT("dive.")) || Eff.StartsWith(TEXT("spear.long")) || Eff.StartsWith(TEXT("spear.reel"))
+		|| Eff.StartsWith(TEXT("cosmetic.")) || Eff == TEXT("handgun.extmag") || Eff == TEXT("handgun.dot") || Eff.StartsWith(TEXT("tackle."));
 	if (bGear && Owned.Contains(Eff)) { ShowToast(FString::Printf(TEXT("You already own the %s."), It.Name)); return; }
 	if (Cash < It.Price) { ShowToast(FString::Printf(TEXT("%s is $%s and you have $%s. Sell fillets at a weigh-in (E at a marina dock)."), It.Name, *Commas(It.Price), *Commas(Cash)), 4); return; }
 	Cash -= It.Price;
@@ -865,7 +895,10 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 		Buffs.Add(Eff, T + KeysBuffs::Seconds(Eff));
 		Msg += TEXT(" ") + (bTop ? KeysBuffs::Label(Eff) + TEXT(": topped up.") : KeysBuffs::StartText(Eff));
 	}
-	if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
+	if (Eff == TEXT("handgun.ammo")) { AddCount(*Eff, 50); Msg += FString::Printf(TEXT(" %d rounds for the console pistol (9)."), CountOf(*Eff)); }
+	else if (Eff == TEXT("safety.flare")) { AddCount(*Eff, 3); Msg += FString::Printf(TEXT(" %d flares: Z with the pistol out."), CountOf(*Eff)); }
+	else if (Eff == TEXT("spear.shafts")) { AddCount(*Eff, 3); }
+	else if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
 	else if (Eff == TEXT("bait.ballyhoo")) { BaitCasts += 6; Msg += TEXT(" Quicker bites on your next 6 casts."); }
 	else if (Eff == TEXT("motel.night"))
 	{
@@ -902,12 +935,42 @@ void AKeysBoatPawn::ApplyOutfit()
 	W->SetOutfit(Shirt, true, Cap, true);
 }
 
+void AKeysBoatPawn::PrepareToLeaveHelm()
+{
+	if (bCharging || IsLineOut()) ReelIn(FString());
+	bCharging = false;
+	StopTroll(true);
+	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+	bTrimMode = false;
+	ScriptThr = -1;
+}
+
+bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const
+{
+	if (const AKeysHandgun* G = AKeysHandgun::Get(this); G && G->CameraFor(OutPos, OutRot, OutFov)) return true;
+	return false;
+}
+
+bool AKeysBoatPawn::IsBusy(FString& Why) const
+{
+	if (FState == EKeysFish::Fight) { Why = TEXT("Land your fish first."); return true; }
+	if (FState == EKeysFish::Caught) { Why = TEXT("Finish with your catch first."); return true; }
+	if (IsDiving()) { Why = TEXT("Climb back aboard first."); return true; }
+	if (IsAshore()) { Why = TEXT("Back aboard first."); return true; }
+	return false;
+}
+
 void AKeysBoatPawn::SaveEconomy()
 {
 	if (!Save) return;
 	Save->Cash = Cash;
 	Save->Owned = Owned.Array();
 	Save->Estates = Estates;
+	Save->Counts = Counts;
+	Save->Wearing = Wearing;
+	Save->TreasureOpened = TreasureOpened;
+	Save->EstateBuilds = EstateBuilds;
+	Save->Spins = Spins;
 	Save->Write();
 }
 
@@ -1006,6 +1069,16 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 	if (Hit(EKeys::B)) { bBoardOpen = true; BoardTab = 0; bFwd = bBack = bLeft = bRight = bAction = false; bCharging = false; return; }
 
+	// the boat pistol owns the keys while it is out (web entities/handgun/input.ts): the boat drifts in neutral
+	if (bRunning && Menu == EMenu::None)
+		if (AKeysHandgun* Gun = AKeysHandgun::Get(this); Gun && Gun->IsOut())
+		{
+			bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+			bCharging = false;
+			Gun->HandleInput(PC, Dt);
+			if (Hit(EKeys::M)) bBigMap = !bBigMap;
+			return;
+		}
 	// menus: Up / Down (or W / S, or the mouse) pick, Enter or Space chooses, Left / Right change a setting, Esc goes back
 	if (Menu == EMenu::None && bRunning && IsAshore() && Hit(EKeys::Escape))
 		if (AKeysWalker* Wk = AKeysWalker::Get(this); Wk && Wk->bShopOpen) { ShopClose(); return; }
@@ -1116,6 +1189,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 	if (Hit(EKeys::K) && T - CaughtT > .7) KeepFish();
 	if (Hit(EKeys::Equals) || Hit(EKeys::Add)) ToggleTroll();
+	if (Hit(EKeys::Nine)) if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle();   // the boat pistol
 	if (Hit(EKeys::E))
 	{
 		if (NearMarina(X, Z) && FMath::Abs(Speed) < 2.5) WeighIn();
@@ -1422,7 +1496,12 @@ void AKeysBoatPawn::SyncChaseCam()
 
 void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 {
-	if (IsDiving() || IsAshore()) return;   // the diver / walker actor places the camera (ApplyDiveCamera)
+	if (IsDiving() || IsAshore()) { bExtCam = false; return; }   // the diver / walker actor places the camera (ApplyDiveCamera)
+	{
+		FVector EP; FRotator ER; float EF;
+		bExtCam = ExternalCamera(EP, ER, EF);
+		if (bExtCam) { Camera->SetWorldLocationAndRotation(EP, ER); Camera->SetFieldOfView(EF); return; }
+	}
 	const FBoatSpec& S = Spec();
 
 	// first person while fishing (V), and the helm view (1) while driving
@@ -1598,6 +1677,15 @@ void AKeysBoatPawn::ReelIn(const FString& Msg)
 
 FString AKeysBoatPawn::PickSpecies() const
 {
+	// a bird carcass on the water: the toothy end of the food chain comes to it (sim/chum.ts SCAVENGER_KEYS)
+	if (const AKeysHandgun* Gun = AKeysHandgun::Get(this); Gun && Gun->NearCarcass(Bob.X, Bob.Z) && FMath::FRand() < .55)
+	{
+		TArray<FString> Sc;
+		for (const FZoneRow& R : AKeysLife::FishTable(Zone)) if (AKeysHandgun::IsScavenger(R.Key)) Sc.Add(R.Key);
+		if (!Sc.Num()) Sc = {TEXT("barracuda"), TEXT("blacktip"), TEXT("jackcrevalle")};
+		const FString K = Sc[FMath::RandRange(0, Sc.Num() - 1)];
+		if (Species(K)) return K;
+	}
 	if (const AKeysLife* L = AKeysLife::Get(this)) return L->PickSpecies(Spot, Bob.X, Bob.Z);
 	const FHump* Hump = NearHump(Bob.X, Bob.Z);
 	const TArray<FZoneRow>& Tbl = ZoneTable(Zone);
@@ -2092,7 +2180,7 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 // When a hooked fish jumps, the camera zooms in and swings to it, then eases back out once it's in the water again.
 void AKeysBoatPawn::UpdateJumpCam(double Dt)
 {
-	if (IsDiving()) return;
+	if (IsDiving() || bExtCam) return;
 	const bool bOn = bJumping && FState == EKeysFish::Fight;
 	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : 1.2);
 	float Want = 88.f;

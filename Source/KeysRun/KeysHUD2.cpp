@@ -3,12 +3,18 @@
 #include "KeysKit.h"
 #include "KeysGeo.h"
 #include "KeysLocals.h"
+#include "KeysHandgun.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "GameFramework/PlayerController.h"
 
 using namespace KeysGeo;
+
+namespace
+{
+	const FLinearColor Teal(.35f, .85f, .85f), Gold(1.f, .82f, .35f), Red(1.f, .3f, .25f), Dim(.75f, .8f, .85f);
+}
 
 // world tags and speech bubbles (the web game's DOM .tag): Larry, the pirates, the sandbar party, named boats
 void AKeysHUD::DrawTags()
@@ -89,6 +95,36 @@ void AKeysHUD::DrawChartMore(AKeysBoatPawn* P, float X, float Y, float Size)
 
 void AKeysHUD::DrawMore(AKeysBoatPawn* P)
 {
+	// the boat pistol (web entities/handgun/hud.ts): crosshair opening with the spread, the magazine, the tally
+	if (const AKeysHandgun* G = AKeysHandgun::Get(this); G && G->IsOut())
+	{
+		const float Cx = Canvas->SizeX * .5f, Cy = Canvas->SizeY * .5f;
+		const float Focal = float(Canvas->SizeX * .5 / FMath::Tan(FMath::DegreesToRadians(75.0 / 2)));
+		const float Gap = FMath::Max(5.f * U, float(G->Spread()) * Focal * 2.2f);
+		const FLinearColor Ch = G->HitFlash > 0 ? FLinearColor(1.f, .35f, .25f) : FLinearColor(1.f, 1.f, 1.f, .9f);
+		for (int32 k = 0; k < 4; k++)
+		{
+			const float DX = k == 0 ? 1.f : k == 1 ? -1.f : 0.f, DY = k == 2 ? 1.f : k == 3 ? -1.f : 0.f;
+			DrawLine(Cx + DX * Gap, Cy + DY * Gap, Cx + DX * (Gap + 10 * U), Cy + DY * (Gap + 10 * U), FLinearColor(0, 0, 0, .5f), 3.5f * U);
+			DrawLine(Cx + DX * Gap, Cy + DY * Gap, Cx + DX * (Gap + 10 * U), Cy + DY * (Gap + 10 * U), Ch, 2 * U);
+		}
+		DrawRect(Ch, Cx - 1.5f * U, Cy - 1.5f * U, 3 * U, 3 * U);
+		if (G->HitFlash > 0)
+			for (int32 s = -1; s <= 1; s += 2) { DrawLine(Cx - 14 * U, Cy - 14 * U * s, Cx - 6 * U, Cy - 6 * U * s, Ch, 2.5f * U); DrawLine(Cx + 14 * U, Cy + 14 * U * s, Cx + 6 * U, Cy + 6 * U * s, Ch, 2.5f * U); }
+		// the magazine, bottom right
+		const float BW = 300 * U, BH = 116 * U, BX = Canvas->SizeX - BW - 28 * U, BY = Canvas->SizeY - BH - 28 * U;
+		Panel(BX, BY, BW, BH, .55f);
+		Text(FString::Printf(TEXT("%d"), G->Mag), BX + 18 * U, BY + 10 * U, 2.4f, G->Mag == 0 ? Red : FLinearColor::White);
+		Text(FString::Printf(TEXT("/ %d"), G->Reserve()), BX + 92 * U, BY + 34 * U, 1.2f, Dim);
+		Text(TEXT("9 mm"), BX + 200 * U, BY + 14 * U, .8f, Dim);
+		Text(FString::Printf(TEXT("Flares %d"), G->Flares()), BX + 200 * U, BY + 40 * U, .8f, G->Flares() ? Gold : Dim);
+		for (int32 i = 0; i < G->MagSize; i++)
+			DrawRect(i < G->Mag ? Gold : FLinearColor(.25f, .25f, .25f, .8f), BX + 18 * U + i * (BW - 36 * U) / G->MagSize, BY + 80 * U, FMath::Max(2.f, (BW - 36 * U) / G->MagSize - 3 * U), 12 * U);
+		if (G->bReloading) { Bar(BX + 18 * U, BY + 98 * U, BW - 36 * U, 8 * U, float(1 - G->ReloadT / FMath::Max(.01, G->ReloadDur)), Teal); }
+		Text(FString::Printf(TEXT("Fish stunned %d  -  Birds startled %d"), G->TallyFish, G->TallyBirds), Canvas->SizeX * .5f, 24 * U + 60 * U, .85f, FLinearColor(1.f, .92f, .75f), nullptr, true);
+		if (G->NoteT > 0 && !G->Note.IsEmpty()) Text(G->Note, Cx, Cy + 60 * U, 1.f, Gold, nullptr, true);
+		Text(TEXT("Click / Space fire - R reload - Z flare - mouse or arrows to aim - 9 or Esc holster"), Cx, Canvas->SizeY - 44 * U, .9f, Dim, nullptr, true);
+	}
 }
 
 bool AKeysHUD::DrawPanels(AKeysBoatPawn* P)

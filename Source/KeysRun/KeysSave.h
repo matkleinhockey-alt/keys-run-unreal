@@ -43,6 +43,16 @@ public:
 	// tournaments won (the trophy case) and the best Marathon race time, seconds (0 = none)
 	UPROPERTY() int32 TourneyWins = 0;
 	UPROPERTY() double RaceBest = 0;
+	// the second port pass: consumables by count (9 mm rounds, flares, spear shafts; sim/shop.ts consumables, the
+	// starter kit given once), what you are wearing per slot (sim/wardrobe.ts), the wreck containers you have emptied
+	// (sim/treasure.ts), each owned parcel's build sheet (content/estates.ts Build, as key=value;...), the casino's
+	// spin counter for its seeded draw (sim/slots.ts) and the tackle rung you fish on
+	UPROPERTY() TMap<FString, int32> Counts;
+	UPROPERTY() bool bStarterKit = false;
+	UPROPERTY() TMap<FString, FString> Wearing;
+	UPROPERTY() TArray<FString> TreasureOpened;
+	UPROPERTY() TMap<FString, FString> EstateBuilds;
+	UPROPERTY() int64 Spins = 0;
 
 	static constexpr int32 MaxTop = 12;
 

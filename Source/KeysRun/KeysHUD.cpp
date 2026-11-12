@@ -13,6 +13,7 @@
 #include "KeysWalker.h"
 #include "KeysTownData.h"
 #include "KeysKit.h"
+#include "KeysHandgun.h"
 #include "EngineUtils.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -183,7 +184,10 @@ void AKeysHUD::DrawHUD()
 			BX += TW + 28 * U;
 		}
 	}
-	if (bAshore)
+	const AKeysHandgun* Gun = AKeysHandgun::Get(this);
+	const bool bGun = Gun && Gun->IsOut();
+	if (bGun) { if (P->bBigMap) DrawChart(P); }
+	else if (bAshore)
 	{
 		DrawAshore(P, Wk);
 		if (P->bBigMap) DrawChart(P);
@@ -196,7 +200,7 @@ void AKeysHUD::DrawHUD()
 		DrawFishing(P);
 	}
 	else if (P->bBigMap) DrawChart(P);
-	if (!bDive && !bAshore) DrawEvents(P);
+	if (!bDive && !bAshore && !bGun) DrawEvents(P);
 	if (P->FState == EKeysFish::Caught) DrawCard(P);
 	else if (P->bElectronics && !P->bBigMap) DrawElectronics(P);
 	DrawTags();
@@ -210,7 +214,7 @@ void AKeysHUD::DrawHUD()
 		Panel(Cx - W * .5f - 18 * U, 28 * U, W + 36 * U, H + 16 * U, .55f);
 		Text(P->Toast, Cx, 36 * U, 1.05f, FLinearColor::White, nullptr, true);
 	}
-	const FString Hint = bDive || bAshore ? FString() : P->Hint();
+	const FString Hint = bDive || bAshore || bGun ? FString() : P->Hint();
 	if (!Hint.IsEmpty()) Text(Hint, Canvas->SizeX * .5f, Canvas->SizeY - 44 * U, .95f, Dim, nullptr, true);
 	if (P->bBoardOpen) DrawBoard(P);
 	if (P->bLoginOpen) DrawLogin(P);
