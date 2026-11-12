@@ -33,6 +33,40 @@ struct FKeysMesh
 
 namespace KeysMesh
 {
+	// ---------------------------------------------------------------- the lofted hull (web entities/boat/hull.ts)
+	// hullStation / zRake / hullProfile / buildHullGeo ported line for line: deadrise that warps from the transom
+	// to a deep-V entry, chine flats, flared topsides, sheer spring, a raked stem, steps in the running bottom,
+	// boot stripe, cove stripe and rub rail. Web frame (x starboard, y up, z toward the stern).
+	struct FHullDef
+	{
+		double F = 1.3, Spring = .35, YK = .5, Dr0 = 20, Dr1 = 48, Rake = 1.2, Entry = .42;
+		TArray<double> Steps;
+		FLinearColor Bottom = FLinearColor(FColor(0xf8, 0xf7, 0xf2)), Boot = FLinearColor(FColor(0x23, 0x46, 0x6e)), Hull = FLinearColor(FColor(0xfb, 0xfa, 0xf6)),
+			Cove = FLinearColor(FColor(0x23, 0x46, 0x6e)), Rub = FLinearColor(FColor(0xd0, 0xd4, 0xd8)), Cap = FLinearColor(FColor(0xfb, 0xfa, 0xf6)),
+			Liner = FLinearColor(FColor(0xf3, 0xf2, 0xec)), Deck = FLinearColor(FColor(0xe0, 0xde, 0xd6));
+		bool bCove = true;
+		bool bCat = false;     // a catamaran: two asymmetric sponsons under a bridge deck (the Freeman)
+		double Tunnel = .42;   // the cat's tunnel height
+	};
+	struct FHullSta { double T, Z, Bb, Bs, YK, YC, YS, BF; };
+	FHullSta HullStation(const FHullDef& H, double L, double B, double T);
+	FHullSta HullStationAtZ(const FHullDef& H, double L, double B, double Z);   // web z (toward the stern)
+	double HullZRake(const FHullDef& H, const FHullSta& S, double Y);
+	double HullSole(double L, const FHullSta& S);                               // the cockpit sole's height
+	// one hull: the loft, the transom and (bDeck) covering boards, liner and sole. Xo shifts it across (a sponson);
+	// AsymSide (-1 / 1) is the half that faces a cat's tunnel, flattened by AsymK.
+	void BuildHullLoft(FKeysMesh& M, const FHullDef& H, double L, double B, bool bDeck = true, double Xo = 0, int32 AsymSide = 0, double AsymK = 1);
+	// a cat's sponsons and bridge deck, or the monohull
+	void BuildHullFor(FKeysMesh& M, const FHullDef& H, double L, double B);
+	// the web game's HULLS[id] for one of the eight boats (content/boats.ts)
+	const FHullDef& HullOf(const KeysData::FBoatSpec& S);
+	// deck shape for the fit-out, the crew and the camera, in the boat's own frame (meters, +X toward the bow)
+	double SoleAt(const KeysData::FBoatSpec& S, double X);     // cockpit sole
+	double SheerAt(const KeysData::FBoatSpec& S, double X);    // top of the gunwale
+	double InnerHalfBeam(const KeysData::FBoatSpec& S, double X);   // half-width inside the covering boards
+	double BowX(const KeysData::FBoatSpec& S);                 // the stem at the sheer
+	double SternX(const KeysData::FBoatSpec& S);               // the transom
+
 	// hull, deck, console, T-top or hardtop and outboards for one of the eight boats. bRiggers: the tower boats'
 	// outriggers, stowed (the player's boat leaves them out and swings its own with BuildRiggers).
 	void BuildBoat(FKeysMesh& M, const KeysData::FBoatSpec& S, bool bRiggers = true);

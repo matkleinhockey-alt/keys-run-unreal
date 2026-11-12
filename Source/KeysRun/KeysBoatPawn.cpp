@@ -1396,14 +1396,13 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 FVector AKeysBoatPawn::FishSpotLocal() const
 {
 	const FBoatSpec& S = Spec();
-	const double DeckZ = .72 + .028 * S.Len - .42;
 	if (HookedStation >= 0)
 	{
 		// a trolled fish is astern: fight it from the transom, on the side it is on
 		const double Sgn = ((FX - X) * FMath::Cos(H) + (FZ - Z) * -FMath::Sin(H)) >= 0 ? 1 : -1;
-		return FVector(-S.Len * .36, Sgn * FMath::Min(.6, S.Beam * .2), DeckZ + .03);
+		return FVector(-S.Len * .36, Sgn * FMath::Min(.6, S.Beam * .2), KeysMesh::SoleAt(S, -S.Len * .36) + .03);
 	}
-	return FVector(-S.Len * .15, FMath::Max(.3, S.Beam * .5 - .55), DeckZ + .03);
+	return FVector(-S.Len * .15, FMath::Max(.3, KeysMesh::InnerHalfBeam(S, -S.Len * .15) - .4), KeysMesh::SoleAt(S, -S.Len * .15) + .03);
 }
 
 // leaving a first-person view: start the chase camera from where the eye was, so it eases back out
@@ -1472,7 +1471,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	if (bDriveOn)
 	{
 		// standing at the wheel behind the console; the horizon tilts with the hull
-		const double MidX = .05 * S.Len, DeckZ = .72 + .028 * S.Len - .42;
+		const double MidX = .05 * S.Len, DeckZ = KeysMesh::SoleAt(S, MidX - .7);
 		FVector Eye(MidX - .7, 0, DeckZ + 1.66), TowerEye;
 		if (View == 2 && KeysMesh::TowerEye(S, TowerEye)) Eye = TowerEye;   // up at the tuna tower helm
 		FVector P = BT.TransformPosition(Eye * 100.0);

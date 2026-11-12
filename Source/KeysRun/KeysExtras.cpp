@@ -507,8 +507,7 @@ void AKeysExtras::UpdateBuddy(double Dt, double T)
 	// fishing while parked: rod out, the odd hookup with a jump
 	const bool bFishing = BState == 2;
 	BStillT = bFishing ? BStillT + Dt : 0;
-	const double Free = .72 + .028 * S.Len;
-	const FVector RodBase(-S.Len * .3, S.Beam * .5 - .1, Free + .05);   // starboard aft gunwale, hull-local meters
+	const FVector RodBase(-S.Len * .3, KeysMesh::InnerHalfBeam(S, -S.Len * .3) + .1, KeysMesh::SheerAt(S, -S.Len * .3) + .05);   // starboard aft gunwale, hull-local meters
 	if (BStillT > 4)
 	{
 		const double A = .9 + (BFight > 0 ? .3 + FMath::Sin(T * 14) * .08 : 0);

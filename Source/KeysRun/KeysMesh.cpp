@@ -83,8 +83,9 @@ namespace KeysMesh
 	static FDims Dims(const KeysData::FBoatSpec& S)
 	{
 		FDims D;
-		D.L = S.Len; D.HB = S.Beam * .5; D.Free = .72 + .028 * D.L; D.Draft = .38 + .025 * D.L;
-		D.DeckZ = D.Free - .42; D.MidX = .05 * D.L;
+		const FHullDef& H = HullOf(S);
+		D.L = S.Len; D.HB = S.Beam * .5; D.Free = H.F; D.Draft = H.YK;
+		D.MidX = .05 * D.L; D.DeckZ = SoleAt(S, D.MidX - .5);
 		D.TopZ = D.DeckZ + 2.35; D.TopL = FMath::Min(2.6, D.L * .26); D.TopW = FMath::Min(2.2, S.Beam * .66);
 		D.TC = D.MidX - .5; D.TopH = D.TopZ + .05;
 		D.bTower = S.Id == TEXT("grady") || S.Id == TEXT("freeman");
@@ -162,93 +163,24 @@ namespace KeysMesh
 	void BuildBoat(FKeysMesh& M, const KeysData::FBoatSpec& S, bool bRiggers)
 	{
 		const FDims Dm = Dims(S);
-		const double L = S.Len, HB = S.Beam * .5, Free = Dm.Free, Draft = Dm.Draft;
-		const int32 NS = 22;
-		const FLinearColor Liner = S.Deck * 1.08f, Cap = S.Hull, Dark = Srgb(.12, .13, .15), Glass = Srgb(.16, .22, .27);
-		const FLinearColor Steel = Srgb(.85, .86, .88), Uph = S.Uph;
-		// a fine entry (the Yellowfin's 24 degrees) pinches the bow sections in
-		const double EntryExp = 1 + FMath::Max(0.0, S.Entry - .5) * 4;
-
-		struct FSt { double X, HB, ZK, ZC, YC, ZS, ZW1, ZW2; };
-		TArray<FSt> St;
-		for (int32 i = 0; i <= NS; i++)
-		{
-			const double T = double(i) / NS;
-			FSt P;
-			P.X = (T - .5) * L;
-			const double Taper = T < .5 ? 1 : FMath::Pow(FMath::Sqrt(FMath::Max(0.0, 1 - FMath::Square((T - .5) / .5))), EntryExp);
-			P.HB = FMath::Max(.02, HB * Taper);
-			P.ZS = Free + .28 * T * T;
-			const double Rise = FMath::Square(FMath::Max(0.0, (T - .6) / .4));
-			P.ZK = FMath::Lerp(-Draft, P.ZS - .12, Rise);
-			P.YC = P.HB * .84;
-			P.ZC = FMath::Min(P.ZK + P.YC * .36, P.ZS - .1);
-			P.ZW1 = FMath::Min(FMath::Max(.04, P.ZC + .01), P.ZS - .2);
-			P.ZW2 = FMath::Min(P.ZW1 + .16, P.ZS - .05);
-			St.Add(P);
-		}
-		// y on the topsides at height z: straight flare from the chine (y = YC + 8%) up to the sheer
-		auto TopY = [](const FSt& P, double Z) { const double U = FMath::Clamp((Z - P.ZC) / FMath::Max(.01, P.ZS - P.ZC), 0.0, 1.0); return FMath::Lerp(P.HB * .92, P.HB, U); };
-
-		for (int32 Side = -1; Side <= 1; Side += 2)
-		{
-			for (int32 i = 0; i < NS; i++)
-			{
-				const FSt& A = St[i];
-				const FSt& B = St[i + 1];
-				const FVector OutBottom(0, Side * .6, -1), OutSide(0, Side, 0);
-				auto Seg = [&](double YA0, double ZA0, double YA1, double ZA1, double YB0, double ZB0, double YB1, double ZB1, const FLinearColor& Col, const FVector& Out)
-				{
-					M.AddQuad(FVector(A.X, Side * YA0, ZA0), FVector(B.X, Side * YB0, ZB0), FVector(B.X, Side * YB1, ZB1), FVector(A.X, Side * YA1, ZA1), Col, Out);
-				};
-				Seg(0, A.ZK, A.YC, A.ZC, 0, B.ZK, B.YC, B.ZC, S.Bottom, OutBottom);
-				Seg(A.YC, A.ZC, A.HB * .92, A.ZC + .02, B.YC, B.ZC, B.HB * .92, B.ZC + .02, S.Bottom, OutBottom);
-				Seg(A.HB * .92, A.ZC + .02, TopY(A, A.ZW1), A.ZW1, B.HB * .92, B.ZC + .02, TopY(B, B.ZW1), B.ZW1, S.Bottom, OutSide);
-				Seg(TopY(A, A.ZW1), A.ZW1, TopY(A, A.ZW2), A.ZW2, TopY(B, B.ZW1), B.ZW1, TopY(B, B.ZW2), B.ZW2, S.Stripe, OutSide);
-				Seg(TopY(A, A.ZW2), A.ZW2, A.HB, A.ZS, TopY(B, B.ZW2), B.ZW2, B.HB, B.ZS, S.Hull, OutSide);
-				// the cove stripe, a thin line of the trim colour just under the sheer
-				if (S.Cove.A > 0 && A.ZS - A.ZW2 > .25)
-				{
-					const double CA0 = A.ZS - .13, CA1 = A.ZS - .08, CB0 = B.ZS - .13, CB1 = B.ZS - .08;
-					Seg(TopY(A, CA0) + .006, CA0, TopY(A, CA1) + .006, CA1, TopY(B, CB0) + .006, CB0, TopY(B, CB1) + .006, CB1, S.Cove, OutSide);
-				}
-				// gunwale cap and inner liner down to the deck
-				const double WA = FMath::Min(.14, A.HB * .5), WB = FMath::Min(.14, B.HB * .5);
-				Seg(A.HB, A.ZS, A.HB - WA, A.ZS, B.HB, B.ZS, B.HB - WB, B.ZS, Cap, FVector::ZAxisVector);
-				const double DA = A.ZS - .42, DB = B.ZS - .42;
-				Seg(A.HB - WA, A.ZS, A.HB - WA, DA, B.HB - WB, B.ZS, B.HB - WB, DB, Liner, FVector(0, -Side, 0));
-				// deck
-				Seg(A.HB - WA, DA, 0, DA, B.HB - WB, DB, 0, DB, S.Deck, FVector::ZAxisVector);
-			}
-			// steps in the running bottom: a dark notch across the bottom from the keel out to the chine
-			for (int32 k = 0; k < S.Steps; k++)
-			{
-				const double Fr = S.Steps == 1 ? .36 : (k == 0 ? .3 : .44);
-				const int32 i = FMath::Clamp(FMath::RoundToInt(Fr * NS), 1, NS - 1);
-				const FSt& P = St[i];
-				const double X0 = P.X - .05, X1 = P.X + .05;
-				M.AddQuad(FVector(X0, 0, P.ZK - .012), FVector(X1, 0, P.ZK - .012), FVector(X1, Side * P.YC, P.ZC - .012), FVector(X0, Side * P.YC, P.ZC - .012), Dark, FVector(0, Side * .6, -1));
-			}
-		}
-		// transom
-		{
-			const FSt& P = St[0];
-			const FVector Back(-1, 0, 0);
-			for (int32 Side = -1; Side <= 1; Side += 2)
-			{
-				M.AddQuad(FVector(P.X, 0, P.ZK), FVector(P.X, Side * P.YC, P.ZC), FVector(P.X, Side * P.HB, P.ZS), FVector(P.X, 0, P.ZS), S.Hull, Back);
-			}
-		}
+		const double L = S.Len, Free = Dm.Free, Draft = Dm.Draft;
+		const FHullDef& H = HullOf(S);
+		const FLinearColor Liner = H.Liner, Dark = Srgb(.12, .13, .15), Glass = Srgb(.16, .22, .27);
+		const FLinearColor Steel = Srgb(.85, .86, .88), Uph = S.Uph, HullC = H.Hull, DeckC = H.Deck;
+		const double Cap = .14 + S.Beam * .02;
+		// the hull itself: the web game's loft (KeysHull.cpp), a cat's sponsons and bridge deck on the Freeman
+		BuildHullFor(M, H, L, S.Beam);
 
 		const double DeckZ = Dm.DeckZ, MidX = Dm.MidX;
 		// console and windshield
-		M.AddBox(FVector(MidX, 0, DeckZ + .6), FVector(1.05, 1.15, 1.2), S.Hull);
-		M.AddBox(FVector(MidX + .45, 0, DeckZ + 1.32), FVector(.06, 1.05, .3), Glass, FQuat(FVector::YAxisVector, -.5));
-		M.AddBox(FVector(MidX - .05, 0, DeckZ + 1.21), FVector(.5, .7, .04), Dark);
+		const double CZ = SoleAt(S, MidX);
+		M.AddBox(FVector(MidX, 0, CZ + .6), FVector(1.05, FMath::Min(1.15, S.Beam * .42), 1.2), HullC);
+		M.AddBox(FVector(MidX + .45, 0, CZ + 1.32), FVector(.06, 1.05, .3), Glass, FQuat(FVector::YAxisVector, -.5));
+		M.AddBox(FVector(MidX - .05, 0, CZ + 1.21), FVector(.5, .7, .04), Dark);
 		if (S.bLeaning)
 		{
 			// leaning post with a cooler seat in front and a rocket launcher of rods along its back (web model.ts seating)
-			M.AddBox(FVector(MidX - 1.15, 0, DeckZ + .5), FVector(.8, 1.05, 1.0), S.Hull);
+			M.AddBox(FVector(MidX - 1.15, 0, DeckZ + .5), FVector(.8, 1.05, 1.0), HullC);
 			M.AddBox(FVector(MidX - 1.15, 0, DeckZ + 1.04), FVector(.85, 1.1, .1), Uph);
 			M.AddBox(FVector(MidX - 1.53, 0, DeckZ + 1.28), FVector(.09, 1.05, .36), Uph, FQuat(FVector::YAxisVector, .12));
 			for (int32 i = 0; i < 5; i++)
@@ -271,26 +203,39 @@ namespace KeysMesh
 				for (int32 s2 = -1; s2 <= 1; s2 += 2) M.AddBox(FVector(MidX - 1.25, Y + s2 * .27, DeckZ + .68), FVector(.5, .08, .28), Uph);
 			}
 		}
-		// bow casting deck (or the go-fast's sun pad) and stern bench
-		M.AddBox(FVector(L * .36, 0, DeckZ + .18), FVector(L * .14, HB * .9, .36), S.Deck);
-		if (S.bSunpad) M.AddBox(FVector(L * .22, 0, DeckZ + .3), FVector(L * .15, HB * 1.05, .22), Uph);
-		M.AddBox(FVector(-L * .43, 0, DeckZ + .25), FVector(L * .08, HB * 1.6, .5), S.Hull);
+		// bow casting deck (or the go-fast's sun pad) and stern bench, inside the liner where they stand
+		{
+			const double BX = L * .33, BW = InnerHalfBeam(S, BX) * 1.9;
+			M.AddBox(FVector(BX, 0, SoleAt(S, BX) + .18), FVector(L * .12, BW, .36), DeckC);
+			if (S.bSunpad)
+			{
+				const double SX = L * .22;
+				M.AddBox(FVector(SX, 0, SoleAt(S, SX) + .3), FVector(L * .15, InnerHalfBeam(S, SX) * 1.9, .22), Uph);
+			}
+			const double AX = -L * .5 + Cap + .3;
+			M.AddBox(FVector(AX, 0, SoleAt(S, AX) + .25), FVector(.5, InnerHalfBeam(S, AX) * 1.95, .5), HullC);
+		}
 		if (S.bBowRail)
 		{
-			// stainless bow rail on stanchions, from the shoulders round the stem
+			// stainless bow rail on stanchions from the shoulders round the stem (web model.ts bowRail)
+			const double L0 = L, B0 = S.Beam;
+			auto RailAt = [&](double T, int32 Side)
+			{
+				const FHullSta St = HullStation(H, L0, B0, T);
+				const double Y = Side * FMath::Max(.04, St.Bs - Cap * .5);
+				return FVector(-HullZRake(H, St, St.YS), Y, St.YS);
+			};
 			for (int32 Side = -1; Side <= 1; Side += 2)
 			{
-				FVector Prev = FVector::ZeroVector;
-				for (int32 i = 15; i <= NS; i++)
+				const int32 NR = 10;
+				for (int32 i = 0; i < NR; i++)
 				{
-					const FSt& P = St[i];
-					const double Y = i == NS ? 0 : Side * FMath::Max(0.0, P.HB - .12);
-					const FVector R(P.X - (i == NS ? .25 : 0), Y, P.ZS + .62);
-					if (i > 15) M.AddTube(Prev, R, .02, .02, 5, Steel);
-					if (i % 2 == 1 && i < NS) M.AddTube(FVector(P.X, Y, P.ZS), R, .016, .016, 5, Steel);
-					Prev = R;
+					const double T0 = FMath::Lerp(.6, .985, double(i) / NR), T1 = FMath::Lerp(.6, .985, double(i + 1) / NR);
+					M.AddTube(RailAt(T0, Side) + FVector(0, 0, .62), RailAt(T1, Side) + FVector(0, 0, .62), .02, .02, 5, Steel);
+					if (i % 2 == 0) M.AddTube(RailAt(T0, Side), RailAt(T0, Side) + FVector(0, 0, .62), .016, .016, 5, Steel);
 				}
 			}
+			M.AddTube(RailAt(.985, -1) + FVector(0, 0, .62), RailAt(.985, 1) + FVector(0, 0, .62), .02, .02, 5, Steel);
 		}
 
 		// T-top or hardtop on four posts
@@ -402,13 +347,13 @@ namespace KeysMesh
 		}
 
 		// outboards: hung off the transom, or set back on a bracket with its own swim platform
-		const double XT = St[0].X;
+		const double XT = SternX(S);
 		const double X0 = XT - .35 - (S.bBracket ? .55 : 0);
 		if (S.bBracket)
 		{
 			const double BW = FMath::Min(S.Beam * .8, S.Engines * .74 + .5);
-			M.AddBox(FVector(XT - .33, 0, Free - .55), FVector(.66, BW, .5), S.Hull);
-			M.AddBox(FVector(XT - .33, 0, Free - .29), FVector(.7, BW + .04, .04), S.Deck);
+			M.AddBox(FVector(XT - .33, 0, Free - .55), FVector(.66, BW, .5), HullC);
+			M.AddBox(FVector(XT - .33, 0, Free - .29), FVector(.7, BW + .04, .04), DeckC);
 		}
 		for (int32 e = 0; e < S.Engines; e++)
 		{
@@ -424,7 +369,8 @@ namespace KeysMesh
 			for (int32 k = 0; k < 3; k++)
 			{
 				const double X = -L * .32 + k * .45;
-				M.AddTube(FVector(X, Side * (HB - .1), Free + .25), FVector(X - .2, Side * (HB + .05), Free + 2.2), .012, .006, 4, Dark);
+				const double Y0 = InnerHalfBeam(S, X) + Cap * .5, Z0 = SheerAt(S, X);
+				M.AddTube(FVector(X, Side * Y0, Z0 - .25), FVector(X - .2, Side * (Y0 + .15), Z0 + 1.7), .012, .006, 4, Dark);
 			}
 	}
 

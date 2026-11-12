@@ -28,118 +28,13 @@ namespace
 	FVector P(double X, double Y, double Z) { return FVector(-Z, X, Y); }
 
 	// ---------------------------------------------------------------- hulls (port of hullStation / hullProfile / buildHullGeo)
-	struct FHullDef
-	{
-		double F = 1.3, Spring = .35, YK = .5, Dr0 = 20, Dr1 = 48, Rake = 1.2, Entry = .42;
-		TArray<double> Steps;
-		FLinearColor Bottom = Hex(0xf8f7f2), Boot = Hex(0x23466e), Hull = Hex(0xfbfaf6), Cove = Hex(0x23466e), Rub = Hex(0xd0d4d8),
-			Cap = Hex(0xfbfaf6), Liner = Hex(0xf3f2ec), Deck = Hex(0xe0ded6);
-		bool bCove = true;
-	};
-
-	struct FSta { double T, Z, Bb, Bs, YK, YC, YS, BF; };
-
-	FSta Station(const FHullDef& H, double L, double B, double T)
-	{
-		const double E = H.Entry, BF = T < E ? 1 : FMath::Sqrt(FMath::Max(0.0, 1 - FMath::Square((T - E) / (1 - E))));
-		const double E2 = FMath::Min(.9, E + .08), BFS = T < E2 ? 1 : FMath::Sqrt(FMath::Max(0.0, 1 - FMath::Square((T - E2) / (1 - E2))));
-		const double Tuck = T < .06 ? .95 + .05 * T / .06 : 1;
-		FSta S;
-		S.T = T;
-		S.BF = BF;
-		S.Bb = B / 2 * .92 * BF * Tuck;
-		S.Bs = B / 2 * BFS * Tuck;
-		S.YK = -H.YK + FMath::Pow(FMath::Max(0.0, T - .55) / .45, 1.8) * (H.YK + H.F * .3);
-		for (double St : H.Steps) if (T < St) S.YK += .05;
-		S.YS = H.F + H.Spring * FMath::Pow(T, 2.2);
-		const double Dr = Lerp(H.Dr0, H.Dr1, SStep(.3, 1, T)) * PI / 180;
-		S.YC = FMath::Min(S.YK + S.Bb * FMath::Tan(Dr), S.YS - .2);
-		S.Z = L / 2 - T * (L - H.Rake * .5);
-		return S;
-	}
-
-	double ZRake(const FHullDef& H, const FSta& S, double Y)
-	{
-		return S.Z - H.Rake * Clamp((Y - S.YK) / FMath::Max(.01, S.YS - S.YK), 0, 1) * SStep(.62, 1, S.T);
-	}
-
-	void Profile(const FHullDef& H, const FSta& S, double B, TArray<FVector2D>& Pts, TArray<FLinearColor>& Cols)
-	{
-		const double Led = B * .025 * S.BF, X0 = S.Bb + Led, Y0 = S.YC + .01;
-		Pts = {FVector2D(0, S.YK), FVector2D(S.Bb * .5, S.YK + (S.YC - S.YK) * .42), FVector2D(S.Bb, S.YC), FVector2D(X0, Y0)};
-		Cols = {H.Bottom, H.Bottom, H.Boot};
-		const double Fs[5] = {.1, .6, .68, .93, 1};
-		const FLinearColor Cs[5] = {H.Boot, H.Hull, H.bCove ? H.Cove : H.Hull, H.Hull, H.Rub};
-		for (int32 k = 0; k < 5; k++)
-		{
-			const double F = Fs[k];
-			Pts.Add(FVector2D(Lerp(X0, S.Bs, F) + FMath::Sin(F * PI) * B * .012 * S.BF, Lerp(Y0, S.YS, F)));
-			Cols.Add(Cs[k]);
-		}
-	}
-
-	double SoleY(double L, const FSta& S) { const double D = .55 + L * .012; return S.YS - D * (1 - .4 * SStep(.55, .85, S.T)); }
-	// station under boat-local z (JS st(z))
-	FSta StationAtZ(const FHullDef& H, double L, double B, double Z) { return Station(H, L, B, Clamp((L / 2 - Z) / (L - H.Rake * .5), 0, 1)); }
-
-	void BuildHull(FKeysMesh& M, const FHullDef& H, double L, double B)
-	{
-		const int32 NS = 36;
-		TArray<FSta> Sts;
-		TArray<TArray<FVector2D>> PrP;
-		TArray<TArray<FLinearColor>> PrC;
-		for (int32 i = 0; i <= NS; i++)
-		{
-			Sts.Add(Station(H, L, B, double(i) / NS));
-			TArray<FVector2D> Pp;
-			TArray<FLinearColor> Cc;
-			Profile(H, Sts[i], B, Pp, Cc);
-			PrP.Add(Pp);
-			PrC.Add(Cc);
-		}
-		auto V = [&](const FSta& S, double X, double Y) { return P(X, Y, ZRake(H, S, Y)); };
-		for (int32 i = 0; i < NS; i++)
-		{
-			const FSta& A = Sts[i];
-			const FSta& Zs = Sts[i + 1];
-			const TArray<FVector2D>& Pa = PrP[i];
-			const TArray<FVector2D>& Pb = PrP[i + 1];
-			for (int32 k = 0; k < Pa.Num() - 1; k++)
-				for (int32 Sx = -1; Sx <= 1; Sx += 2)
-					M.AddQuad(V(A, Sx * Pa[k].X, Pa[k].Y), V(A, Sx * Pa[k + 1].X, Pa[k + 1].Y), V(Zs, Sx * Pb[k + 1].X, Pb[k + 1].Y), V(Zs, Sx * Pb[k].X, Pb[k].Y),
-						PrC[i][k], FVector(0, Sx, k < 2 ? -.6 : 0));
-		}
-		// transom
-		const FSta& S0 = Sts[0];
-		{
-			TArray<FVector2D> Ring;
-			for (int32 j = PrP[0].Num() - 1; j >= 0; j--) Ring.Add(FVector2D(-PrP[0][j].X, PrP[0][j].Y));
-			for (int32 j = 1; j < PrP[0].Num(); j++) Ring.Add(PrP[0][j]);
-			const double Cy = (S0.YK + S0.YS) / 2;
-			for (int32 j = 0; j < Ring.Num() - 1; j++)
-			{
-				const double My = (Ring[j].Y + Ring[j + 1].Y) / 2;
-				M.AddTri(P(0, Cy, S0.Z), P(Ring[j].X, Ring[j].Y, S0.Z), P(Ring[j + 1].X, Ring[j + 1].Y, S0.Z), My < S0.YC ? H.Bottom : H.Hull, FVector(-1, 0, 0));
-			}
-		}
-		// deck: covering boards, liner and sole
-		const double Cap = .14 + B * .02;
-		auto Inn = [Cap](const FSta& S) { return FMath::Max(0.0, S.Bs - Cap); };
-		for (int32 i = 0; i < NS; i++)
-		{
-			const FSta& A = Sts[i];
-			const FSta& Zs = Sts[i + 1];
-			for (int32 Sx = -1; Sx <= 1; Sx += 2)
-			{
-				M.AddQuad(V(A, Sx * A.Bs, A.YS + .002), V(A, Sx * Inn(A), A.YS + .01), V(Zs, Sx * Inn(Zs), Zs.YS + .01), V(Zs, Sx * Zs.Bs, Zs.YS + .002), H.Cap, FVector::ZAxisVector);
-				M.AddQuad(V(A, Sx * Inn(A), A.YS), V(A, Sx * Inn(A), SoleY(L, A)), V(Zs, Sx * Inn(Zs), SoleY(L, Zs)), V(Zs, Sx * Inn(Zs), Zs.YS), H.Liner, FVector(0, -Sx, 0));
-			}
-			M.AddQuad(V(A, -Inn(A), SoleY(L, A)), V(A, Inn(A), SoleY(L, A)), V(Zs, Inn(Zs), SoleY(L, Zs)), V(Zs, -Inn(Zs), SoleY(L, Zs)), H.Deck, FVector::ZAxisVector);
-		}
-		const double Zi = S0.Z - Cap, I0 = Inn(S0), Sl = SoleY(L, S0);
-		M.AddQuad(P(-I0, Sl, Zi), P(I0, Sl, Zi), P(I0, S0.YS, Zi), P(-I0, S0.YS, Zi), H.Liner, FVector(1, 0, 0));
-		M.AddQuad(P(-S0.Bs, S0.YS + .01, S0.Z), P(S0.Bs, S0.YS + .01, S0.Z), P(I0, S0.YS + .01, Zi), P(-I0, S0.YS + .01, Zi), H.Cap, FVector::ZAxisVector);
-	}
+	using KeysMesh::FHullDef;
+	using FSta = KeysMesh::FHullSta;
+	FSta Station(const FHullDef& H, double L, double B, double T) { return KeysMesh::HullStation(H, L, B, T); }
+	double ZRake(const FHullDef& H, const FSta& S, double Y) { return KeysMesh::HullZRake(H, S, Y); }
+	double SoleY(double L, const FSta& S) { return KeysMesh::HullSole(L, S); }
+	FSta StationAtZ(const FHullDef& H, double L, double B, double Z) { return KeysMesh::HullStationAtZ(H, L, B, Z); }
+	void BuildHull(FKeysMesh& M, const FHullDef& H, double L, double B) { KeysMesh::BuildHullLoft(M, H, L, B, true); }
 
 	// trafficHull: a Grady-like hull with traffic proportions
 	FHullDef TrafficHull(double F, uint32 HullC, uint32 Boot, int64 Cove, uint32 BottomC, double Dr = 20, int64 DeckC = -1)

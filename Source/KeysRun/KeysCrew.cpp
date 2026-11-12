@@ -43,8 +43,9 @@ void FKeysDeck::Init(const KeysData::FBoatSpec& S)
 {
 	L = S.Len;
 	HB = S.Beam * .5;
-	Free = .72 + .028 * L;
-	DeckZ = Free - .42;
+	Free = KeysMesh::HullOf(S).F;
+	DeckZ = KeysMesh::SoleAt(S, .05 * L - .5);
+	Spec = &S;
 	MidX = .05 * L;
 	TopZ = DeckZ + 2.35;
 	TopL = FMath::Min(2.6, L * .26);
@@ -53,16 +54,12 @@ void FKeysDeck::Init(const KeysData::FBoatSpec& S)
 
 double FKeysDeck::SoleAt(double X) const
 {
-	const double T = FMath::Clamp(X / L + .5, 0.0, 1.0);
-	return Free + .28 * T * T - .42;
+	return Spec ? KeysMesh::SoleAt(*Spec, X) : DeckZ;
 }
 
 double FKeysDeck::InnerHB(double X) const
 {
-	const double T = FMath::Clamp(X / L + .5, 0.0, 1.0);
-	const double Taper = T < .5 ? 1 : FMath::Sqrt(FMath::Max(0.0, 1 - FMath::Square((T - .5) / .5)));
-	const double H = FMath::Max(.02, HB * Taper);
-	return H - FMath::Min(.14, H * .5);
+	return Spec ? KeysMesh::InnerHalfBeam(*Spec, X) : HB - .14;
 }
 
 // ---------------------------------------------------------------- layout

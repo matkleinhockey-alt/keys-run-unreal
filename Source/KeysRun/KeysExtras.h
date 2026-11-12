@@ -28,6 +28,7 @@ struct FKeysExtrasTag
 struct FKeysDeck
 {
 	double L = 7, HB = 1.3, Free = .9, DeckZ = .5, MidX = .35, TopZ = 2.8, TopL = 1.8, TopW = 1.7;
+	const KeysData::FBoatSpec* Spec = nullptr;   // the boats table never moves, so this stays good
 	void Init(const KeysData::FBoatSpec& S);
 	double SoleAt(double X) const;     // deck height at X
 	double InnerHB(double X) const;    // half-width inside the gunwale at X

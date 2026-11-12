@@ -380,7 +380,7 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 		else
 		{
 			const double Off = St.Rigger >= 0 ? (St.Rigger == 0 ? -1 : 1) * S.Beam * .4 : St.Side * .05;
-			From = BT.TransformPosition(FVector(-S.Len * .5 + .2, FMath::Clamp(Off, -S.Beam * .45, S.Beam * .45), .72 + .028 * S.Len + (i == 4 ? 2.5 : .9)) * 100.0) / 100.0;
+			From = BT.TransformPosition(FVector(-S.Len * .5 + .2, FMath::Clamp(Off, -S.Beam * .45, S.Beam * .45), KeysMesh::SheerAt(S, -S.Len * .5) + (i == 4 ? 2.5 : .9)) * 100.0) / 100.0;
 		}
 		const FVector To = G2U(Lures[i]);
 		// slack follows the ride, and a long line carries a bigger belly
@@ -401,7 +401,7 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 		if (St.Rigger >= 0 && bRiggers)
 		{
 			const double Sx = St.Rigger == 0 ? -1 : 1;
-			const FVector Rod = BT.TransformPosition(FVector(-S.Len * .32 + .45 - .2, Sx * (S.Beam * .5 + .05), .72 + .028 * S.Len + 2.2) * 100.0) / 100.0;
+			const FVector Rod = BT.TransformPosition(FVector(-S.Len * .32 + .45 - .2, Sx * (S.Beam * .5 + .05), KeysMesh::SheerAt(S, -S.Len * .32) + 2.2) * 100.0) / 100.0;
 			M.AddTube(Rod, From, LineR(Rod), LineR(From), 3, LineC);
 		}
 	}
@@ -409,7 +409,7 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 	// the teasers: a daisy chain of squid off each transom corner, splashing in the white water close astern
 	for (int32 Sd = -1; Sd <= 1; Sd += 2)
 	{
-		const FVector From = BT.TransformPosition(FVector(-S.Len * .5 + .2, Sd * S.Beam * .38, .72 + .028 * S.Len + .5) * 100.0) / 100.0;
+		const FVector From = BT.TransformPosition(FVector(-S.Len * .5 + .2, Sd * S.Beam * .38, KeysMesh::SheerAt(S, -S.Len * .5) + .5) * 100.0) / 100.0;
 		const double Back = 14 * Out;
 		double TX, TZ, LH = H;
 		if (!TrackBack(Back, TX, TZ, LH)) { TX = X - Fx * Back; TZ = Z - Fz * Back; }
