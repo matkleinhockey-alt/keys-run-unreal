@@ -2449,12 +2449,22 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 		const double Sag = FState == EKeysFish::Fight ? (1 - Clamp(Tension, 0, 1)) * Len * .12 : FState == EKeysFish::Casting ? 0 : Len * .06;
 		const FVector Ctrl = (TipU + EndU) * .5 - FVector(0, 0, Sag);
 		const int32 Segs = 24;
+		// the braid keeps about a pixel and a half of width however far out the fish is (a 1.3 cm tube is lost against
+		// the water at 60 m off the transom in a trolling fight)
+		const FVector CamU = Camera->GetComponentLocation() / 100.0;
+		auto Rad = [&CamU](const FVector& Q) { return FMath::Max(.013, (Q - CamU).Size() * .0011); };
 		FVector Prev = TipU;
 		for (int32 i = 1; i <= Segs; i++)
 		{
 			const double U = double(i) / Segs;
-			const FVector P = TipU * FMath::Square(1 - U) + Ctrl * 2 * U * (1 - U) + EndU * U * U;
-			M.AddTube(Prev, P, .013, .013, 4, FLinearColor(.98f, .86f, .12f));   // hi-vis yellow braid
+			FVector P = TipU * FMath::Square(1 - U) + Ctrl * 2 * U * (1 - U) + EndU * U * U;
+			// a long line under load lies on the water, not through it: only the last stretch goes down to the fish
+			if (FState == EKeysFish::Fight && U < .92)
+			{
+				const double Surf = WaveH(P.X, P.Y, T, AmpAt(P.X, P.Y)) + .06;
+				if (P.Z < Surf) P.Z = Surf;
+			}
+			M.AddTube(Prev, P, Rad(Prev), Rad(P), 4, FLinearColor(.98f, .86f, .12f));   // hi-vis yellow braid
 			Prev = P;
 		}
 		Bobber->SetWorldLocation(ToUE(Bob.X, Bob.Y + .05, Bob.Z));

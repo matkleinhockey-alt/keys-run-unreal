@@ -723,7 +723,8 @@ namespace KeysGeo
 		const double Rate = Clamp(Interval / .35, .05, 1.5);
 		// At displacement speeds the rings are dropped so close together that they stack into a wall; a slow hull
 		// (trolling, idling in) pushes a much smaller wake, so the height eases in with speed.
-		const double Slow = .3 + .7 * WSStep(2, 9, V);
+		// (At trolling speed, ~2.7 m/s, the rings drop 0.2 m apart and still summed into a wide white mound astern.)
+		const double Slow = .1 + .9 * WSStep(2.5, 10, V);
 		const double A = Slow * Rate * Clamp(Len / 10, .35, 1.3) * (.18 + .5 * FMath::Exp(-FMath::Square((V - 8) / 7)) + .26 * FMath::Min(V / 25, 1.0));
 		FWakeRing& W = WakeP[WakeI];
 		W.X = X; W.Z = Z; W.T = T; W.C = FMath::Max(1.5, .34 * V); W.A = FMath::Min(9.9, A);
