@@ -223,7 +223,7 @@ if (kind < 0.5) {
   float4 gr = F.nd(p * 160.0);
   float4 pu = F.nd(p * 6.0);
   df = lerp(0.97, 1.03, pu.x);
-  g = gr.yzw * 0.035 * closeF + pu.yzw * 0.03;
+  g = gr.yzw * 0.012 * closeF + pu.yzw * 0.025;
   rough = 0.4 + 0.08 * gr.x; spec = 0.45;
   col += fres * 0.06;
 } else if (kind < 8.5) {           // wood: grain along the plank, darker late-wood rings, weathered
@@ -287,7 +287,7 @@ if (kind < 0.5) {
   float2 c = frac(q * 120.0) - 0.5;
   g = (qa * c.x + qb * c.y) * 0.16 * closeF + F.nd(p * 9.0).yzw * 0.02;
   float3 ir = 0.5 + 0.5 * cos(6.2831853 * (ndv * 1.4 + float3(0.0, 0.33, 0.67)));
-  col = lerp(col, col * (0.6 + ir), 0.35 * (1.0 - ndv)) + 0.03 * ir;
+  col = col * (1.0 + 0.35 * ir * (1.0 - ndv)) + 0.02 * ir;
   rough = 0.18; spec = 0.75;
 } else if (kind < 16.5) {          // bark / palm trunk: rings and fibres
   float4 w = F.nd(p * 3.0);

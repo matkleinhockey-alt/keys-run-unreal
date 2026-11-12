@@ -126,6 +126,11 @@ private:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> CrewMesh;      // attached to the player's boat: 0 people, 1 props, 2 flag
+	// the web game's deck crew (models/crew/dance-01: the textured, rigged figure dancing its clip), one per party
+	// guest; empty if the asset didn't load, and then the procedural guests walk and dance as before
+	UPROPERTY() TArray<TObjectPtr<class USkeletalMeshComponent>> PartyModels;
+	bool PartyModelsReady();
+	void UpdatePartyModels();
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> RoosterMesh;   // attached to the player's boat
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BuddyMesh;     // 0 hull, 1 rod
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BuddyFish;

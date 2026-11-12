@@ -521,7 +521,7 @@ namespace
 	{
 		const FKeysShape& S = LifeShapeOf(V.Key);
 		const double L = V.Len, Hh = V.H > 0 ? V.H : L * .17, W = V.W > 0 ? V.W : L * .16, NE = 2.3;
-		const int32 NS = bHigh ? 36 : 16, NR = bHigh ? 22 : 10;
+		const int32 NS = bHigh ? 36 : 24, NR = bHigh ? 22 : 14;
 		const FLinearColor Fin = V.Fin, Back = V.Back;
 		const bool bDolphin = V.Key == TEXT("dolphin"), bCet = V.Kind == EKeysKind::Dolphin;
 		auto Prof = [&S](double t) { return t < S.Peak ? FMath::Pow(FMath::Sin(PI / 2 * t / S.Peak), S.Nose) : LLerp(1, S.Ped, FMath::Pow((t - S.Peak) / (1 - S.Peak), 1.25)); };
@@ -554,7 +554,7 @@ namespace
 		M.CurK = SurfFin;
 		auto MidFin = [&](const FKeysFin& F, bool bTop)
 		{
-			const int32 NSeg = bHigh ? 16 : 8;
+			const int32 NSeg = bHigh ? 16 : 10;
 			auto Pt = [&](double U, bool bEdge)
 			{
 				const double t = LLerp(F.T0, F.T1, U), z = -L / 2 + t * L, yb = bTop ? TopY(t) - .004 : BotY(t) + .004;
@@ -638,14 +638,8 @@ namespace
 		M.CurK = SurfEye;
 		for (int32 Sx = -1; Sx <= 1; Sx += 2)
 		{
-			if (bHigh)
-			{
-				M.Blob(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), 10, 6, (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
-				if (!S.bShark && !bCet) M.Blob(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), 8, 5, LHex(0x0a0a0c));
-				continue;
-			}
-			M.Octa(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
-			if (!S.bShark && !bCet) M.Octa(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), LHex(0x0a0a0c));
+			M.Blob(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), bHigh ? 10 : 6, bHigh ? 6 : 4, (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
+			if (!S.bShark && !bCet) M.Blob(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), bHigh ? 8 : 5, bHigh ? 5 : 3, LHex(0x0a0a0c));
 		}
 		M.CurK = SurfFish;
 		if (V.Bill > 0) M.Tube(FVector(0, Hh * .02, -L / 2 + .04), FVector(0, Hh * .02, -L / 2 - L * V.Bill + .04), .03, 0, 6, Back);
@@ -907,12 +901,12 @@ void AKeysLife::Tick(float DeltaSeconds)
 	UpdateRigs(Dt, T);
 	UpdateDrops(Dt, T);
 	Flush(BirdMesh, BirdBuf);
-	Flush(SeaMesh, SeaBuf);
+	Flush(SeaMesh, SeaBuf, SurfFish);
 	Flush(WeedMesh, WeedBuf);
 	Flush(DropMesh, DropBuf);
 }
 
-void AKeysLife::Flush(UProceduralMeshComponent* M, FKeysLifeBuf& B)
+void AKeysLife::Flush(UProceduralMeshComponent* M, FKeysLifeBuf& B, uint8 Kind)
 {
 	if (!M) return;
 	if (!B.V.Num())
@@ -922,7 +916,9 @@ void AKeysLife::Flush(UProceduralMeshComponent* M, FKeysLifeBuf& B)
 	}
 	if (B.V.Num() != B.LastV || B.Sig != B.LastSig)
 	{
-		M->CreateMeshSection_LinearColor(0, B.V, B.T, B.N, B.UV, B.C, TArray<FProcMeshTangent>(), false);
+		TArray<FVector2D> K;
+		K.Init(FVector2D(Kind, 0), B.V.Num());
+		M->CreateMeshSection_LinearColor(0, B.V, B.T, B.N, B.UV, K, TArray<FVector2D>(), TArray<FVector2D>(), B.C, TArray<FProcMeshTangent>(), false);
 		M->SetMaterial(0, AKeysWorld::VertexColorMaterial());
 		B.LastV = B.V.Num();
 		B.LastSig = B.Sig;

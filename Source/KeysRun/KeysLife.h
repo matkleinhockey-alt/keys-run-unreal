@@ -242,7 +242,7 @@ private:
 	void PoseBird(FKeysBird& B, double Dt, double Flap, double Tuck, double Rate);
 	void MoveBird(FKeysBird& B, double X, double Y, double Z, double Dt);
 	void EmitBird(const FKeysBird& B);
-	void Flush(UProceduralMeshComponent* M, FKeysLifeBuf& B);
+	void Flush(UProceduralMeshComponent* M, FKeysLifeBuf& B, uint8 Kind = 0);
 	void ReadViewer(double Dt);
 	void UpdateNearField();
 
