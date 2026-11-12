@@ -49,7 +49,7 @@ private:
 
 	TArray<FVector2D> Route;
 	TArray<double> Cum;
-	double RouteLen = 1;
+	double RouteLen = 1, StartS = 0;
 	struct FBoat { double S = 0, Speed = 0, X = 0, Z = 0, H = 0; int32 Hull = 0; };
 	TArray<FBoat> Boats;
 	bool bFleetOn = false;

@@ -148,6 +148,29 @@ void AKeysTourneyShow::BuildRoute()
 	Cum.Add(0);
 	for (int32 i = 1; i < Route.Num(); i++) Cum.Add(Cum[i - 1] + FVector2D::Distance(Route[i - 1], Route[i]));
 	RouteLen = FMath::Max(1.0, Cum.Last());
+	// where the field lines up: the first stretch of the route where all three hulls, abreast, sit in open water
+	// clear of every pier, finger and piling (the harbour point itself is beside the town's pier head)
+	auto Open = [](double X, double Z)
+	{
+		if (DepthAt(X, Z) < 1.6) return false;
+		double Gy;
+		for (int32 k = 0; k < 8; k++)
+			if (KeysTown::GroundAt(X + FMath::Cos(k * PI / 4) * 6, Z + FMath::Sin(k * PI / 4) * 6, Gy, false)) return false;
+		return !KeysTown::GroundAt(X, Z, Gy, false);
+	};
+	StartS = 0;
+	for (double S0 = 0; S0 < FMath::Min(RouteLen - 40, 600.0); S0 += 5)
+	{
+		double X, Z, TX, TZ;
+		RouteAt(S0, X, Z, TX, TZ);
+		bool bOk = true;
+		for (int32 i = 0; i < Boats.Num() && bOk; i++)
+		{
+			const double Off = (i - (Boats.Num() - 1) / 2.0) * AbreastM;
+			for (double Al = -8; Al <= 8 && bOk; Al += 4) bOk = Open(X - TZ * Off + TX * Al, Z + TX * Off + TZ * Al);
+		}
+		if (bOk) { StartS = S0; break; }
+	}
 }
 
 void AKeysTourneyShow::RouteAt(double S, double& X, double& Z, double& TX, double& TZ) const
@@ -172,17 +195,17 @@ void AKeysTourneyShow::TickFleet(double Dt, double T, double Since)
 	{
 		FBoat& B = Boats[i];
 		const KeysData::FBoatSpec& Sp = KeysData::Boats()[B.Hull];
-		if (Since < 0) { B.S = 0; B.Speed = 0; }
+		if (Since < 0) { B.S = StartS; B.Speed = 0; }
 		else if (Since >= i * StaggerS)
 		{
-			const double Want = B.S < HarbourLegM ? HarbourMs : RunMs;
+			const double Want = B.S < StartS + HarbourLegM ? HarbourMs : RunMs;
 			B.Speed = FMath::Lerp(B.Speed, Want, FMath::Min(1.0, Dt * (Want > B.Speed ? .6 : 1.2)));
 			B.S = FMath::Min(RouteLen - 1, B.S + B.Speed * Dt);
 		}
 		double X, Z, TX, TZ;
 		RouteAt(B.S, X, Z, TX, TZ);
 		// abreast across the start of the route, closing into line as they get under way
-		const double K = FMath::Max(0.0, 1 - B.S / 80), Off = (i - (Boats.Num() - 1) / 2.0) * AbreastM * K;
+		const double K = FMath::Max(0.0, 1 - (B.S - StartS) / 80), Off = (i - (Boats.Num() - 1) / 2.0) * AbreastM * K;
 		B.X = X - TZ * Off; B.Z = Z + TX * Off; B.H = FMath::Atan2(-TX, -TZ);
 		FPose Ps = RidePose(B.X, B.Z, B.H, Sp.Len, Sp.Beam, T, .8);
 		Ps.Pitch += FMath::Min(.2, B.Speed * .004);
@@ -206,8 +229,10 @@ void AKeysTourneyShow::BeginCeremony()
 	if (!Ev || !P) return;
 	// the promenade at the town marina, off to one side of the pier ramp, facing the water
 	double X, Z, SX, SZ;
-	KeysTown::ToWorld(-16, KeysTown::PadV0 + 6, X, Z);
-	KeysTown::ToWorld(-16, KeysTown::PadV0 + 5, SX, SZ);
+	// east of the ramp: west of it (the web game's first choice) this port's dry-stack rack stands between the podium
+	// and the water, so the wide shot from the water came in through the rack's uprights
+	KeysTown::ToWorld(16, KeysTown::PadV0 + 6, X, Z);
+	KeysTown::ToWorld(16, KeysTown::PadV0 + 5, SX, SZ);
 	Origin = FVector(X, KeysTown::PadY, Z);
 	Yaw = FMath::Atan2(-(SZ - Z), SX - X);
 	const bool bMe = Ev->WinnerId0() == TEXT("me");
@@ -352,7 +377,8 @@ void AKeysTourneyShow::TickCeremony(double Dt, double T, double S)
 	M.Commit(Party, 0, AKeysWorld::VertexColorMaterial());
 	// three shots: a wide from the water side, close on the trophy, then along the fish
 	bCam = true; CamFov = 60;
-	if (S < 3.5) { const double U = S / 3.5; CamPos = Local(11 - U * 2, 3.2 + U * .6, -5 + U * 6); CamLook = Local(-1, 2.2, 0); }
+	// the wide from over the water (ceremony.ts), a little higher so it clears the rails and the moored boats
+	if (S < 3.5) { const double U = S / 3.5; CamPos = Local(11 - U * 2, 3.8 + U * .6, -5 + U * 6); CamLook = Local(-1, 2.2, 0); }
 	else if (S < 7) { const double U = (S - 3.5) / 3.5, A = -.5 + U; CamPos = Local(FMath::Cos(A) * 3.4, 2.6 - U * .5, FMath::Sin(A) * 3.4); CamLook = Local(0, 2.55, 0); }
 	else { const double U = FMath::Min(1.0, (S - 7) / 3); CamPos = Local(-.6, 2.5, -2.3 + U * 4.6); CamLook = Local(-2.4, 2.35, -2.0 + U * 4.0); }
 }
@@ -371,7 +397,7 @@ void AKeysTourneyShow::Tick(float DeltaSeconds)
 	const AKeysEvents::ETourney Ph = Ev->TourneyPhase();
 	const bool bIn = Ph == AKeysEvents::ETourney::Countdown || Ph == AKeysEvents::ETourney::Live || Ph == AKeysEvents::ETourney::Ceremony;
 	const double Since = bIn ? Ev->TourneyClock() : -1e9;
-	if (Ph == AKeysEvents::ETourney::Countdown && LastPhase != int32(Ph)) { Route.Reset(); for (FBoat& B : Boats) { B.S = 0; B.Speed = 0; } }
+	if (Ph == AKeysEvents::ETourney::Countdown && LastPhase != int32(Ph)) { Route.Reset(); for (FBoat& B : Boats) { B.S = StartS; B.Speed = 0; } }
 	TickFleet(Dt, T, Since);
 	if (Ph == AKeysEvents::ETourney::Countdown)
 	{
