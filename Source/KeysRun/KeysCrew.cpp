@@ -505,8 +505,9 @@ void AKeysExtras::UpdatePartyModels()
 		C->SetSkeletalMesh(CrewMeshAsset());
 		C->SetupAttachment(CrewMesh);
 		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		C->SetCastShadow(true);
-		C->bCastDynamicShadow = true;
+		// like the web game (entities/crew-model/asset.ts): they take the deck's shadows but don't cast their own;
+		// the decimated skinned mesh self-shadows into dark facets otherwise
+		C->SetCastShadow(false);
 		C->RegisterComponent();
 		C->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 		C->PlayAnimation(CrewAnimAsset(), true);
