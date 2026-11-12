@@ -20,6 +20,7 @@
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
+#include "KeysGfx.h"
 #include "ProceduralMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -108,6 +109,7 @@ void AKeysBoatPawn::BeginPlay()
 {
 	Super::BeginPlay();
 	KeysGeo::Init();
+	KeysGfx::Init(GetWorld());
 	BoatIndex = PickIndex = 1;
 	Rebuild();
 	PlaceAtSpawn();
@@ -265,6 +267,9 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		Add(TEXT("autochase"), TEXT("Auto-chase hooked fish"), bAutoChase ? TEXT("On") : TEXT("Off"), true);
 		Add(TEXT("diveview"), TEXT("Dive view"), bDiveChase ? TEXT("Chase") : TEXT("Dive mask"), true);
 		Add(TEXT("haze"), TEXT("Underwater haze"), UnderwaterHaze < .8 ? TEXT("Clear") : UnderwaterHaze > 1.2 ? TEXT("Murky") : TEXT("Normal"), true);
+		Add(TEXT("gfx"), TEXT("Graphics quality"), KeysGfx::QualityLabel(), true);
+		Add(TEXT("res"), TEXT("Resolution scale"), KeysGfx::ResScaleLabel(), true);
+		Add(TEXT("display"), TEXT("Display"), KeysGfx::IsFullscreen() ? TEXT("Full screen") : TEXT("Window"), true);
 		Add(TEXT("back"), TEXT("Back"));
 		break;
 	}
@@ -343,6 +348,16 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 		bDiveChase = !bDiveChase;
 		if (AKeysDiver* D = AKeysDiver::Get(this)) { D->SetDefaultChase(bDiveChase); if (D->IsDiving() && D->IsChaseView() != bDiveChase) D->CycleView(); }
 	}
+	else if (Id == TEXT("gfx")) KeysGfx::SetQuality(KeysGfx::Quality() + (Dir < 0 ? -1 : 1));
+	else if (Id == TEXT("res"))
+	{
+		// Auto, 50, 60 ... 100 percent
+		static const int32 Steps[7] = {0, 50, 60, 70, 80, 90, 100};
+		int32 I = 0;
+		for (int32 k = 0; k < 7; k++) if (Steps[k] == KeysGfx::ResScale()) I = k;
+		KeysGfx::SetResScale(Steps[(I + (Dir < 0 ? 6 : 1)) % 7]);
+	}
+	else if (Id == TEXT("display")) KeysGfx::SetFullscreen(!KeysGfx::IsFullscreen());
 	else if (Id == TEXT("haze"))
 	{
 		// Clear 0.6, Normal 1, Murky 1.5
@@ -590,6 +605,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd.StartsWith(TEXT("buy="))) ShopBuy(FCString::Atoi(*Cmd.Mid(4)));
 		else if (Cmd == TEXT("shopclose")) ShopClose();
 		else if (Cmd.StartsWith(TEXT("cash="))) Cash = FCString::Atoi64(*Cmd.Mid(5));
+		else if (Cmd.StartsWith(TEXT("gfx="))) KeysGfx::SetQuality(FCString::Atoi(*Cmd.Mid(4)));
+		else if (Cmd.StartsWith(TEXT("res="))) KeysGfx::SetResScale(FCString::Atoi(*Cmd.Mid(4)));
 		else if (Cmd == TEXT("sunset")) { if (AKeysWorld* Wd = World()) Wd->ToggleSunset(); }
 		else if (Cmd.StartsWith(TEXT("con=")))
 		{
@@ -2554,6 +2571,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	const double Dt = FMath::Min(double(DeltaSeconds), 1.0 / 20);
 	const double T = GetWorld()->GetTimeSeconds();
+	KeysGfx::Tick(GetWorld(), DeltaSeconds);
 	HandleInput(DeltaSeconds);
 	UpdateCursor();
 	RunTestScript(GetWorld()->GetRealTimeSeconds());

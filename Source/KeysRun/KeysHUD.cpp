@@ -1,4 +1,7 @@
 #include "KeysHUD.h"
+#include "KeysGfx.h"
+#include "Engine/GameViewportClient.h"
+#include "UnrealClient.h"
 #include "KeysFinal.h"
 #include "KeysWrecks.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -336,6 +339,10 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 		else if (Sel == TEXT("fpview")) Help = TEXT("First person puts you at the rod with your own hands on the reel whenever the line is out.");
 		else if (Sel == TEXT("diveview")) Help = TEXT("How a dive starts (J): looking out through your dive mask with the speargun in hand, or the chase view behind your fins. 1 switches while you swim.");
 		else if (Sel == TEXT("haze")) Help = TEXT("How much the water hazes the distance on a dive. Visibility still shrinks with depth, from about 30 m near the surface to 10 m past 20 m.");
+		else if (Sel == TEXT("gfx")) Help = KeysGfx::Describe();
+		else if (Sel == TEXT("res")) Help = FString::Printf(TEXT("How many of the screen's pixels are rendered before TSR upscales to the full (Retina) resolution. Auto follows the graphics quality: now %d%% of %dx%d. Lower is faster; 100%% is native."),
+			KeysGfx::EffectiveScreenPercent(), GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport ? GEngine->GameViewport->Viewport->GetSizeXY().X : 0, GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport ? GEngine->GameViewport->Viewport->GetSizeXY().Y : 0);
+		else if (Sel == TEXT("display")) Help = TEXT("Full screen at the display's own resolution, or a window three quarters of its size.");
 		else if (Sel == TEXT("autochase")) Help = TEXT("When a big fish runs, the boat follows it so you don't get spooled.");
 		if (!Help.IsEmpty())
 		{
