@@ -81,6 +81,10 @@ public:
 	// the hype-man lines shouted over the air horn (stands in for speech synthesis); empty when quiet
 	FString GetCallout() const;
 	bool IsBuddyOn() const { return bBuddyOn; }
+	// Caelen as a pistol target (entities/life/caelen.ts): his capsule while he is here, and what a shot did
+	bool CaelenHitbox(FVector& OutA, FVector& OutB, double& OutR) const;
+	void CaelenShot(bool bHit);
+	static constexpr double CaelenRadius = .75, CaelenNearMiss = 2.2;
 
 	// radio tempo for the dancers; the audio actor can set this from the current station
 	double MusicBpm = 96;
@@ -174,4 +178,8 @@ private:
 	bool bCaelenInit = false;
 	double CA = 0, CR = 12, CHt = 8, CTalkT = 25, CSwoop = 0, CBubble = 0, CPh = 0, CYaw = 0, CRoll = 0;
 	FVector CPos = FVector::ZeroVector;   // game meters
+	double CAway = 0, CLeaveT = 0, CExitLineT = 0;
+	int32 CLineIdx = 0;
+	FString CLine;
+	void CaelenSay(const FString& Line, double Hold = 4);
 };

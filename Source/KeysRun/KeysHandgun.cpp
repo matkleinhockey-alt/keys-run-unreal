@@ -1,4 +1,5 @@
 #include "KeysHandgun.h"
+#include "KeysExtras.h"
 #include "KeysKit.h"
 #include "KeysGeo.h"
 #include "KeysMesh.h"
@@ -410,6 +411,7 @@ void AKeysHandgun::StepBullets(double Dt)
 	GatherTargets(E, Tg);
 	AKeysAudio* Au = AKeysAudio::Get(this);
 	AKeysLife* L = AKeysLife::Get(this);
+	AKeysExtras* Ex = AKeysExtras::Get(this);
 	for (FBullet& B : Bullets)
 	{
 		if (!B.bAlive) continue;
@@ -445,6 +447,25 @@ void AKeysHandgun::StepBullets(double Dt)
 			{
 				const double A0 = P1.Y - SurfaceY(P1.X, P1.Z, T), A1 = P2.Y - SurfaceY(P2.X, P2.Z, T);
 				if (A0 > 0 && A1 <= 0) { const double F = A0 / (A0 - A1); Seg2 = P1 + (P2 - P1) * F; SegLen *= F; bCrossed = true; }
+			}
+			// Caelen, tested as the round passes him (he is never an aim-assist target): a hit counts, a near miss is
+			// announced at most once per round
+			if (!B.bInWater && !B.bCaelenHit && Ex)
+			{
+				FVector CA, CB;
+				double CR, S0 = 0;
+				if (Ex->CaelenHitbox(CA, CB, CR))
+				{
+					const double D2 = KeysDive::ClosestDistSqSegSeg(P1, Seg2, CA, CB, S0);
+					if (D2 <= CR * CR)
+					{
+						B.bCaelenHit = true;
+						TallyCaelen++;
+						HitFlash = .25;
+						Ex->CaelenShot(true);
+					}
+					else if (!B.bCaelenTaunt && D2 <= FMath::Square(CR + AKeysExtras::CaelenNearMiss)) { B.bCaelenTaunt = true; Ex->CaelenShot(false); }
+				}
 			}
 			// the swept test along P1 -> Seg2
 			const FTgt* Best = nullptr;
@@ -713,6 +734,19 @@ void AKeysHandgun::Render(double T)
 	else Glow->SetVisibility(false);
 	FlareLight->SetVisibility(Best > 0);
 	if (Best > 0) { FlareLight->SetWorldLocation(BestP); FlareLight->SetIntensity(float(400000 * Best)); }
+}
+
+void AKeysHandgun::DebugFireAt(const FVector& G, bool bFire)
+{
+	if (!bOut) Toggle();
+	const AKeysBoatPawn* P = Pawn();
+	if (!P) return;
+	FVector E, D;
+	Eye(E, D);
+	const FVector V = G - E;
+	LookYaw = FMath::Atan2(-V.X, -V.Z) - P->Heading();
+	LookPitch = FMath::Atan2(V.Y, FMath::Sqrt(V.X * V.X + V.Z * V.Z)) + .002 * FMath::Sqrt(V.X * V.X + V.Z * V.Z) * .1;
+	if (bFire) { FireT = 0; Fire(); }
 }
 
 void AKeysHandgun::DebugFire(double Yaw, double Pitch)

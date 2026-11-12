@@ -9,6 +9,8 @@
 #include "KeysDiver.h"
 #include "KeysWalker.h"
 #include "KeysFinal.h"
+#include "KeysExtras.h"
+#include "KeysHandgun.h"
 #include "KeysAudio.h"
 #include "KeysOnline.h"
 #include "KeysTownData.h"
@@ -433,6 +435,14 @@ void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 	{
 		// spear=hogfish: a speared catch card
 		LandSpeared(A.IsEmpty() ? FString(TEXT("hogfish")) : A, 14.2, X + 4, Z + 2);
+	}
+	else if (C == TEXT("caelen") || C == TEXT("caelenaim"))
+	{
+		// aim the pistol at Caelen (and fire, for "caelen"; a=1.5 aims that far beside him for the near miss)
+		FVector CA, CB;
+		double CR;
+		if (AKeysExtras* Ex = AKeysExtras::Get(this); Ex && Ex->CaelenHitbox(CA, CB, CR))
+			if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->DebugFireAt((CA + CB) * .5 + FVector(0, FCString::Atod(*A), 0), C == TEXT("caelen"));
 	}
 	else if (C == TEXT("wrecksreset")) WrecksFound.Reset();
 	else if (C == TEXT("fills")) AddCount(TEXT("dive.fill"), FCString::Atoi(*A));

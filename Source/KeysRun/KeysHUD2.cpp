@@ -165,7 +165,7 @@ void AKeysHUD::DrawMore(AKeysBoatPawn* P)
 		for (int32 i = 0; i < G->MagSize; i++)
 			DrawRect(i < G->Mag ? Gold : FLinearColor(.25f, .25f, .25f, .8f), BX + 18 * U + i * (BW - 36 * U) / G->MagSize, BY + 80 * U, FMath::Max(2.f, (BW - 36 * U) / G->MagSize - 3 * U), 12 * U);
 		if (G->bReloading) { Bar(BX + 18 * U, BY + 98 * U, BW - 36 * U, 8 * U, float(1 - G->ReloadT / FMath::Max(.01, G->ReloadDur)), Teal); }
-		Text(FString::Printf(TEXT("Fish stunned %d  -  Birds startled %d"), G->TallyFish, G->TallyBirds), Canvas->SizeX * .5f, 24 * U + 60 * U, .85f, FLinearColor(1.f, .92f, .75f), nullptr, true);
+		Text(FString::Printf(TEXT("Fish stunned %d  -  Birds startled %d%s"), G->TallyFish, G->TallyBirds, G->TallyCaelen ? *FString::Printf(TEXT("  -  Caelen %d"), G->TallyCaelen) : TEXT("")), Canvas->SizeX * .5f, 24 * U + 60 * U, .85f, FLinearColor(1.f, .92f, .75f), nullptr, true);
 		if (G->NoteT > 0 && !G->Note.IsEmpty()) Text(G->Note, Cx, Cy + 60 * U, 1.f, Gold, nullptr, true);
 		Text(TEXT("Click / Space fire - R reload - Z flare - mouse or arrows to aim - 9 or Esc holster"), Cx, Canvas->SizeY - 44 * U, .9f, Dim, nullptr, true);
 	}

@@ -42,13 +42,14 @@ public:
 	int32 Mag = 0, MagSize = 12;
 	bool bReloading = false;
 	double ReloadT = 0, ReloadDur = 1, Heat = 0, HitFlash = 0, NoteT = 0;
-	int32 TallyFish = 0, TallyBirds = 0, TallyShots = 0;
+	int32 TallyFish = 0, TallyBirds = 0, TallyShots = 0, TallyCaelen = 0;
 	FString Note;
 	int32 Reserve() const;
 	int32 Flares() const;
 	double Spread() const;
 	// test hooks
 	void DebugFire(double Yaw, double Pitch);
+	void DebugFireAt(const FVector& Game, bool bFire);   // aim at a point (game meters), and fire
 	void DebugLook(double Yaw, double Pitch) { LookYaw = Yaw; LookPitch = Pitch; }
 	void DebugFlare() { FireFlare(); }
 
@@ -57,6 +58,7 @@ private:
 	{
 		FVector P, V;   // game meters, m/s
 		double Travelled = 0, WaterPath = 0, VEntry = 0, V0 = 0;
+		bool bCaelenHit = false, bCaelenTaunt = false;   // Caelen has been told about this round (handgun/index.ts tellCaelen)
 		bool bInWater = false, bAlive = true;
 		int32 Skips = 0;
 		FVector LegStart;

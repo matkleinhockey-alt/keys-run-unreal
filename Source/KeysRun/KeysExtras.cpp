@@ -227,14 +227,14 @@ void AKeysExtras::GetTags(TArray<FKeysExtrasTag>& Out) const
 			Tg.MaxDist = 900; Tg.MinDist = 25;
 		}
 	}
-	if (bCaelenInit)
+	if (bCaelenInit && GullMesh->IsVisible())
 	{
 		const double Dc = FMath::Sqrt(FMath::Square(CPos.X - CamX) + FMath::Square(CPos.Z - CamZ));
 		if (Dc < 160)
 		{
 			FKeysExtrasTag& Tg = Out.AddDefaulted_GetRef();
 			Tg.WorldPos = KeysGeo::ToUE(CPos.X, CPos.Y + 1.2, CPos.Z);
-			Tg.Text = CBubble > 0 ? TEXT("Caelen: \"you didn't make this...\"") : TEXT("Caelen");
+			Tg.Text = CBubble > 0 ? FString::Printf(TEXT("Caelen: \"%s\""), *CLine) : FString(TEXT("Caelen"));
 			Tg.MaxDist = 160;
 		}
 	}
@@ -601,6 +601,44 @@ void AKeysExtras::BuildGull(FKeysMesh& M, double Up, double Hand) const
 	}
 }
 
+namespace
+{
+	// caelen.ts: what he says unprompted, in rotation, and when shot at
+	const TCHAR* CaelenLines[] = {TEXT("I'm an executive"), TEXT("you didn't make this... you didn't make this"), TEXT("I'm an executive, braow"),
+		TEXT("I don't even fish, I own the fish"), TEXT("I'm at a conference in Toronto right now... really important stuff..."), TEXT("can I bring Dan on your boat?"), TEXT("spare the portabello")};
+	const TCHAR* CaelenDownCheers[] = {TEXT("The whole boat erupts - \"FINAAALLY! He's reallly annoying.\""), TEXT("Hands up all round the deck - \"Finaaally. That bird was reallly annoying.\""),
+		TEXT("Cheering on deck - \"FINAAALLY! Nobody liked him. Nobody.\""), TEXT("The deck goes up - \"Finaaally! He's been reallly annoying since Islamorada.\"")};
+	constexpr double CaelenAwayS = 120, CaelenLeaveS = 2.4, CaelenExitDelay = 1.9, CaelenHalfLen = .35;
+}
+
+void AKeysExtras::CaelenSay(const FString& Line, double Hold)
+{
+	CLine = Line;
+	CBubble = Hold;
+	Toast(TEXT("Caelen: ") + Line, 3.2);
+	Sound(TEXT("CaelenSquawk"), CPos);
+	Sound(TEXT("CaelenVoice"), CPos);
+}
+
+bool AKeysExtras::CaelenHitbox(FVector& OutA, FVector& OutB, double& OutR) const
+{
+	if (!bCaelenInit || CAway > 0) return false;
+	// along his heading; CYaw is the Unreal yaw of his flight in game x/z (x east, z south)
+	const FVector F(FMath::Cos(CYaw) * CaelenHalfLen, 0, FMath::Sin(CYaw) * CaelenHalfLen);
+	OutA = CPos - F; OutB = CPos + F; OutR = CaelenRadius;
+	return true;
+}
+
+void AKeysExtras::CaelenShot(bool bHit)
+{
+	if (CAway > 0) return;
+	if (!bHit) { CaelenSay(TEXT("you suck at this braowww")); return; }
+	CaelenSay(TEXT("AYO- that's assault braowww"), 2.4);
+	CAway = CaelenAwayS; CLeaveT = CaelenLeaveS; CExitLineT = CaelenExitDelay;
+	Sound(TEXT("CrowdRoar"));
+	Toast(CaelenDownCheers[FMath::RandRange(0, 3)], 4);
+}
+
 void AKeysExtras::UpdateCaelen(double Dt, double T)
 {
 	AKeysBoatPawn* P = PawnRef.Get();
@@ -612,24 +650,51 @@ void AKeysExtras::UpdateCaelen(double Dt, double T)
 		CA = FMath::FRand() * 2 * PI;
 		CR = 12; CHt = 8;
 		CTalkT = ERand(20, 35);
+		CLine = CaelenLines[0];
 		CPos = FVector(P->BoatX() + FMath::Cos(CA) * CR, BoatY + CHt, P->BoatZ() + FMath::Sin(CA) * CR);
 		CYaw = CA + PI * .5;
 		GullMesh->SetVisibility(true);
 	}
-	// keep pace with the boat: circle wider and higher when running, swoop low over the cockpit now and then
-	CA += Dt * (.35 + FMath::Min(.5, Sp * .012));
-	CR = FMath::Lerp(CR, Sp > 8 ? 20.0 : 12.0, Dt * .5);
-	CHt = FMath::Lerp(CHt, Sp > 8 ? 10.0 : 7.0, Dt * .5);
-	if (CSwoop <= 0 && FMath::FRand() < Dt * .03 && Sp < 6) CSwoop = 3.5;
-	double R = CR, Hh = CHt;
-	if (CSwoop > 0)
+	FVector NewPos;
+	if (CAway > 0)
 	{
-		CSwoop -= Dt;
-		const double Q = FMath::Sin(PI * (1 - FMath::Max(0.0, CSwoop) / 3.5));
-		R = FMath::Lerp(R, 3.0, Q);
-		Hh = FMath::Lerp(Hh, 3.2, Q);
+		// sulking: he climbs away on the heading he was hit on, blinks out for the rest of the two minutes, then comes back
+		CAway -= Dt;
+		if (CExitLineT > 0) { CExitLineT -= Dt; if (CExitLineT <= 0) CaelenSay(TEXT("fine - I'm going to Milan with 2 beautiful women anyway"), 3.2); }
+		if (CBubble > 0) CBubble -= Dt;
+		if (CAway <= 0)
+		{
+			CAway = 0; CLeaveT = 0; CExitLineT = 0;
+			CR = 12; CHt = 8; CA = FMath::FRand() * 2 * PI; CSwoop = 0;
+			CPos = FVector(P->BoatX() + FMath::Cos(CA) * CR, BoatY + CHt, P->BoatZ() + FMath::Sin(CA) * CR);
+			GullMesh->SetVisibility(true);
+			CaelenSay(TEXT("I'm back. I'm an executive, you can't ban me"));
+			CTalkT = ERand(45, 90);
+			return;
+		}
+		if (CLeaveT <= 0) return;
+		CLeaveT -= Dt;
+		CR += Dt * 14; CHt += Dt * 7; CA += Dt * .5;
+		NewPos = FVector(P->BoatX() + FMath::Cos(CA) * CR, BoatY + CHt, P->BoatZ() + FMath::Sin(CA) * CR);
+		if (CLeaveT <= 0) GullMesh->SetVisibility(false);
 	}
-	const FVector NewPos(P->BoatX() + FMath::Cos(CA) * R, BoatY + Hh + FMath::Sin(T * 1.7) * .6, P->BoatZ() + FMath::Sin(CA) * R);
+	else
+	{
+		// keep pace with the boat: circle wider and higher when running, swoop low over the cockpit now and then
+		CA += Dt * (.35 + FMath::Min(.5, Sp * .012));
+		CR = FMath::Lerp(CR, Sp > 8 ? 20.0 : 12.0, Dt * .5);
+		CHt = FMath::Lerp(CHt, Sp > 8 ? 10.0 : 7.0, Dt * .5);
+		if (CSwoop <= 0 && FMath::FRand() < Dt * .03 && Sp < 6) CSwoop = 3.5;
+		double R = CR, Hh = CHt;
+		if (CSwoop > 0)
+		{
+			CSwoop -= Dt;
+			const double Q = FMath::Sin(PI * (1 - FMath::Max(0.0, CSwoop) / 3.5));
+			R = FMath::Lerp(R, 3.0, Q);
+			Hh = FMath::Lerp(Hh, 3.2, Q);
+		}
+		NewPos = FVector(P->BoatX() + FMath::Cos(CA) * R, BoatY + Hh + FMath::Sin(T * 1.7) * .6, P->BoatZ() + FMath::Sin(CA) * R);
+	}
 
 	// steer: face along the motion and bank into the turn (JS moveBird)
 	const FVector Vel = NewPos - CPos;
@@ -645,24 +710,23 @@ void AKeysExtras::UpdateCaelen(double Dt, double T)
 	CPos = NewPos;
 
 	// flap most of the time, glide now and then
-	const double Flap = (FMath::Sin(T * .9) > -.2 || Sp > 10) ? 1 : 0;
-	CPh += Dt * 9 * FMath::Max(.15, Flap);
+	const double Flap = (FMath::Sin(T * .9) > -.2 || Sp > 10 || CAway > 0) ? 1 : 0;
+	CPh += Dt * (CAway > 0 ? 13 : 9) * FMath::Max(.15, Flap);
 	const double F = FMath::Sin(CPh), F2 = FMath::Sin(CPh - .7);
 	FKeysMesh M;
 	BuildGull(M, .12 + F * .75 * Flap, .05 + F2 * .55 * Flap);
 	M.Commit(GullMesh, 0, AKeysWorld::VertexColorMaterial());
 	GullMesh->SetWorldLocationAndRotation(KeysGeo::ToUE(CPos.X, CPos.Y, CPos.Z),
 		FRotator(FMath::RadiansToDegrees(PitchR), FMath::RadiansToDegrees(CYaw), FMath::RadiansToDegrees(CRoll)));
+	if (CAway > 0) return;
 
 	// he has opinions
 	CTalkT -= Dt;
 	if (CTalkT <= 0)
 	{
 		CTalkT = ERand(45, 90);
-		Toast(TEXT("Caelen: you didn't make this... you didn't make this"));
-		Sound(TEXT("CaelenSquawk"), CPos);
-		Sound(TEXT("CaelenVoice"), CPos);
-		CBubble = 4;
+		CLineIdx = (CLineIdx + 1) % UE_ARRAY_COUNT(CaelenLines);
+		CaelenSay(CaelenLines[CLineIdx]);
 	}
 	if (CBubble > 0) CBubble -= Dt;
 }
