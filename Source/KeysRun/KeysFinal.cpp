@@ -108,6 +108,8 @@ void AKeysFinal::BeginPlay()
 		SpoutMID->SetScalarParameterValue(TEXT("Bright"), 2.6f);
 		FlashMID = UMaterialInstanceDynamic::Create(GM, this);
 		FlashMID->SetScalarParameterValue(TEXT("Bright"), 12.f);
+		BackdropMID = UMaterialInstanceDynamic::Create(GM, this);
+		BackdropMID->SetScalarParameterValue(TEXT("Bright"), 1.f);
 	}
 	// the three gold bluefin, one model shared
 	{
@@ -614,15 +616,23 @@ void AKeysFinal::TickWrecks()
 }
 
 // ================================================================ the underwater portrait (underwater-trophy.ts)
-void AKeysFinal::ShowPortrait(const FString& Key, double Weight)
+void AKeysFinal::ShowPortrait(const FString& Key, double Weight, bool bUnderwater)
 {
 	bPortrait = true;
+	bPortraitUw = bUnderwater;
 	PortraitKey = Key;
 	PortraitT = 0;
-	PortraitLen = FMath::Clamp(KeysMesh::FishLength(Weight), .35, 2.4);
+	PortraitLen = FMath::Clamp(KeysMesh::FishLength(Weight), .35, 4.5);
+	bPortraitHung = !bUnderwater && (PortraitLen > 1.5 || Weight >= 25);
+	if (!bPortraitHung) PortraitLen = FMath::Min(PortraitLen, 2.4);
 	FKeysHumanLook L;
-	L.Skin = Hex(0xd9a27f); L.Shirt = Hex(0x14181d); L.Bottom = Hex(0x14181d); L.Hair = Hex(0x3b2a1e);
+	if (bUnderwater) { L.Skin = Hex(0xd9a27f); L.Shirt = Hex(0x14181d); L.Bottom = Hex(0x14181d); L.Hair = Hex(0x3b2a1e); }
+	else { L.Skin = Hex(0xd9a27f); L.Shirt = Hex(0x9cc8e0); L.Bottom = Hex(0xb9a77c); L.bShortsLong = true; L.bCap = true; L.CapColor = Hex(0x1d3557); L.bGlasses = true; L.bShoes = true; L.Shoes = Hex(0xf2f2f2); }
 	Diver.Init(L, false);
+	Capture->PostProcessSettings.SceneColorTint = bUnderwater ? FLinearColor(.8f, .97f, 1.f) : FLinearColor::White;
+	Capture->PostProcessSettings.AutoExposureBias = bUnderwater ? 3.f : 4.3f;
+	StudioKey->SetLightColor(bUnderwater ? FLinearColor(.75f, .95f, 1.f) : FLinearColor(1.f, .95f, .85f));
+	StudioRim->SetLightColor(bUnderwater ? FLinearColor(.45f, .9f, .85f) : FLinearColor(.75f, .85f, 1.f));
 	StudioKey->SetVisibility(true);
 	StudioRim->SetVisibility(true);
 }
@@ -640,20 +650,41 @@ void AKeysFinal::TickPortrait(double Dt, double T)
 	if (!bPortrait) return;
 	PortraitT += Dt;
 	const FVector O = StudioO / 100.0;   // meters, UE axes
-	FKeysMesh M;
+	FKeysMesh M, Bg;
 	// the water behind and the sand below: a deep blue-green gradient, brighter toward the surface
 	{
 		const double BX = 6, BW = 14, BZ0 = -6, BZ1 = 9;
 		const int32 NB = 24;
-		auto Col = [](double U) { return U < .5 ? FMath::Lerp(Hex(0x0a3a44), Hex(0x2a8c96), float(U * 2)) : FMath::Lerp(Hex(0x2a8c96), Hex(0x9fe8e0), float((U - .5) * 2)); };
+		const bool bUw = bPortraitUw;
+		// under water a deep blue-green brightening toward the surface; on deck the sea to the horizon, then the sky
+		auto Col = [bUw](double U)
+		{
+			if (bUw) return U < .5 ? FMath::Lerp(Hex(0x0a3a44), Hex(0x2a8c96), float(U * 2)) : FMath::Lerp(Hex(0x2a8c96), Hex(0x9fe8e0), float((U - .5) * 2));
+			return U < .38 ? FMath::Lerp(Hex(0x135a86), Hex(0x2f8fbf), float(U / .38)) : FMath::Lerp(Hex(0xdcefff), Hex(0x6fb4e6), float((U - .38) / .62));
+		};
 		for (int32 i = 0; i < NB; i++)
 		{
 			const double Z0 = FMath::Lerp(BZ0, BZ1, double(i) / NB), Z1 = FMath::Lerp(BZ0, BZ1, double(i + 1) / NB);
-			M.AddQuad(O + FVector(BX, -BW, Z0), O + FVector(BX, BW, Z0), O + FVector(BX, BW, Z1), O + FVector(BX, -BW, Z1), Col((i + .5) / NB), FVector(-1, 0, 0));
+			if (bUw) M.AddQuad(O + FVector(BX, -BW, Z0), O + FVector(BX, BW, Z0), O + FVector(BX, BW, Z1), O + FVector(BX, -BW, Z1), Col((i + .5) / NB), FVector(-1, 0, 0));
+			else
+			{
+				// on deck the sea and sky glow on their own (the sun can be anywhere behind the set): the glow material's
+				// solid mode, UV fixed at the middle of its soft blob
+				const int32 V0 = Bg.V.Num();
+				Bg.AddQuad(O + FVector(BX, -BW, Z0), O + FVector(BX, BW, Z0), O + FVector(BX, BW, Z1), O + FVector(BX, -BW, Z1), Col((i + .5) / NB), FVector(-1, 0, 0));
+				for (int32 v = V0; v < Bg.V.Num(); v++) Bg.UV[v] = FVector2D(2.5, .5);
+			}
 		}
-		M.AddQuad(O + FVector(-4, -14, -2.2), O + FVector(-4, 14, -2.2), O + FVector(6, 14, -2.2), O + FVector(6, -14, -2.2), Hex(0x8a8466), FVector::ZAxisVector);
+		M.AddQuad(O + FVector(-4, -14, -2.2), O + FVector(-4, 14, -2.2), O + FVector(6, 14, -2.2), O + FVector(6, -14, -2.2), bUw ? Hex(0x8a8466) : Hex(0xeeeae0), FVector::ZAxisVector);
+		if (!bUw)
+		{
+			// the gunwale and the rail behind the angler
+			M.AddBox(O + FVector(2.2, 0, -1.7), FVector(.4, 12, 1.0), Hex(0xf6f4ee));
+			M.AddTube(O + FVector(2.1, -6, -.5), O + FVector(2.1, 6, -.5), .025, .025, 6, Hex(0xd9dde2));
+			for (double Yp = -5; Yp <= 5; Yp += 2.5) M.AddTube(O + FVector(2.1, Yp, -1.2), O + FVector(2.1, Yp, -.5), .02, .02, 6, Hex(0xd9dde2));
+		}
 		// a few soft shafts of light
-		for (int32 k = 0; k < 4; k++)
+		for (int32 k = 0; k < (bUw ? 4 : 0); k++)
 		{
 			const double Y0 = -3 + k * 2.1 + FMath::Sin(PortraitT * .3 + k) * .3;
 			M.AddQuad(O + FVector(5.8, Y0 - .25, 8), O + FVector(5.8, Y0 + .25, 8), O + FVector(5.8, Y0 + 1.3, -2), O + FVector(5.8, Y0 + .4, -2), Hex(0x8fe0dc), FVector(-1, 0, 0));
@@ -661,16 +692,19 @@ void AKeysFinal::TickPortrait(double Dt, double T)
 	}
 	// the diver, facing the lens, the fish held up across the chest
 	const double HY = Diver.HipY, Half = FMath::Min(.42, PortraitLen * .3);
-	Diver.Pos = O + FVector(.6, 0, -2.2 + .05);
+	Diver.Pos = O + FVector(.6, bPortraitHung ? .55 : 0, -2.2 + .05);
 	Diver.Yaw = PI;
 	Diver.Pitch = 0; Diver.Roll = FMath::Sin(PortraitT * .8) * .03;
 	Diver.HeadNod = .05; Diver.HeadYaw = 0; Diver.bHoldHead = true;
-	Diver.PoseLegs(FKeysHuman::J(-.12, .085, .05), FKeysHuman::J(.12, .15, -.12));
+	if (bPortraitUw) Diver.PoseLegs(FKeysHuman::J(-.12, .085, .05), FKeysHuman::J(.12, .15, -.12));
+	else Diver.PoseLegs(FKeysHuman::J(-.12, .085, 0), FKeysHuman::J(.12, .085, 0));
 	const double Bob = FMath::Sin(PortraitT * 1.3) * .03;
-	Diver.Pose(FKeysHuman::J(-Half, HY + .38 + Bob, .4), FKeysHuman::J(Half, HY + .38 + Bob, .4));
+	if (bPortraitHung) Diver.Pose(FKeysHuman::J(-.5, HY + .55, .3), FKeysHuman::J(.24, HY + .95 + Bob, .2));
+	else Diver.Pose(FKeysHuman::J(-Half, HY + .38 + Bob, .4), FKeysHuman::J(Half, HY + .38 + Bob, .4));
 	Diver.Build(M);
 	const FTransform Xf = Diver.ToBoat();
 	// mask, strap and snorkel
+	if (bPortraitUw)
 	{
 		const FVector HP = FKeysHuman::J(0, HY + .77, 0);
 		const FQuat HQ = Xf.GetRotation();
@@ -681,14 +715,29 @@ void AKeysFinal::TickPortrait(double Dt, double T)
 		// fins
 		for (const FVector& Ft : {Diver.FootL, Diver.FootR}) M.AddBox(Xf.TransformPosition(Ft + FVector(.25, 0, -.04)), FVector(.55, .2, .02), Hex(0x1f6fd0), HQ);
 	}
+	// a big fish: hung by the tail from the gin pole beside the angler, nose down (catch-flow.ts's hang rig)
+	if (bPortraitHung)
+	{
+		const FVector Pole = Xf.TransformPosition(FKeysHuman::J(-.6, 0, .25));
+		const double Top = PortraitLen + 1.4;
+		const FVector PTop = Pole + FVector(0, 0, Top), Arm = Xf.TransformPosition(FKeysHuman::J(-.6 - .5, 0, .25)) + FVector(0, 0, Top - .1);
+		M.AddTube(Pole, PTop, .06, .05, 8, Hex(0xd9dde2));
+		M.AddTube(PTop, Arm, .045, .045, 8, Hex(0xd9dde2));
+		M.AddTube(Arm, Arm - FVector(0, 0, .35), .008, .008, 4, Hex(0x2a2a2a));
+		KeysShapes::AddBlob(M, Arm - FVector(0, 0, .4), FVector(.05), FQuat::Identity, Hex(0xc8102e), 6, 4);
+		const FVector Side = Xf.GetRotation().RotateVector(FVector(1, 0, 0));   // the flank to the lens
+		const FQuat Q = FRotationMatrix::MakeFromXY(FVector(0, 0, -1), Side).ToQuat() * FQuat(FVector::XAxisVector, FMath::Sin(PortraitT * .7) * .08);
+		AppendFish(M, PortraitKey, PortraitLen, FTransform(Q, Arm - FVector(0, 0, .45 + PortraitLen / 2)));
+	}
 	// the fish across the hands, its flank to the lens
+	else
 	{
 		const FVector GL = Xf.TransformPosition(FKeysHuman::J(-Half, HY + .38 + Bob, .44)), GR = Xf.TransformPosition(FKeysHuman::J(Half, HY + .38 + Bob, .44));
 		const FVector Axis = (GR - GL).GetSafeNormal(), Mid = (GL + GR) * .5 + FVector(0, 0, .02);
 		const FQuat Q = FRotationMatrix::MakeFromXZ(Axis, FVector::ZAxisVector).ToQuat() * FQuat(FVector::XAxisVector, FMath::Sin(PortraitT * .9) * .12);
 		AppendFish(M, PortraitKey, PortraitLen, FTransform(Q, Mid));
 		// a few bubbles
-		for (int32 k = 0; k < 6; k++)
+		for (int32 k = 0; k < (bPortraitUw ? 6 : 0); k++)
 		{
 			const double Ph = FMath::Fmod(PortraitT * .35 + k * .17, 1.0);
 			const FVector Bp = Xf.TransformPosition(FKeysHuman::J(.04 + k * .01, HY + .8 + Ph * 2.4, .18));
@@ -696,10 +745,18 @@ void AKeysFinal::TickPortrait(double Dt, double T)
 		}
 	}
 	M.Commit(StudioMesh, 0, AKeysWorld::VertexColorMaterial());
+	if (Bg.V.Num()) Bg.Commit(StudioMesh, 1, BackdropMID ? (UMaterialInterface*)BackdropMID : AKeysWorld::GlowMaterial());
+	else StudioMesh->ClearMeshSection(1);
 	StudioMesh->SetVisibility(true);
 	// the lens: framed on the fish and the diver's chest and head
-	const FVector Look = Xf.TransformPosition(FKeysHuman::J(0, HY + .55, .2));
-	const double Dist = FMath::Max(2.0, PortraitLen * 1.25 + 1.3);
+	FVector Look = Xf.TransformPosition(FKeysHuman::J(0, HY + .55, .2));
+	double Dist = FMath::Max(2.0, PortraitLen * 1.25 + 1.3);
+	if (bPortraitHung)
+	{
+		// frame the angler and the whole fish on the pole
+		Look = Xf.TransformPosition(FKeysHuman::J(-.5, 0, .3)) + FVector(0, 0, FMath::Max(1.1, (PortraitLen + 1.4) * .55));
+		Dist = FMath::Max(3.2, (PortraitLen + 1.6) * 1.45);
+	}
 	const FVector Cam = Look + FVector(-Dist, FMath::Sin(PortraitT * .25) * .35, .25);
 	Capture->SetWorldLocationAndRotation(Cam * 100, (Look - Cam).Rotation());
 	StudioKey->SetWorldLocation((Cam + FVector(.4, -1.2, 1.6)) * 100);

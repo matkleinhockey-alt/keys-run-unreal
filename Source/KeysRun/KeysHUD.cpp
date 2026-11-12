@@ -884,7 +884,8 @@ void AKeysHUD::DrawCard(AKeysBoatPawn* P)
 			const float IW = 480 * U, IH = 360 * U, IX = X - IW - 18 * U, IY = Y;
 			DrawRect(FLinearColor(0, 0, 0, .7f), IX - 4 * U, IY - 4 * U, IW + 8 * U, IH + 8 * U);
 			DrawTexture(RT, IX, IY, IW, IH, 0, 0, 1, 1, FLinearColor::White, BLEND_Opaque);
-			Text(TEXT("Speared - and held up for the camera, five metres down"), IX + 10 * U, IY + IH - 26 * U, .7f, FLinearColor(.85f, .95f, .97f));
+			Text(Fn->PortraitUnderwater() ? TEXT("Speared - and held up for the camera, five metres down") : Fn->PortraitHung() ? TEXT("Too big to hold up - on the gin pole") : TEXT("Grip and grin"),
+				IX + 10 * U, IY + IH - 26 * U, .7f, FLinearColor(.85f, .95f, .97f));
 		}
 	Panel(X, Y, W, PH, .7f);
 	float Yy = Y + 16 * U;

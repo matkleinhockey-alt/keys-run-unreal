@@ -379,8 +379,8 @@ void AKeysBoatPawn::UpdateFinal(double Dt, double T)
 	// the underwater portrait follows the card
 	if (AKeysFinal* Fn = AKeysFinal::Get(this))
 	{
-		const bool bWant = FState == EKeysFish::Caught && bCardSpeared;
-		if (bWant && !Fn->Portrait()) Fn->ShowPortrait(Key, Weight);
+		const bool bWant = FState == EKeysFish::Caught;
+		if (bWant && !Fn->Portrait()) Fn->ShowPortrait(Key, Weight, bCardSpeared);
 		else if (!bWant && Fn->Portrait()) Fn->HidePortrait();
 	}
 }

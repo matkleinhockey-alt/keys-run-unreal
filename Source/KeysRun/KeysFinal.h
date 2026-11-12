@@ -42,7 +42,12 @@ public:
 	void OnLeaveShore();
 	bool StationAt(FVector& Out) const { Out = StationPos; return bStation; }
 	// the underwater portrait for a speared catch
-	void ShowPortrait(const FString& Key, double Weight);
+	// the catch card's photo (game/catch/portrait.ts, underwater-trophy.ts): the captain on deck holding the fish up,
+	// or, past 25 lb or 1.5 m (display-mode.ts isHoldable), the fish hung on the gin pole beside them; or for a
+	// speared fish a diver in a wetsuit, mask and snorkel holding it up under water
+	void ShowPortrait(const FString& Key, double Weight, bool bUnderwater);
+	bool PortraitUnderwater() const { return bPortraitUw; }
+	bool PortraitHung() const { return bPortraitHung; }
 	void HidePortrait();
 	UTextureRenderTarget2D* Portrait() const { return bPortrait ? PortraitRT : nullptr; }
 
@@ -69,6 +74,7 @@ private:
 	UPROPERTY() TObjectPtr<UPointLightComponent> StudioRim;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SpoutMID;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> FlashMID;
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> BackdropMID;
 
 	// the gold bluefin
 	TArray<FVector2D> Loop;
@@ -93,7 +99,7 @@ private:
 	double WreckCheckT = 0;
 
 	// the portrait
-	bool bPortrait = false;
+	bool bPortrait = false, bPortraitUw = false, bPortraitHung = false;
 	FString PortraitKey;
 	double PortraitT = 0, PortraitLen = 1;
 	FVector StudioO = FVector::ZeroVector;   // UE cm
