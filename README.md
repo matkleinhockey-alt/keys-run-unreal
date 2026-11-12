@@ -456,8 +456,11 @@ Epic). The first launch goes full screen at the display's size and picks High on
 ## The Freeman's fighting chair
 
 The Freeman carries a teak big-game fighting chair in the cockpit. A fish hooked on the troll is fought from it: the angler
-sits in the chair with the rod butt in its gimbal, the chair swivels to follow the fish, and the camera frames the angler
-from in front of the chair (V gives the angler's own view). After the catch card the boat goes back on the troll.
+sits in the chair with the rod butt in its gimbal, the chair swivels to follow the fish, and the camera flies well off the
+boat's side and above it, behind the angler's shoulder, framing the angler, the rod and the line out to the fish (V gives
+the angler's own view). While a fish is on, the guests walk forward out of the cockpit to the bow and dance there, and walk
+back after. Auto-chase holds the stern on the fish and, for one of 150 lb or more that is taking line, backs down on it
+slowly in short bursts. After the catch card the boat goes back on the troll.
 
 ## Credits
 
