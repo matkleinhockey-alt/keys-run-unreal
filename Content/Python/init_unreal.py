@@ -360,9 +360,11 @@ if (kind < 0.5) {
   float4 fl = F.nd(p * 420.0);
   float4 lo = F.nd(p * 1.5);
   g = fl.yzw * 0.03 * closeF + lo.yzw * 0.004;
-  metal = 0.7; rough = 0.16 + 0.1 * fl.x * nearF;
+  // fully metallic so the sky it reflects is tinted by the paint (a dielectric layer would wash it to grey), a little
+  // rougher so the reflection is a soft sheen, and grazing angles brightening the paint's own colour, not white
+  metal = 0.92; rough = 0.26 + 0.08 * fl.x * nearF; spec = 0.35;
   col *= lerp(0.95, 1.06, fl.x * nearF + 0.5 * (1.0 - nearF));
-  col += fres * 0.08;
+  col *= 1.0 + fres * 0.35;
 } else if (kind > 26.5 && kind < 27.5) {   // teak-look foam decking with black caulk lines, fore and aft
   float pl = frac(p.y / 0.07);
   float caulk = 1.0 - smoothstep(0.0, 0.08, min(pl, 1.0 - pl));

@@ -45,6 +45,12 @@ namespace KeysMesh
 		S.YK = -H.YK + FMath::Pow(FMath::Max(0.0, T - .55) / .45, 1.8) * (H.YK + H.F * .3);
 		for (double St : H.Steps) if (T < St) S.YK += .05;
 		S.YS = H.F + H.Spring * FMath::Pow(T, 2.2);
+		S.SoleK = H.SoleRise;
+		if (H.SheerDrop > 0)
+		{
+			S.Drop = H.SheerDrop * (1 - SStep(H.SheerDropT - .03, H.SheerDropT + .03, T));
+			S.YS -= S.Drop;
+		}
 		const double Dr = FMath::Lerp(H.Dr0, H.Dr1, SStep(.3, 1, T)) * PI / 180;
 		S.YC = FMath::Min(S.YK + S.Bb * FMath::Tan(Dr), S.YS - .2);
 		S.Z = L / 2 - T * (L - H.Rake * .5);
@@ -58,7 +64,7 @@ namespace KeysMesh
 		return S.Z - H.Rake * Clamp01((Y - S.YK) / FMath::Max(.01, S.YS - S.YK)) * SStep(.62, 1, S.T);
 	}
 
-	double HullSole(double L, const FHullSta& S) { const double D = .55 + L * .012; return S.YS - D * (1 - .4 * SStep(.55, .85, S.T)); }
+	double HullSole(double L, const FHullSta& S) { const double D = .55 + L * .012; return S.YS + S.Drop - D * (1 - S.SoleK * SStep(.55, .85, S.T)); }
 
 	// covering boards, the liner down to the sole, and the sole, inside the sheer of these stations
 	static void BuildDeckIn(FKeysMesh& M, const FHullDef& H, double L, double B, const TArray<FHullSta>& Sts, double Xo)
@@ -101,7 +107,11 @@ namespace KeysMesh
 		const int32 NS = 36;
 		for (int32 i = 0; i <= NS; i++) Ts.Add(double(i) / NS);
 		for (double St : H.Steps) { Ts.Add(St - .0035); Ts.Add(St + .0035); }
+		for (double Sm : H.Seams) { Ts.Add(Sm - .0016); Ts.Add(Sm + .0016); }
+		// the step down in the sheer: a few more stations through it so it sweeps instead of kinking
+		if (H.SheerDrop > 0) for (int32 k = -3; k <= 3; k++) Ts.Add(H.SheerDropT + k * .009);
 		Ts.Sort();
+		for (int32 i = Ts.Num() - 1; i > 0; i--) if (Ts[i] - Ts[i - 1] < 1e-4) Ts.RemoveAt(i);
 		const int32 N = Ts.Num();
 		TArray<FHullSta> Sts;
 		TArray<TArray<FVector2D>> PrP[2];
@@ -129,8 +139,9 @@ namespace KeysMesh
 		{
 			const FHullSta& A = Sts[i];
 			const FHullSta& Zs = Sts[i + 1];
-			bool bStep = false;
+			bool bStep = false, bSeam = false;
 			for (double St : H.Steps) if (A.T < St && Zs.T > St) bStep = true;
+			for (double Sm : H.Seams) if (A.T < Sm && Zs.T > Sm) bSeam = true;
 			for (int32 h = 0; h < 2; h++)
 			{
 				const int32 Sx = h == 0 ? -1 : 1;
@@ -138,7 +149,7 @@ namespace KeysMesh
 				const TArray<FVector2D>& Pb = PrP[h][i + 1];
 				for (int32 k = 0; k < Pa.Num() - 1; k++)
 					M.AddQuad(V(A, Sx * Pa[k].X, Pa[k].Y), V(A, Sx * Pa[k + 1].X, Pa[k + 1].Y), V(Zs, Sx * Pb[k + 1].X, Pb[k + 1].Y), V(Zs, Sx * Pb[k].X, Pb[k].Y),
-						bStep && k < 2 ? StepC : PrC[h][i][k], FVector(bStep && k < 2 ? -1 : 0, Sx, k < 2 ? -.6 : 0));
+						bStep && k < 2 ? StepC : bSeam && k >= 3 && k < Pa.Num() - 2 ? PrC[h][i][k] * .3f : PrC[h][i][k], FVector(bStep && k < 2 ? -1 : 0, Sx, k < 2 ? -.6 : 0));
 			}
 		}
 		// transom: each half of the ring from its own profile, so an asymmetric hull's chines don't jump at the stern
@@ -173,7 +184,7 @@ namespace KeysMesh
 		for (int32 i = 0; i <= NS; i++) Sts.Add(HullStation(H, L, B, double(i) / NS));
 		const double Rad40 = FMath::DegreesToRadians(40.0);
 		// one half's cross-section, from the tunnel's centreline round the sponson to the sheer, and each edge's paint
-		struct FSec { TArray<FVector2D> P; TArray<FLinearColor> C; TArray<FVector> Out; int32 Keel = 0, Roof = 0; };
+		struct FSec { TArray<FVector2D> P; TArray<FLinearColor> C; TArray<FVector> Out; TArray<double> Rw; int32 Keel = 0, Roof = 0; };
 		auto Section = [&](const FHullSta& S)
 		{
 			FSec O;
@@ -185,16 +196,21 @@ namespace KeysMesh
 			const double Yk = -H.YK + (H.YK + H.StemFoot) * FMath::Pow(SStep(.74, 1, T), 1.6);
 			const double Dr = FMath::DegreesToRadians(FMath::Lerp(H.Dr0, H.Dr1, SStep(.3, 1, T)));
 			const double Yc = FMath::Min(Yk + (Bo - Kc) * FMath::Tan(Dr) + .06 * SStep(.6, 1, T), S.YS - .3);
-			const double Yt = FMath::Max(Yk + .2, FMath::Min(H.Tunnel + H.TunnelRise * FMath::Pow(T, 1.5), HullSole(L, S) - .12));
+			// the tunnel: walls standing up from the sponsons' inboard bottoms into a roof arched over the centreline
+			const double Cap = HullSole(L, S) - .1;
+			const double Yc0 = FMath::Max(Yk + .3, FMath::Min(H.Tunnel + H.TunnelRise * FMath::Pow(T, 1.5) + H.TunnelArch, Cap));
+			const double Yt = FMath::Max(Yk + .2, Yc0 - H.TunnelArch);
 			const double Yci = FMath::Min(Yk + (Kc - Ki) * FMath::Tan(Rad40), Yt - .02);
-			auto Add = [&O](double X, double Y, const FLinearColor& C, const FVector& Out) { O.P.Add(FVector2D(X, Y)); O.C.Add(C); O.Out.Add(Out); };
-			// each point carries the paint and the facing of the edge that ends at it
-			Add(0, Yt, H.Hull, FVector(0, 0, -1));
-			Add(Ki, Yt, H.Hull, FVector(0, 0, -1));                        // the tunnel roof
-			O.Roof = 1;
-			Add(Ki, Yci, H.Hull, FVector(0, -1, 0));                       // the tunnel wall
-			Add(Kc, Yk, H.Bottom, FVector(0, -.6, -1));                    // the steep inboard bottom
-			O.Keel = 3;
+			auto Add = [&O](double X, double Y, const FLinearColor& C, const FVector& Out, double Rw) { O.P.Add(FVector2D(X, Y)); O.C.Add(C); O.Out.Add(Out); O.Rw.Add(Rw); };
+			// each point carries the paint and the facing of the edge that ends at it; Rw marks the roof (set back at the bow)
+			const FLinearColor Roof = H.Hull * .82f;
+			static const double Us[6] = {0, .38, .64, .82, .94, 1};
+			for (int32 k = 0; k < 6; k++)
+				Add(Ki * Us[k], Yt + (Yc0 - Yt) * FMath::Sqrt(FMath::Max(0.0, 1 - Us[k] * Us[k])), Roof, FVector(0, -Us[k], -(1 - Us[k] * .8)), 1);
+			O.Roof = 5;
+			Add(Ki, Yci, Roof, FVector(0, -1, 0), 0);                       // the tunnel wall
+			Add(Kc, Yk, H.Bottom, FVector(0, -.6, -1), 0);                  // the steep inboard bottom
+			O.Keel = 7;
 			// the outboard bottom to the chine, then the topsides: a navy pinstripe low, another under the rub rail,
 			// and the rub rail at the sheer
 			const double Ys = S.YS;
@@ -207,13 +223,20 @@ namespace KeysMesh
 				const double Y = FMath::Clamp(Hs[k], Prev, Ys);
 				Prev = Y;
 				const double F = (Y - Yc) / FMath::Max(.01, Ys - Yc);
-				Add(FMath::Lerp(Bo, S.Bs, F) + FMath::Sin(F * PI) * .02, Y, Cs[k], k == 0 ? FVector(0, .5, -1) : FVector(0, 1, 0));
+				Add(FMath::Lerp(Bo, S.Bs, F) + FMath::Sin(F * PI) * .02, Y, Cs[k], k == 0 ? FVector(0, .5, -1) : FVector(0, 1, 0), 0);
 			}
 			return O;
 		};
 		TArray<FSec> Secs;
 		for (const FHullSta& S : Sts) Secs.Add(Section(S));
-		auto V = [&](const FHullSta& S, double X, double Y) { return P(X, Y, HullZRake(H, S, Y)); };
+		// the bridge deck's face between the stems is set back at the tunnel roof, so the stems stand proud of it
+		const double XBow = -Sts[NS].Z;
+		auto V = [&](const FHullSta& S, double X, double Y, double Rw = 0)
+		{
+			FVector Q = P(X, Y, HullZRake(H, S, Y));
+			if (Rw > 0) Q.X = FMath::Min(Q.X, XBow - H.BowRecess * Rw);
+			return Q;
+		};
 		for (int32 i = 0; i < NS; i++)
 			for (int32 Sx = -1; Sx <= 1; Sx += 2)
 			{
@@ -223,26 +246,39 @@ namespace KeysMesh
 				{
 					FVector Out = A.Out[k + 1];
 					Out.Y *= Sx;
-					M.AddQuad(V(Sts[i], Sx * A.P[k].X, A.P[k].Y), V(Sts[i], Sx * A.P[k + 1].X, A.P[k + 1].Y), V(Sts[i + 1], Sx * Z.P[k + 1].X, Z.P[k + 1].Y), V(Sts[i + 1], Sx * Z.P[k].X, Z.P[k].Y),
-						A.C[k + 1], Out);
+					M.AddQuad(V(Sts[i], Sx * A.P[k].X, A.P[k].Y, A.Rw[k]), V(Sts[i], Sx * A.P[k + 1].X, A.P[k + 1].Y, A.Rw[k + 1]),
+						V(Sts[i + 1], Sx * Z.P[k + 1].X, Z.P[k + 1].Y, Z.Rw[k + 1]), V(Sts[i + 1], Sx * Z.P[k].X, Z.P[k].Y, Z.Rw[k]), A.C[k + 1], Out);
 				}
 			}
-		// the transom and the bow: the bridge deck's face across the tunnel, and each sponson's end fanned from inside it
+		// the transom and the bow: the bridge deck's face over the tunnel's arch, and each sponson's end fanned from inside it
 		for (int32 End = 0; End <= 1; End++)
 		{
 			const FHullSta& S = Sts[End ? NS : 0];
 			const FSec& A = Secs[End ? NS : 0];
 			const FVector Face(End ? 1 : -1, 0, 0);
-			const double Ki = A.P[1].X, Yt = A.P[0].Y, Bs = A.P.Last().X, Ys = A.P.Last().Y;
-			M.AddQuad(V(S, -Ki, Yt), V(S, Ki, Yt), V(S, Bs, Ys), V(S, -Bs, Ys), H.Hull, Face);
+			const int32 R = A.Roof;
+			const double Bs = A.P.Last().X, Ys = A.P.Last().Y;
+			// the face: down from the sheer to the tunnel's arch in the plane of the stems, and a soffit under it back to the
+			// roof (set back at the bow, so the stems stand proud)
 			for (int32 Sx = -1; Sx <= 1; Sx += 2)
 			{
-				const FVector2D Ctr((A.P[A.Keel].X + Ki) * .5 + .01, (A.P[A.Keel].Y + Yt) * .5);
-				TArray<FVector2D> Ring;
-				for (int32 k = 1; k < A.P.Num(); k++) Ring.Add(A.P[k]);
-				for (int32 k = 0; k < Ring.Num() - 1; k++)
-					M.AddTri(V(S, Sx * Ctr.X, Ctr.Y), V(S, Sx * Ring[k].X, Ring[k].Y), V(S, Sx * Ring[k + 1].X, Ring[k + 1].Y), Ring[k].Y < A.P[A.Keel + 1].Y + .02 ? H.Bottom : H.Hull, Face);
-				M.AddTri(V(S, Sx * Ctr.X, Ctr.Y), V(S, Sx * Ring.Last().X, Ring.Last().Y), V(S, Sx * Ring[0].X, Ring[0].Y), H.Hull, Face);
+				const FVector Top = V(S, 0, Ys);
+				for (int32 k = 0; k < R; k++)
+				{
+					M.AddTri(Top, V(S, Sx * A.P[k].X, A.P[k].Y), V(S, Sx * A.P[k + 1].X, A.P[k + 1].Y), H.Hull, Face);
+					M.AddQuad(V(S, Sx * A.P[k].X, A.P[k].Y), V(S, Sx * A.P[k + 1].X, A.P[k + 1].Y), V(S, Sx * A.P[k + 1].X, A.P[k + 1].Y, A.Rw[k + 1]), V(S, Sx * A.P[k].X, A.P[k].Y, A.Rw[k]),
+						H.Hull * .82f, FVector(0, 0, -1));
+				}
+				M.AddTri(Top, V(S, Sx * A.P[R].X, A.P[R].Y), V(S, Sx * Bs, Ys), H.Hull, Face);
+				const FVector LipE = V(S, Sx * A.P[R].X, A.P[R].Y);
+				M.AddTri(LipE, V(S, Sx * Bs, Ys), V(S, Sx * A.P[R].X, A.P[R].Y, 1), H.Hull, Face);
+				// the stem's inboard face up to its top, in front of the set-back roof
+				M.AddTri(LipE, V(S, Sx * A.P[R].X, A.P[R].Y, 1), V(S, Sx * A.P[R + 1].X, A.P[R + 1].Y), H.Hull * .82f, FVector(0, -Sx, 0));
+				const FVector2D Ctr((A.P[A.Keel].X + A.P[R].X) * .5 + .01, (A.P[A.Keel].Y + A.P[R].Y) * .5);
+				const FVector C3 = V(S, Sx * Ctr.X, Ctr.Y);
+				for (int32 k = R; k < A.P.Num() - 1; k++)
+					M.AddTri(C3, V(S, Sx * A.P[k].X, A.P[k].Y, A.Rw[k]), V(S, Sx * A.P[k + 1].X, A.P[k + 1].Y, A.Rw[k + 1]), A.P[k].Y < A.P[A.Keel + 1].Y + .02 ? H.Bottom : H.Hull, Face);
+				M.AddTri(C3, V(S, Sx * Bs, Ys), V(S, Sx * A.P[R].X, A.P[R].Y, 1), H.Hull, Face);
 			}
 		}
 		BuildDeckIn(M, H, L, B, Sts, 0);
@@ -255,8 +291,8 @@ namespace KeysMesh
 		static const FRow Rows[] = {
 			{TEXT("robalo"),    1.05, .38, .45, 20, 48, .9,  .42, 0,   0,   0xf4f4f2, 0x6fa8c9, 0xffffff, -1,       0x8e949a, 0xffffff, 0xf1f1ee, 0xdcddd8, false},
 			{TEXT("grady"),     1.3,  .52, .55, 20, 50, 1.3, .40, 0,   0,   0xf8f7f2, 0x23466e, 0xfbfaf6, 0x23466e, 0xd0d4d8, 0xfbfaf6, 0xf3f2ec, 0xe0ded6, false},
-			{TEXT("freeman"),   1.25, .65, .5,  22, 40, .2,  .55, 0,   0,   0xc4c9ce, 0x1f2a44, 0xccd1d6, 0x1f2a44, 0x1f2a44, 0xf4f5f5, 0xf3f2ee, 0xdedcd6, true},
-			{TEXT("midnight"),  1.4,  .55, .62, 22, 54, 2.1, .38, .3,  .44, 0x4a443b, 0x2a2620, 0x74695a, 0x2a2620, 0x101112, 0x85796a, 0x85796a, 0xb8875a, false},
+			{TEXT("freeman"),   1.25, .65, .5,  22, 40, .2,  .55, 0,   0,   0x9ea6ae, 0x1f2a44, 0xaab1b9, 0x1f2a44, 0x1f2a44, 0xf4f5f5, 0xf3f2ee, 0xdedcd6, true},
+			{TEXT("midnight"),  1.4,  .55, .62, 22, 54, 2.1, .38, .3,  .44, 0x3a3027, 0x241e18, 0x5c4a37, 0x241e18, 0x101112, 0x6a5641, 0x6a5641, 0xb8875a, false},
 			{TEXT("mti"),       1.35, .3,  .6,  24, 55, 2.3, .48, .28, .42, 0x15171a, 0xf4f4f4, 0xc8102e, 0xf4f4f4, 0x0d0e10, 0xf4f4f4, 0xf4f4f4, 0x2a2d31, false},
 			{TEXT("yellowfin"), 1.32, .46, .56, 21, 51, 1.5, .56, 0,   0,   0xf2efe2, 0x1f3b57, 0xe9d98a, 0x1f3b57, 0x8e949a, 0xf6f4ea, 0xf3f1e6, 0xe2decd, false},
 			{TEXT("contender"), 1.18, .44, .5,  20, 49, 1.2, .46, 0,   0,   0xf4f6f5, 0x2f7a52, 0xf2f4f5, 0x2f7a52, 0xb9bec4, 0xf7f8f8, 0xf2f2ee, 0xdedfd9, false},
@@ -279,8 +315,9 @@ namespace KeysMesh
 				H.bCat = R.bCat;
 				// after the owners' photos: the Freeman's blunt twin bow and high tunnel; the Midnight Express's long fine
 				// bow with a flared coaming and its rounded tumblehome stern
-				if (H.bCat) { H.MinBow = .45; H.Tunnel = .34; H.TunnelRise = .75; H.SponW = .27; H.StemFoot = .12; }
-				if (FString(R.Id) == TEXT("midnight")) { H.Tumble = .08; H.Flare = .06; }
+				if (H.bCat) { H.MinBow = .45; H.Tunnel = .34; H.TunnelRise = 1.0; H.TunnelArch = .26; H.BowRecess = .4; H.SoleRise = .75; H.SponW = .27; H.StemFoot = .12; }
+				// the Midnight's gunwale steps down over the aft cockpit, with panel seams at the step and forward
+				if (FString(R.Id) == TEXT("midnight")) { H.Tumble = .08; H.Flare = .06; H.SheerDrop = .2; H.SheerDropT = .3; H.Seams = {.3, .62}; H.SoleRise = .12; }
 				Out.Add(TPair<FString, FHullDef>(R.Id, H));
 			}
 			return Out;

@@ -82,8 +82,14 @@ namespace KeysMesh
 		double MinBow = 0;     // the narrowest the deck gets at the bow (fraction of the half-beam): a cat's blunt twin bow
 		double Tumble = 0;     // tumblehome at the stern: the topsides roll in toward the sheer
 		double Flare = 0;      // extra flare forward: the sheer stands out past the chine sooner
+		double TunnelArch = 0; // a cat's tunnel roof arched this much higher on the centreline than at its walls
+		double BowRecess = 0;  // a cat's bridge-deck face set back this far from the stems at the tunnel roof
+		double SheerDrop = 0, SheerDropT = .3;   // the gunwale steps down this much aft of SheerDropT (0 transom, 1 stem)
+		double SoleRise = .4;  // how much of the cockpit's depth the sole climbs out of toward the bow
+		TArray<double> Seams;  // panel seams: thin dark lines down the topsides at these stations
 	};
-	struct FHullSta { double T, Z, Bb, Bs, YK, YC, YS, BF; };
+	// Drop: how far the sheer steps down here (the sole doesn't follow it); SoleK: FHullDef::SoleRise
+	struct FHullSta { double T, Z, Bb, Bs, YK, YC, YS, BF; double Drop = 0, SoleK = .4; };
 	FHullSta HullStation(const FHullDef& H, double L, double B, double T);
 	FHullSta HullStationAtZ(const FHullDef& H, double L, double B, double Z);   // web z (toward the stern)
 	double HullZRake(const FHullDef& H, const FHullSta& S, double Y);
@@ -136,6 +142,10 @@ namespace KeysMesh
 	// a contoured bucket seat facing Fwd (horizontal): a cushion with raised side bolsters, a tall back with wings and a
 	// rounded top, quilted centre panels with dark piping. Base is the cushion's underside centre.
 	void BuildBucketSeat(FKeysMesh& M, const FVector& Base, const FVector& Fwd, double W, const FLinearColor& Uph, uint8 InsertKind, double BackH = .72);
+	// a teak-framed helm chair (the Freeman's): curved varnished teak sides that run under the seat, up the back and
+	// forward into scrolled armrests, a teak crest rail over the back, white cushions, on a white pedestal with a
+	// footrest. Base is the deck under the pedestal, facing Fwd.
+	void BuildTeakHelmChair(FKeysMesh& M, const FVector& Base, const FVector& Fwd, const FLinearColor& Teak, const FLinearColor& Cushion, const FLinearColor& Pedestal);
 	// A stand-up tuna rod with a two-speed lever-drag reel (KeysRod.cpp): an aluminium gimbal butt, the reel seat and
 	// its clamp, the reel (machined side plates with bolts, pillars, a spool packed with blue mono, the lever drag with a
 	// knurled knob, the crank with its big rubber knob), a long black foam fore grip, a blue-and-silver cross-wrapped

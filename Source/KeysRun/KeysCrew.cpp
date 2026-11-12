@@ -83,7 +83,8 @@ void AKeysExtras::BuildLayout()
 		C.Shirt = XHex(0x9cc8e0); C.Bottom = XHex(0xb9a77c); C.bShortsLong = true; C.Hair = XHex(0x4a3020);
 		C.bCap = true; C.CapColor = XHex(0x1d3557); C.bShoes = true; C.Shoes = XHex(0xf2f2f2); C.bGlasses = true;
 		Captain.Init(C, false);
-		const double X = Deck.MidX - Deck.ConL * .5 - .14;
+		// the Midnight's wheel stands proud of its dash, so its captain stands a little further aft, clear of the seats
+		const double X = Deck.MidX - Deck.ConL * .5 - (S.Id == TEXT("midnight") ? .42 : .14);
 		Captain.Pos = FVector(X, .12, Deck.SoleAt(X));
 		Captain.Yaw = 0;
 		HelmL = XJ(-.1, 1.1, .12);
@@ -117,10 +118,10 @@ void AKeysExtras::BuildLayout()
 		const double ConA = Deck.MidX - Deck.ConL * .5, ConF = Deck.MidX + Deck.ConL * .5 + Deck.ConFwd;
 		KeepOut.Add(FBox2D(FVector2D(ConA - .1, -Deck.ConW * .5 - .1), FVector2D(ConF + (bMidL ? 1.0 : .6), Deck.ConW * .5 + .1)));
 		const int32 NSeat = S.bRodRack ? 4 : S.Beam > 3.6 ? 3 : 2;
-		if (bMidL) { SeatX0 = Deck.MidX - 2.7; SeatX1 = Deck.MidX - .82; SeatHalf = 1.38; }
-		else { SeatX0 = Deck.MidX - 1.62; SeatX1 = Deck.MidX - .9; SeatHalf = S.bLeaning ? .58 : (NSeat - 1) * .32 + .3; }
+		if (bMidL) { SeatX0 = Deck.MidX - 3.05; SeatX1 = Deck.MidX - 1.17; SeatHalf = 1.38; }
+		else { SeatX0 = Deck.MidX - 1.68; SeatX1 = Deck.MidX - .9; SeatHalf = S.bLeaning ? .58 : (NSeat - 1) * (S.Id == TEXT("freeman") ? .37 : .32) + .36; }
 		KeepOut.Add(FBox2D(FVector2D(SeatX0, -SeatHalf), FVector2D(SeatX1, SeatHalf)));
-		if (bMidL) KeepOut.Add(FBox2D(FVector2D(Deck.MidX - 3.72, -.78), FVector2D(Deck.MidX - 2.98, .78)));
+		if (bMidL) KeepOut.Add(FBox2D(FVector2D(Deck.MidX - 4.07, -.78), FVector2D(Deck.MidX - 3.33, .78)));
 		if (KeysMesh::HasFightChair(S))
 		{
 			const FVector CB = KeysMesh::FightChairBase(S);

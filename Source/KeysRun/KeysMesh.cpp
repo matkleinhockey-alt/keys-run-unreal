@@ -404,7 +404,7 @@ namespace KeysMesh
 				}
 				RBox(FVector(ConAft - .012, 0, Z0 + .82), FVector(.03, A * 1.8, .44), FrameBlack, .02, SurfGelcoat);
 				FVector Prev;
-				const FVector WC(ConAft - .3, -A * .25, Z0 + .95);
+				const FVector WC(ConAft - .16, -A * .25, Z0 + .95);
 				for (int32 k = 0; k <= 16; k++)
 				{
 					const double An = 2 * PI * k / 16;
@@ -412,7 +412,7 @@ namespace KeysMesh
 					if (k) Tube(Prev, Qw, .016, .016, 8, FrameBlack, SurfRubber);
 					Prev = Qw;
 				}
-				Tube(WC, WC + FVector(.28, 0, -.08), .025, .03, 8, FrameBlack, SurfRubber);
+				Tube(WC, WC + FVector(.16, 0, -.05), .025, .03, 8, FrameBlack, SurfRubber);
 			}
 			// the black window slots down the sides, the hatches and the arrowhead inlay on top
 			for (int32 s2 = -1; s2 <= 1; s2 += 2)
@@ -490,11 +490,11 @@ namespace KeysMesh
 			// two rows of four contoured buckets on champagne plinths, and a wet bar behind them
 			for (int32 Rw = 0; Rw < 2; Rw++)
 			{
-				const double SX = MidX - 1.15 - Rw * 1.2, Zb = SoleAt(S, SX);
+				const double SX = MidX - 1.5 - Rw * 1.2, Zb = SoleAt(S, SX);
 				RBox(FVector(SX - .02, 0, Zb + .2), FVector(.62, 2.7, .4), Champ, .06, SurfMetalPaint);
 				for (int32 i = 0; i < 4; i++) BuildBucketSeat(M, FVector(SX, (i - 1.5) * .66, Zb + .4), FVector::XAxisVector, .6, Uph, SurfHexQuilt, .74);
 			}
-			const double WX = MidX - 3.35, Zw = SoleAt(S, WX);
+			const double WX = MidX - 3.7, Zw = SoleAt(S, WX);
 			RBox(FVector(WX, 0, Zw + .47), FVector(.7, 1.5, .94), Champ, .07, SurfMetalPaint);
 			RBox(FVector(WX, 0, Zw + .945), FVector(.66, 1.46, .02), FrameBlack, .008, SurfGlass);
 		}
@@ -504,17 +504,16 @@ namespace KeysMesh
 			const int32 N = S.bRodRack ? 4 : S.Beam > 3.6 ? 3 : 2;
 			for (int32 i = 0; i < N; i++)
 			{
-				const double Y = (i - (N - 1) * .5) * .64, SX = MidX - 1.25;
-				Tube(FVector(SX, Y, DeckZ), FVector(SX, Y, DeckZ + .46), .06, .05, 12, bFree ? Srgb(.95, .95, .94) : Steel, uint8(bFree ? SurfGelcoat : SurfSteel));
+				const double Y = (i - (N - 1) * .5) * (bFree ? .74 : .64), SX = MidX - 1.25;
 				if (bFree)
 				{
-					// teak-framed helm chairs: a wooden shell under the cushions and wooden armrests
-					RBox(FVector(SX, Y, DeckZ + .47), FVector(.6, .6, .06), Teak, .02, SurfWood);
-					RBox(FVector(SX - .3, Y, DeckZ + .92), FVector(.06, .6, .78), Teak, .02, SurfWood, FQuat(FVector::YAxisVector, .13));
+					BuildTeakHelmChair(M, FVector(SX, Y, DeckZ), FVector::XAxisVector, Teak, Srgb(.95, .95, .93), Srgb(.96, .96, .95));
+					continue;
 				}
+				Tube(FVector(SX, Y, DeckZ), FVector(SX, Y, DeckZ + .46), .06, .05, 12, Steel, SurfSteel);
 				RBox(FVector(SX, Y, DeckZ + .55), FVector(.56, .57, .16), Uph, .07, UphK);
 				RBox(FVector(SX - .27, Y, DeckZ + .95), FVector(.15, .56, .7), Uph, .06, UphK, FQuat(FVector::YAxisVector, .13));
-				for (int32 s2 = -1; s2 <= 1; s2 += 2) RBox(FVector(SX, Y + s2 * .27, DeckZ + .7), FVector(.5, .09, .06), bFree ? Teak : Uph, .025, uint8(bFree ? SurfWood : UphK));
+				for (int32 s2 = -1; s2 <= 1; s2 += 2) RBox(FVector(SX, Y + s2 * .27, DeckZ + .7), FVector(.5, .09, .06), Uph, .025, UphK);
 			}
 		}
 		// bow casting deck (or the go-fast's sun pad) and stern bench, inside the liner where they stand
@@ -536,24 +535,39 @@ namespace KeysMesh
 					BuildBucketSeat(M, FVector(ConFront + .3, k * .56, Zc + .38), FVector::XAxisVector, .54, Uph, SurfHexQuilt, .6);
 					RBox(FVector(ConFront + .72, k * .56, Zc + .45), FVector(.42, .5, .12), Uph, .05, SurfHexQuilt);
 				}
-				// the bow: a U of quilted lounge seats round the forepeak, backs against the liner
-				const double X0 = ConFront + 1.25, X1 = BowX(S) - 1.15;
-				const int32 NSeg = 7;
-				for (int32 Side = -1; Side <= 1; Side += 2)
-					for (int32 k = 0; k < NSeg; k++)
-					{
-						const double Xa = FMath::Lerp(X0, X1, double(k) / NSeg), Xb = FMath::Lerp(X0, X1, double(k + 1) / NSeg), Xm = (Xa + Xb) * .5;
-						const double Ia = InnerHalfBeam(S, Xa), Ib = InnerHalfBeam(S, Xb), Im = InnerHalfBeam(S, Xm), Zs = SoleAt(S, Xm);
-						const double Yaw = Side * FMath::Atan2(Ib - Ia, Xb - Xa), Sl = FMath::Sqrt(FMath::Square(Xb - Xa) + FMath::Square(Ib - Ia)) + .02;
-						const FQuat Q(FVector::ZAxisVector, Yaw);
-						RBox(FVector(Xm, Side * (Im - .28), Zs + .17), FVector(Sl, .5, .34), Champ, .04, SurfMetalPaint, Q);
-						RBox(FVector(Xm, Side * (Im - .3), Zs + .4), FVector(Sl, .52, .12), Uph, .05, SurfHexQuilt, Q);
-						RBox(FVector(Xm, Side * (Im - .05), Zs + .7), FVector(Sl, .1, .42), Uph, .045, SurfHexQuilt, Q);
-					}
+				// the bow: one smooth U of quilted lounge round the forepeak, its back against the liner, on a champagne base
 				{
-					const double Zs = SoleAt(S, X1 + .2), Iw = InnerHalfBeam(S, X1 + .2);
-					RBox(FVector(X1 + .2, 0, Zs + .2), FVector(.5, Iw * 2, .4), Champ, .04, SurfMetalPaint);
-					RBox(FVector(X1 + .2, 0, Zs + .44), FVector(.5, Iw * 2 - .05, .12), Uph, .05, SurfHexQuilt);
+					const double X0 = ConFront + 1.25, X1 = BowX(S) - 1.25;
+					auto UPath = [&](double Off, double Dz)
+					{
+						TArray<FVector> Pts;
+						const int32 NS2 = 14;
+						for (int32 k = 0; k <= NS2; k++)
+						{
+							const double X = FMath::Lerp(X0, X1, double(k) / NS2);
+							Pts.Add(FVector(X, -(InnerHalfBeam(S, X) - Off), SoleAt(S, X) + Dz));
+						}
+						// round the forepeak: a half-ellipse across the bow
+						const double Hy = InnerHalfBeam(S, X1) - Off, Zf = SoleAt(S, X1) + Dz, Rx = FMath::Max(.15, FMath::Min(Hy * .7, BowX(S) - .55 - X1 - Off * .5));
+						for (int32 k = 1; k < 12; k++)
+						{
+							const double A = PI * (-.5 + double(k) / 12);
+							Pts.Add(FVector(X1 + Rx * FMath::Cos(A), Hy * FMath::Sin(A), Zf));
+						}
+						for (int32 k = NS2; k >= 0; k--)
+						{
+							const double X = FMath::Lerp(X0, X1, double(k) / NS2);
+							Pts.Add(FVector(X, InnerHalfBeam(S, X) - Off, SoleAt(S, X) + Dz));
+						}
+						return Pts;
+					};
+					Sweep(UPath(.3, .14), .14, .27, FVector::ZAxisVector, Champ, SurfMetalPaint);
+					Sweep(UPath(.31, .33), .065, .27, FVector::ZAxisVector, Uph, SurfHexQuilt);
+					Sweep(UPath(.08, .55), .17, .07, FVector::ZAxisVector, Uph, SurfHexQuilt);
+					// a filler cushion across the very forepeak inside the U
+					const double Xf = X1 + .1, Iw = FMath::Max(.2, InnerHalfBeam(S, Xf) - .58);
+					RBox(FVector(Xf, 0, SoleAt(S, Xf) + .14), FVector(.5, Iw * 2, .28), Champ, .05, SurfMetalPaint);
+					RBox(FVector(Xf, 0, SoleAt(S, Xf) + .34), FVector(.5, Iw * 2, .12), Uph, .05, SurfHexQuilt);
 				}
 				// tan quilted bolsters along the inside of the gunwales, and the rounded champagne cap rail on top
 				for (int32 Side = -1; Side <= 1; Side += 2)
