@@ -1,0 +1,10 @@
+{
+  "name": "keys-run-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Keys Run online server: live boats and the crew leaderboard",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.18.0" },
+  "engines": { "node": ">=18" }
+}

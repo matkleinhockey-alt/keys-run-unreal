@@ -1,0 +1,235 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Pawn.h"
+#include "KeysData.h"
+#include "KeysLife.h"
+#include "KeysBoatPawn.generated.h"
+
+class UProceduralMeshComponent;
+class UStaticMeshComponent;
+class UCameraComponent;
+class AKeysWorld;
+class UKeysSave;
+struct FKeysMesh;
+
+UENUM()
+enum class EKeysFish : uint8 { Idle, Casting, Waiting, Nibble, Bite, Fight, Caught };
+
+struct FKeysCooler
+{
+	FString Name;
+	double Weight;
+	int32 Pts;
+};
+
+// The player's center console: wave-riding physics, the chase camera, and the whole fishing loop.
+UCLASS()
+class KEYSRUN_API AKeysBoatPawn : public APawn
+{
+	GENERATED_BODY()
+
+public:
+	AKeysBoatPawn();
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
+
+	// ---- read by the HUD
+	bool bRunning = false;
+	int32 PickIndex = 1;
+	const KeysData::FBoatSpec& Spec() const { return KeysData::Boats()[BoatIndex]; }
+	double KnotsNow() const;
+	double DepthHere() const;
+	FString ZoneName() const;
+	FString NearName() const;
+	double BoatX() const { return X; }
+	double BoatZ() const { return Z; }
+	double Heading() const { return H; }
+	double Throttle() const { return Thr; }
+
+	EKeysFish FState = EKeysFish::Idle;
+	bool bCharging = false;
+	double Charge = 0;
+	double Tension = 0, Stamina = 1, LineDist = 0;
+	int32 Drag = 3;
+	FString FightLabel, FightSub;
+	bool bStrikeShown = false;
+
+	int64 Score = 0;
+	int32 Count = 0;
+	TSet<FString> CaughtKeys;
+	TArray<FKeysCooler> Cooler;
+	double CoolerLb() const;
+
+	// catch card
+	FString CardName, CardZone, CardFact, CardBonus, CardNote, CardSex;
+	double CardWeight = 0;
+	int32 CardPts = 0, CardInches = 0;
+	bool bCanKeep = false;
+
+	bool bTrimMode = false;
+	double TrimV = .2;
+	int32 Gear = 0;   // 0 drive, 1 neutral, 2 reverse
+	FString GearName() const { return Gear == 0 ? TEXT("D") : Gear == 1 ? TEXT("N") : TEXT("R"); }
+	bool bAutoChase = true, bAutoOn = false;
+	FString AutoMode;
+	bool bBigMap = false;
+	FString Toast;
+	double ToastUntil = 0;
+	FString Hint() const;
+	FString Warning() const;
+
+	// ---- views (1 cycles third person / helm, V toggles the first-person fishing view)
+	int32 View = 0;            // 0 third person, 1 first person from the helm
+	bool bFpPref = true;       // go first person while a cast is charging or the line is out
+	bool bFpOn = false;        // first-person fishing view is active
+	bool bDriveOn = false;     // helm view is active
+	// ---- electronics (G): chartplotter and fish finder; [ ] zoom the chart
+	bool bElectronics = false;
+	double ChartRange = 400;   // meters from the boat to the chart edge
+	// ---- local leaderboard (B)
+	bool bBoardOpen = false;
+	int32 BoardTab = 0;        // 0 biggest fish, 1 species records, 2 crew (when online)
+	// ---- menus, by mouse or keyboard: the main menu before you start, Esc for the pause menu
+	enum class EMenu : uint8 { None, Main, Pause, Settings, Controls };
+	struct FMenuItem { FName Id; FString Label, Value; bool bArrows = false; };
+	EMenu Menu = EMenu::Main;
+	int32 MenuSel = 0;
+	void GetMenuItems(TArray<FMenuItem>& Out) const;
+	void MenuActivate(FName Id, int32 Dir = 0);   // Dir 0 = choose, -1 / +1 = the left / right arrow
+	void OnHudClick(FName Box);                    // a click on any HUD button (menus, leaderboard tabs, login box)
+	void OnHudHover(FName Box);
+	// true while a menu, the leaderboard or the login box owns the keyboard
+	bool IsCapturingKeys() const { return Menu != EMenu::None || bLoginOpen || bBoardOpen; }
+
+	// ---- online (L): log in with a name and a crew code
+	bool bLoginOpen = false;
+	int32 LoginField = 0;      // 0 name, 1 crew code
+	FString LoginName, LoginCrew;
+	UKeysSave* Board() const;
+
+	// ---- for other systems (game meters, y up; see KeysGeo.h)
+	double GetSpeed() const { return Speed; }        // m/s along the heading, negative in reverse (game speed, includes SpeedScale)
+	double GetY() const { return Y; }                // hull heave
+	double GetVY() const { return VY; }
+	double GetPitch() const { return Pitch; }        // radians, bow up positive
+	double GetRoll() const { return Roll; }          // radians, starboard up positive
+	bool IsAir() const { return bAir; }
+	int32 GetGear() const { return Gear; }           // 0 drive, 1 neutral, 2 reverse
+	bool IsInFight() const { return FState == EKeysFish::Fight; }
+	bool IsLineOut() const { return FState == EKeysFish::Casting || FState == EKeysFish::Waiting || FState == EKeysFish::Nibble || FState == EKeysFish::Bite || FState == EKeysFish::Fight; }
+	bool IsFishingActive() const { return bCharging || IsLineOut(); }
+	const KeysData::FSpecies* HookedSpecies() const { return Sp; }   // the fish on (or about to bite); null if none
+	FString HookedKey() const { return Key; }
+	double HookedWeight() const { return Sp ? Weight : 0; }
+	double FishX() const { return FX; }
+	double FishZ() const { return FZ; }
+	double FishDeep() const { return Deep; }         // how far the hooked fish has sounded, meters
+	bool IsFishJumping() const { return bJumping; }
+	FVector BobberPos() const { return Bob; }        // game meters (x, y up, z)
+	bool IsBobberInWater() const { return FState == EKeysFish::Waiting || FState == EKeysFish::Nibble || FState == EKeysFish::Bite; }
+	bool IsFirstPerson() const { return bFpOn || bDriveOn; }
+	void NudgeBoat(double DX, double DZ, double SpeedMul) { X += DX; Z += DZ; Speed *= SpeedMul; }
+
+private:
+	void Rebuild();
+	void PlaceAtSpawn();
+	void HandleInput(float Dt);
+	void UpdateBoat(double Dt, double T);
+	bool AutoChase(double TopMs, bool bCanDrive, double& OutThr, double& OutSteer);
+	void Slam(double VY);
+	void UpdateCamera(double Dt, double T);
+	void CycleView();
+	void SyncChaseCam();
+	FVector FishSpotLocal() const;
+	void UpdateViewModel(double Dt);
+	FVector BuildViewModel(FKeysMesh& M);
+	void ShowToast(const FString& Msg, double Secs = 3.2);
+
+	// fishing
+	void OnAction();
+	void StartCharge();
+	void CastLine(double Power);
+	void ReelIn(const FString& Msg);
+	FString PickSpecies() const;
+	void ChooseFish();
+	void BuildHookedMesh();
+	void MissFish(const FString& Msg);
+	void SetHook();
+	void StartJump(bool bLow);
+	void UpdateJump(double Dt);
+	void Lose(const FString& Msg);
+	void Land();
+	void KeepFish();
+	void ReleaseFish();
+	void FinishCatch();
+	void WeighIn();
+	void UpdateFishing(double Dt, double T);
+	void DrawLineAndRod(double T);
+	void ShowFishMesh(bool bShow);
+	FVector RodTip(const FVector& Target) const;
+	AKeysWorld* World();
+
+	UPROPERTY() TObjectPtr<USceneComponent> Root;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatMesh;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> LineMesh;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FishMesh;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> Bobber;
+	UPROPERTY() TObjectPtr<UCameraComponent> Camera;
+	UPROPERTY() TWeakObjectPtr<AKeysWorld> WorldActor;
+	UPROPERTY() TObjectPtr<UKeysSave> Save;
+
+	int32 BoatIndex = 1;
+
+	// boat state, game meters, y up (see KeysGeo.h)
+	double X = 0, Z = 0, H = 0, Y = 0, VY = 0, Pitch = 0, Roll = 0, VP = 0, VR = 0, DVX = 0, DVZ = 0;
+	double Speed = 0, Thr = 0, Steer = 0, WakeT = 0, TrailT = 0, RideNow = 0, DkNow = 0;
+	bool bOnlineTried = false;
+	bool bCursorOn = false;
+	EMenu MenuBack = EMenu::Main;   // where Back goes from Settings / Controls
+	void SubmitLogin();
+	void ToggleOnline();
+	void StartRun(bool bDemo);
+	void UpdateCursor();
+	void RunTestScript(double T);
+	bool bAir = false;
+	double TrimVent = 0, TrimMsgT = -99, CollideMsgT = -99, SlamT = -99, AcMsgT = -99;
+	bool bTrimUp = false, bTrimDn = false;
+	bool bFwd = false, bBack = false, bLeft = false, bRight = false, bAction = false;
+
+	// camera
+	double CamYaw = 0, CamPitchOff = 0, CamZoom = 1, Shake = 0;
+	bool bDragging = false;
+	FVector ShowPos = FVector::ZeroVector;   // where the catch is held up for the photo, game meters
+	double ShowSgn = 1;
+	FVector CamPos = FVector::ZeroVector, CamLook = FVector::ZeroVector;   // game meters
+	bool bCamInit = false;
+	// first-person fishing eye (fp) and helm look offsets
+	FVector FpEyeL = FVector::ZeroVector;   // boat-local meters (x forward, y starboard, z up)
+	double FpYaw = 0, FpPitch = -.12, FpUserT = 0, DYaw = 0, DPitch = 0;
+	// first-person rod (view model)
+	double VmRx = -1.15, VmWhip = 0, VmBend = .01, VmCrank = 0;
+
+	// fishing state, mirrors the JS F object
+	FVector Bob = FVector::ZeroVector, CastFrom = FVector::ZeroVector, CastTo = FVector::ZeroVector;
+	double CastT = 0, CastDur = .7, CastH = 10, ChargeT = 0, BiteT = 0, Win = 0, NibT = 0, DipT = 0;
+	int32 Nibs = 0;
+	FString Zone, Key;
+	FKeysFishSpot Spot;   // bird pile / weedline / rig the bait landed in (JS F.hs)
+	const KeysData::FSpecies* Sp = nullptr;
+	double Weight = 0, Str = 0, FX = 0, FZ = 0, OFX = 0, OFZ = 0;
+	bool bRunningFish = false;
+	double RunT = 0, RunAng = 0, Pull = 0, SlackT = 0, OverT = 0, MaxLine = 200;
+	int32 JumpQ = 0;
+	double Deep = 0, DeepT = 0, ShakeT = 0, SoundMsgT = -99, CaughtT = -99, LastPts = 0;
+	bool bSlam1 = false, bSlam2 = false, bDeepTip = false;
+
+	// a fish in the air
+	bool bJumping = false, bJumpLow = false;
+	double JT = 0, JDur = 1, JX = 0, JZ = 0, JDX = 0, JDZ = 0, JRun = 0, JH = 0, JSpin = 0;
+	// jump cinematics: the camera zooms in and swings toward a fish in the air
+	float JumpFov = 88.f;
+	double JumpLook = 0;
+	void UpdateJumpCam(double Dt);
+	double FishLen = 1;
+};

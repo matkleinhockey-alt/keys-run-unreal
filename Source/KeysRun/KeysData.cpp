@@ -1,0 +1,140 @@
+#include "KeysData.h"
+
+namespace KeysData
+{
+	static FLinearColor Hex(uint32 C) { return FLinearColor(FColor((C >> 16) & 255, (C >> 8) & 255, C & 255)); }
+
+	static const TMap<FString, FSpecies>& AllSpecies()
+	{
+		static TMap<FString, FSpecies> M;
+		if (M.Num()) return M;
+		auto S = [](const TCHAR* Key, const TCHAR* Name, double Min, double Max, double Str, double Mult, uint32 Color, bool bJump, const TCHAR* Fact)
+		{
+			M.Add(FString(Key), FSpecies{Key, Name, Min, Max, Str, Mult, Hex(Color), bJump, Fact});
+		};
+		S(TEXT("bonefish"), TEXT("Bonefish"), 3, 12, .65, 30, 0xd2dade, false, TEXT("The gray ghost of the flats. In Florida, bonefish are catch-and-release only."));
+		S(TEXT("permit"), TEXT("Permit"), 8, 40, .85, 28, 0xb6c3ca, false, TEXT("Famously picky crab-eaters. Landing one is a career moment for flats anglers."));
+		S(TEXT("tarpon"), TEXT("Tarpon"), 30, 160, 1.05, 10, 0xdfe8ee, true, TEXT("The silver king. Florida tarpon are catch-and-release unless you hold a harvest tag."));
+		S(TEXT("barracuda"), TEXT("Great Barracuda"), 5, 45, .7, 6, 0x9db2bf, true, TEXT("An ambush predator that can't resist a fast, flashy tube lure."));
+		S(TEXT("snook"), TEXT("Snook"), 4, 30, .6, 12, 0xcfc6a0, false, TEXT("Snook hug mangrove edges and bridge shadows, waiting for the tide to bring bait."));
+		S(TEXT("redfish"), TEXT("Redfish"), 4, 28, .55, 10, 0xcf8c4e, false, TEXT("Look for copper tails waving above the surface in skinny water."));
+		S(TEXT("trout"), TEXT("Spotted Seatrout"), 1, 8, .3, 12, 0xb1ae8f, false, TEXT("Big trout cruise the grass flats at first light."));
+		S(TEXT("mangrove"), TEXT("Mangrove Snapper"), 1, 12, .35, 14, 0xa85a4b, false, TEXT("Smart and leader-shy. Go lighter and you'll get more bites."));
+		S(TEXT("yellowtail"), TEXT("Yellowtail Snapper"), 1, 7, .3, 16, 0xe8c547, false, TEXT("Chum them up behind the boat along the reef edge."));
+		S(TEXT("mutton"), TEXT("Mutton Snapper"), 4, 22, .5, 12, 0xd97b69, false, TEXT("A prized reef snapper that eats best on a bottom-fished bait."));
+		S(TEXT("hogfish"), TEXT("Hogfish"), 2, 20, .4, 15, 0xeaa07c, false, TEXT("Usually speared, but a live shrimp on the bottom will tempt one."));
+		S(TEXT("grouper"), TEXT("Black Grouper"), 10, 80, .95, 8, 0x5f5c53, false, TEXT("Lock the drag and pull hard - they bolt for the rocks."));
+		S(TEXT("mahi"), TEXT("Mahi-Mahi"), 6, 55, .8, 9, 0x7cd34c, true, TEXT("Find floating weedlines with birds working, and the mahi are underneath."));
+		S(TEXT("blackfin"), TEXT("Blackfin Tuna"), 6, 40, .85, 9, 0x2c4268, false, TEXT("Blackfin school around the offshore humps beyond the reef."));
+		S(TEXT("wahoo"), TEXT("Wahoo"), 15, 90, 1, 8, 0x4d80a9, false, TEXT("Razor teeth and blistering first runs - wire leader recommended."));
+		S(TEXT("sailfish"), TEXT("Sailfish"), 30, 100, 1.1, 12, 0x3155a6, true, TEXT("A Keys winter favorite, usually caught with kites and live bait."));
+		S(TEXT("yellowfin"), TEXT("Yellowfin Tuna"), 20, 220, 1.15, 8, 0xe9c43a, false, TEXT("Named for the long golden second dorsal and anal fins of big adults. Yellowfin often travel with pods of dolphins."));
+		S(TEXT("bluefin"), TEXT("Atlantic Bluefin Tuna"), 150, 900, 1.55, 5, 0x14224a, false, TEXT("Warm-blooded giants. In spring some pass through the Florida Straits on their way to spawn in the Gulf of Mexico."));
+		S(TEXT("albacore"), TEXT("Albacore"), 15, 60, .85, 10, 0x7f93b8, false, TEXT("The longfin tuna - those huge pectoral fins give it away. A rare visitor this far south."));
+		S(TEXT("cobia"), TEXT("Cobia"), 10, 90, 1, 9, 0x3b3328, false, TEXT("Cobia shadow rays, turtles and sharks - sight-cast when one cruises by."));
+		S(TEXT("amberjack"), TEXT("Greater Amberjack"), 15, 120, 1.15, 7, 0x8a7b45, false, TEXT("Amberjack crowd the Marathon Hump and wrecks, then bulldog straight for the bottom."));
+		S(TEXT("kingfish"), TEXT("King Mackerel"), 8, 60, .9, 9, 0x3d5a7a, false, TEXT("Kingfish run the reef edge in winter; slow-trolled live baits draw the big \"smokers\"."));
+		S(TEXT("cero"), TEXT("Cero Mackerel"), 2, 12, .5, 14, 0x3f6286, false, TEXT("Cero hang over the reef - the Keys' own gold-spotted mackerel."));
+		S(TEXT("jackcrevalle"), TEXT("Jack Crevalle"), 4, 35, .85, 8, 0x4f6a6e, false, TEXT("Jacks hunt in packs and never quit pulling."));
+		S(TEXT("ladyfish"), TEXT("Ladyfish"), 1, 4, .35, 20, 0x7f9aa0, true, TEXT("Ladyfish jump like mini tarpon - the poor man's tarpon."));
+		S(TEXT("sheepshead"), TEXT("Sheepshead"), 2, 12, .45, 14, 0xc9c9c0, false, TEXT("Sheepshead have human-like teeth for crunching crabs and barnacles off bridge pilings."));
+		S(TEXT("pompano"), TEXT("Florida Pompano"), 1, 6, .4, 22, 0xf1e9b0, false, TEXT("Pompano skip along the surface behind a boat wake - and they are prized table fare."));
+		S(TEXT("tripletail"), TEXT("Tripletail"), 4, 30, .6, 14, 0x4e4434, false, TEXT("Tripletail float on their sides under buoys and debris, pretending to be a leaf."));
+		S(TEXT("lionfish"), TEXT("Lionfish"), .5, 3, .2, 60, 0xa5432e, false, TEXT("Invasive in Florida. There is no bag limit - every one removed helps the reef."));
+		S(TEXT("goliath"), TEXT("Goliath Grouper"), 100, 500, 1.4, 4, 0x6b5c3e, false, TEXT("Protected in Florida apart from a tiny permit lottery - photograph it and let it go."));
+		S(TEXT("graytrigger"), TEXT("Gray Triggerfish"), 2, 10, .45, 15, 0x6f6f68, false, TEXT("Triggerfish lock their first dorsal spine upright to wedge into reef holes."));
+		S(TEXT("blacktip"), TEXT("Blacktip Shark"), 30, 150, 1.05, 5, 0x7a8187, true, TEXT("Hooked blacktips often spin out of the water."));
+		S(TEXT("bullshark"), TEXT("Bull Shark"), 100, 350, 1.35, 4, 0x6b6f68, false, TEXT("Bull sharks roam from the open ocean right up into rivers and canals."));
+		S(TEXT("lemonshark"), TEXT("Lemon Shark"), 60, 250, 1.15, 4, 0xa6976b, false, TEXT("Lemon sharks are protected in Florida state waters - release them."));
+		S(TEXT("hammerhead"), TEXT("Great Hammerhead"), 150, 700, 1.5, 3, 0x6e7a80, false, TEXT("Great hammerheads must be released in Florida waters."));
+		S(TEXT("marlin"), TEXT("Blue Marlin"), 150, 800, 1.45, 5, 0x1f3f8f, true, TEXT("The bucket-list billfish of the Gulf Stream. Blue marlin over 300 lb are almost always females."));
+		S(TEXT("swordfish"), TEXT("Swordfish"), 80, 400, 1.3, 6, 0x40465a, false, TEXT("Daytime swordfish live near the bottom in well over a thousand feet of water."));
+		S(TEXT("blackmarlin"), TEXT("Black Marlin"), 200, 900, 1.55, 5, 0x2b3340, true, TEXT("The only marlin whose pectoral fins lock rigidly out to the sides - a true giant, rarely seen this side of the Pacific."));
+		S(TEXT("gag"), TEXT("Gag Grouper"), 6, 45, .9, 7, 0x6f6a60, false, TEXT("Gags hang over ledges and wrecks; the big ones are almost always males."));
+		S(TEXT("redgrouper"), TEXT("Red Grouper"), 5, 30, .85, 7, 0x9a5a46, false, TEXT("Red groupers dig out holes in the bottom that other reef fish move into."));
+		return M;
+	}
+
+	const FSpecies* Species(const FString& Key) { return AllSpecies().Find(Key); }
+
+	const TArray<FString>& SpeciesKeys()
+	{
+		static TArray<FString> K;
+		if (!K.Num()) AllSpecies().GetKeys(K);
+		return K;
+	}
+
+	const TArray<FZoneRow>& ZoneTable(const FString& Zone)
+	{
+		using FRow = TArray<FZoneRow>;
+		static TMap<FString, FRow> T;
+		if (!T.Num())
+		{
+			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(Name, FRow(Rows)); };
+			Z(TEXT("Creek"), {{TEXT("snook"), 5}, {TEXT("redfish"), 3}, {TEXT("tarpon"), 2}, {TEXT("mangrove"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}});
+			Z(TEXT("Flats"), {{TEXT("bonefish"), 5}, {TEXT("permit"), 2}, {TEXT("barracuda"), 3}, {TEXT("tarpon"), 1}, {TEXT("ladyfish"), 2}, {TEXT("lemonshark"), .8}, {TEXT("blacktip"), 1}});
+			Z(TEXT("Backcountry"), {{TEXT("snook"), 4}, {TEXT("redfish"), 4}, {TEXT("trout"), 5}, {TEXT("tarpon"), 2}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("tripletail"), .8}, {TEXT("bullshark"), .6}});
+			Z(TEXT("Bridge"), {{TEXT("tarpon"), 5}, {TEXT("mangrove"), 4}, {TEXT("snook"), 2}, {TEXT("sheepshead"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("goliath"), .6}, {TEXT("bullshark"), .6}});
+			Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("yellowtail"), 3}, {TEXT("mutton"), 2}, {TEXT("redgrouper"), 1.2}, {TEXT("gag"), .8}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("jackcrevalle"), 1.5}, {TEXT("graytrigger"), 1.5}});
+			Z(TEXT("Reef"), {{TEXT("yellowtail"), 5}, {TEXT("mutton"), 3}, {TEXT("hogfish"), 3}, {TEXT("grouper"), 2.5}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2.5}, {TEXT("kingfish"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("goliath"), .4}});
+			Z(TEXT("Offshore"), {{TEXT("mahi"), 6}, {TEXT("blackfin"), 4}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 2}, {TEXT("marlin"), 1.3}, {TEXT("blackmarlin"), .5}, {TEXT("swordfish"), 1.1}, {TEXT("yellowfin"), .8}, {TEXT("albacore"), .3}, {TEXT("bluefin"), .2}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("cobia"), .5}, {TEXT("hammerhead"), .3}});
+		}
+		const FRow* R = T.Find(Zone);
+		return R ? *R : T[TEXT("Hawk Channel")];
+	}
+
+	const TArray<FBoatSpec>& Boats()
+	{
+		static TArray<FBoatSpec> B;
+		if (B.Num()) return B;
+		auto Add = [](const TCHAR* Id, const TCHAR* Brand, const TCHAR* Name, const TCHAR* Power, double Len, double Beam, int32 Engines, double Top, double Accel, double Turn,
+			const TCHAR* DraftFt, double Draft, bool bCat, bool bHardtop, uint32 Hull, uint32 Stripe, uint32 Bottom, uint32 Canvas, uint32 Engine, uint32 Deck, double Cap, double Spring, const TCHAR* Desc)
+		{
+			FBoatSpec S;
+			S.Id = Id; S.Brand = Brand; S.Name = Name; S.Power = Power; S.DraftFt = DraftFt; S.Desc = Desc;
+			S.Len = Len; S.Beam = Beam; S.Top = Top; S.Accel = Accel; S.Turn = Turn; S.Draft = Draft; S.Engines = Engines;
+			S.bCat = bCat; S.bHardtop = bHardtop;
+			S.Hull = Hex(Hull); S.Stripe = Hex(Stripe); S.Bottom = Hex(Bottom); S.Canvas = Hex(Canvas); S.Engine = Hex(Engine); S.Deck = Hex(Deck);
+			S.CoolerCap = Cap; S.Spring = Spring;
+			B.Add(S);
+		};
+		Add(TEXT("robalo"), TEXT("Robalo"), TEXT("R230"), TEXT("Single Mercury Racing 450R"), 7.0, 2.59, 1, 52, .62, 1.15, TEXT("1' 7\""), .6, false, true,
+			0xffffff, 0x6fa8c9, 0xf4f4f2, 0xf4f4f2, 0xd8dadc, 0xdcddd8, 150, .38,
+			TEXT("A nimble 23-footer that slips onto the flats and under the bridges. Gets wet and bouncy once you pass the reef."));
+		Add(TEXT("grady"), TEXT("Grady-White"), TEXT("Canyon 306"), TEXT("Twin Mercury Racing 450R"), 9.3, 3.23, 2, 58, .5, .9, TEXT("1' 9\""), .72, false, false,
+			0xfbfaf6, 0x23466e, 0xf8f7f2, 0x23466e, 0xd8dadc, 0xe0ded6, 350, .52,
+			TEXT("The classic all-rounder. Its deep-V hull smooths out Hawk Channel chop and runs to blue water with confidence."));
+		Add(TEXT("freeman"), TEXT("Freeman"), TEXT("42LR"), TEXT("Quad Mercury Racing 450R"), 12.8, 3.58, 4, 69, .44, .72, TEXT("2' 0\""), .82, true, true,
+			0x74bfe6, 0x1f2a33, 0xf2f2f0, 0xf2f2ee, 0x17191c, 0xe6e2d8, 800, .3,
+			TEXT("A long-range catamaran built for tournament fishing. Twin hulls ride flat and soft offshore, and it drafts shallow for its size."));
+		Add(TEXT("midnight"), TEXT("Midnight Express"), TEXT("43 Open"), TEXT("Quad Mercury Racing 450R"), 13.1, 3.81, 4, 70, .42, .66, TEXT("2' 0\""), .9, false, true,
+			0x17191d, 0xc8a24a, 0x2a2d31, 0xf2f2ee, 0x1c1f24, 0xe7e5df, 400, .35,
+			TEXT("A twin-step deep-V luxury rocket with a very wide beam. Fast, stable, and dry, but keep it in real water."));
+		Add(TEXT("mti"), TEXT("MTI"), TEXT("V42"), TEXT("Quad Mercury Racing 450R"), 12.8, 3.5, 4, 76, .46, .62, TEXT("3' 0\""), 1.15, false, true,
+			0xc8102e, 0xf4f4f4, 0x15171a, 0x15171a, 0x15171a, 0x2a2d31, 300, .3,
+			TEXT("The fastest center console here, with race-bred power. It covers the Keys in minutes, but its deeper draft keeps it off the flats."));
+		return B;
+	}
+
+	bool IsSounder(const FString& Key)
+	{
+		static const TSet<FString> S = {TEXT("blackfin"), TEXT("yellowfin"), TEXT("bluefin"), TEXT("albacore"), TEXT("amberjack"), TEXT("grouper"), TEXT("goliath"), TEXT("swordfish"),
+			TEXT("cobia"), TEXT("bullshark"), TEXT("hammerhead"), TEXT("lemonshark"), TEXT("blacktip"), TEXT("mutton"), TEXT("kingfish"), TEXT("wahoo")};
+		return S.Contains(Key);
+	}
+
+	bool IsBillfish(const FString& Key) { return Key == TEXT("sailfish") || Key == TEXT("marlin") || Key == TEXT("blackmarlin"); }
+
+	FString ReleaseOnlyReason(const FString& Key)
+	{
+		static const TMap<FString, FString> CR = {
+			{TEXT("goliath"), TEXT("Goliath grouper are protected in Florida - release it in the water.")},
+			{TEXT("hammerhead"), TEXT("Great hammerheads must be released in Florida waters.")},
+			{TEXT("lemonshark"), TEXT("Lemon sharks are protected in Florida state waters.")},
+			{TEXT("bonefish"), TEXT("Bonefish are catch-and-release only in Florida.")},
+			{TEXT("tarpon"), TEXT("Tarpon are catch-and-release in Florida unless you hold a harvest tag.")},
+			{TEXT("marlin"), TEXT("Billfish - release only.")}, {TEXT("blackmarlin"), TEXT("Billfish - release only.")}, {TEXT("sailfish"), TEXT("Billfish - release only.")}};
+		const FString* R = CR.Find(Key);
+		return R ? *R : FString();
+	}
+}
