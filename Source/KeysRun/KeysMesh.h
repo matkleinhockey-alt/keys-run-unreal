@@ -33,8 +33,16 @@ struct FKeysMesh
 
 namespace KeysMesh
 {
-	// hull, deck, console, T-top or hardtop and outboards for one of the five boats
-	void BuildBoat(FKeysMesh& M, const KeysData::FBoatSpec& S);
+	// hull, deck, console, T-top or hardtop and outboards for one of the eight boats. bRiggers: the tower boats'
+	// outriggers, stowed (the player's boat leaves them out and swings its own with BuildRiggers).
+	void BuildBoat(FKeysMesh& M, const KeysData::FBoatSpec& S, bool bRiggers = true);
+	// Outriggers (web entities/boat/model.ts OUTRIGGERS): the tower boats (Grady-White, Freeman) carry two long poles
+	// on swivel bases that swing from stowed upright (Rig 0) to about 70 degrees out and raked aft (Rig 1). Hulls with
+	// fixed rigger poles on the T-top (Yellowfin, Contender) report those. False on a boat with nothing to hang a line
+	// from. Tips and bases are in the boat's own frame, meters.
+	bool RiggerTips(const KeysData::FBoatSpec& S, double Rig, FVector OutTip[2], FVector OutBase[2]);
+	bool HasSwingingRiggers(const KeysData::FBoatSpec& S);
+	void BuildRiggers(FKeysMesh& M, const KeysData::FBoatSpec& S, double Rig);
 	// Boats with a tuna tower (the Grady-White and the Freeman): true, and where your eyes are standing at the upper
 	// helm, in the boat's own frame (meters, +X toward the bow, Z up).
 	bool TowerEye(const KeysData::FBoatSpec& S, FVector& OutEye);

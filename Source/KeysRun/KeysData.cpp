@@ -113,7 +113,45 @@ namespace KeysData
 		Add(TEXT("mti"), TEXT("MTI"), TEXT("V42"), TEXT("Quad Mercury Racing 450R"), 12.8, 3.5, 4, 76, .46, .62, TEXT("3' 0\""), 1.15, false, true,
 			0xc8102e, 0xf4f4f4, 0x15171a, 0x15171a, 0x15171a, 0x2a2d31, 300, .3,
 			TEXT("The fastest center console here, with race-bred power. It covers the Keys in minutes, but its deeper draft keeps it off the flats."));
+		Add(TEXT("yellowfin"), TEXT("Yellowfin"), TEXT("36 CC"), TEXT("Triple Mercury Racing 450R"), 11.0, 3.3, 3, 66, .48, .78, TEXT("1' 10\""), .76, false, true,
+			0xe9d98a, 0x1f3b57, 0xf2efe2, 0xf2f2ee, 0xf4f4f2, 0xe2decd, 520, .46,
+			TEXT("The Keys tournament favourite. A sharp 24-degree entry that cuts chop most boats pound through, with a famously dry ride for a boat this quick."));
+		Add(TEXT("contender"), TEXT("Contender"), TEXT("32ST"), TEXT("Twin Mercury Racing 450R"), 9.8, 3.0, 2, 61, .52, .86, TEXT("1' 8\""), .68, false, false,
+			0xf2f4f5, 0x2f7a52, 0xf4f6f5, 0xe8eae6, 0xf4f4f2, 0xdedfd9, 420, .44,
+			TEXT("A no-nonsense fishing hull with a huge cockpit and almost nothing in it. Light, quick to plane, and happy running a long day offshore."));
+		Add(TEXT("nortech"), TEXT("Nor-Tech"), TEXT("390 Sport"), TEXT("Twin Mercury Racing 500R"), 11.9, 2.9, 2, 82, .58, .58, TEXT("2' 8\""), 1.05, false, true,
+			0x14161a, 0xff7a18, 0x14161a, 0x14161a, 0x14161a, 0x1b1e23, 180, .26,
+			TEXT("Not a fishing boat. A stepped-hull go-fast that will out-run everything here in a straight line and punish you for asking it to turn."));
+
+		// fit-out per hull, from HULLS[id].style (content/boats.ts) and BOAT_PRICE (sim/economy.ts)
+		struct FFit { const TCHAR* Id; uint32 EngAcc, EngLow, Cove, Uph; bool bTTop, bRadar, bRodRack, bBowRail, bRiggerPoles, bSunpad, bLeaning, bBracket; int32 Steps; double Entry; int64 Price; };
+		static const FFit Fits[] = {
+			{TEXT("robalo"),    0x6fa8c9, 0x2a2d31, 0,        0x6fa8c9, false, false, false, true,  false, false, true,  false, 0, .42, 9000},
+			{TEXT("grady"),     0x23466e, 0x2a2d31, 0x23466e, 0xe8e4d8, true,  true,  false, true,  true,  false, true,  false, 0, .40, 0},
+			{TEXT("freeman"),   0x1f2a33, 0x1f2126, 0,        0x9aa0a6, false, true,  true,  false, false, false, false, true,  1, .50, 42000},
+			{TEXT("midnight"),  0xc8a24a, 0x17191d, 0xc8a24a, 0xf3efe6, false, false, false, false, false, true,  false, true,  2, .46, 56000},
+			{TEXT("mti"),       0xf4f4f4, 0x15171a, 0xf4f4f4, 0x1d1f23, false, false, false, false, false, true,  false, true,  2, .48, 70000},
+			{TEXT("yellowfin"), 0x1f3b57, 0x2a2d31, 0x1f3b57, 0x1f3b57, true,  true,  true,  true,  true,  false, true,  true,  0, .56, 30000},
+			{TEXT("contender"), 0x2f7a52, 0x2a2d31, 0x2f7a52, 0x2f7a52, true,  false, true,  true,  true,  false, true,  false, 0, .46, 20000},
+			{TEXT("nortech"),   0xff7a18, 0x0b0c0e, 0xff7a18, 0xff7a18, false, false, false, false, false, true,  false, true,  2, .50, 85000},
+		};
+		for (FBoatSpec& S : B)
+			for (const FFit& F : Fits)
+			{
+				if (S.Id != F.Id) continue;
+				S.EngAcc = Hex(F.EngAcc); S.EngLow = Hex(F.EngLow); S.Uph = Hex(F.Uph);
+				S.Cove = F.Cove ? Hex(F.Cove) : FLinearColor(0, 0, 0, 0);
+				S.bTTop = F.bTTop; S.bRadar = F.bRadar; S.bRodRack = F.bRodRack; S.bBowRail = F.bBowRail; S.bRiggerPoles = F.bRiggerPoles;
+				S.bSunpad = F.bSunpad; S.bLeaning = F.bLeaning; S.bBracket = F.bBracket; S.Steps = F.Steps; S.Entry = F.Entry; S.Price = F.Price;
+			}
 		return B;
+	}
+
+	int32 BoatIndexOf(const FString& Id)
+	{
+		const TArray<FBoatSpec>& B = Boats();
+		for (int32 i = 0; i < B.Num(); i++) if (B[i].Id == Id) return i;
+		return -1;
 	}
 
 	bool IsSounder(const FString& Key)
