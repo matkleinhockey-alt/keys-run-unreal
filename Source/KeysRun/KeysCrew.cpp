@@ -524,7 +524,12 @@ void AKeysExtras::CommitCrew(double T)
 	FKeysMesh M;
 	Captain.Build(M);
 	Crew.Build(M);
-	for (const FKeysPartyGoer& G : Party) G.H.Build(M);
+	// in the first-person fishing view, a guest standing where you stand would fill the lens: they step aside
+	FVector Eye;
+	const AKeysBoatPawn* EP = PawnRef.Get();
+	const bool bEye = EP && EP->FpEyeLocal(Eye);
+	for (const FKeysPartyGoer& G : Party)
+		if (!bEye || FVector2D(G.H.Pos.X - Eye.X, G.H.Pos.Y - Eye.Y).Size() > 1.1) G.H.Build(M);
 	if (bHasPole) PoleH.Build(M);
 	if (bHasShower && ShowerH.bVisible)
 	{

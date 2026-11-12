@@ -53,6 +53,17 @@ AKeysBoatPawn::AKeysBoatPawn()
 	BoatMesh->SetupAttachment(Root);
 	BoatMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
+	RiggerMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Riggers"));
+	RiggerMesh->SetupAttachment(Root);
+	RiggerMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	TrollMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Spread"));
+	TrollMesh->SetupAttachment(Root);
+	TrollMesh->SetUsingAbsoluteLocation(true);
+	TrollMesh->SetUsingAbsoluteRotation(true);
+	TrollMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	TrollMesh->SetCastShadow(false);
+
 	LineMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Line"));
 	LineMesh->SetupAttachment(Root);
 	LineMesh->SetUsingAbsoluteLocation(true);
@@ -92,6 +103,7 @@ void AKeysBoatPawn::BeginPlay()
 	Rebuild();
 	PlaceAtSpawn();
 	LineMesh->SetWorldLocationAndRotation(FVector::ZeroVector, FRotator::ZeroRotator);
+	TrollMesh->SetWorldLocationAndRotation(FVector::ZeroVector, FRotator::ZeroRotator);
 	if (UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(AKeysWorld::SolidMaterial(), this))
 	{
 		MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(.9f, .05f, .04f));
@@ -131,8 +143,9 @@ AKeysWorld* AKeysBoatPawn::World()
 void AKeysBoatPawn::Rebuild()
 {
 	FKeysMesh M;
-	KeysMesh::BuildBoat(M, Spec());
+	KeysMesh::BuildBoat(M, Spec(), false);
 	M.Commit(BoatMesh, 0, AKeysWorld::VertexColorMaterial());
+	RigBuilt = -1;   // the outriggers are their own mesh, so they can swing (KeysTroll.cpp)
 }
 
 void AKeysBoatPawn::PlaceAtSpawn()
@@ -185,7 +198,7 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 	{
 	case EMenu::Main:
 		Add(TEXT("play"), TEXT("Start fishing"));
-		Add(TEXT("boat"), TEXT("Boat"), Spec().Brand + TEXT(" ") + Spec().Name, true);
+		Add(TEXT("boat"), TEXT("Boat"), Spec().Brand + TEXT(" ") + Spec().Name + (OwnsBoat(Spec().Id) ? FString() : FString::Printf(TEXT("  ($%s)"), *Commas(Spec().Price))), true);
 		Add(TEXT("online"), OnlineLabel, OnlineValue);
 		Add(TEXT("board"), TEXT("Leaderboard"));
 		Add(TEXT("settings"), TEXT("Settings"));
@@ -228,8 +241,14 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 {
 	const int32 Step = Dir < 0 ? -1 : 1;
-	if (Id == TEXT("play")) StartRun(false);
+	if (Id == TEXT("play"))
+	{
+		if (OwnsBoat(Spec().Id)) StartRun(false);
+		else ShowToast(FString::Printf(TEXT("The %s %s isn't yours yet - Enter on the Boat row buys it for $%s (you have $%s), or pick a boat you own."),
+			*Spec().Brand, *Spec().Name, *Commas(Spec().Price), *Commas(Cash)), 5);
+	}
 	else if (Id == TEXT("resume")) Menu = EMenu::None;
+	else if (Id == TEXT("boat") && Dir == 0) BuyBoat();
 	else if (Id == TEXT("boat"))
 	{
 		const int32 NB = Boats().Num();
@@ -246,6 +265,7 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 	else if (Id == TEXT("mainmenu"))
 	{
 		if (FState != EKeysFish::Idle) ReelIn(FString());
+		StopTroll(true);
 		Speed = Thr = 0;
 		bRunning = false;
 		Menu = EMenu::Main;
@@ -277,6 +297,23 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 		UnderwaterHaze = Steps[I];
 		if (AKeysDiver* D = AKeysDiver::Get(this)) D->UnderwaterHaze = UnderwaterHaze;
 	}
+}
+
+// the boat broker (web sim/economy.ts stepBuy): buying also selects the hull
+void AKeysBoatPawn::BuyBoat()
+{
+	const FBoatSpec& S = Spec();
+	if (OwnsBoat(S.Id)) { ShowToast(FString::Printf(TEXT("The %s %s is yours. Start fishing!"), *S.Brand, *S.Name)); return; }
+	if (Cash < S.Price)
+	{
+		ShowToast(FString::Printf(TEXT("The %s %s is $%s and you have $%s. Sell fillets at a weigh-in (E at a marina dock) - $%s to go."),
+			*S.Brand, *S.Name, *Commas(S.Price), *Commas(Cash), *Commas(S.Price - Cash)), 5);
+		return;
+	}
+	Cash -= S.Price;
+	Owned.Add(TEXT("boat.") + S.Id);
+	SaveEconomy();
+	ShowToast(FString::Printf(TEXT("SOLD! The %s %s is yours - fuelled up in Boot Key Harbor. $%s left."), *S.Brand, *S.Name, *Commas(Cash)), 5);
 }
 
 void AKeysBoatPawn::OnHudClick(FName Box)
@@ -520,6 +557,24 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (AKeysDiver* Dv = AKeysDiver::Get(this)) Dv->DebugCmd(C, A);
 		}
 		else if (Cmd == TEXT("jump")) { if (FState == EKeysFish::Fight) StartJump(false); }
+		else if (Cmd == TEXT("troll")) { if (!bTrolling) ToggleTroll(); }
+		else if (Cmd == TEXT("trollin")) { if (bTrolling) ToggleTroll(); }
+		else if (Cmd == TEXT("trollraise")) { if (bTrolling && PendKey.IsEmpty()) TrollRaise(.9); }   // a fish comes up on the spread now
+		else if (Cmd == TEXT("trollstrike")) { if (bTrolling && PendKey.IsEmpty()) { TrollRaise(.9); if (!PendKey.IsEmpty()) TrollCommit(); } }
+		else if (Cmd == TEXT("ownall")) { for (const FBoatSpec& B : Boats()) Owned.Add(TEXT("boat.") + B.Id); }
+		else if (Cmd.StartsWith(TEXT("boat=")))
+		{
+			// boat=<id>: switch to that hull (the picker's preview, owned or not)
+			const int32 I = BoatIndexOf(Cmd.Mid(5));
+			if (I >= 0) { StopTroll(true); BoatIndex = PickIndex = I; Rebuild(); }
+		}
+		else if (Cmd.StartsWith(TEXT("throttle=")))
+		{
+			// throttle=0.3: hold the throttle lever there (for driving shots without a keyboard)
+			ScriptThr = FCString::Atod(*Cmd.Mid(9));
+		}
+		else if (Cmd.StartsWith(TEXT("reel="))) bScriptReel = FCString::Atoi(*Cmd.Mid(5)) != 0;   // reel=1 holds S
+		else if (Cmd.StartsWith(TEXT("steer="))) ScriptSteer = FCString::Atod(*Cmd.Mid(6));   // steer=0.3 (left positive)
 		else if (Cmd.StartsWith(TEXT("catch=")))
 		{
 			// land a mid-size fish of that species and show the catch card
@@ -959,7 +1014,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::Q)) { ToggleAshore(); return; }
 
 	bFwd = Down(EKeys::W) || (!bTrimMode && Down(EKeys::Up));
-	bBack = Down(EKeys::S) || (!bTrimMode && Down(EKeys::Down));
+	bBack = Down(EKeys::S) || (!bTrimMode && Down(EKeys::Down)) || bScriptReel;
 	bLeft = Down(EKeys::A) || Down(EKeys::Left);
 	bRight = Down(EKeys::D) || Down(EKeys::Right);
 	if (FParse::Param(FCommandLine::Get(), TEXT("KRDemo")))
@@ -986,6 +1041,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		if (AKeysExtras::MiamiDestination(X, Z, Spec().Draft, NX, NZ, NH, Msg))
 		{
 			if (IsLineOut()) ReelIn(TEXT(""));
+			StopTroll(true);
 			X = NX; Z = NZ; H = NH;
 			Speed = Thr = DVX = DVZ = 0;
 			bCamInit = false;
@@ -1010,6 +1066,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		}
 	}
 	if (Hit(EKeys::K) && T - CaughtT > .7) KeepFish();
+	if (Hit(EKeys::Equals) || Hit(EKeys::Add)) ToggleTroll();
 	if (Hit(EKeys::E))
 	{
 		if (NearMarina(X, Z) && FMath::Abs(Speed) < 2.5) WeighIn();
@@ -1142,6 +1199,9 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	double AcThr = 0, AcSteer = 0;
 	const bool bAc = AutoChase(TopMs, bCanDrive, AcThr, AcSteer);
 	if (bAc) TT = AcThr;
+	double TrollT = 0;
+	if (!bAc && bCanDrive && TrollThrottle(TopMs, TrollT)) { TT = TrollT; Gear = 0; }   // trolling holds seven knots
+	else if (!bAc && bCanDrive && ScriptThr >= 0) TT = ScriptThr;
 	Thr += (TT - Thr) * FMath::Min(1.0, Dt * 2.5);
 
 	// trim: the sweet spot moves out as you get on plane; too far in plows the bow, too far out blows the props out
@@ -1157,7 +1217,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 
 	const double D = DepthFast(X, Z);
 	if (D < S.Draft) Speed = Clamp(Speed, -1.2, 1.5);
-	const double St = bAc ? AcSteer : bCanDrive ? (bLeft ? 1 : bRight ? -1 : 0) : 0;
+	const double St = bAc ? AcSteer : bCanDrive ? (bLeft ? 1 : bRight ? -1 : ScriptSteer) : 0;
 	Steer += (St - Steer) * FMath::Min(1.0, Dt * 4);
 	const double F = FMath::Abs(Speed) / TopMs;
 	H += S.Turn * Steer * (.3 + FMath::Min(1.0, FMath::Abs(Speed) / 8) * .9) * (1 - .35 * F) * (1.15 - .35 * TrimV) * (Speed < -.2 ? -1 : 1) * Dt;
@@ -1277,7 +1337,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	{
 		TrailT = 0;
 		const double V = FMath::Abs(Speed);
-		const double Wash = bAir ? 0 : FMath::Clamp((V - 1.5) / 7, 0.0, 1.0) * (.55 + .45 * FMath::Min(1.0, F * 1.5));
+		const double Wash = bAir ? 0 : FMath::SmoothStep(2.0, 9.0, V) * (.55 + .45 * FMath::Min(1.0, F * 1.5));   // little white water off a displacement-speed hull (trolling)
 		EmitTrail(0, X - Fx * S.Len * .48, Z - Fz * S.Len * .48, S.Beam * (.32 + .3 * FMath::Min(1.0, F * 1.4)), Wash, T);
 	}
 
@@ -1295,6 +1355,12 @@ FVector AKeysBoatPawn::FishSpotLocal() const
 {
 	const FBoatSpec& S = Spec();
 	const double DeckZ = .72 + .028 * S.Len - .42;
+	if (HookedStation >= 0)
+	{
+		// a trolled fish is astern: fight it from the transom, on the side it is on
+		const double Sgn = ((FX - X) * FMath::Cos(H) + (FZ - Z) * -FMath::Sin(H)) >= 0 ? 1 : -1;
+		return FVector(-S.Len * .36, Sgn * FMath::Min(.6, S.Beam * .2), DeckZ + .03);
+	}
 	return FVector(-S.Len * .15, FMath::Max(.3, S.Beam * .5 - .55), DeckZ + .03);
 }
 
@@ -1403,6 +1469,16 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		if (FState == EKeysFish::Fight) { LX = Lerp(X, FX, .35); LZ = Lerp(Z, FZ, .35); }
 		else if (FState != EKeysFish::Idle) { LX = Lerp(X, Bob.X, .35); LZ = Lerp(Z, Bob.Z, .35); }
 		WantLook = FVector(LX, Y + 1.8, LZ);
+		if (RaiseCamT > 0 && bRunning && !bDragging)
+		{
+			// a fish coming up on the spread: the camera swings round over the console to look back down the wake at it
+			const FVector Tgt = !PendKey.IsEmpty() ? RaisePos : FVector(FX, 0, FZ);
+			const double DX = Tgt.X - X, DZ = Tgt.Z - Z, DL = FMath::Max(1.0, Hyp(DX, DZ));
+			FVector TowerEye;
+			const double Up = KeysMesh::TowerEye(S, TowerEye) ? TowerEye.Z + 3.5 : 7.5;   // clear of the tower and the top
+			WantPos = FVector(X - DX / DL * (S.Len * .5 + 9), Y + Up, Z - DZ / DL * (S.Len * .5 + 9));
+			WantLook = FVector(Lerp(X, Tgt.X, .75), 0, Lerp(Z, Tgt.Z, .75));
+		}
 	}
 	if (!bCamInit) { CamPos = WantPos; CamLook = WantLook; bCamInit = true; }
 	CamPos = FMath::Lerp(CamPos, WantPos, 1 - FMath::Exp(-Dt * 4));
@@ -2051,6 +2127,9 @@ FString AKeysBoatPawn::Hint() const
 	if (FState == EKeysFish::Caught) return TEXT("K keeps it in the cooler - Space releases it");
 	if (bTrimMode && FState == EKeysFish::Idle && !bCharging) return TEXT("Trim mode: Up trims up, Down trims down - W/S throttle - T to exit");
 	if (bCharging) return TEXT("Release to cast - hold longer to throw farther");
+	if (bTrolling && FState == EKeysFish::Idle)
+		return TResume > 0 ? FString(TEXT("Clearing the lines - back on the troll in a moment"))
+			: TEXT("Trolling - A/D steer the spread over weedlines, birds and the edge - = brings the lines in");
 	if (bDriveOn && FState == EKeysFish::Idle) return TEXT("G shows the chartplotter and fish finder - [ ] zoom the chart - 1 switches view");
 	switch (FState)
 	{
@@ -2096,6 +2175,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	UpdateBoat(Dt, T);
 	if (IsAshore()) { X = PinX; Z = PinZ; H = PinH; Speed = 0; }
 	if (bRunning) UpdateFishing(Dt, T);
+	UpdateTroll(Dt, T);
 	if (AKeysAudio* A = AKeysAudio::Get(this))
 	{
 		FKeysBoatAudioState S;
@@ -2116,4 +2196,5 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	UpdateJumpCam(Dt);
 	UpdateViewModel(Dt);
 	DrawLineAndRod(T);
+	UpdateSpread(Dt, T);
 }

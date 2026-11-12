@@ -134,6 +134,13 @@ void AKeysHUD::DrawHUD()
 	if (!P->bRunning)
 	{
 		DrawMenu(P);
+		if (Now < P->ToastUntil && !P->Toast.IsEmpty())
+		{
+			float TW = 0, TH = 0;
+			GetTextSize(P->Toast, TW, TH, GEngine->GetMediumFont(), 1.05f * U);
+			Panel(Canvas->SizeX * .5f - TW * .5f - 18 * U, 28 * U, TW + 36 * U, TH + 16 * U, .7f);
+			Text(P->Toast, Canvas->SizeX * .5f, 36 * U, 1.05f, FLinearColor::White, nullptr, true);
+		}
 		if (P->bBoardOpen) DrawBoard(P);
 		if (P->bLoginOpen) DrawLogin(P);
 		Contacts.Reset();
@@ -267,6 +274,11 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 		Text(FString::Printf(TEXT("%s  -  %.0f ft  -  %.0f mph top  -  draft %s"), *S.Power, S.Len * 3.28, S.Top * 1.15, *S.DraftFt), CX + 26 * U, Yy, 1.05f, Dim);
 		Yy += 40 * U;
 		Wrapped(S.Desc, CX + 26 * U, Yy, CW - 52 * U, 1.1f);
+		// the boat broker: what it costs, and what you have
+		const bool bOwn = P->OwnsBoat(S.Id);
+		const FString Own = bOwn ? (S.Price == 0 ? FString(TEXT("Yours - the boat you started with")) : FString(TEXT("Yours")))
+			: FString::Printf(TEXT("$%s  -  you have $%s  -  %s"), *FText::AsNumber(S.Price).ToString(), *FText::AsNumber(P->Cash).ToString(), P->Cash >= S.Price ? TEXT("Enter to buy") : TEXT("sell fillets at a weigh-in"));
+		Text(Own, CX + 26 * U, CY + 270 * U - 38 * U, .85f, bOwn ? Teal : Gold);
 		Text(FString::Printf(TEXT("Boat %d of %d"), P->PickIndex + 1, KeysData::Boats().Num()), CX + CW - 26 * U - 120 * U, CY + 270 * U - 38 * U, .85f, Dim);
 	}
 	else if (P->Menu == EMenu::Controls)
@@ -307,7 +319,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("Hold Space"), TEXT("Power up a cast, release to throw")}, {TEXT("Space"), TEXT("Strike when a fish bites")},
 		{TEXT("Hold Space or S"), TEXT("Reel during the fight")}, {TEXT("T / Shift+T"), TEXT("Drag tighter / looser")}, {TEXT("R"), TEXT("Reel in")},
 		{TEXT("K / Space"), TEXT("Keep / release the fish")}, {TEXT("E"), TEXT("Weigh in at a marina dock")}, {TEXT("F"), TEXT("Auto-chase on / off")},
-		{TEXT("V"), TEXT("First-person fishing view")}};
+		{TEXT("V"), TEXT("First-person fishing view")}, {TEXT("="), TEXT("Troll: riggers out, lines out, hold 5 kn")}};
 	static const FRow More[] = {
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
 		{TEXT("O"), TEXT("Sunset")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
@@ -320,7 +332,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
 		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("R"), TEXT("Haul the bands back to reload")},
 		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}};
-	const float ColW = W * .5f, Row = 31 * U;
+	const float ColW = W * .5f, Row = 28 * U;
 	auto Block = [&](const TCHAR* Head, const FRow* Rows, int32 N, float BX, float BY)
 	{
 		Text(Head, BX, BY, 1.2f, Teal);
@@ -527,6 +539,25 @@ void AKeysHUD::DrawFishing(AKeysBoatPawn* P)
 		Panel(Cx - 180 * U, H - 170 * U, 360 * U, 60 * U);
 		Text(FString::Printf(TEXT("Cast  %d m"), FMath::RoundToInt(12 + P->Charge * 73)), Cx, H - 166 * U, .9f, FLinearColor::White, nullptr, true);
 		Bar(Cx - 160 * U, H - 134 * U, 320 * U, 12 * U, float(P->Charge), Gold);
+	}
+	if ((P->IsTrolling() || P->RigOut() > 0) && P->FState == EKeysFish::Idle && !P->bCharging)
+	{
+		// the trolling panel: the speed band the lures swim in, where you are in it, and how long the spread has soaked
+		const float W = 420 * U, X = Cx - W * .5f, Y = H - 196 * U;
+		Panel(X, Y, W, 96 * U, .55f);
+		const double Q = P->TrollQualityNow();
+		const FString Head = !P->IsTrolling() ? FString(TEXT("Lines in")) : P->TrollResuming() ? FString(TEXT("Clearing the lines")) : P->RigOut() < 1 ? FString(TEXT("Setting the spread")) : FString(TEXT("Trolling"));
+		Text(FString::Printf(TEXT("%s  -  %.1f kn"), *Head, P->KnotsNow()), X + 18 * U, Y + 8 * U, 1.0f, Gold);
+		const int32 Soak = FMath::FloorToInt(P->TrollSoak());
+		Text(FString::Printf(TEXT("soak %d:%02d"), Soak / 60, Soak % 60), X + W - 120 * U, Y + 12 * U, .8f, Dim);
+		// the band: 5 to 9 knots of lure speed, a marker where the boat is
+		const float BX = X + 18 * U, BW = W - 36 * U, BY = Y + 48 * U;
+		Bar(BX, BY, BW, 12 * U, 0, Teal);
+		const double Kmin = 2.6 / 1.35 / .5144, Kmax = 4.6 / 1.35 / .5144, Klo = Kmin - 2, Khi = Kmax + 2;
+		auto KX = [&](double K) { return BX + float(FMath::Clamp((K - Klo) / (Khi - Klo), 0.0, 1.0)) * BW; };
+		DrawRect(FLinearColor(Teal.R, Teal.G, Teal.B, .35f + .5f * float(Q)), KX(Kmin), BY, KX(Kmax) - KX(Kmin), 12 * U);
+		DrawRect(FLinearColor::White, KX(P->KnotsNow()) - 2 * U, BY - 5 * U, 4 * U, 22 * U);
+		Text(FString::Printf(TEXT("lures swimming %d%%"), FMath::RoundToInt(Q * 100)), X + 18 * U, Y + 66 * U, .8f, Q > .5 ? Teal : Dim);
 	}
 	if (P->bStrikeShown && P->FState == EKeysFish::Bite)
 		Text(TEXT("STRIKE!"), Cx, H * .36f, 3.0f, Gold, GEngine->GetLargeFont(), true);

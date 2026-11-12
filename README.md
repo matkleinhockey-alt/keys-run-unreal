@@ -57,8 +57,30 @@ so there are no hand-made assets. The editor script creates the materials and th
   haul, ease off before the shaft tears free); a landed fish goes on the same catch card, cooler and score as a rod catch.
   Fish stand off a diver who is finning hard, bolt from a near-miss, and fill in around you in schools on the reef.
   Planing boats leave a white prop-wash trail that spreads, breaks up and fades to pale green churned water. H cycles the four sea states.
-- **Boats:** all five (Robalo R230, Grady-White Canyon 306, Freeman 42LR, Midnight Express 43, MTI V42) with their real specs.
-  The physics is ported line for line: 15-point buoyancy, trim and hole shot, prop ventilation, wave surfing, slams and air, beaching, reverse and neutral.
+- **Boats:** all eight (Robalo R230, Grady-White Canyon 306, Freeman 42LR, Midnight Express 43, MTI V42, Yellowfin 36 CC,
+  Contender 32ST and Nor-Tech 390 Sport) with their real specs (length, beam, engines, top speed, acceleration, turning, draft,
+  cooler) and fit-out from the web game's `content/boats.ts` hull styles: T-top or hardtop, paint, boot and cove stripes,
+  leaning post with a rocket launcher of rods or helm seats, rod racks on the top, radar, bow rail, bow sun pad on the go-fast
+  boats, steps in the running bottom, engines on the transom or set back on a bracket, cowl and lower-unit colours. The
+  Yellowfin is a cream hull with navy trim and triple outboards and the fine 24-degree entry; the Contender is white and green;
+  the Nor-Tech is black and orange with a stepped bottom. Boats are bought from the broker with the cash from your fillets
+  (`sim/economy.ts`): the Grady-White is yours to start, then the Robalo $9,000, Contender $20,000, Yellowfin $30,000, Freeman
+  $42,000, Midnight Express $56,000, MTI $70,000 and Nor-Tech $85,000. In the main menu, Left / Right on the Boat row shows each
+  one and Enter buys it. The physics is ported line for line: 15-point buoyancy, trim and hole shot, prop ventilation, wave
+  surfing, slams and air, beaching, reverse and neutral.
+- **Outriggers and trolling (=):** the tower boats (Grady-White and Freeman) carry two long outriggers on swivel bases that swing
+  out from stowed upright to about 70 degrees and rake aft (web `entities/boat/model.ts`); the Yellowfin and Contender have fixed
+  rigger poles on the T-top. = puts the spread out and the boat holds trolling speed by itself (about 5 kn on the gauge; the lures
+  swim from 4 to 6.5 kn, best in the middle, and the panel shows where you are in the band). The spread is the web game's
+  (`game/fishing/troll-spread.ts`): ballyhoo under pink skirts on the two long rigger lines, skirted lures on two flat lines down the
+  prop wash and a shotgun bait 96 m back down the middle, plus a pair of squid daisy-chain teasers splashing close astern. The lines
+  run from the rods up to the rigger clips and back to the baits, trail along the boat's own track through a turn, and the lures skip,
+  weave and roll on their own beats. Strikes follow `sim/troll.ts`: the strike clock runs in proportion to how well the lures are
+  swimming and twice as fast over a weedline, a bird pile or a rig; tuna, billfish and wahoo are what a spread is set for; a good
+  spread skews the fish heavy. The mate calls "Port rigger - FISH UP!", the camera swings round over the console to watch the fish
+  come up behind the bait (`troll-raise.ts`), it eats, the bait goes under, and it is the rod's own fight from the transom (the
+  boat drops out of gear; jumpers come out of the water), the same catch card, cooler and score. After a fish the lines are cleared
+  for a few seconds before the boat goes back on the troll. = again brings the lines in.
 - **Fishing:** charge-and-release casting, nibbles and strikes, the fight (tension, drag, stamina, runs, jumps, tail-walks, sounding),
   auto-chase, all 40 species with the same zone tables, offshore size scaling, both grand slams, the catch card, the cooler and capacity,
   catch-and-release rules, and marina weigh-ins.
@@ -98,7 +120,7 @@ estates other than Harbor Row and the estate builder are not ported; the casino'
 than the machine screen; the shop shelves are a subset of the web game's (no handgun, flags or tackle-ladder rungs);
 and there is no lighthouse beam.
 
-Not ported: the tuna-tower view (no ported hull has a tower), the 3D screens on the dash (the electronics are a HUD panel instead),
+Not ported: the boats' glass-helm screens, cabin, deck lights and quilted upholstery details, the 3D screens on the dash (the electronics are a HUD panel instead),
 spray particles (splashes are simple shapes), text-to-speech (the DJ and Luigi callouts are on-screen text),
 engine sounds for other boats, and playing your own music files on the radio.
 
@@ -124,7 +146,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 
 | Key | Action |
 | --- | --- |
-| A / D, Enter | choose boat, start |
+| A / D, Enter | choose a boat (Enter on the Boat row buys it), start |
 | W / S | throttle / reverse (S also reels) |
 | A / D | steer |
 | U | gear D → N → R |
@@ -133,6 +155,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Space | strike on the bite; hold to reel during a fight; release a landed fish |
 | R | reel in |
 | K | keep the fish |
+| = | trolling: outriggers and lines out, hold trolling speed / lines in |
 | E | weigh in at a marina dock |
 | F | auto-chase on/off |
 | H | sea state |
@@ -173,7 +196,8 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | --- | --- |
 | `KeysGeo.*` | islands, depth, zones, waves, wakes, bridge pilings (ported from the JS) |
 | `KeysData.*` | species, zone tables, boats |
-| `KeysMesh.*` | procedural boat hulls, fish and tubes |
+| `KeysMesh.*` | procedural boat hulls and their fit-out, the outriggers, fish and tubes |
+| `KeysTroll.cpp` | trolling: the speed window and strike clock, the raise and the hookup, the spread of lines, lures and teasers |
 | `KeysWorld.*` | terrain, water surface, bridges, scenery, marinas, sky and sun |
 | `KeysBoatPawn.*` | boat physics, camera, input, fishing loop |
 | `KeysHUD.*` | all on-screen UI, including the chartplotter, fish finder and leaderboard |
@@ -239,4 +263,7 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   own frame: u along the frontage, v inland from the shore, yaw 0 faces +u and 1.57 inland), `wlook=yaw,pitch`, `wview`,
   `use`, `buy=N`, `shopclose`, `cash=N`, `sunset`. `con=<console command>` runs any console command (`con=stat unit`),
   and `perf:town0` / `perf:town1` hide / show the town and the landmarks for frame-time comparisons.
+  Boats and trolling: `ownall` (own every boat), `boat=<id>` (robalo, grady, freeman, midnight, mti, yellowfin, contender, nortech),
+  `troll` / `trollin`, `trollraise` (a fish comes up on the spread now), `trollstrike` (skip the raise: a fish on now),
+  `throttle=0.4`, `steer=0.3`, `reel=1` / `reel=0` (hold S).
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.

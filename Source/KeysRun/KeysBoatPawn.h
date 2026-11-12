@@ -130,6 +130,7 @@ public:
 	FVector BobberPos() const { return Bob; }        // game meters (x, y up, z)
 	bool IsBobberInWater() const { return FState == EKeysFish::Waiting || FState == EKeysFish::Nibble || FState == EKeysFish::Bite; }
 	bool IsFirstPerson() const { return bFpOn || bDriveOn; }
+	bool FpEyeLocal(FVector& Out) const { Out = FpEyeL; return bFpOn; }   // where you stand to fish, boat-local meters
 	void NudgeBoat(double DX, double DZ, double SpeedMul) { X += DX; Z += DZ; Speed *= SpeedMul; }
 
 	// ---- diving (J): the diver actor drives the camera and reports toasts and speared catches back here
@@ -148,6 +149,14 @@ public:
 	void ShopBuy(int32 Index);
 	void ShopClose();
 	double UnderwaterHaze = 1; // Settings: how bright the underwater haze is
+
+	// ---- trolling (=): outriggers out, the throttle held at seven knots, the spread skipping in the wake (KeysTroll.cpp)
+	bool IsTrolling() const { return bTrolling; }
+	double RigOut() const { return RigK; }                 // 0 stowed .. 1 out, eased
+	double TrollQualityNow() const { return TrollQ; }      // 0..1, how well the lures are swimming
+	double TrollSoak() const { return TSoak; }
+	bool TrollResuming() const { return TResume > 0; }
+	bool OwnsBoat(const FString& Id) const { return Id == KeysData::StarterBoat() || Owned.Contains(TEXT("boat.") + Id); }
 
 private:
 	void Rebuild();
@@ -192,6 +201,8 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatMesh;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> LineMesh;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FishMesh;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> RiggerMesh;   // the tower boats' swinging outriggers
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> TrollMesh;    // the trolling spread: lines, lures, teasers
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Bobber;
 	UPROPERTY() TObjectPtr<UCameraComponent> Camera;
 	UPROPERTY() TWeakObjectPtr<AKeysWorld> WorldActor;
@@ -217,6 +228,37 @@ private:
 	void WalkInteract();
 	void SaveEconomy();
 	void ApplyOutfit();
+	// trolling (KeysTroll.cpp; web game/fishing/trolling.ts, troll-spread.ts, troll-raise.ts, shared sim/troll.ts)
+	void ToggleTroll();
+	void StopTroll(bool bQuiet);
+	void UpdateTroll(double Dt, double T);
+	void UpdateSpread(double Dt, double T);
+	bool TrollThrottle(double TopMs, double& OutThr) const;
+	FString TrollSpecies(double Q) const;
+	void TrollRaise(double Q);
+	void TrollCommit();
+	bool LurePos(int32 Station, FVector& Out) const;
+	FString TrollSideName(int32 Station) const;
+	void PushTrack();
+	bool TrackBack(double Back, double& OX, double& OZ, double& OH) const;
+	bool bTrolling = false;
+	double RigK = 0, RigBuilt = -1, TrollQ = 0;
+	double TUntil = 48, TSoak = 0, TSince = 22, TResume = 0;   // sim/troll.ts TrollState, plus the resume pause
+	bool bTrollBusy = false;
+	FString PendKey;                 // a fish on its way up to a lure (the raise)
+	double PendWeight = 0, RaiseLeft = 0, RaiseCamT = 0;
+	int32 PendStation = -1, HookedStation = -1;
+	FVector RaisePos = FVector::ZeroVector;
+	static constexpr int32 NumStations = 5;
+	FVector Lures[NumStations];      // game meters, as of the last spread update
+	double Pulled[NumStations] = {0, 0, 0, 0, 0};
+	bool bSpreadOut = false;
+	TArray<FVector> Trk;             // the boat's track by distance: x, z, heading
+	int32 TrkHead = -1, TrkCount = 0;
+	// boat purchase (sim/economy.ts): Enter on the Boat row buys the boat on show
+	void BuyBoat();
+	double ScriptThr = -1, ScriptSteer = 0;
+	bool bScriptReel = false;   // -KRScript throttle= / steer= holds
 	double CoffeeUntil = -1, BreakfastUntil = -1;   // diner buffs (game seconds)
 	int32 BaitCasts = 0;                            // live shrimp left: quicker bites
 	double PinX = 0, PinZ = 0, PinH = 0;            // where the boat is tied up while you are ashore
