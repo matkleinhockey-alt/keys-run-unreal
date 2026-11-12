@@ -1,6 +1,7 @@
 #include "KeysGameMode.h"
 #include "KeysVisitors.h"
 #include "KeysLocals.h"
+#include "KeysStreet.h"
 #include "KeysBoatPawn.h"
 #include "KeysHUD.h"
 #include "KeysWorld.h"
@@ -60,6 +61,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	SpawnOnce<AKeysEvents>(W);
 	SpawnOnce<AKeysVisitors>(W);
 	SpawnOnce<AKeysLocals>(W);
+	SpawnOnce<AKeysStreet>(W);
 	AKeysExtras* Ex = SpawnOnce<AKeysExtras>(W);
 	AKeysAudio* Au = SpawnOnce<AKeysAudio>(W);
 	if (Ex && Au)

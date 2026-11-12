@@ -123,24 +123,8 @@ void AKeysTown::BeginPlay()
 		k++;
 	}
 	struct FWalk { const TCHAR* Look; TArray<FVector2D> Pts; double Speed; };
-	const TArray<FWalk> Walks = {
-		{TEXT("tourist"), {{-98, 44.9}, {98, 44.9}}, 1.2},
-		{TEXT("woman"), {{90, 43.7}, {-92, 43.7}}, 1.1},
-		{TEXT("local"), {{-60, 44.2}, {60, 44.2}}, 1.35},
-		{TEXT("angler"), {{-100, 25.5}, {100, 25.5}}, 1.0},
-		{TEXT("woman"), {{70, 24.6}, {-80, 24.6}}, 1.15},
-		{TEXT("tourist"), {{-30, 26.2}, {50, 26.2}}, .95},
-		{TEXT("local"), {{-6.5, 47}, {-6.5, 98}}, 1.25},
-		{TEXT("woman"), {{6.5, 98}, {6.5, 47}}, 1.2},
-		{TEXT("tourist"), {{-96, 98.6}, {96, 98.6}}, 1.1},
-		{TEXT("angler"), {{80, 81.8}, {-80, 81.8}}, 1.3},
-		{TEXT("local"), {{-40, 82.4}, {40, 82.4}}, 1.0},
-		{TEXT("woman"), {{-90, 97.6}, {20, 97.6}}, 1.25},
-		{TEXT("tourist"), {{0, 12}, {0, 19}, {-30, 22.8}, {30, 22.8}, {0, 19}}, 1.05},
-		{TEXT("angler"), {{-20, 128}, {20, 128}, {20, 136}, {-20, 136}}, 1.1},
-		{TEXT("woman"), {{30, 44.2}, {96, 44.2}}, 1.0},
-		{TEXT("local"), {{-96, 43.4}, {-36, 43.4}}, 1.1},
-	};
+	// the sidewalk crowd is the web game's scripted street life now (AKeysStreet, town-life.ts)
+	const TArray<FWalk> Walks;
 	for (const FWalk& W : Walks)
 	{
 		FPerson Pp;
