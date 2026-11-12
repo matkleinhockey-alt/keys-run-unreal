@@ -163,6 +163,22 @@ void AKeysHUD::DrawHUD()
 	if (bDive) DrawDiving(P, Dv);
 	DrawExtras(P);
 	DrawFriends(P);
+	{
+		// the buff strip (web game/buffs.ts): what you ate and drank in town, and how long it has left
+		TArray<AKeysBoatPawn::FBuffShow> Bf;
+		P->LiveBuffs(Bf);
+		float BX = 24 * U;
+		for (const AKeysBoatPawn::FBuffShow& B : Bf)
+		{
+			const FString S = FString::Printf(TEXT("%s %d:%02d"), *B.Label, B.Left / 60, B.Left % 60);
+			float TW = 0, TH = 0;
+			GetTextSize(S, TW, TH, GEngine->GetMediumFont(), .8f * U);
+			Panel(BX, 140 * U, TW + 20 * U, 30 * U, .55f);
+			DrawRect(B.bDrink ? FLinearColor(.95f, .55f, .2f) : Teal, BX, 140 * U, 4 * U, 30 * U);
+			Text(S, BX + 11 * U, 145 * U, .8f, B.bDrink ? FLinearColor(1.f, .75f, .45f) : FLinearColor::White);
+			BX += TW + 28 * U;
+		}
+	}
 	if (bAshore)
 	{
 		DrawAshore(P, Wk);

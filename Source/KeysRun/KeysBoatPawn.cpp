@@ -561,6 +561,12 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("trollin")) { if (bTrolling) ToggleTroll(); }
 		else if (Cmd == TEXT("trollraise")) { if (bTrolling && PendKey.IsEmpty()) TrollRaise(.9); }   // a fish comes up on the spread now
 		else if (Cmd == TEXT("trollstrike")) { if (bTrolling && PendKey.IsEmpty()) { TrollRaise(.9); if (!PendKey.IsEmpty()) TrollCommit(); } }
+		else if (Cmd.StartsWith(TEXT("buff=")))
+		{
+			// buff=diner.coffee: as if bought at the counter
+			const FString K = Cmd.Mid(5);
+			if (KeysBuffs::Seconds(K) > 0) { Buffs.Add(K, GetWorld()->GetTimeSeconds() + KeysBuffs::Seconds(K)); ShowToast(KeysBuffs::StartText(K)); }
+		}
 		else if (Cmd == TEXT("ownall")) { for (const FBoatSpec& B : Boats()) Owned.Add(TEXT("boat.") + B.Id); }
 		else if (Cmd.StartsWith(TEXT("boat=")))
 		{
@@ -608,6 +614,7 @@ void AKeysBoatPawn::ToggleDive()
 	if (!D->IsDiving())
 	{
 		if (FState == EKeysFish::Caught) { ShowToast(TEXT("Finish with your catch first.")); return; }
+		if (Sway() > .6) { ShowToast(TEXT("You've had a few too many to go over the side. Sleep it off first.")); return; }   // sim/steady.ts tooDrunkToDive
 		// going over the side with a line out (or a cast still charging) would leave the rod with nobody on it
 		if (bCharging || IsLineOut()) ReelIn(FString());
 		bCharging = false;
@@ -615,7 +622,7 @@ void AKeysBoatPawn::ToggleDive()
 		bTrimMode = false;
 		D->SetDefaultChase(bDiveChase);
 		D->UnderwaterHaze = UnderwaterHaze;
-		D->AirMul = (HasGear(TEXT("dive.tank")) ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1);
+		D->AirMul = (HasGear(TEXT("dive.tank")) ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1) * (BuffOn(TEXT("diner.mahi")) ? 1.05 : 1);
 		D->EnterWater(X, Z, H);
 		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to climb back aboard."), 6);
 	}
@@ -816,9 +823,14 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	const double T = GetWorld()->GetTimeSeconds();
 	FString Msg = FString::Printf(TEXT("Bought: %s ($%s). $%s left."), It.Name, *Commas(It.Price), *Commas(Cash));
 	if (bGear) Owned.Add(Eff);
-	if (Eff == TEXT("diner.coffee")) { CoffeeUntil = T + 600; Msg += TEXT(" Strike window is longer for ten minutes."); }
-	else if (Eff == TEXT("diner.breakfast")) { BreakfastUntil = T + 600; CoffeeUntil = FMath::Max(CoffeeUntil, T + 300); Msg += TEXT(" Steady hands for a while."); }
-	else if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
+	if (KeysBuffs::Seconds(Eff) > 0)
+	{
+		// a second one starts the clock again (sim/shop.ts buy); the strip and the end toast come from UpdateBuffs
+		const bool bTop = Buffs.Contains(Eff);
+		Buffs.Add(Eff, T + KeysBuffs::Seconds(Eff));
+		Msg += TEXT(" ") + (bTop ? KeysBuffs::Label(Eff) + TEXT(": topped up.") : KeysBuffs::StartText(Eff));
+	}
+	if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
 	else if (Eff == TEXT("bait.ballyhoo")) { BaitCasts += 6; Msg += TEXT(" Quicker bites on your next 6 casts."); }
 	else if (Eff == TEXT("motel.night"))
 	{
@@ -1418,7 +1430,10 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 			FpPitch = Lerp(FpPitch, Clamp(FMath::Atan2(Tgt.Y - Eye.Y, HD) + .06, -.7, .3), FMath::Min(1.0, Dt * 2.5));
 		}
 		FpUserT -= Dt;
-		const double Pp = FpPitch + (FMath::FRand() - .5) * Shake * .03;
+		// steady or unsteady hands (sim/steady.ts handWobble): a slow drift, much bigger after a few drinks
+		const double Sw = Sway(), Idle = .006 / FMath::Square(FMath::Clamp(SteadyMul(), .5, 2.0));
+		const double Pp = FpPitch + (FMath::FRand() - .5) * Shake * .03 + FMath::Sin(T * 1.7) * Idle + FMath::Sin(T * .9 + 1) * .03 * Sw;
+		FpYaw += FMath::Sin(T * .5 + 2) * .045 * Sw * Dt;
 		// game yaw: forward is (-sin, -cos) in x/z, which is Unreal X/Y
 		const FVector Dir(-FMath::Sin(FpYaw) * FMath::Cos(Pp), -FMath::Cos(FpYaw) * FMath::Cos(Pp), FMath::Sin(Pp));
 		Camera->SetWorldLocationAndRotation(EyeU, Dir.Rotation());
@@ -1807,7 +1822,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 				Weight = AKeysLife::TunaWeight(*Sp, Bob.X, Bob.Z);
 				FX = TS.FX; FZ = TS.FZ; OFX = OFZ = 0;
 				BuildHookedMesh();
-				FState = EKeysFish::Bite; Win = 1.6 * (T < CoffeeUntil ? 1.5 : 1); bStrikeShown = true; Shake = FMath::Max(Shake, .3);
+				FState = EKeysFish::Bite; Win = StrikeWindow(1.6); bStrikeShown = true; Shake = FMath::Max(Shake, .3);
 				if (AKeysAudio* A = AKeysAudio::Get(this)) { A->Strike(Bob.X, Bob.Z); A->Splash(TS.FX, TS.FZ, 30, 1.5); }
 			}
 		}
@@ -1863,7 +1878,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 				AKeysAudio* A = AKeysAudio::Get(this);
 				if (Nibs <= 0)
 				{
-					FState = EKeysFish::Bite; Win = 1.4 * (T < CoffeeUntil ? 1.5 : 1); bStrikeShown = true; Shake = FMath::Max(Shake, .15);
+					FState = EKeysFish::Bite; Win = StrikeWindow(1.4); bStrikeShown = true; Shake = FMath::Max(Shake, .15);
 					if (A) { A->Strike(Bob.X, Bob.Z); A->Splash(Bob.X, Bob.Z, 20, 1.2); }
 				}
 				else { Nibs--; DipT = .28; NibT = Rand(.8, 1.6); if (A) A->Nibble(Bob.X, Bob.Z); }
@@ -1952,7 +1967,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 			FZ -= DZ * R * Dt;
 		}
 		Stamina = FMath::Max(0.0, Stamina - Dt * .1 * (.45 + Tension) / FMath::Sqrt(S));
-		if (Tension >= (HasGear(TEXT("rod.heavy")) ? 1.12 : 1.06)) { OverT += Dt; if (OverT > .6) { Lose(TEXT("Snap! Too much pressure and the line parted.")); return; } }
+		if (Tension >= LineBreakAt()) { OverT += Dt; if (OverT > .6) { Lose(TEXT("Snap! Too much pressure and the line parted.")); return; } }
 		else OverT = FMath::Max(0.0, OverT - Dt);
 		if (Tension < .06) { SlackT += Dt; if (SlackT > 2.6) { Lose(TEXT("Slack line - the fish shook the hook.")); return; } }
 		else SlackT = 0;
@@ -2175,6 +2190,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	UpdateBoat(Dt, T);
 	if (IsAshore()) { X = PinX; Z = PinZ; H = PinH; Speed = 0; }
 	if (bRunning) UpdateFishing(Dt, T);
+	if (bRunning) UpdateBuffs(T);
 	UpdateTroll(Dt, T);
 	if (AKeysAudio* A = AKeysAudio::Get(this))
 	{

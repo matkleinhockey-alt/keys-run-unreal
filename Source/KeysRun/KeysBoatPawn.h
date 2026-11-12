@@ -13,6 +13,15 @@ class AKeysWorld;
 class UKeysSave;
 struct FKeysMesh;
 
+// timed food and drink from the town (web sim/shop.ts BUFF_SECONDS, sim/steady.ts BUFF_LABELS): 0 if Key isn't one
+namespace KeysBuffs
+{
+	double Seconds(const FString& Key);
+	FString Label(const FString& Key);
+	FString StartText(const FString& Key);
+	bool IsDrink(const FString& Key);
+}
+
 UENUM()
 enum class EKeysFish : uint8 { Idle, Casting, Waiting, Nibble, Bite, Fight, Caught };
 
@@ -156,6 +165,11 @@ public:
 	double TrollQualityNow() const { return TrollQ; }      // 0..1, how well the lures are swimming
 	double TrollSoak() const { return TSoak; }
 	bool TrollResuming() const { return TResume > 0; }
+	// buffs: what is live (label, seconds left, a drink?), and what they add up to
+	struct FBuffShow { FString Label; int32 Left; bool bDrink; };
+	void LiveBuffs(TArray<FBuffShow>& Out) const;
+	double SteadyMul() const;   // >1 steadier hands: a longer strike window
+	double Sway() const;        // 0..1 how tipsy: a shorter strike window, the view wobbles, no diving past 0.6
 	bool OwnsBoat(const FString& Id) const { return Id == KeysData::StarterBoat() || Owned.Contains(TEXT("boat.") + Id); }
 
 private:
@@ -259,7 +273,12 @@ private:
 	void BuyBoat();
 	double ScriptThr = -1, ScriptSteer = 0;
 	bool bScriptReel = false;   // -KRScript throttle= / steer= holds
-	double CoffeeUntil = -1, BreakfastUntil = -1;   // diner buffs (game seconds)
+	// timed food and drink buffs (KeysBuffs.cpp; web game/buffs.ts, sim/shop.ts modifiersFor, sim/steady.ts)
+	TMap<FString, double> Buffs;     // effect key -> game time it wears off
+	void UpdateBuffs(double T);
+	bool BuffOn(const TCHAR* BuffKey) const;
+	double StrikeWindow(double Base) const;
+	double LineBreakAt() const;
 	int32 BaitCasts = 0;                            // live shrimp left: quicker bites
 	double PinX = 0, PinZ = 0, PinH = 0;            // where the boat is tied up while you are ashore
 	bool bAir = false;

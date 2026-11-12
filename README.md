@@ -31,7 +31,12 @@ so there are no hand-made assets. The editor script creates the materials and th
   your fillets at the weigh-in (game fish, billfish and protected species don't sell). The heavy rod holds more tension,
   the lever reel brings fish in faster, diner coffee widens the strike window, live bait brings quicker bites, the dive
   shop's pony bottle, wetsuit and fins stretch your breath hold, the motel sleeps you through to sunset, the slots and
-  scratch-offs pay out (sometimes), the gift shop dresses you, and a Harbor Row lot gets you a villa. Cash, gear and
+  scratch-offs pay out (sometimes), the gift shop dresses you, and a Harbor Row lot gets you a villa. Food and drink
+  are timed buffs with their own strip on screen and a toast when they wear off (web `game/buffs.ts`, `sim/shop.ts`,
+  `sim/steady.ts`): coffee, the mahi sandwich, key lime pie, wings, ice cream and snacks steady your hands (a longer strike
+  window, less wobble in the first-person view), the fisherman's breakfast also holds the line a little harder in a fight,
+  the mahi sandwich stretches a breath hold, and a beer, a key lime shot or a six-pack does the opposite: a shorter strike
+  window, a view that sways, and too many to dive. Cash, gear and
   property are saved with the leaderboard.
 - **Landmarks:** Sombrero Key Light on the reef crest (the skeletal iron pyramid with the keeper's house and lantern),
   Faro Blanco's lighthouse, the reef's mooring-ball line, and numbered red nuns and green cans down both sides of every
@@ -266,4 +271,5 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   Boats and trolling: `ownall` (own every boat), `boat=<id>` (robalo, grady, freeman, midnight, mti, yellowfin, contender, nortech),
   `troll` / `trollin`, `trollraise` (a fish comes up on the spread now), `trollstrike` (skip the raise: a fish on now),
   `throttle=0.4`, `steer=0.3`, `reel=1` / `reel=0` (hold S).
+  `buff=<key>` (diner.coffee, bar.beer, ...) as if bought at the counter.
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.
