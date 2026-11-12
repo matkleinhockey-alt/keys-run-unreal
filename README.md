@@ -18,9 +18,9 @@ You only have to do this once. (If you're comfortable with Terminal, `xattr -dr 
 
 ## Play online with friends
 
-1. On the start screen, press **L**.
-2. Type your name, press **Enter**, type your crew's code, press **Enter**.
-3. Pick a boat with **A / D** and press **Enter**.
+1. In the main menu, click **Play online** (or press **L**).
+2. Type your name, press **Enter**, type your crew's code, and click **Go online**.
+3. Pick a boat with the arrows next to **Boat**, then click **Start fishing**.
 
 Everyone who types the same crew code is in the same crew. You'll see their boats with name tags, green dots on the chart, a message when someone lands a fish, and a **Crew** tab on the leaderboard (**B**). The game remembers your login; **L** again logs out.
 
@@ -38,6 +38,7 @@ Everyone who types the same crew code is in the same crew. You'll see their boat
 | G | chartplotter and fish finder |
 | B | leaderboard |
 | L | log in / out of online play |
+| Esc | pause menu (settings, controls, leaderboard, quit) |
 | H | sea state |
 | O | sunset |
 | P | radio |
