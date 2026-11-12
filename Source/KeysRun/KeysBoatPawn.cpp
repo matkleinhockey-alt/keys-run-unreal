@@ -1213,7 +1213,10 @@ bool AKeysBoatPawn::InChair() const
 
 FVector AKeysBoatPawn::ChairEyeLocal() const
 {
-	return KeysMesh::FightChairBase(Spec()) + FQuat(FVector::UpVector, ChairYaw).RotateVector(FVector(.05, 0, 1.05));
+	// the angler's own eyes as posed this frame (he leans back and pumps); before he's built, about where they'll be
+	FVector E;
+	if (const AKeysExtras* Ex = AKeysExtras::Get(this); Ex && Ex->ChairEye(E)) return E;
+	return KeysMesh::FightChairBase(Spec()) + FQuat(FVector::UpVector, ChairYaw).RotateVector(FVector(.2, 0, 1.15));
 }
 
 bool AKeysBoatPawn::FpEyeLocal(FVector& Out) const

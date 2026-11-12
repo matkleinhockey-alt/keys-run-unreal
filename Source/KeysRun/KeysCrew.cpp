@@ -782,7 +782,11 @@ void AKeysExtras::CommitCrew(double T)
 			const FVector Grip = HX.InverseTransformPosition((G + Dl * .8) * 100.0) / 100.0, Crank = HX.InverseTransformPosition((G + Dl * .42 + Q.RotateVector(FVector(0, .12, .1))) * 100.0) / 100.0;
 			ChairH.Pose(Grip + FVector(0, -.04, 0), Crank + FVector(0, 0, .03 * FMath::Sin(T * 6)));
 			ChairH.Build(M);
+			// just in front of his face, where his eyes are
+			ChairEyeL = ChairH.ToBoat().TransformPosition(XJ(0, ChairH.HipY + .8, .2));
+			bChairEyeOn = true;
 		}
+		else bChairEyeOn = false;
 	}
 	// in the first-person fishing view, a guest standing where you stand would fill the lens: they step aside
 	FVector Eye;

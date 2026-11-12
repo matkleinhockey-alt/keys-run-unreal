@@ -64,6 +64,9 @@ class KEYSRUN_API AKeysExtras : public AActor
 
 public:
 	static AKeysExtras* Get(const UObject* WorldContext);
+	// the chair angler's eyes, boat frame (meters), while there is one in the chair: the first-person chair view sits
+	// here so it moves with the angler's head instead of ending up inside it as he leans and pumps
+	bool ChairEye(FVector& Out) const { Out = ChairEyeL; return bChairEyeOn; }
 	// a cosmetic flag flown from the stern of every boat you take out (content/cosmetics.ts FlagLook); empty for none
 	void SetCosmeticFlag(const FString& Key) { if (Key != CosFlag) { CosFlag = Key; LayoutFor.Empty(); } }
 	AKeysExtras();
@@ -154,6 +157,8 @@ private:
 	FKeysDeck Deck;
 	FKeysHuman Captain, Crew;
 	FKeysHuman ChairH;   // the angler in the fighting chair (the Freeman's trolling fights)
+	FVector ChairEyeL = FVector::ZeroVector;
+	bool bChairEyeOn = false;
 	bool bChairInit = false;
 	FVector HelmL, HelmR;
 	TArray<FKeysPartyGoer> Party;
