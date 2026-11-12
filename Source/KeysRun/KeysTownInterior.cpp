@@ -337,7 +337,7 @@ void AKeysTown::BuildCasinoInterior(FTownBatch& I, FTownBatch& G)
 		for (double V = V0; V < V1 - .01; V += 1.0)
 		{
 			const int32 A = int32(U - X0), B = int32(V - V0);
-			const uint32 C = (A + B) % 4 == 0 ? 0xe0b34a : (A * 3 + B) % 7 == 0 ? 0x0e6d78 : (A + B) % 2 ? 0x7a1424 : 0x6a1020;
+			const uint32 C = (A + B) % 4 == 0 ? 0x9a7a3a : (A * 3 + B) % 7 == 0 ? 0x0a4a52 : (A + B) % 2 ? 0x5a0e1a : 0x4a0a16;
 			I.Flat(U, FMath::Min(U + 1, X1), Zf(FMath::Min(V + 1, V1)), Zf(V), Y0, Hex(C));
 		}
 	const double CY = P + H;
@@ -425,8 +425,8 @@ void AKeysTown::BuildCasinoInterior(FTownBatch& I, FTownBatch& G)
 			if (Hh > .5) I.Ball(TU0 + .9, Y0 + .9, Zf(V + .7), .25, Cc[(int32(V) + 2) % 5], 1.2, 6);
 		}
 		// the glow of the water itself (unlit blue panels at the back) and the glass rim
-		I.Quad3(FVector(TU0 + .06, Y0 + .7, Zf(B->V0)), FVector(TU0 + .06, Y0 + .7, Zf(B->V1)), FVector(TU0 + .06, CY - .6, Zf(B->V1)), FVector(TU0 + .06, CY - .6, Zf(B->V0)), FVector(1, 0, 0), Hex(0x0f5a82));
-		G.Span(TU0 + .1, TU1 - .1, CY - .64, CY - .6, Zf(B->V1), Zf(B->V0), 0x9fe8ff);
+		I.Quad3(FVector(TU0 + .06, Y0 + .7, Zf(B->V0)), FVector(TU0 + .06, Y0 + .7, Zf(B->V1)), FVector(TU0 + .06, CY - .6, Zf(B->V1)), FVector(TU0 + .06, CY - .6, Zf(B->V0)), FVector(1, 0, 0), Hex(0x06283c));
+		G.Span(TU0 + .1, TU1 - .1, CY - .64, CY - .6, Zf(B->V1), Zf(B->V0), 0x4fa8c8);
 		I.Span(TU0, TU1, CY - .6, CY, Zf(B->V1), Zf(B->V0), 0x0b1a22);
 		I.Span(TU1 - .08, TU1, Y0, Y0 + .7, Zf(B->V1), Zf(B->V0), 0x0b1a22);
 		for (double V = B->V0; V <= B->V1; V += 4.7) I.Span(TU1 - .1, TU1, Y0, CY, Zf(V + .1), Zf(V - .1), 0x0b1a22);

@@ -360,7 +360,11 @@ namespace KeysTown
 			A.Add({TEXT("marlin"), FString(), 16, 22.2, 2.4, TEXT("Read the plaque"),
 				TEXT("BLUE MARLIN, 612 LB. Boated 1957 off Sombrero Reef. The plaque says \"released\" because the town got embarrassed.")});
 			for (const FEstateLot& E : HarborRow())
-				A.Add({FString(TEXT("estate:")) + E.Id, FString(TEXT("estate:")) + E.Id, (E.U0 + E.U1) * .5, E.V0 + 1.6, 2.4, TEXT("Look at the For Sale sign"), FString()});
+			{
+				// the sign stands by the fence, clear of the cars parked nose-in along the back lot
+				const double CU = (E.U0 + E.U1) * .5;
+				A.Add({FString(TEXT("estate:")) + E.Id, FString(TEXT("estate:")) + E.Id, CU + (CU < 0 ? 6 : -6), E.V0 + 8, 2.6, TEXT("Read the For Sale sign"), FString()});
+			}
 		}
 		return A;
 	}

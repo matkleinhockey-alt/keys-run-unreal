@@ -822,10 +822,11 @@ void AKeysTown::BuildEstates()
 		E.Span(L.U0 + .5, L.U1 - .5, P + .7, P + .78, Zf(L.V0 + 9) - .03, Zf(L.V0 + 9) + .03, 0xf4f4f2);
 		if (!bOwned)
 		{
-			// the For Sale sign on two posts
-			E.Box(CX - .8, P + .8, Zf(L.V0 + 9.6), .1, 1.6, .1, 0xf4f4f2);
-			E.Box(CX + .8, P + .8, Zf(L.V0 + 9.6), .1, 1.6, .1, 0xf4f4f2);
-			E.Box(CX, P + 1.5, Zf(L.V0 + 9.6), 2.2, 1.0, .06, 0xc23a3a);
+			// the For Sale sign on two posts, by the fence and clear of the parked cars
+			const double SignU = (L.U0 + L.U1) / 2 + ((L.U0 + L.U1) / 2 < 0 ? 6 : -6);
+			E.Box(SignU - .8, P + .8, Zf(L.V0 + 9.6), .1, 1.6, .1, 0xf4f4f2);
+			E.Box(SignU + .8, P + .8, Zf(L.V0 + 9.6), .1, 1.6, .1, 0xf4f4f2);
+			E.Box(SignU, P + 1.5, Zf(L.V0 + 9.6), 2.2, 1.0, .06, 0xc23a3a);
 			continue;
 		}
 		// a villa (estates/residences.ts villa): ground floor, a set-back first floor, terracotta hips, pool deck in front
@@ -848,7 +849,7 @@ void AKeysTown::BuildEstates()
 	for (const FEstateLot& L : HarborRow())
 	{
 		if (OwnedEstates.Contains(L.Id)) continue;
-		const double CX = (L.U0 + L.U1) / 2;
+		const double CX = (L.U0 + L.U1) / 2 + ((L.U0 + L.U1) / 2 < 0 ? 6 : -6);
 		AddSign(TEXT("FOR SALE"), CX, P + 1.68, L.V0 + 9.6 - .05, .32, FLinearColor::White, 0, true, 2.0);
 		AddSign(FString::Printf(TEXT("$%dk  %s"), L.Price / 1000, L.Name), CX, P + 1.3, L.V0 + 9.6 - .05, .14, FLinearColor::White, 0, true, 2.0);
 		InteriorSigns.Last()->ComponentTags.Add(TEXT("estate"));

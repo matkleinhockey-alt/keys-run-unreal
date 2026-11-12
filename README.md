@@ -8,8 +8,35 @@ so there are no hand-made assets. The editor script creates the materials and th
 ## What's in it
 
 - **The map:** every island, creek, channel, hump, reef line and marina from the JS game, using the same `landH` / `depthAt` /
-  `zoneAt` math (`KeysGeo.cpp`), plus Miami and Biscayne Bay. US-1 and the old Seven Mile Bridge (with its missing swing span) have pilings you can hit.
-  It also has palms, mangroves, conch houses, the Miami skyline, and docks at all four marinas.
+  `zoneAt` math (`KeysGeo.cpp`), plus Miami and Biscayne Bay. US-1 and the Seven Mile Bridge
+  (barrier walls, striping, bents with pier caps, the hump over the channel) and the old bridge (lower and narrower, arch
+  ribs, the missing swing span and its broken stubs) have pilings you can hit; US-1 runs across the keys as a road. The keys
+  have real palms, mangroves and conch houses (each its own size, with a hip tin roof, a porch, shuttered windows, some up
+  on piers), 41 waterfront estates with pools, private docks and a boat on a lift, and six public fishing piers. Plus the
+  Miami skyline.
+- **Boot Key Harbor City (the town):** the town built in the web game, at Boot Key Harbor City Marina, laid out from the same
+  tables (`world/town.ts`, `world/casino.ts`, `content/venues.ts`): the fill pad with its seawall, rails and promenade;
+  Harbor Drive, Palm Avenue, the back lane and Sombrero Boulevard with sidewalks, kerbs, markings and crossings; sixteen
+  buildings in their own paint with their names and taglines on the sign bands, windows, awnings and roof signs (the
+  tackle shop's marlin, the Pink Flamingo's flamingo, the gun shop's target, the Rusty Anchor's beer mug, the diner, the
+  ice-cream cone, the casino's gold marlin); parked cars and boat trailers, palms, lamps, benches, the marlin statue and
+  the motel's pole sign; people standing about and walking the sidewalks. Every building is a walk-in room with its
+  counter, shelves of stock, booths, racks and staff: the Salty Dog Diner, the Rusty Anchor, the Tipsy Tarpon and Reel
+  Hammered, Hook Line & Sinker, Deadeye Guns, Cheap Beer & Lotto, Conch Republic Gifts, Keys Pawn, the coin laundry,
+  Scuba Steve's, the Sunset Motor Lodge, Cone Zone and the Stop-N-Go; the Pink Flamingo Cabaret with its stage, two
+  dancers, the bar and the DJ; and the Gaff & Gill Casino with its slot banks, the cage, the Go Fish table, the marlin
+  fountain and the aquarium wall. Harbor Row's four lots behind the casino are for sale.
+- **Ashore (Q):** tie up alongside any dock (the four marinas, the fishing piers, an estate's dock) when you are slow,
+  and walk the docks, the town and the keys. F at a counter opens its shelf: buy with the cash the fish house pays for
+  your fillets at the weigh-in (game fish, billfish and protected species don't sell). The heavy rod holds more tension,
+  the lever reel brings fish in faster, diner coffee widens the strike window, live bait brings quicker bites, the dive
+  shop's pony bottle, wetsuit and fins stretch your breath hold, the motel sleeps you through to sunset, the slots and
+  scratch-offs pay out (sometimes), the gift shop dresses you, and a Harbor Row lot gets you a villa. Cash, gear and
+  property are saved with the leaderboard.
+- **Landmarks:** Sombrero Key Light on the reef crest (the skeletal iron pyramid with the keeper's house and lantern),
+  Faro Blanco's lighthouse, the reef's mooring-ball line, and numbered red nuns and green cans down both sides of every
+  dredged channel and marina entrance (red right returning), riding the swell. The marinas have the web game's docks:
+  main pier, T-head, finger piers, pilings, boats in the slips, the harbourmaster's sheds and dry-stack racks.
 - **The sea:** the same 8-wave swell and chop, and smooth Kelvin wakes (V-shaped, at the real 19.5° angle) from every boat.
   The water is see-through: `M_KR_Ocean` is Unreal's Single Layer Water, so you look down through real refraction and per-channel
   absorption at the sea floor. The flats are clear turquoise over sand and seagrass, Hawk Channel is green-blue, and the Gulf Stream is
@@ -54,7 +81,7 @@ so there are no hand-made assets. The editor script creates the materials and th
 - **The living sea:** pelican flocks, gulls, terns and frigatebirds; 40 bird piles that cycle into feeding frenzies; sargassum weedlines;
   four oil rigs you can fish (and hit); and visible schools of all the species with tuna that run down a bait left soaking offshore.
   Casting into a school bites faster and bigger, and rigs and weedlines have their own fish tables. All of it is marked on the chart.
-- **Extras:** the buddy boat (Y), the shower (J), travel to Miami and back (X), the crew, party and flags on deck, Caelen the parrot,
+- **Extras:** the buddy boat (Y), the shower (Z), travel to Miami and back (X), the crew, party and flags on deck, Caelen the parrot,
   and Luigi mode: trim all the way up at speed and see what happens.
 - **Sky:** physically based sky, clouds, fog, and O for sunset over the Seven Mile Bridge.
 
@@ -62,12 +89,21 @@ so there are no hand-made assets. The editor script creates the materials and th
   boats live (with name tags, wakes you can ride, and green dots on the chart), gets "Sam landed a 41 lb cobia!" messages, and shares a
   Crew tab on the leaderboard (B). The game remembers your login and reconnects next time; L again logs out. See "Online play" below.
 
+Town and land differences from the web game: the island outlines are still the ellipses (the web game's real OSM
+coastlines are not ported), so the town sits in the same place relative to its marina rather than on the same map
+coordinates; facades and signs are geometry and text instead of painted canvases (no window notices, no neon glow at
+night beyond the lamps and tubes); the dancers are the game's own figures (the web game's rigged glTF dancers are not
+ported); street life is people on loops along the sidewalks (no visit scripts, dogs, squirrels, gulls or litter);
+estates other than Harbor Row and the estate builder are not ported; the casino's slots are a single shelf item rather
+than the machine screen; the shop shelves are a subset of the web game's (no handgun, flags or tackle-ladder rungs);
+and there is no lighthouse beam.
+
 Not ported: the tuna-tower view (no ported hull has a tower), the 3D screens on the dash (the electronics are a HUD panel instead),
 spray particles (splashes are simple shapes), text-to-speech (the DJ and Luigi callouts are on-screen text),
 engine sounds for other boats, and playing your own music files on the radio.
 
-Diving differs from the web game in a few places: there is no shop here, so every dive uses the no-gear loadout (no tank,
-fins or wide mask) and the speargun is the stock gun with unlimited shafts; the god rays (the web game's high/ultra quality
+Diving differs from the web game in a few places: the dive shop's pony bottle, wetsuit and fins only lengthen the breath
+hold (the wide mask and the gun shop's long gun are for show), and the speargun is the stock gun with unlimited shafts; the god rays (the web game's high/ultra quality
 setting), the breathing loop in the underwater sound and the wreck treasure are not ported; the near-field reef schools are
 ported on top of this port's existing fish population (the web game's resident and roaming layers are not); the diver
 dives with J, so the shower moved to Z; and the underwater fog is a post-process rather than a per-material fog.
@@ -115,6 +151,11 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Y | buddy boat |
 | Z | shower |
 | J | jump in to dive / climb back aboard |
+| Q | tie up at a dock and go ashore / back aboard (twice when far: a cab back to the dock) |
+| **Ashore:** W A S D + mouse | walk where you look (Shift runs, arrow keys turn) |
+| F | use a counter, a slot machine, a sign or a plaque |
+| Up / Down + Enter, or 1-9 | pick and buy at a counter (F or Esc walks away) |
+| 1 | third person / first person |
 | X | travel to Miami and back |
 | C / mouse wheel | zoom |
 | **Diving:** W A S D + mouse | swim where you look |
@@ -146,6 +187,10 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysDiver.*` | diving: controller, cameras, diver and gun models, bubbles, marine snow, the underwater post-process |
 | `KeysAudio.*`, `KeysSfxSynth.*`, `KeysMusicSynth.*`, `KeysSynth.*` | the sound engine, effects synth and radio |
 | `KeysExtras.*`, `KeysCrew.cpp`, `KeysHuman.*` | buddy boat, Luigi mode, Caelen, crew, party, shower and flags |
+| `KeysTownData.*` | the town's layout, interiors, people, venues and shelves, docks, piers, estates, walkability (ported from the JS) |
+| `KeysTown.*`, `KeysTownInterior.cpp`, `KeysTownBatch.cpp` | builds Boot Key Harbor City: streets, buildings, signs, props, cars, interiors, the casino, people |
+| `KeysWalker.*` | going ashore: the walker, its cameras and body, interaction points |
+| `KeysLandmarks.*` | bridges, marinas, Sombrero Key Light, Faro Blanco, channel marks, mooring balls, fishing piers, waterfront estates |
 | `KeysGameMode.*` | wires it together; the map can stay empty |
 | `Content/Python/init_unreal.py` | creates the materials and map on first launch |
 
@@ -190,4 +235,8 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   `dv:hold=5` (stay at 5 m), `dv:depth=N`, `dv:look=yaw,pitch`, `dv:aimfish`, `dv:fishahead`, `dv:spear`, `dv:reload`, `dv:haul=1`,
   `dv:swim=1`, `dv:air=0.2`, `dv:chase` / `dv:mask`. `-KRScat=r,g,b` / `-KRAbs=r,g,b` override the water's scattering / absorption,
   and `-KRSeaDebug` paints the sea floor's LOD rings.
+  Ashore: `tie` (bring the boat alongside the town pier and step off), `ashore`, `board`, `walk=u,v,yaw` (the town's
+  own frame: u along the frontage, v inland from the shore, yaw 0 faces +u and 1.57 inland), `wlook=yaw,pitch`, `wview`,
+  `use`, `buy=N`, `shopclose`, `cash=N`, `sunset`. `con=<console command>` runs any console command (`con=stat unit`),
+  and `perf:town0` / `perf:town1` hide / show the town and the landmarks for frame-time comparisons.
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.
