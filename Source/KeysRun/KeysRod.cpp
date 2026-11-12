@@ -169,12 +169,28 @@ namespace KeysMesh
 			// the foot and the seat clamp it bolts to
 			M.Surf = SurfSteel;
 			M.AddRoundBox(At(.415) + Up * .045, FVector(.13, .03, .05) * Sc, .006, Alu, FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), bNear ? 2 : 1);
-			// side plates, machined: a thick disc with a raised hub
+			// side plates, machined and cut away like a real big lever-drag's: a thick rim ring, a hub and three swept
+			// spokes, with the blue line on the spool showing through the windows between them
 			for (int32 s = -1; s <= 1; s += 2)
 			{
 				const FVector PC = RC + Side * (s * (HalfW + PlateT * .5));
-				Puck(M, PC, Side * s, D, PlateR, PlateT, .005, bNear ? 28 : 12, Alu, SurfSteel);
-				Puck(M, PC + Side * (s * PlateT * .7), Side * s, D, PlateR * .55, PlateT * .6, .003, bNear ? 20 : 10, AluDark, SurfSteel);
+				const FVector P0 = PC - Side * (s * PlateT * .5);
+				{
+					const double Ri = PlateR * .74, Bv = .004;
+					const uint8 W = M.Surf; M.Surf = SurfSteel;
+					Lathe(M, P0, Side * s, D, {{Ri, 0}, {PlateR - Bv, 0}, {PlateR, Bv}, {PlateR, PlateT - Bv}, {PlateR - Bv, PlateT}, {Ri + Bv, PlateT}, {Ri, PlateT - Bv}, {Ri, 0}}, bNear ? 28 : 12, Alu);
+					M.Surf = W;
+				}
+				Puck(M, PC, Side * s, D, PlateR * .34, PlateT, .004, bNear ? 20 : 10, Alu, SurfSteel);
+				Puck(M, PC + Side * (s * PlateT * .7), Side * s, D, PlateR * .26, PlateT * .6, .003, bNear ? 16 : 8, AluDark, SurfSteel);
+				for (int32 k = 0; k < 3; k++)
+				{
+					const double A = 2 * PI * k / 3 + .5, A2 = A + .35;
+					const FVector In = (D * FMath::Cos(A) + Up * FMath::Sin(A)) * PlateR * .3, Out = (D * FMath::Cos(A2) + Up * FMath::Sin(A2)) * PlateR * .78;
+					const FVector Mid = PC + (In + Out) * .5, Dir = (Out - In).GetSafeNormal();
+					M.Surf = SurfSteel;
+					M.AddRoundBox(Mid, FVector((Out - In).Size() + .006, PlateR * .2, PlateT * .85), .003, Alu, FRotationMatrix::MakeFromXZ(Dir, Side * s).ToQuat(), 1);
+				}
 				if (bNear)
 					for (int32 b = 0; b < 8; b++)
 					{
@@ -193,6 +209,11 @@ namespace KeysMesh
 			{
 				const uint8 W = M.Surf; M.Surf = SurfGlass;
 				Lathe(M, RC - Side * HalfW, Side, D, {{0, 0}, {PlateR * .8, 0}, {PlateR * .82, .004}, {PlateR * .82, HalfW * 2 - .004}, {PlateR * .8, HalfW * 2}, {0, HalfW * 2}}, bNear ? 24 : 10, Mono);
+				M.Surf = W;
+				// the spool's polished flange lips just inside the plates, round the line
+				M.Surf = SurfSteel;
+				for (int32 s = -1; s <= 1; s += 2)
+					Lathe(M, RC + Side * (s * (HalfW - .004)), Side * s, D, {{PlateR * .8, 0}, {PlateR * .88, 0}, {PlateR * .88, .004}, {PlateR * .8, .004}, {PlateR * .8, 0}}, bNear ? 24 : 10, Silver);
 				M.Surf = W;
 			}
 			// the lever drag: an arched arm over the right plate with a knurled knob
