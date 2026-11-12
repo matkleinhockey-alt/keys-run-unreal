@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "KeysMesh.h"
 #include "KeysHuman.h"
+#include "KeysDancers.h"
 #include "KeysTown.generated.h"
 
 class UProceduralMeshComponent;
@@ -91,6 +92,10 @@ private:
 	void BuildFar(FTownBatch& F);
 	void AddSign(const FString& Text, double U, double Y, double V, double Size, const FLinearColor& Color, double YawDeg = 0, bool bInterior = false, double Width = 0);
 	void UpdatePeople(double T, double Dt, const FVector& CamGame);
+	// the room you are in gets real lights at its ceiling lamps (a small pool moved from room to room): warm white in the
+	// shops, amber in the bars, pink in the Pink Flamingo with a key light on its stage (KeysTownInterior.cpp)
+	void UpdateRoomLights(const KeysTown::FLot* L, const FVector& StageAt);
+	const KeysTown::FLot* LitLot = nullptr;
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Near;      // the street: pad, roads, buildings, props, cars
@@ -118,6 +123,10 @@ private:
 		double Gait = 0;
 	};
 	TArray<FPerson> Folk;
+	// the Pink Flamingo's stage dancers as the web game's rigged models (KeysDancers.h), one per dancer in Folk (by
+	// order); empty when the models aren't there and the procedural dancers dance instead
+	TArray<FKeysDancerFig> StageFigs;
+	void HideStageFigs() { for (FKeysDancerFig& F : StageFigs) F.SetVisible(false); }
 	TArray<FString> OwnedEstates;
 	bool bWalkerAshore = false;
 	FVector WalkerPos = FVector::ZeroVector;

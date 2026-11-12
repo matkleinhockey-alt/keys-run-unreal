@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "KeysHuman.h"
+#include "KeysDancers.h"
 #include "KeysTraffic.h"
 #include "KeysLocals.generated.h"
 
@@ -83,10 +84,12 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BarPeople;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BarFloatMesh;
 	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> BarBoatMeshes;
+	// the web game's rigged dancers on the rafted boats' decks (KeysDancers.h), two on each of the first few
+	TArray<FKeysDancerFig> BarFigs;
 	double BarPeopleT = 0;
 
 	// ---- party boats on the hook
-	struct FMoored { int32 Hull; double AX, AZ, BaseYaw, Ph, Len, TieX, TieZ, Bpm; TArray<FKeysHuman> Crew; };
+	struct FMoored { int32 Hull; double AX, AZ, BaseYaw, Ph, Len, TieX, TieZ, Bpm; TArray<FKeysHuman> Crew; TArray<FKeysDancerFig> Figs; };
 	TArray<FMoored> Moored;
 	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> MooredMeshes;
 	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> MooredCrew;

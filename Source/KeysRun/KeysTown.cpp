@@ -900,7 +900,7 @@ void AKeysTown::Tick(float DeltaSeconds)
 		UpdatePeople(GetWorld()->GetTimeSeconds(), DeltaSeconds, CamGame);
 		People->SetVisibility(true);
 	}
-	else People->SetVisibility(false);
+	else { People->SetVisibility(false); HideStageFigs(); UpdateRoomLights(nullptr, FVector::ZeroVector); }
 }
 
 void AKeysTown::UpdatePeople(double T, double Dt, const FVector& CamGame)
@@ -912,8 +912,12 @@ void AKeysTown::UpdatePeople(double T, double Dt, const FVector& CamGame)
 	FKeysMesh M;
 	FTownBatch Fish;
 	int32 Drawn = 0;
+	int32 DancerI = 0;
+	TArray<bool> FigOn;
+	FigOn.Init(false, StageFigs.Num());
 	for (FPerson& Pp : Folk)
 	{
+		const int32 MyDancer = Pp.bDancer ? DancerI++ : -1;
 		// walkers advance along their loop
 		double U = Pp.U, V = Pp.V, Yaw = Pp.Yaw;
 		double Speed = 0;
@@ -967,6 +971,21 @@ void AKeysTown::UpdatePeople(double T, double Dt, const FVector& CamGame)
 			H.Pose(FKeysHuman::J(-.24, H.HipY + .02, -FMath::Sin(G) * .22), FKeysHuman::J(.24, H.HipY + .02, FMath::Sin(G) * .22));
 			H.Pos.Z += FMath::Abs(FMath::Sin(G)) * .03;
 		}
+		else if (Pp.bDancer && KeysDancers::KindFor(MyDancer) > 0)
+		{
+			// the web game's rigged dancers on the stage, dancing their clip on their marks, facing the room
+			while (StageFigs.Num() <= MyDancer)
+			{
+				FKeysDancerFig& F = StageFigs.AddDefaulted_GetRef();
+				F.Spawn(this, People, KeysDancers::KindFor(StageFigs.Num() - 1));
+				FigOn.Add(false);
+			}
+			FKeysDancerFig& F = StageFigs[MyDancer];
+			F.Place(H.Pos, -Yaw, 1.66 + .03 * (MyDancer % 2), Dt);
+			F.SetVisible(true);
+			FigOn[MyDancer] = true;
+			continue;
+		}
 		else if (Pp.bDancer)
 		{
 			// the stage act: hips sway, arms up, a slow turn on the spot
@@ -1002,6 +1021,14 @@ void AKeysTown::UpdatePeople(double T, double Dt, const FVector& CamGame)
 			Fish.Box(Uu, Yy, Zf(Vv) + (S < 23 ? Sz * .9 : -Sz * .9), .03, Sz * .6, Sz * .5, FC[i % 6], 0, Ry);
 		}
 		Fish.M.Commit(Tank, 0, AKeysWorld::VertexColorMaterial());
+	}
+	for (int32 i = 0; i < StageFigs.Num(); i++) if (!FigOn.IsValidIndex(i) || !FigOn[i]) StageFigs[i].SetVisible(false);
+	// real lights in the room you are standing in, a key light on the stage where the dancers are
+	{
+		FVector Stage = FVector::ZeroVector;
+		int32 NS = 0;
+		for (const FPerson& Pp : Folk) if (Pp.bDancer) { Stage += Pp.H.Pos; NS++; }
+		UpdateRoomLights(CamLot, NS ? Stage / NS : FVector::ZeroVector);
 	}
 	if (Drawn) M.Commit(People, 0, AKeysWorld::VertexColorMaterial());
 	else People->ClearAllMeshSections();

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "KeysHuman.h"
+#include "KeysDancers.h"
 #include "KeysExtras.generated.h"
 
 class UProceduralMeshComponent;
@@ -130,9 +131,9 @@ private:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> CrewMesh;      // attached to the player's boat: 0 people, 1 props, 2 flag
-	// the web game's deck crew (models/crew/dance-01: the textured, rigged figure dancing its clip), one per party
-	// guest; empty if the asset didn't load, and then the procedural guests walk and dance as before
-	UPROPERTY() TArray<TObjectPtr<class USkeletalMeshComponent>> PartyModels;
+	// the web game's dancers (models/crew/dance-01..03: textured, rigged figures dancing their clip, KeysDancers.h), one
+	// per party guest; empty if the assets didn't load, and then the procedural guests walk and dance as before
+	TArray<FKeysDancerFig> PartyFigs;
 	bool PartyModelsReady();
 	void UpdatePartyModels();
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> RoosterMesh;   // attached to the player's boat
@@ -158,10 +159,6 @@ private:
 	TArray<FBox2D> KeepOut;
 	// puts a point back on the open deck: inside the gunwales, off the bow and stern furniture and out of KeepOut
 	void ClampToDeck(double& X, double& Y, double Margin = .3) const;
-	// per party model: the hips' rest spot in the mesh, so the clip's travel can be taken back out (bone -1: not found)
-	TArray<int32> HipBone;
-	TArray<FVector2D> HipAvg;
-	FVector HipRest = FVector::ZeroVector;
 	TArray<double> PathCum;
 	double PathTotal = 1;
 	bool bHasShower = false, bShowerOn = false;

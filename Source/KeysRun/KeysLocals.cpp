@@ -8,6 +8,7 @@
 #include "KeysWorld.h"
 #include "KeysAudio.h"
 #include "KeysBoatPawn.h"
+#include "KeysDancers.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -87,6 +88,19 @@ namespace
 		L.CapColor = Hex(Shirts[(I + 5) % 8]);
 		L.Hair = Hex(I % 2 ? 0x3b2a1e : 0x8a6a3a);
 		return L;
+	}
+
+	// where party guest c dances on a boat's open aft deck: clear of the transom bench, the helm seats or leaning
+	// post, the Midnight's wet bar and the Freeman's tuna chair, inside the gunwales (boat frame, meters)
+	FVector2D PartySpot(const KeysData::FBoatSpec& Sp, int32 C)
+	{
+		const KeysMesh::FBoatLayout Ly = KeysMesh::BoatLayout(Sp);
+		const double Cap = .14 + Sp.Beam * .02;
+		const double XA = KeysMesh::SternX(Sp) + Cap + 1.0;
+		const double XB = FMath::Max(XA + .4, Sp.Id == TEXT("midnight") ? Ly.MidX - 4.25 : Ly.MidX - 1.85);
+		const double X = FMath::Lerp(XA, XB, C == 2 ? .9 : C % 2 ? .55 : .2);
+		const double Side = C == 2 && !KeysMesh::HasFightChair(Sp) ? 0 : C % 2 ? 1 : -1;
+		return FVector2D(X, Side * FMath::Max(.2, KeysMesh::InnerHalfBeam(Sp, X) - .42));
 	}
 
 	// a dancing person on a deck (the deck party's beat)
@@ -542,8 +556,23 @@ void AKeysLocals::TickSandbar(double Dt, double T, const FVector& Cam)
 	BarSand->SetVisibility(bNear);
 	BarPeople->SetVisibility(bNear);
 	BarFloatMesh->SetVisibility(bNear);
-	for (UProceduralMeshComponent* C : BarBoatMeshes) C->SetVisibility(bNear);
+	for (UProceduralMeshComponent* C : BarBoatMeshes) C->SetVisibility(bNear, true);
 	if (!bNear) return;
+	// two of the web game's rigged dancers on each of the first four boats' aft decks
+	const double DCam = FMath::Sqrt(FMath::Square(S.X - Cam.X) + FMath::Square(S.Z - Cam.Z));
+	if (DCam < 320)
+		for (int32 i = 0; i < FMath::Min(4, BarBoats.Num()); i++)
+			for (int32 k = 0; k < 2; k++)
+			{
+				const int32 Fi = i * 2 + k;
+				if (KeysDancers::KindFor(Fi) <= 0) break;
+				while (BarFigs.Num() <= Fi) BarFigs.AddDefaulted();
+				FKeysDancerFig& F = BarFigs[Fi];
+				if (!F.IsValid()) F.Spawn(this, BarBoatMeshes[i], KeysDancers::KindFor(Fi));
+				const KeysData::FBoatSpec& Sp = KeysData::Boats()[BarBoats[i].Hull];
+				const FVector2D Spot = PartySpot(Sp, k);
+				F.Place(FVector(Spot.X, Spot.Y, KeysMesh::SoleAt(Sp, Spot.X)), (k ? -.5 : .5) * PI + FMath::Sin(T * .13 + Fi) * .5, 1.63 + .04 * k, Dt);
+			}
 	for (int32 i = 0; i < BarBoats.Num(); i++)
 	{
 		const FBarBoat& B = BarBoats[i];
@@ -660,13 +689,21 @@ void AKeysLocals::TickParties(double Dt, double T, const FVector& Cam)
 		if (D < 260)
 		{
 			FKeysMesh M;
-			const double Sx = -Sp.Len * .3;
 			for (int32 c = 0; c < Mo.Crew.Num(); c++)
 			{
 				FKeysHuman& Hm = Mo.Crew[c];
-				const double LX = Sx + c * .9, LY = (c - 1) * Sp.Beam * .18;
-				Hm.Pos = FVector(LX, LY, KeysMesh::SoleAt(Sp, LX));
+				const FVector2D Spot = PartySpot(Sp, c);
+				Hm.Pos = FVector(Spot.X, Spot.Y, KeysMesh::SoleAt(Sp, Spot.X));
 				Hm.Yaw = PI + FMath::Sin(T * .3 + c) * .6;
+				// the two in swimsuits are the web game's rigged dancers when the models are there
+				if (c != 1 && KeysDancers::KindFor(c) > 0)
+				{
+					while (Mo.Figs.Num() <= c) Mo.Figs.AddDefaulted();
+					FKeysDancerFig& F = Mo.Figs[c];
+					if (!F.IsValid()) F.Spawn(this, MooredCrew[i], KeysDancers::KindFor(c + i));
+					F.Place(Hm.Pos, Hm.Yaw, 1.64 + .03 * c, Dt);
+					continue;
+				}
 				Dance(Hm, T, Mo.Bpm, c * 1.3 + Mo.Ph);
 				Hm.Build(M);
 			}

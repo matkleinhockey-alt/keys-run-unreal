@@ -1,6 +1,7 @@
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/PointLightComponent.h"
 
 // The walk-in rooms: entities/town/interiors.ts (ROOMS, the shell, lamps, booths, stools), shops.ts (furnishShop: the stock on
 // every shelf) and casino-interior.ts / casino-aquarium.ts (the Gaff & Gill floor), built from the same INTERIOR_BOXES the
@@ -435,4 +436,63 @@ void AKeysTown::BuildCasinoInterior(FTownBatch& I, FTownBatch& G)
 	for (const TCHAR* Id : {TEXT("casino-island-w"), TEXT("casino-island-e")})
 		if (const FInteriorBox* B = InteriorBox(Id)) I.Span(B->U0, B->U1, Y0, Y0 + .05, Zf(B->V1), Zf(B->V0), 0xe0b34a);
 	AddSign(TEXT("GAFF & GILL"), 0, P + 6.6, V1 - .1, .9, Hex(0xffd96a), 0, true, 16);
+}
+
+// ---------------------------------------------------------------- the lights in the room you are standing in
+void AKeysTown::UpdateRoomLights(const FLot* L, const FVector& StageAt)
+{
+	if (L == LitLot) return;
+	LitLot = L;
+	struct FSpot { FVector At; FLinearColor Col; double Lm, Radius; bool bShadow; };
+	TArray<FSpot> Spots;
+	if (L)
+	{
+		const FRoom* R = RoomOf(L->Id);
+		const double H = FMath::Min(L->H, R ? R->CeilMax : 4.2);
+		const double X0 = L->U0 + WallT, X1 = L->U1 - WallT, V0 = L->V0 + WallT, V1 = L->V1 - WallT;
+		const bool bBell = L->Style == EStyle::Bar || L->Style == EStyle::Diner || L->Style == EStyle::Club;
+		const bool bClub = L->Style == EStyle::Club, bBar = L->Style == EStyle::Bar, bCasino = L->Style == EStyle::Casino;
+		// under each of the room's ceiling lamps (BuildInteriors puts them on this grid); the casino on a wider one
+		// at most four across and two deep, so a big shop gets light all over rather than in one corner
+		const double SU = FMath::Max(bCasino ? 9.0 : 7.0, (X1 - X0 - 1) / 4), SV = FMath::Max(bCasino ? 8.0 : 6.0, (V1 - V0 - 1) / 2);
+		for (double U = X0 + 3.5; U < X1 - 1; U += SU)
+			for (double V = V0 + 3; V < V1 - 1; V += SV)
+			{
+				const double Y = bBell ? P + H - 1.9 : P + FMath::Min(H, 4.4) - .45;
+				const FLinearColor C = bClub ? FLinearColor(1.f, .32f, .62f) : bBar ? FLinearColor(1.f, .7f, .42f) : bCasino ? FLinearColor(1.f, .82f, .6f) : FLinearColor(1.f, .9f, .78f);
+				Spots.Add({FVector(U, -V, Y), C, bClub ? 260 : bBar ? 520 : bCasino ? 900 : 1100, bClub ? 7 : 11, false});
+			}
+		// the Pink Flamingo's stage: a warm key light over the dancers, and a pink back light
+		if (bClub && !StageAt.IsNearlyZero())
+		{
+			Spots.Insert({StageAt + FVector(0, 3.2, 3.0), FLinearColor(1.f, .86f, .8f), 2200, 8, true}, 0);
+			Spots.Insert({StageAt + FVector(0, -1.5, 2.6), FLinearColor(1.f, .25f, .7f), 900, 6, false}, 1);
+		}
+		if (Spots.Num() > 8) Spots.SetNum(8);
+	}
+	while (Lights.Num() < Spots.Num())
+	{
+		UPointLightComponent* Lt = NewObject<UPointLightComponent>(this);
+		Lt->SetupAttachment(People);
+		Lt->SetMobility(EComponentMobility::Movable);
+		Lt->SetIntensityUnits(ELightUnits::Lumens);
+		Lt->SetSourceRadius(12.f);
+		Lt->SetSoftSourceRadius(30.f);
+		Lt->RegisterComponent();
+		Lights.Add(Lt);
+	}
+	for (int32 i = 0; i < Lights.Num(); i++)
+	{
+		UPointLightComponent* Lt = Lights[i];
+		if (!Lt) continue;
+		const bool bOn = Spots.IsValidIndex(i);
+		Lt->SetVisibility(bOn);
+		if (!bOn) continue;
+		const FSpot& Sp = Spots[i];
+		Lt->SetRelativeLocation(Sp.At * 100.0);
+		Lt->SetLightColor(Sp.Col);
+		Lt->SetIntensity(float(Sp.Lm));
+		Lt->SetAttenuationRadius(float(Sp.Radius * 100));
+		Lt->SetCastShadows(Sp.bShadow);
+	}
 }

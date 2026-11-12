@@ -6,10 +6,6 @@
 #include "KeysMesh.h"
 #include "KeysWorld.h"
 #include "ProceduralMeshComponent.h"
-#include "Components/SkeletalMeshComponent.h"
-#include "Engine/SkeletalMesh.h"
-#include "Engine/SkinnedAsset.h"
-#include "Animation/AnimSequence.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 
@@ -516,109 +512,37 @@ void AKeysExtras::ClampToDeck(double& X, double& Y, double Margin) const
 }
 
 // ---------------------------------------------------------------- the deck crew models (web entities/crew-model)
-namespace
-{
-	// dance-01: the web game's bikini_girl bound to the Mixamo rig with its "Hip Hop Dancing" clip, imported from
-	// apps/client/public/models/crew/dance-01.glb (Content/KeysRun/Crew). 1.83 m tall at rest, feet at 0.
-	constexpr double CrewTemplateH = 1.8298;
-	double CrewYawOffset()
-	{
-		static double Off = 1e9;
-		if (Off > 1e8) { Off = 90; FParse::Value(FCommandLine::Get(), TEXT("KRCrewYaw="), Off); }
-		return Off;
-	}
-	USkeletalMesh* CrewMeshAsset()
-	{
-		static TWeakObjectPtr<USkeletalMesh> M;
-		static bool bTried = false;
-		if (!bTried) { bTried = true; M = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/KeysRun/Crew/Dance01/dance-01/SkeletalMeshes/dance-01.dance-01")); }
-		return M.Get();
-	}
-	UAnimSequence* CrewAnimAsset()
-	{
-		static TWeakObjectPtr<UAnimSequence> A;
-		static bool bTried = false;
-		if (!bTried) { bTried = true; A = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/KeysRun/Crew/Dance01/dance-01/SkeletalMeshes/dance-01_Anim.dance-01_Anim")); }
-		return A.Get();
-	}
-}
-
 bool AKeysExtras::PartyModelsReady()
 {
-	static int32 Off = -1;
-	if (Off < 0) Off = FParse::Param(FCommandLine::Get(), TEXT("KRNoCrewModels")) ? 1 : 0;
-	return Off == 0 && CrewMeshAsset() && CrewAnimAsset() && CrewMesh;
+	return CrewMesh && KeysDancers::KindFor(0) > 0;
 }
 
 void AKeysExtras::UpdatePartyModels()
 {
 	if (!PartyModelsReady())
 	{
-		for (USkeletalMeshComponent* C : PartyModels) if (C) C->SetVisibility(false);
+		for (FKeysDancerFig& F : PartyFigs) F.SetVisible(false);
 		return;
 	}
-	// one figure per guest, sized like the web placements (1.6 - 1.72 m)
-	while (PartyModels.Num() < Party.Num())
+	// one figure per guest, a mix of the web game's dancers, sized like the web placements (1.6 - 1.72 m)
+	while (PartyFigs.Num() < Party.Num())
 	{
-		USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(this);
-		C->SetSkeletalMesh(CrewMeshAsset());
-		C->SetupAttachment(CrewMesh);
-		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		// like the web game (entities/crew-model/asset.ts): they take the deck's shadows but don't cast their own;
-		// the decimated skinned mesh self-shadows into dark facets otherwise
-		C->SetCastShadow(false);
-		C->RegisterComponent();
-		C->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-		C->PlayAnimation(CrewAnimAsset(), true);
-		// a random start in the clip, so a deck of them isn't dancing in lockstep (index.ts spawnFigure)
-		C->SetPosition(FMath::FRandRange(0.f, CrewAnimAsset()->GetPlayLength()), false);
-		C->SetPlayRate(FMath::FRandRange(.92f, 1.06f));
-		PartyModels.Add(C);
+		FKeysDancerFig& F = PartyFigs.AddDefaulted_GetRef();
+		F.Spawn(this, CrewMesh, KeysDancers::KindFor(PartyFigs.Num() - 1));
 	}
 	FVector Eye;
 	const AKeysBoatPawn* EP = PawnRef.Get();
 	const bool bEye = EP && EP->FpEyeLocal(Eye);
 	static const double Heights[5] = {1.67, 1.63, 1.7, 1.65, 1.68};
-	for (int32 i = 0; i < PartyModels.Num(); i++)
+	const double Dt = GetWorld()->GetDeltaSeconds();
+	for (int32 i = 0; i < PartyFigs.Num(); i++)
 	{
-		USkeletalMeshComponent* C = PartyModels[i];
-		if (!C) continue;
+		FKeysDancerFig& F = PartyFigs[i];
 		const bool bOn = Party.IsValidIndex(i) && (!bEye || FVector2D(Party[i].H.Pos.X - Eye.X, Party[i].H.Pos.Y - Eye.Y).Size() > 1.1);
-		C->SetVisibility(bOn);
+		F.SetVisible(bOn);
 		if (!bOn) continue;
 		const FKeysHuman& H = Party[i].H;
-		const double Sc = Heights[i % 5] / CrewTemplateH;
-		// the glTF faces +Z in its own frame, which the importer turns into UE -Y: a quarter turn puts her face along +X
-		const FRotator Rot(0, FMath::RadiansToDegrees(H.Yaw) + CrewYawOffset(), 0);
-		FVector Loc = FVector(H.Pos.X, H.Pos.Y, Deck.SoleAt(H.Pos.X)) * 100.0;
-		// The Mixamo dance clip travels: its hips (the root bone of this rig, so nothing locks them) wander across the floor through the loop, which walked the figures
-		// off the deck. Take the hips' slow sideways drift back out each frame so she dances on her own spot.
-		while (HipBone.Num() <= i) HipBone.Add(-2);   // -2: not looked for yet
-		if (HipBone[i] == -2 && C->GetSkinnedAsset())
-		{
-			HipBone[i] = INDEX_NONE;
-			const FReferenceSkeleton& RS = C->GetSkinnedAsset()->GetRefSkeleton();
-			for (int32 b = 0; b < RS.GetNum(); b++)
-				if (RS.GetBoneName(b).ToString().Contains(TEXT("Hips"))) { HipBone[i] = b; break; }
-			if (HipBone[i] != INDEX_NONE)
-			{
-				FTransform Acc = FTransform::Identity;
-				for (int32 b = HipBone[i]; b != INDEX_NONE; b = RS.GetParentIndex(b)) Acc = Acc * RS.GetRefBonePose()[b];
-				HipRest = Acc.GetLocation();
-			}
-		}
-		if (HipBone[i] >= 0)
-		{
-			// only the slow travel: the hips' own sway in the dance stays, their average over a few seconds is held
-			// over her spot
-			while (HipAvg.Num() <= i) HipAvg.Add(FVector2D::ZeroVector);
-			const FVector Hp = C->GetBoneLocation(C->GetBoneName(HipBone[i]), EBoneSpaces::ComponentSpace) - HipRest;
-			const double K = FMath::Clamp(double(GetWorld()->GetDeltaSeconds()) / 2.5, 0.0, 1.0);
-			HipAvg[i] = FMath::Lerp(HipAvg[i], FVector2D(Hp.X, Hp.Y), K);
-			Loc -= Rot.RotateVector(FVector(HipAvg[i].X, HipAvg[i].Y, 0) * Sc);
-		}
-		C->SetRelativeLocationAndRotation(Loc, Rot);
-		C->SetRelativeScale3D(FVector(Sc));
+		F.Place(FVector(H.Pos.X, H.Pos.Y, Deck.SoleAt(H.Pos.X)), H.Yaw, Heights[i % 5], Dt);
 	}
 }
 
