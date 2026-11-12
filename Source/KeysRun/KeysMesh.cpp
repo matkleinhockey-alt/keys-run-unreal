@@ -379,7 +379,7 @@ namespace KeysMesh
 			const int32 NSt = 14, NA = 14;
 			TArray<FVector> G;
 			auto HalfW = [&](double Sv) { return ConW * .5 * (1 - .2 * FMath::Pow(Sv, 1.6)); };
-			auto TopH = [&](double Sv) { return FMath::Lerp(1.12, .8, SStepM(.12, .85, Sv)); };
+			auto TopH = [&](double Sv) { return FMath::Lerp(1.28, .95, SStepM(.12, .85, Sv)); };
 			for (int32 i = 0; i < NSt; i++)
 			{
 				const double Sv = double(i) / (NSt - 1), X = FMath::Lerp(ConAft, ConFront, Sv);
@@ -452,11 +452,12 @@ namespace KeysMesh
 			{
 				// the Freeman's tall black-framed windshield, from the console up to the hardtop
 				const double Xb = MidX + ConL * .3, Xt = Dm.TC + Dm.TopL * .5 - .25, Zb = CZ + 1.2, Zt = Dm.TopZ - .02, Wb = ConW * .5 + .03, Wt = ConW * .5 + .12;
+				const FLinearColor Clear = Srgb(.42, .52, .58);
 				M.Surf = SurfGlass;
-				M.AddQuad(FVector(Xb, -Wb, Zb), FVector(Xb, Wb, Zb), FVector(Xt, Wt, Zt), FVector(Xt, -Wt, Zt), Glass, FVector(1, 0, .5));
+				M.AddQuad(FVector(Xb, -Wb, Zb), FVector(Xb, Wb, Zb), FVector(Xt, Wt, Zt), FVector(Xt, -Wt, Zt), Clear, FVector(1, 0, .5));
 				for (int32 s2 = -1; s2 <= 1; s2 += 2)
 				{
-					M.AddQuad(FVector(Xb, s2 * Wb, Zb), FVector(Xt, s2 * Wt, Zt), FVector(Xt - .5, s2 * (Wt + .03), Zt), FVector(Xb - .45, s2 * (Wb + .02), Zb), Glass, FVector(0, s2, 0));
+					M.AddQuad(FVector(Xb, s2 * Wb, Zb), FVector(Xt, s2 * Wt, Zt), FVector(Xt - .5, s2 * (Wt + .03), Zt), FVector(Xb - .45, s2 * (Wb + .02), Zb), Clear, FVector(0, s2, 0));
 					Tube(FVector(Xb, s2 * Wb, Zb), FVector(Xt, s2 * Wt, Zt), .028, .028, 8, FrameBlack, SurfGelcoat);
 				}
 				Tube(FVector(Xb, -Wb, Zb), FVector(Xb, Wb, Zb), .022, .022, 8, FrameBlack, SurfGelcoat);

@@ -561,11 +561,14 @@ void AKeysWorld::UpdateWater()
 	{
 		if (!bHull || FMath::Square(X - HullC.X) + FMath::Square(Z - HullC.Y) > HullR2) return H;
 		const FVector Lc = HullT.InverseTransformPosition(ToUE(X, H, Z)) / 100;
-		if (Lc.X <= HullX0 || Lc.X >= HullX1) return H;
-		const double F = (Lc.X - HullX0) / (HullX1 - HullX0) * HullN;
+		// a grid cell's worth past the liner too, or the triangles that cross the gunwale would carry the swell
+		// back up over the sole; outside the hull that dip stays under the topsides
+		constexpr double Reach = .95;
+		if (Lc.X <= HullX0 - Reach || Lc.X >= HullX1 + Reach * .5) return H;
+		const double F = FMath::Clamp((Lc.X - HullX0) / (HullX1 - HullX0), 0.0, 1.0) * HullN;
 		const int32 K = FMath::Clamp(int32(F), 0, HullN - 1);
 		const double U = F - K;
-		if (FMath::Abs(Lc.Y) >= FMath::Lerp(HullHalf[K], HullHalf[K + 1], U)) return H;
+		if (FMath::Abs(Lc.Y) >= FMath::Lerp(HullHalf[K], HullHalf[K + 1], U) + Reach) return H;
 		const double Floor = HullT.TransformPosition(FVector(Lc.X, Lc.Y, FMath::Lerp(HullSole[K], HullSole[K + 1], U)) * 100).Z / 100;
 		return FMath::Min(H, Floor);
 	};

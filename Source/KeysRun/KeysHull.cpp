@@ -255,7 +255,7 @@ namespace KeysMesh
 		static const FRow Rows[] = {
 			{TEXT("robalo"),    1.05, .38, .45, 20, 48, .9,  .42, 0,   0,   0xf4f4f2, 0x6fa8c9, 0xffffff, -1,       0x8e949a, 0xffffff, 0xf1f1ee, 0xdcddd8, false},
 			{TEXT("grady"),     1.3,  .52, .55, 20, 50, 1.3, .40, 0,   0,   0xf8f7f2, 0x23466e, 0xfbfaf6, 0x23466e, 0xd0d4d8, 0xfbfaf6, 0xf3f2ec, 0xe0ded6, false},
-			{TEXT("freeman"),   1.25, .65, .5,  22, 40, .2,  .55, 0,   0,   0xcfd3d6, 0x1f2a44, 0xd5d9dc, 0x1f2a44, 0x1f2a44, 0xf4f5f5, 0xf3f2ee, 0xdedcd6, true},
+			{TEXT("freeman"),   1.25, .65, .5,  22, 40, .2,  .55, 0,   0,   0xc4c9ce, 0x1f2a44, 0xccd1d6, 0x1f2a44, 0x1f2a44, 0xf4f5f5, 0xf3f2ee, 0xdedcd6, true},
 			{TEXT("midnight"),  1.4,  .55, .62, 22, 54, 2.1, .38, .3,  .44, 0x4a443b, 0x2a2620, 0x74695a, 0x2a2620, 0x101112, 0x85796a, 0x85796a, 0xb8875a, false},
 			{TEXT("mti"),       1.35, .3,  .6,  24, 55, 2.3, .48, .28, .42, 0x15171a, 0xf4f4f4, 0xc8102e, 0xf4f4f4, 0x0d0e10, 0xf4f4f4, 0xf4f4f4, 0x2a2d31, false},
 			{TEXT("yellowfin"), 1.32, .46, .56, 21, 51, 1.5, .56, 0,   0,   0xf2efe2, 0x1f3b57, 0xe9d98a, 0x1f3b57, 0x8e949a, 0xf6f4ea, 0xf3f1e6, 0xe2decd, false},
@@ -279,7 +279,7 @@ namespace KeysMesh
 				H.bCat = R.bCat;
 				// after the owners' photos: the Freeman's blunt twin bow and high tunnel; the Midnight Express's long fine
 				// bow with a flared coaming and its rounded tumblehome stern
-				if (H.bCat) { H.MinBow = .32; H.Tunnel = .34; H.TunnelRise = .75; H.SponW = .27; H.StemFoot = .12; }
+				if (H.bCat) { H.MinBow = .45; H.Tunnel = .34; H.TunnelRise = .75; H.SponW = .27; H.StemFoot = .12; }
 				if (FString(R.Id) == TEXT("midnight")) { H.Tumble = .08; H.Flare = .06; }
 				Out.Add(TPair<FString, FHullDef>(R.Id, H));
 			}

@@ -203,7 +203,35 @@ namespace KeysMesh
 		const FVector Pv(-.22, 0, .12);
 		const FQuat Tilt(FVector::YAxisVector, -.2);
 		auto Bk = [&](const FVector& L) { return Pv + Tilt.RotateVector(L); };
-		Box(Bk(FVector(-.05, 0, BackH * .5)), FVector(.13, W * .96, BackH), FMath::Min(.2, W * .3), SurfVinyl, Tilt, 4);
+		{
+			// the shell: a shield outline (square at the foot, a full round top) extruded through its thickness
+			TArray<FVector2D> Ol;
+			const double Hw = W * .48, Rt = Hw * .9, Zs = BackH - Rt;
+			Ol.Add(FVector2D(-Hw, .02));
+			for (int32 k = 0; k <= 4; k++) Ol.Add(FVector2D(-Hw, FMath::Lerp(.02, Zs, k / 4.0)));
+			for (int32 k = 1; k < 16; k++)
+			{
+				const double A = PI * (1 - k / 16.0), C = FMath::Cos(A), Sn = FMath::Sin(A);
+				Ol.Add(FVector2D(FMath::Sign(C) * FMath::Pow(FMath::Abs(C), .7) * Hw, Zs + FMath::Pow(Sn, .8) * Rt));
+			}
+			for (int32 k = 4; k >= 0; k--) Ol.Add(FVector2D(Hw, FMath::Lerp(.02, Zs, k / 4.0)));
+			TArray<FVector> G;
+			for (int32 Face = 0; Face < 2; Face++)
+				for (const FVector2D& O2 : Ol) G.Add(At(Bk(FVector(Face ? .015 : -.115, O2.X, O2.Y))));
+			const FVector Ctr = At(Bk(FVector(-.05, 0, BackH * .5)));
+			M.Surf = SurfVinyl;
+			M.AddGrid(G, Ol.Num(), 2, false, Uph, Ctr);
+			const FVector Fn = Q.RotateVector(Tilt.RotateVector(FVector(1, 0, 0)));
+			for (int32 Face = 0; Face < 2; Face++)
+			{
+				const FVector Mid = At(Bk(FVector(Face ? .015 : -.115, 0, BackH * .45)));
+				for (int32 k = 0; k < Ol.Num(); k++)
+				{
+					const int32 k2 = (k + 1) % Ol.Num();
+					M.AddTri(Mid, G[Face * Ol.Num() + k], G[Face * Ol.Num() + k2], Uph, Face ? Fn : -Fn);
+				}
+			}
+		}
 		Box(Bk(FVector(.025, 0, BackH * .47)), FVector(.03, W * .5, BackH * .6), .012, InsertKind, Tilt);
 		for (int32 s = -1; s <= 1; s += 2)
 			Box(Bk(FVector(.03, s * (W * .5 - W * .1), BackH * .38)), FVector(.12, W * .18, BackH * .7), .05, SurfVinyl, FQuat(FVector::ZAxisVector, -s * .35) * Tilt);
