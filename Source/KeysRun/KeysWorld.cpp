@@ -548,6 +548,21 @@ void AKeysWorld::ApplySun(double K)
 
 void AKeysWorld::ToggleSunset() { SunsetTarget = SunsetTarget > .5 ? 0 : 1; }
 
+double AKeysWorld::DuskK() const { return SStep(0, 1, SunK); }
+
+double AKeysWorld::Dusk(const UObject* WorldContext)
+{
+	const AKeysWorld* W = Get(WorldContext);
+	return W ? W->DuskK() : 0;
+}
+
+UMaterialInterface* AKeysWorld::GlowMaterial()
+{
+	static TWeakObjectPtr<UMaterialInterface> M;
+	if (!M.IsValid()) M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Bubble.M_KR_Bubble"));
+	return M.Get();
+}
+
 void AKeysWorld::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

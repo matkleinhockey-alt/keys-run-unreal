@@ -49,4 +49,7 @@ private:
 	TArray<FMark> Marks;
 	TArray<FVector2D> Balls;
 	double BobT = 0;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> BeamMID;
+	FVector LightPos = FVector::ZeroVector;   // Sombrero Key Light's lantern, game meters
+	void UpdateBeam();
 };

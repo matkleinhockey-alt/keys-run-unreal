@@ -26,6 +26,11 @@ struct FKeysMesh
 
 	void Commit(UProceduralMeshComponent* Mesh, int32 Section, UMaterialInterface* Mat) const;
 
+	// For AKeysWorld::GlowMaterial: a soft blob seen from any side (three crossed squares), and a soft-edged
+	// triangle whose brightness falls off across its far edge (Across 0 at B, 1 at C) and along it (alpha A0 -> A1)
+	void AddGlowBlob(const FVector& C, double R, const FLinearColor& Color);
+	void AddGlowFan(const FVector& A, const FVector& B, const FVector& Cc, const FLinearColor& Color, double A0, double A1);
+
 	// Smooth shading: vertices at the same spot share an averaged normal, unless their faces meet at more than
 	// MaxAngleDeg (so fins and hard chines keep their edge).
 	void SmoothNormals(double MaxAngleDeg = 55);

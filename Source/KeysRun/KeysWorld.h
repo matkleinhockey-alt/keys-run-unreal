@@ -28,6 +28,12 @@ public:
 
 	void ToggleSunset();
 	bool IsSunset() const { return SunsetTarget > .5; }
+	// 0 by day, 1 at full sunset: what lights the lighthouse beam, the lamps' halos and the neon (web lightMats)
+	double DuskK() const;
+	static double Dusk(const UObject* WorldContext);
+	// the soft translucent glow material (M_KR_Bubble's "snow" mode: UV x in [2, 3] draws a soft-edged blob or band,
+	// vertex alpha is the opacity); each user makes its own instance and sets "Bright"
+	static UMaterialInterface* GlowMaterial();
 
 	static AKeysWorld* Get(const UObject* WorldContext);
 	// the camera is under the surface: draw the sea's underside (Snell's window) and keep it in step with the waves

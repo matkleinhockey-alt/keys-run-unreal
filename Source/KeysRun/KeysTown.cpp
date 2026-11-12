@@ -1,4 +1,5 @@
 #include "KeysTown.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "KeysTownData.h"
 #include "KeysGeo.h"
 #include "KeysWorld.h"
@@ -48,6 +49,7 @@ AKeysTown::AKeysTown()
 	People = Make(TEXT("TownPeople"), true);
 	Estates = Make(TEXT("TownEstates"), true);
 	Tank = Make(TEXT("TownTank"), false);
+	Halos = Make(TEXT("TownHalos"), false);
 }
 
 AKeysTown* AKeysTown::Get(const UObject* WorldContext)
@@ -86,6 +88,25 @@ void AKeysTown::BeginPlay()
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: town built - street %d tris, interiors %d, glow %d, far %d, %d signs"), S.Tris(), I.Tris(), G.Tris(), F.Tris(), Signs.Num());
 
 	BuildEstates();
+
+	if (UMaterialInterface* GM = AKeysWorld::GlowMaterial())
+	{
+		FKeysMesh H;
+		for (const FHalo& Hl : HaloList)
+		{
+			const FVector C(Hl.P.X, Hl.P.Z, Hl.P.Y);   // town batch (x, y up, z) to mesh (x, z, y)
+			if (!Hl.bPool) { FLinearColor Cc = Hl.C; Cc.A = Hl.R < 1.2 ? .3f : .55f; H.AddGlowBlob(C, Hl.R, Cc); continue; }
+			// a pool of light on the pavement: one flat soft square
+			FLinearColor Cc = Hl.C; Cc.A = .35f;
+			const int32 I0 = H.AddVert(C + FVector(-Hl.R, -Hl.R, 0), FVector::UpVector, Cc), I1 = H.AddVert(C + FVector(Hl.R, -Hl.R, 0), FVector::UpVector, Cc);
+			const int32 I2 = H.AddVert(C + FVector(Hl.R, Hl.R, 0), FVector::UpVector, Cc), I3 = H.AddVert(C + FVector(-Hl.R, Hl.R, 0), FVector::UpVector, Cc);
+			H.UV[I0] = FVector2D(2.001, .001); H.UV[I1] = FVector2D(2.999, .001); H.UV[I2] = FVector2D(2.999, .999); H.UV[I3] = FVector2D(2.001, .999);
+			H.T.Append({I0, I2, I1, I0, I3, I2});
+		}
+		HaloMID = UMaterialInstanceDynamic::Create(GM, this);
+		H.Commit(Halos, 0, HaloMID);
+		Halos->SetVisibility(false);
+	}
 
 	// the people: everyone standing at a fixed spot, then the street walkers
 	int32 k = 0;
@@ -583,6 +604,9 @@ void AKeysTown::BuildFacade(const FLot& L, FTownBatch& S, FTownBatch& G)
 	// a neon tube along the rim lights up at night
 	G.Facade(SA - .05, SB + .05, SY + BH + .02, SY + BH + .07, F + .14, true, Hex(Lk.Neon));
 	G.Facade(SA - .05, SB + .05, SY - .07, SY - .02, F + .14, true, Hex(Lk.Neon));
+	// overlapping soft blobs along each tube read as one continuous glow
+	for (double U = SA + .4; U <= SB - .39; U += FMath::Max(.5, (SB - SA - .8) / FMath::Max(1.0, FMath::RoundToDouble((SB - SA - .8) / .7))))
+		for (double Yh : {SY + BH + .045, SY - .045}) HaloList.Add({FVector(U, Yh, -(F + .3)), .9, Hex(Lk.Neon), false});
 	if (Vn)
 	{
 		FString Name = FString(Vn->Name).ToUpper();
@@ -666,6 +690,8 @@ void AKeysTown::BuildProps(FTownBatch& S, FTownBatch& G)
 		S.Cyl(X, P, Z, .22, .26, .4, 0x4b5158, 8);
 		S.Box(X, P + 4.45, Z, .7, .1, .22, 0x4b5158);
 		G.Box(X, P + 4.34, Z, .5, .1, .16, 0xffe2a8);
+		HaloList.Add({FVector(X, P + 4.3, Z), 1.5, FLinearColor(1.f, .86f, .6f), false});
+		HaloList.Add({FVector(X, P + .06, Z), 3.6, FLinearColor(1.f, .8f, .5f), true});
 	}
 	for (const FPoint& B : Benches())
 	{
@@ -890,10 +916,13 @@ void AKeysTown::Tick(float DeltaSeconds)
 		for (UTextRenderComponent* T : InteriorSigns) if (T) T->SetVisibility(bIn || T->ComponentHasTag(TEXT("estate")));
 	}
 	// the glow layer: neon is dim by day and bright at sunset
-	if (FMath::Abs(Dusk - AppliedDusk) > .02)
+	Dusk = AKeysWorld::Dusk(this);
+	if (FMath::Abs(Dusk - AppliedDusk) > .02 || (Halos && Halos->IsVisible() != (Tier == 0 && Dusk > .02)))
 	{
 		AppliedDusk = Dusk;
 		Glow->SetVisibility(Tier == 0);
+		if (Halos) Halos->SetVisibility(Tier == 0 && Dusk > .02);
+		if (HaloMID) HaloMID->SetScalarParameterValue(TEXT("Bright"), float(1.4 * Dusk));
 	}
 	if (Tier == 0 && Dist < 260)
 	{

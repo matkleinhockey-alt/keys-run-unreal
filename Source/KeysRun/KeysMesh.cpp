@@ -61,6 +61,28 @@ void FKeysMesh::AddTube(const FVector& A, const FVector& B, double RA, double RB
 	}
 }
 
+void FKeysMesh::AddGlowBlob(const FVector& Ctr, double R, const FLinearColor& Color)
+{
+	const FVector Ax[3][2] = {{FVector::XAxisVector, FVector::YAxisVector}, {FVector::XAxisVector, FVector::ZAxisVector}, {FVector::YAxisVector, FVector::ZAxisVector}};
+	for (int32 p = 0; p < 3; p++)
+	{
+		const FVector U = Ax[p][0] * R, W = Ax[p][1] * R, Nn = FVector::CrossProduct(Ax[p][0], Ax[p][1]);
+		const int32 I0 = AddVert(Ctr - U - W, Nn, Color), I1 = AddVert(Ctr + U - W, Nn, Color), I2 = AddVert(Ctr + U + W, Nn, Color), I3 = AddVert(Ctr - U + W, Nn, Color);
+		UV[I0] = FVector2D(2.001, .001); UV[I1] = FVector2D(2.999, .001); UV[I2] = FVector2D(2.999, .999); UV[I3] = FVector2D(2.001, .999);
+		T.Append({I0, I1, I2, I0, I2, I3});
+	}
+}
+
+void FKeysMesh::AddGlowFan(const FVector& A, const FVector& B, const FVector& Cc, const FLinearColor& Color, double A0, double A1)
+{
+	const FVector Nn = FVector::CrossProduct(B - A, Cc - A).GetSafeNormal();
+	FLinearColor CA = Color, CB = Color;
+	CA.A = float(A0); CB.A = float(A1);
+	const int32 I0 = AddVert(A, Nn, CA), I1 = AddVert(B, Nn, CB), I2 = AddVert(Cc, Nn, CB);
+	UV[I0] = FVector2D(2.5, .5); UV[I1] = FVector2D(2.5, .001); UV[I2] = FVector2D(2.5, .999);
+	T.Append({I0, I1, I2});
+}
+
 void FKeysMesh::Commit(UProceduralMeshComponent* Mesh, int32 Section, UMaterialInterface* Mat) const
 {
 	if (!Mesh) return;

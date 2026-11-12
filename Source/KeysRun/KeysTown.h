@@ -116,6 +116,12 @@ private:
 	bool bWalkerAshore = false;
 	FVector WalkerPos = FVector::ZeroVector;
 	double Dusk = 0, AppliedDusk = -1;
+	// the night glow (web entities/town/kit.ts lightMats): soft halos round the lamps and along the neon, and pools of
+	// lamp light on the pavement, faded in by the sunset blend
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Halos;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> HaloMID;
+	struct FHalo { FVector P; double R; FLinearColor C; bool bPool; };
+	TArray<FHalo> HaloList;
 	int32 Tier = -1;          // 0 near, 1 far, 2 hidden
 	bool bInsideOn = false;
 	double PeopleT = 0;

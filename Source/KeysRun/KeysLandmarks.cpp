@@ -1,4 +1,5 @@
 #include "KeysLandmarks.h"
+#include "KeysMesh.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysGeo.h"
@@ -58,6 +59,31 @@ void AKeysLandmarks::BeginPlay()
 	UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineDebugMaterials/VertexColorMaterial.VertexColorMaterial"));
 	G.M.Commit(Lamps, 0, GlowMat ? GlowMat : AKeysWorld::VertexColorMaterial());
 	BuildBuoys();
+	// the lens: two flat fans off the lantern turning every 9 s, a narrow bright core and a wide faint spread
+	// (world/lighthouse.ts), night only - the sunset blend lights them
+	if (UMaterialInterface* GM = AKeysWorld::GlowMaterial())
+	{
+		FKeysMesh M;
+		const FLinearColor Warm(1.f, .95f, .81f);
+		const double Reach = 620;
+		struct FFan { double HalfW, Op, Far; };
+		for (const FFan& F : {FFan{2.6, .26, Reach}, FFan{6.5, .1, Reach * .78}})
+		{
+			const FVector O = FVector::ZeroVector;
+			M.AddGlowFan(O, FVector(F.Far, -F.HalfW, 0), FVector(F.Far, F.HalfW, 0), Warm, F.Op * 3, 0);
+			M.AddGlowFan(O, FVector(F.Far, 0, -3.2), FVector(F.Far, 0, 3.2), Warm, F.Op * 3, 0);
+			// and the back of the lens, a second beam the other way
+			M.AddGlowFan(O, FVector(-F.Far, F.HalfW, 0), FVector(-F.Far, -F.HalfW, 0), Warm, F.Op * 3, 0);
+			M.AddGlowFan(O, FVector(-F.Far, 0, 3.2), FVector(-F.Far, 0, -3.2), Warm, F.Op * 3, 0);
+		}
+		M.AddGlowBlob(FVector::ZeroVector, 6.5, FLinearColor(1.f, .94f, .78f, .9f));
+		BeamMID = UMaterialInstanceDynamic::Create(GM, this);
+		M.Commit(Beam, 0, BeamMID);
+		Beam->SetUsingAbsoluteLocation(true);
+		Beam->SetUsingAbsoluteRotation(true);
+		Beam->SetWorldLocation(KeysGeo::ToUE(LightPos.X, LightPos.Y, LightPos.Z));
+		Beam->SetVisibility(false);
+	}
 	for (const FPier& Pp : Piers()) UE_LOG(LogTemp, Log, TEXT("Keys Run: pier %s at %.0f, %.0f -> %.0f, %.0f"), *Pp.Name, Pp.X0, Pp.Z0, Pp.X0 + Pp.NX * Pp.Len, Pp.Z0 + Pp.NZ * Pp.Len);
 	for (int32 i = 0; i < FMath::Min(6, WaterfrontEstates().Num()); i++) UE_LOG(LogTemp, Log, TEXT("Keys Run: estate on %s at %.0f, %.0f facing %.2f, %.2f"), *WaterfrontEstates()[i].Island, WaterfrontEstates()[i].X, WaterfrontEstates()[i].Z, WaterfrontEstates()[i].NX, WaterfrontEstates()[i].NZ);
 	for (const KeysGeo::FMarina& M : KeysGeo::Marinas()) UE_LOG(LogTemp, Log, TEXT("Keys Run: marina %s at %.0f, %.0f dir %d"), *M.Name, M.SX, M.SZ, M.Dir);
@@ -250,6 +276,7 @@ void AKeysLandmarks::BuildBridges(FTownBatch& B)
 void AKeysLandmarks::BuildLighthouse(FTownBatch& B, FTownBatch& G)
 {
 	const double LX = -200, LZ = KeysGeo::ChainZ(-200) + 1455, Focal = 43;
+	LightPos = FVector(LX, Focal - 1.6, LZ);
 	const uint32 Iron = 0x6e4232, White = 0xe8e6df, Dark = 0x22262b;
 	const int32 Sides = 8;
 	const double BaseR = 13, TopR = 3.2;
@@ -485,9 +512,22 @@ void AKeysLandmarks::BuildBuoys()
 	Tick(0);
 }
 
+void AKeysLandmarks::UpdateBeam()
+{
+	if (!BeamMID) return;
+	const double K = AKeysWorld::Dusk(this);
+	Beam->SetVisibility(K > .02);
+	if (K <= .02) return;
+	const double T = GetWorld()->GetTimeSeconds();
+	Beam->SetWorldRotation(FRotator(0, FMath::RadiansToDegrees(T / 9 * 2 * PI), 0));
+	// the lamp blooms as the lens comes round (brightest on the beam, never fully out)
+	BeamMID->SetScalarParameterValue(TEXT("Bright"), float(1.6 * K));
+}
+
 void AKeysLandmarks::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateBeam();
 	if (BuoyISMs.Num() < 6) return;
 	BobT -= DeltaSeconds;
 	if (BobT > 0) return;
