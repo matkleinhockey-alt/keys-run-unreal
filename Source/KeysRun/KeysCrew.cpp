@@ -108,11 +108,20 @@ void AKeysExtras::BuildLayout()
 		auto Lane = [this](double X) { return FMath::Max(.35, Deck.InnerHB(X) - .32); };
 		const double Zc = FMath::Min(L * .33, L * .39 - .6);
 		const double XF = FMath::Min(L * .27, Deck.MidX + 1.6);
+		// past the helm seats (or the leaning post) the lane swings out round them, so nobody walks through the chairs:
+		// the seat row's half-width plus a shoulder, as far as the gunwale allows
+		const int32 NSeat = S.bRodRack ? 4 : S.Beam > 3.6 ? 3 : 2;
+		const double SeatHalf = S.bLeaning ? .58 : (NSeat - 1) * .32 + .3;
+		const double SX0 = Deck.MidX - 1.75, SX1 = Deck.MidX - .8;
+		auto SeatLane = [&](double X) { return FMath::Max(Lane(X), FMath::Min(SeatHalf + .3, Deck.InnerHB(X) - .16)); };
+		const bool bRound = SX0 > -Zc + .3 && SX1 < L * .1 - .3;
 		PathPts.Reset();
 		PathPts.Add(FVector2D(-Zc, Lane(-Zc)));
+		if (bRound) { PathPts.Add(FVector2D(SX0, SeatLane(SX0))); PathPts.Add(FVector2D(SX1, SeatLane(SX1))); }
 		PathPts.Add(FVector2D(L * .1, Lane(L * .1)));
 		PathPts.Add(FVector2D(XF, 0));
 		PathPts.Add(FVector2D(L * .1, -Lane(L * .1)));
+		if (bRound) { PathPts.Add(FVector2D(SX1, -SeatLane(SX1))); PathPts.Add(FVector2D(SX0, -SeatLane(SX0))); }
 		PathPts.Add(FVector2D(-Zc, -Lane(-Zc)));
 		PathPts.Add(FVector2D(-Zc - .15, 0));
 		PathCum.Reset();
