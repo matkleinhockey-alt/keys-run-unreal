@@ -65,7 +65,7 @@ void AKeysBoatPawn::UpdateHelm(double Dt, double T)
 			L->SetupAttachment(GetRootComponent());
 			L->SetCastShadows(false);
 			L->SetLightColor(i < 2 ? Teal : FLinearColor(.16f, .36f, 1.f));
-			L->SetAttenuationRadius(i < 2 ? 900 : 700);
+			L->SetAttenuationRadius(i < 2 ? 650 : 450);
 			L->RegisterComponent();
 			UwLights.Add(L);
 		}
@@ -120,8 +120,8 @@ void AKeysBoatPawn::UpdateHelm(double Dt, double T)
 		const bool bOn = bUw && (i < 2 || Dusk > .3);
 		Lt->SetVisibility(bOn);
 		if (!bOn) continue;
-		if (i < 2) { Lt->SetRelativeLocation(FVector(SternX + .7 + i * L * .2, 0, -45 / 100.0) * 100); Lt->SetIntensity(float(2500 + 6000 * Dusk)); }
-		else { Lt->SetRelativeLocation(FVector(MidX - 1.0, 0, KeysMesh::SoleAt(S, MidX) + 2.2) * 100); Lt->SetIntensity(float(600 * Dusk)); }
+		if (i < 2) { Lt->SetRelativeLocation(FVector(SternX + .7 + i * L * .2, 0, -1.1) * 100); Lt->SetIntensity(float(250 + 900 * Dusk)); }
+		else { Lt->SetRelativeLocation(FVector(MidX - 1.0, 0, KeysMesh::SoleAt(S, MidX) + 2.2) * 100); Lt->SetIntensity(float(120 * Dusk)); }
 	}
 	// ---- the glass helm: two screens on the dash, the chart on the left and the sounder on the right, a few times a second
 	HelmT -= Dt;

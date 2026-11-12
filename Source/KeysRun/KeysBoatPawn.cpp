@@ -680,7 +680,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		{
 			double TX, TZ, TY;
 			if (AKeysTreasure* Tr = AKeysTreasure::Get(this); Tr && Tr->DebugNearest(TX, TZ, TY))
-				if (AKeysDiver* Dv = AKeysDiver::Get(this)) { Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%f,%f"), TX + 2.2, TZ + .8)); Dv->DebugCmd(TEXT("depth"), TEXT("200")); }
+				if (AKeysDiver* Dv = AKeysDiver::Get(this)) { Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%f,%f"), TX + 1.7, TZ + .5)); Dv->DebugCmd(TEXT("depth"), TEXT("200")); }
 		}
 		else if (Cmd == TEXT("open")) { if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen(); }
 		else if (Cmd == TEXT("flare")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->DebugFlare(); }

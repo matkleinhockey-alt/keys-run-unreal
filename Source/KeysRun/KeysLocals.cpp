@@ -782,8 +782,9 @@ FString AKeysLocals::DebugCmd(const FString& Cmd)
 				if (D < Best) { Best = D; LarryRoute = r; LarryS = LarryLoops[r].Cum[k]; }
 			}
 		double X, Z, TX, TZ;
-		AKeysTraffic::RouteAt(LarryLoops[LarryRoute], LarryS + 40, X, Z, TX, TZ);
-		P->DebugPlace(X - TZ * 22, Z + TX * 22, HeadingOf(TZ * 22, -TX * 22));
+		AKeysTraffic::RouteAt(LarryLoops[LarryRoute], LarryS + 12, X, Z, TX, TZ);
+		P->DebugPlace(X - TZ * 16, Z + TX * 16, HeadingOf(TZ * 16, -TX * 16));
+		LarrySay = 3;
 		return TEXT("larry out");
 	}
 	if (Cmd == TEXT("sandbar") && P && BarI >= 0)
