@@ -102,7 +102,8 @@ void AKeysExtras::BuildLayout()
 		Crew.Pos = FVector(X, 0, Deck.SoleAt(X));
 		Crew.Yaw = 0;
 		// the Freeman and the Midnight Express have their own seat on the console's front
-		if (S.Id != TEXT("freeman") && S.Id != TEXT("midnight")) Props.AddBox(FVector(X - .02, 0, Deck.SoleAt(X) + .21), FVector(.42, .62, .42), XHex(0xeeeae0));
+		// (the go-fasts with a sun pad have no console seat of their own)
+		if (S.bSunpad && S.Id != TEXT("midnight")) Props.AddBox(FVector(X - .02, 0, Deck.SoleAt(X) + .21), FVector(.42, .62, .42), XHex(0xeeeae0));
 	}
 
 	// where nobody stands: the console and the seat on its front, the helm seats or leaning post, the Midnight's wet
