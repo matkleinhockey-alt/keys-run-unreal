@@ -131,7 +131,7 @@ def _custom(mat, x, y, code, out_type, names, desc):
 # pores on skin, strands in hair, orange-peel gelcoat, non-skid diamonds, brushed steel, wood grain, stucco, corrugated
 # tin, lap siding, shingles, asphalt speckle, sand ripples, bark rings, fish scales with a rainbow sheen. Fine detail
 # fades out with distance so it never shimmers.
-SURFACE_FN = """
+KRF_NOISE = """
 struct KRF {
   float hash(float3 p) { p = frac(p * 0.3183099 + 0.1); p *= 17.0; return frac(p.x * p.y * p.z * (p.x + p.y + p.z)); }
   float4 nd(float3 x) {
@@ -150,6 +150,9 @@ struct KRF {
     return s;
   }
 };
+"""
+
+SURFACE_FN = KRF_NOISE + """
 KRF F;
 float kind = floor(K.x + 0.5);
 float3 p = LP / 100.0;
@@ -253,14 +256,24 @@ if (kind < 0.5) {
   df = lerp(1.0, lerp(0.8, 1.15, n1.x), nearF) * lerp(0.9, 1.06, n2.x) * lerp(0.92, 1.06, n3.x);
   g = n1.yzw * 0.08 * nearF;
   rough = 0.86 + 0.08 * n2.x; spec = 0.4;
-} else if (kind < 12.5) {          // sand: wind ripples and grain
+} else if (kind < 12.5) {          // the ground: sand with wind ripples and grain, grass where it is green
+  float veg = saturate((VC.g - VC.r) * 9.0 + 0.1);
   float2 dir = float2(0.8, 0.6);
   float4 w = F.nd(p * 0.6);
   float ph = dot(p.xy, dir) * 6.2831853 * 2.6 + w.x * 7.0;
   float4 gr = F.nd(p * 110.0);
-  df = lerp(1.0, lerp(0.92, 1.06, gr.x), nearF) * lerp(0.96, 1.03, 0.5 + 0.5 * sin(ph));
-  g = float3(dir * cos(ph) * 0.1, 0) * midF + gr.yzw * 0.03 * nearF;
-  rough = 0.94; spec = 0.35;
+  float sdf = lerp(1.0, lerp(0.92, 1.06, gr.x), nearF) * lerp(0.96, 1.03, 0.5 + 0.5 * sin(ph));
+  float3 sg = float3(dir * cos(ph) * 0.1, 0) * midF + gr.yzw * 0.03 * nearF;
+  float4 bl = F.fbm(p * 18.0, 2);
+  float4 lo = F.nd(p * 0.3);
+  float4 lo2 = F.nd(p * 0.07);
+  float gdf = lerp(1.0, lerp(0.78, 1.14, bl.x), midF) * lerp(0.82, 1.12, lo.x) * lerp(0.88, 1.08, lo2.x);
+  float3 gg = bl.yzw * 0.12 * nearF + lo.yzw * 0.04;
+  df = lerp(sdf, gdf, veg);
+  g = lerp(sg, gg, veg);
+  // patches of dry, yellower grass
+  col = lerp(col, col * float3(1.18, 1.05, 0.7), veg * smoothstep(0.55, 0.8, lo2.x) * 0.6);
+  rough = lerp(0.94, 0.9, veg); spec = 0.35;
 } else if (kind < 13.5) {          // leaves: waxy, veined
   float4 v = F.nd(p * 26.0);
   float4 lo = F.nd(p * 2.0);
@@ -508,6 +521,28 @@ return saturate(VC.rgb * grain * (0.58 + 0.9 * caus));
 """
 
 
+SEAFLOOR_NORMAL = KRF_NOISE + """
+KRF F;
+float3 p = WP / 100.0;
+float dist = D / 100.0;
+float nearF = 1.0 - saturate((dist - 4.0) / 30.0);
+float midF = 1.0 - saturate((dist - 20.0) / 80.0);
+// sand where the floor is pale; ripples run across the surge, broken up by a slow warp
+float sand = saturate((dot(VC.rgb, float3(0.33, 0.33, 0.33)) - 0.25) * 4.0);
+float4 w = F.nd(p * 0.35);
+float2 dir = normalize(float2(0.6, 0.8));
+float ph = dot(p.xy, dir) * 6.2831853 * 1.6 + w.x * 9.0;
+float sh = sin(ph);
+float3 g = float3(dir * (cos(ph) * (0.6 + 0.4 * sh)) * 0.22 * sand * midF, 0.0);
+float4 gr = F.nd(p * 70.0);
+float4 lump = F.fbm(p * 1.5, 2);
+g += gr.yzw * 0.05 * nearF + lump.yzw * 0.1;
+float3 N0 = float3(0, 0, 1);
+g -= dot(g, N0) * N0;
+return normalize(N0 - g);
+"""
+
+
 def _seafloor(mat):
     F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
     vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -900, 0)
@@ -520,6 +555,11 @@ def _seafloor(mat):
     mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
     mel.connect_material_property(_const(mat, 0.95, -500, 220), "", unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(_const(mat, 0.3, -500, 320), "", unreal.MaterialProperty.MP_SPECULAR)
+    mat.set_editor_property("tangent_space_normal", False)
+    nrm = _custom(mat, -500, 450, SEAFLOOR_NORMAL, F3, ["VC", "WP", "D"], "Ripples")
+    for src, pin in ((vc, "VC"), (wp, "WP"), (dp, "D")):
+        _link(src, "", nrm, pin)
+    mel.connect_material_property(nrm, "", unreal.MaterialProperty.MP_NORMAL)
 
 
 # Coral, sponges and boulders. Instance color comes in per-instance custom data 0-2; vertex red is the mottle and
@@ -546,6 +586,22 @@ def _inst_color(mat, x, y):
     return ap2
 
 
+# coral surface: polyp pits and fine grooves as a world-space detail normal, faded with distance
+REEF_NORMAL = KRF_NOISE + """
+KRF F;
+float3 p = WP / 100.0;
+float3 N0 = normalize(VN) * TS;
+float dist = D / 100.0;
+float nearF = 1.0 - saturate((dist - 3.0) / 22.0);
+float4 a = F.nd(p * 38.0);
+float4 b = F.fbm(p * 7.0, 2);
+float pits = abs(a.x - 0.5);
+float3 g = a.yzw * 0.09 * nearF + b.yzw * 0.07;
+g -= dot(g, N0) * N0;
+return normalize(N0 - g);
+"""
+
+
 def _reef(mat):
     F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
     inst = _inst_color(mat, -1300, 0)
@@ -557,7 +613,14 @@ def _reef(mat):
     for src, pin in ((inst, "Inst"), (vc, "VC"), (wp, "WP"), (tm, "T"), (dp, "D")):
         _link(src, "", base, pin)
     mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    mel.connect_material_property(_const(mat, 0.85, -500, 220), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(_const(mat, 0.7, -500, 220), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mat.set_editor_property("tangent_space_normal", False)
+    vn = mel.create_material_expression(mat, unreal.MaterialExpressionVertexNormalWS, -900, 800)
+    ts = mel.create_material_expression(mat, unreal.MaterialExpressionTwoSidedSign, -900, 900)
+    nrm = _custom(mat, -500, 400, REEF_NORMAL, F3, ["WP", "VN", "D", "TS"], "Polyps")
+    for src, pin in ((wp, "WP"), (vn, "VN"), (dp, "D"), (ts, "TS")):
+        _link(src, "", nrm, pin)
+    mel.connect_material_property(nrm, "", unreal.MaterialProperty.MP_NORMAL)
 
 
 # Sea fans, sea plumes, seagrass and far coral cards: alpha-tested cards that sway with the current and the surge.
@@ -570,16 +633,36 @@ if (Kind < 0.5) {
   float hw = 0.5 * (1.0 - 0.75 * uv.y);
   a = 1.0 - smoothstep(hw - 0.08, hw, abs(uv.x - 0.5));
 } else if (Kind < 1.5) {
-  float2 c = (uv - float2(0.5, 0.52)) * float2(1.0, 1.08);
-  float shape = 1.0 - smoothstep(0.44, 0.5, length(c) + 0.04 * sin(atan2(c.y, c.x) * 9.0));
-  float stem = 1.0 - smoothstep(0.02, 0.035, abs(uv.x - 0.5));
-  stem *= 1.0 - step(0.3, uv.y);
-  // a fine, irregular mesh of branchlets rather than a grid
-  float2 w = uv + float2(sin(uv.y * 23.0 + uv.x * 7.0) * 0.012, sin(uv.x * 19.0 - uv.y * 5.0) * 0.012);
-  float2 g = abs(frac(w * float2(44.0, 52.0) + float2(sin(w.y * 11.0) * 0.4, 0.0)) - 0.5);
-  float lattice = max(step(0.41, g.x), step(0.42, g.y));
-  float rib = 1.0 - smoothstep(0.012, 0.03, abs(frac(atan2(c.y, c.x) * 2.2) - 0.5) * length(c));
-  a = max(shape * max(lattice, rib), stem);
+  // a gorgonian: a fan-shaped outline (wider at the top, ragged), main branches forking up from the stem, and
+  // between them a fine irregular net (the edges of a stretched Voronoi pattern), denser toward the rim
+  float2 c = (uv - float2(0.5, 0.06)) * float2(1.0, 0.95);
+  float ang = atan2(c.x, c.y);
+  float rr = length(c);
+  float rim = 0.86 + 0.05 * sin(ang * 7.0 + 1.3) + 0.03 * sin(ang * 17.0) + 0.02 * sin(ang * 31.0 + 2.0);
+  float shape = (1.0 - smoothstep(rim - 0.04, rim, rr)) * (1.0 - smoothstep(1.05, 1.25, abs(ang)));
+  // Voronoi edges in a frame stretched along the radius (the net's cells run outward)
+  float2 q = float2(ang * 17.0, rr * 30.0);
+  q += float2(sin(q.y * 1.7) * 0.25, sin(q.x * 1.3) * 0.25);
+  float2 ip = floor(q), fp = frac(q);
+  float f1 = 8.0, f2 = 8.0;
+  for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+      float2 o = float2(i, j);
+      float2 h = frac(sin(float2(dot(ip + o, float2(127.1, 311.7)), dot(ip + o, float2(269.5, 183.3)))) * 43758.5453);
+      float dd = length(o + h - fp);
+      if (dd < f1) { f2 = f1; f1 = dd; } else if (dd < f2) { f2 = dd; }
+    }
+  float net = (1.0 - smoothstep(0.05, 0.1, f2 - f1)) * step(0.06, rr);
+  // main branches: a few forking ribs from the stem, thinning outward
+  float br = 0.0;
+  for (int k = 0; k < 7; k++) {
+    float a0 = (float(k) - 3.0) * 0.32;
+    float a1 = a0 + sin(float(k) * 2.1 + rr * 5.0) * 0.08 * rr;
+    float wdt = (0.022 - rr * 0.014) / max(rr, 0.05);
+    br = max(br, 1.0 - smoothstep(wdt * 0.5, wdt, abs(ang - a1)));
+  }
+  float stem = (1.0 - smoothstep(0.018, 0.03, abs(uv.x - 0.5))) * (1.0 - step(0.12, uv.y));
+  a = max(shape * max(net, br * step(0.04, rr)), stem);
 } else {
   float2 c = uv - float2(0.5, 0.0);
   float n = sin(uv.y * 41.0 + uv.x * 13.0) * sin(uv.x * 37.0 - uv.y * 7.0) + 0.6 * sin(uv.y * 87.0 + uv.x * 51.0);
@@ -676,6 +759,36 @@ else if (camDepth <= 20.0) vis = lerp(15.0, 10.0, (camDepth - 15.0) / 5.0);
 vis += Bonus;
 float turb = smoothstep(vis * 0.6, vis, d);
 below = lerp(below, insc * amb, turb);
+// light shafts: march the view ray through the first 20 m, sampling a caustic-like pattern projected down
+// the refracted sun direction from the surface; brighter near the surface, under the sun's side of the sky
+{
+  float3 sd = normalize(SunDir.xyz);
+  float3 rd = normalize(SunDir.xyz * float3(0.75, 0.75, 1.0));   // refraction steepens the beams
+  rd.z = max(rd.z, 0.35);
+  rd = normalize(rd);
+  float3 ro = Cam / 100.0;
+  float3 vd = normalize(WP - Cam);
+  float maxD = min(d, 22.0);
+  float acc = 0.0;
+  const int NS = 14;
+  for (int i = 0; i < NS; i++) {
+    float t = (float(i) + frac(sin(dot(UV, float2(12.9898, 78.233)) + float(i)) * 43758.5453)) / float(NS) * maxD;
+    float3 sp = ro + vd * t;
+    float dep = max(0.0, -sp.z);
+    // where this point's beam crossed the surface
+    float2 s2 = sp.xy + rd.xy / rd.z * dep;
+    // a caustic net (warped cells) seen from below: many soft beams rather than a few planes
+    float2 q = s2 * 0.9 + float2(Time * 0.05, Time * 0.035);
+    float2 wq = q + 0.6 * float2(sin(q.y * 1.3 + Time * 0.4), sin(q.x * 1.1 - Time * 0.33));
+    float n = sin(wq.x * 2.9) * sin(wq.y * 3.3) + 0.6 * sin((wq.x + wq.y) * 4.7 + Time * 0.6) * sin((wq.x - wq.y) * 3.9);
+    float beam = pow(saturate(n * 0.5 + 0.2), 2.0);
+    acc += beam * exp(-dep / 7.0) * exp(-t / 14.0) * (sp.z < 0.0 ? 1.0 : 0.0);
+  }
+  acc /= float(NS);
+  float facing = 0.45 + 0.55 * saturate(dot(vd, sd) * 0.5 + 0.5);
+  float3 shaft = float3(0.55, 0.85, 0.9) * acc * facing * 2.8 * amb / max(Ex, 1e-6) * 0.25;
+  below += shaft * (1.0 - turb * 0.5);
+}
 col = lerp(col, below, Under);
 float vig = smoothstep(0.35, 0.95, length(UV - 0.5));
 col = lerp(col, col * 0.9, vig * Under * 0.5);
@@ -718,12 +831,16 @@ def _underwater(mat):
     sp = mel.create_material_expression(mat, unreal.MaterialExpressionScreenPosition, -1200, 450)
     ex = mel.create_material_expression(mat, unreal.MaterialExpressionEyeAdaptation, -1200, 550)
     params = {}
-    for i, (nm, dv) in enumerate((("Under", 0.0), ("Wet", 0.0), ("Bonus", 0.0), ("Haze", 1.0))):
+    for i, (nm, dv) in enumerate((("Under", 0.0), ("Wet", 0.0), ("Bonus", 0.0), ("Haze", 1.0), ("Time", 0.0))):
         e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1200, 700 + i * 100)
         e.set_editor_property("parameter_name", nm)
         e.set_editor_property("default_value", dv)
         params[nm] = e
-    uw = _custom(mat, -600, 0, UNDERWATER, F3, ["Col", "Dist", "Cam", "WP", "UV", "Ex", "Under", "Wet", "Bonus", "Haze"], "Underwater")
+    sdir = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1200, 1250)
+    sdir.set_editor_property("parameter_name", "SunDir")
+    sdir.set_editor_property("default_value", unreal.LinearColor(0.55, -0.62, 0.56, 0.0))
+    params["SunDir"] = sdir
+    uw = _custom(mat, -600, 0, UNDERWATER, F3, ["Col", "Dist", "Cam", "WP", "UV", "Ex", "Under", "Wet", "Bonus", "Haze", "Time", "SunDir"], "Underwater")
     wpp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1200, 1150)
     _link(wpp, "", uw, "WP")
     _link(cmask, "", uw, "Col")

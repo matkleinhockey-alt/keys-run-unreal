@@ -151,6 +151,7 @@ void AKeysTown::BuildGround(FTownBatch& S)
 	{
 		const FSurface& Sf = Surfaces()[i];
 		const double Lift = .002 * i;   // later surfaces draw on top
+		S.M.Surf = Sf.Kind == ESurface::Promenade ? SurfWood : Sf.Kind == ESurface::Road ? SurfAsphalt : SurfConcrete;
 		if (Sf.Kind == ESurface::Promenade)
 		{
 			// real planks, running across the frontage, each a shade different
@@ -186,6 +187,7 @@ void AKeysTown::BuildGround(FTownBatch& S)
 			}
 		}
 	}
+	S.M.Surf = SurfDefault;
 	// road markings: Harbor Drive and Sombrero Boulevard get a double yellow and white edge lines; Palm Avenue a centre dash
 	const double MY = P + .045;
 	for (double VC : {34.0, 90.0})
@@ -273,8 +275,11 @@ void AKeysTown::BuildLot(const FLot& L, FTownBatch& S, FTownBatch& G)
 	const FLinearColor WallC = L.Style == EStyle::Club || L.Style == EStyle::Casino ? Hex(Lk.Wall) : Fade(Lk.Wall);
 	// the walls, with the doorway cut into the front (lintel above it); the front wall is drawn by BuildFacade
 	const TArray<FLocalBox> Walls = LotWalls(L);
+	S.M.Surf = L.Style == EStyle::Bar ? SurfWood : SurfStucco;
 	for (int32 i = 2; i < Walls.Num(); i++) S.SpanC(Walls[i].U0, Walls[i].U1, P, Top, Zf(Walls[i].V1), Zf(Walls[i].V0), WallC);
+	S.M.Surf = SurfDefault;
 	BuildFacade(L, S, G);
+	S.M.Surf = L.Style == EStyle::Bar ? SurfShingle : SurfConcrete;
 
 	// roof
 	if (L.Style == EStyle::Bar)
@@ -296,6 +301,7 @@ void AKeysTown::BuildLot(const FLot& L, FTownBatch& S, FTownBatch& G)
 		S.Box(CX + (.5 - Seed) * W * .4, PT + .4, CZ - 1.5, 1.2, .7, 1.0, 0xa8aeb3);
 	}
 
+	S.M.Surf = SurfCloth;
 	// awning: stripes sloping out over the sidewalk
 	if (Lk.Awn1 && L.Style != EStyle::Bar && L.Style != EStyle::Diner)
 	{
@@ -307,6 +313,7 @@ void AKeysTown::BuildLot(const FLot& L, FTownBatch& S, FTownBatch& G)
 	if (L.Style == EStyle::Diner)
 		for (int32 i = 0; i < 6; i++) S.Box(L.Door - 2.5 + .5 + i * .83, P + 2.95, FZ + .8, .83, .06, 1.6, i % 2 ? 0xf4f4f2 : 0xc23a3a, .26);
 
+	S.M.Surf = SurfDefault;
 	// the hero sign on the roof: the thing that tells you what the place is from across the harbour
 	const double HY = Top + .8;
 	const double HZ = FZ - .6;
@@ -635,7 +642,6 @@ void AKeysTown::AddSign(const FString& Text, double U, double Y, double V, doubl
 // ---------------------------------------------------------------- palms, lamps, benches, bins, the marlin statue, dumpsters, the motel sign
 void AKeysTown::BuildProps(FTownBatch& S, FTownBatch& G)
 {
-	const uint32 Frond[] = {0x4f9a3c, 0x62b04a, 0x73c15a, 0x58a443};
 	for (const FPalm& Pm : Palms())
 	{
 		const double X = Pm.U, Z = Zf(Pm.V);
@@ -644,28 +650,7 @@ void AKeysTown::BuildProps(FTownBatch& S, FTownBatch& G)
 		// town-life.ts palmTrunkAt: a curved trunk that leans
 		const double Seed = FMath::Fmod(FMath::Abs(FMath::Sin(Pm.U * 12.9898 + Pm.V * 78.233) * 43758.5453), 1.0);
 		const double Lean = (Seed - .5) * .9, Ht = 6.4 * Pm.H, BaseY = P + .5;
-		auto At = [&](double Fr) { return FVector(Pm.U + Lean * 1.65 * Fr * Fr, BaseY + Ht * Fr, -(Pm.V - Lean * .75 * Fr * Fr)); };
-		auto Rad = [](double Fr) { return .3 - .14 * Fr; };
-		for (int32 i = 0; i < 6; i++) S.Tube3(At(i / 6.0), At((i + 1) / 6.0), Rad(i / 6.0), Rad((i + 1) / 6.0), 7, i % 2 ? 0xaa9577 : 0x8c7758);
-		const FVector T = At(1);
-		for (int32 k = 0; k < 11; k++)
-		{
-			const double Ang = k / 11.0 * 2 * PI + Seed * 3, Len = 3.2 + ((k * 7) % 3) * .35, Seg = Len / 3;
-			FVector Pp = T - FVector(0, .02, 0);
-			const uint32 Col = Frond[(k + int32(Seed * 4)) % 4];
-			const double Pitches[3] = {.5, .05, -.55};
-			const double Widths[3] = {.95, .8, .55};
-			for (int32 j = 0; j < 3; j++)
-			{
-				const double Pitch = Pitches[j] - (k % 3) * .08;
-				const FVector Dd(FMath::Sin(Ang) * FMath::Cos(Pitch), FMath::Sin(Pitch), FMath::Cos(Ang) * FMath::Cos(Pitch));
-				const FVector C = Pp + Dd * Seg / 2;
-				S.Box(C.X, C.Y, C.Z, Widths[j], .05, Seg * 1.04, j == 2 && k % 2 ? 0x8fa347 : Col, -Pitch, Ang);
-				Pp += Dd * Seg;
-			}
-		}
-		S.Ball(T.X - .1, T.Y - .22, T.Z + .1, .17, 0x5a4a2a, 1, 6);
-		S.Ball(T.X + .15, T.Y - .26, T.Z - .08, .15, 0x6a5a30, 1, 6);
+		S.Palm(FVector(Pm.U, BaseY, -Pm.V), Ht, Lean * 1.65 / Ht, Lean * .75 / Ht, Seed, 12);
 	}
 	for (const FPoint& Lp : Lamps())
 	{

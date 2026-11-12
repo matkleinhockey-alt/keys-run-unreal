@@ -271,7 +271,7 @@ namespace
 	// a sphere at the resolution of three.js IcosahedronGeometry(1, detail)
 	FGeo Sphere(int32 Detail)
 	{
-		const int32 Seg = Detail == 0 ? 8 : Detail == 1 ? 12 : 18, Rings = Detail == 0 ? 5 : Detail == 1 ? 8 : 12;
+		const int32 Seg = Detail == 0 ? 10 : Detail == 1 ? 18 : 30, Rings = Detail == 0 ? 6 : Detail == 1 ? 11 : 18;
 		FGeo G;
 		for (int32 j = 0; j <= Rings; j++)
 			for (int32 i = 0; i <= Seg; i++)
@@ -289,12 +289,24 @@ namespace
 		return G;
 	}
 
+	// smooth value noise (trilinear between hashed lattice points), so displaced boulders stay round instead of faceted
+	double SmoothN(const FVector& P, double Seed)
+	{
+		const FVector F(FMath::Frac(P.X), FMath::Frac(P.Y), FMath::Frac(P.Z));
+		const int32 X0 = FMath::FloorToInt32(P.X), Y0 = FMath::FloorToInt32(P.Y), Z0 = FMath::FloorToInt32(P.Z);
+		const FVector U = F * F * (FVector(3) - 2 * F);
+		auto H = [&](int32 i, int32 j, int32 k) { return HashN((X0 + i) + (Y0 + j) * 57 + (Z0 + k) * 113, Seed); };
+		const double A = FMath::Lerp(FMath::Lerp(H(0, 0, 0), H(1, 0, 0), U.X), FMath::Lerp(H(0, 1, 0), H(1, 1, 0), U.X), U.Y);
+		const double B = FMath::Lerp(FMath::Lerp(H(0, 0, 1), H(1, 0, 1), U.X), FMath::Lerp(H(0, 1, 1), H(1, 1, 1), U.X), U.Y);
+		return FMath::Lerp(A, B, U.Z);
+	}
+
 	void Displace(FGeo& G, double Amp, double Freq, double Seed)
 	{
 		for (FVector& V : G.P)
 		{
-			const double N = HashN(FMath::FloorToInt32(V.X * Freq) + FMath::FloorToInt32(V.Y * Freq) * 7 + FMath::FloorToInt32(V.Z * Freq) * 13, Seed);
-			V *= 1 + (N - .5) * 2 * Amp;
+			const double N = SmoothN(V * Freq, Seed) * .7 + SmoothN(V * Freq * 2.7 + FVector(5.3), Seed) * .3;
+			V *= 1 + (N - .5) * 2.4 * Amp;
 		}
 	}
 
@@ -335,7 +347,31 @@ namespace
 		FGeo Out;
 		TFunction<void(const FM4&, double, double, int32, int32, bool)> Grow = [&](const FM4& M, double Len, double R, int32 D, int32 Bf, bool bRoot)
 		{
-			FGeo Seg = Cylinder(R * TipFlare, R, Len, Radial);
+			FGeo Seg = Cylinder(R * TipFlare, R, Len, Radial, false);
+			if (D <= 0)
+			{
+				// a rounded tip instead of a flat cut
+				const double Rt = R * TipFlare;
+				const int32 W0 = Seg.P.Num();
+				const int32 NRg = 3;
+				for (int32 j = 1; j <= NRg; j++)
+				{
+					const double A = PI * .5 * j / NRg;
+					for (int32 i = 0; i <= Radial; i++)
+					{
+						const double Ph = 2 * PI * i / Radial, Rr = Rt * FMath::Cos(A);
+						Seg.P.Add(FVector(FMath::Sin(Ph) * Rr, Len + Rt * FMath::Sin(A) * .8, FMath::Cos(Ph) * Rr));
+						Seg.UV.Add(FVector2D(double(i) / Radial, 1));
+					}
+				}
+				const int32 Wd = Radial + 1;
+				for (int32 j = 0; j < NRg; j++)
+					for (int32 i = 0; i < Radial; i++)
+					{
+						const int32 A0 = (j == 0 ? Wd : W0 + (j - 1) * Wd) + i, B0 = W0 + j * Wd + i;
+						Seg.T.Append({A0, A0 + 1, B0, A0 + 1, B0 + 1, B0});
+					}
+			}
 			for (FVector& V : Seg.P) { V.X *= FlatX; V.Z *= FlatZ; }
 			Paint(Seg, 0, Len, Seed + (Depth - D) * 97, bRoot);
 			for (FVector& V : Seg.P) V = M.Apply(V);
@@ -397,10 +433,10 @@ namespace
 		{
 		case Elkhorn:
 			if (Lod == 2) return Card(1.3, 1.3);
-			return Branching(0xe1f0a, Lod == 0 ? 2 : 1, 2, 6, .95, .12, .46, 2.6, .34, .88, .92, 1.35, .4);
+			return Branching(0xe1f0a, Lod == 0 ? 2 : 1, 2, Lod == 0 ? 10 : 6, .95, .12, .46, 2.6, .34, .88, .92, 1.35, .4);
 		case Staghorn:
 			if (Lod == 2) return Card(1.3, 1.3);
-			return Branching(0x57a6, Lod == 0 ? 3 : 2, 4, Lod == 0 ? 5 : 4, .5, .09, .6, 1, 1, .82, .86, .7, .15);
+			return Branching(0x57a6, Lod == 0 ? 3 : 2, 4, Lod == 0 ? 8 : 5, .5, .09, .6, 1, 1, .82, .86, .7, .15);
 		case Brain: return Boulder(2 - Lod, .56, .06, 1.6, 11);
 		case Star: return Boulder(2 - Lod, .72, .1, 2.2, 29);
 		case Encrusting: return Boulder(Lod == 0 ? 1 : 0, .24, .14, 4, 47);
@@ -455,6 +491,20 @@ namespace
 			const FVector& A = G.P[G.T[i]], &B = G.P[G.T[i + 1]], &C = G.P[G.T[i + 2]];
 			const FVector Fn = FVector::CrossProduct(B - A, C - A);
 			Nrm[G.T[i]] += Fn; Nrm[G.T[i + 1]] += Fn; Nrm[G.T[i + 2]] += Fn;
+		}
+		// weld by position (cylinder seams, branch joints) so the coral shades as one smooth surface
+		{
+			TMap<FIntVector, FVector> Acc;
+			auto KeyOf = [](const FVector& P) { return FIntVector(FMath::RoundToInt(P.X * 2000), FMath::RoundToInt(P.Y * 2000), FMath::RoundToInt(P.Z * 2000)); };
+			for (int32 i = 0; i < G.P.Num(); i++) Acc.FindOrAdd(KeyOf(G.P[i])) += Nrm[i].GetSafeNormal();
+			for (int32 i = 0; i < G.P.Num(); i++)
+			{
+				const FVector Sum = Acc.FindRef(KeyOf(G.P[i]));
+				// keep a hard edge where the faces meeting here disagree a lot (a flat base against a side)
+				const FVector Own = Nrm[i].GetSafeNormal();
+				const FVector Sm = Sum.GetSafeNormal();
+				Nrm[i] = FVector::DotProduct(Own, Sm) > .5 ? Sm : Own;
+			}
 		}
 		for (FVector& N : Nrm) N = N.GetSafeNormal();
 		auto U = [](const FVector& P) { return FVector(P.X, P.Z, P.Y); };

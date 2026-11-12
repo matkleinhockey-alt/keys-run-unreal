@@ -52,6 +52,8 @@ public:
 	// where the fine water grid is centered (game meters)
 	double FocusX = 0, FocusZ = 0;
 
+	FVector SunDir() const { return SunDirUE; }
+
 private:
 	void BuildTerrain();
 	void BuildScenery();
@@ -72,6 +74,7 @@ private:
 	UPROPERTY() TObjectPtr<USkyAtmosphereComponent> Atmosphere;
 	UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> Fog;
 	UPROPERTY() TObjectPtr<UVolumetricCloudComponent> Clouds;
+	UPROPERTY() TObjectPtr<class UPostProcessComponent> Grade;   // the look: grade, bloom, vignette, AO, Lumen quality
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> ISMs;
 
 	// water grid

@@ -242,11 +242,11 @@ void FKeysHuman::Build(FKeysMesh& M) const
 			const double T = ThighT[k];
 			const bool bShort = T < ShortEnd;
 			const double Rr = ThighR[k] * FT * (bShort ? 1.06 : 1);
-			R.Add({W(Seg(Hip, Knee, T)), Rr * 1.02, Rr, bShort ? Bottom : Skin, uint8(bShort ? SurfCloth : SurfSkin)});
+			R.Add({W(Seg(Hip, Knee, T)), Rr * 1.02, Rr, bShort ? Bottom : Skin, uint8(bShort ? (bFem ? SurfVinyl : SurfCloth) : SurfSkin)});
 			// a crisp hem: the next ring just below, in skin
 			if (bShort && k < 5 && ThighT[k + 1] >= ShortEnd)
 			{
-				R.Add({W(Seg(Hip, Knee, ShortEnd)), Rr * 1.0, Rr * .97, Bottom, SurfCloth});
+				R.Add({W(Seg(Hip, Knee, ShortEnd)), Rr * 1.0, Rr * .97, Bottom, uint8(bFem ? SurfVinyl : SurfCloth)});
 				R.Add({W(Seg(Hip, Knee, ShortEnd + .005)), ThighR[k] * FT, ThighR[k] * FT * .98, Skin, SurfSkin});
 			}
 		}
@@ -280,7 +280,7 @@ void FKeysHuman::Build(FKeysMesh& M) const
 		{
 			if (bFem)
 			{
-				if (Z < .07 || (Z > .345 && Z < .455)) { K = SurfCloth; return Bottom; }
+				if (Z < .07 || (Z > .345 && Z < .455)) { K = SurfVinyl; return Bottom; }
 				K = SurfSkin; return Skin;
 			}
 			if (Z < .045) { K = SurfCloth; return Bottom; }
@@ -305,7 +305,7 @@ void FKeysHuman::Build(FKeysMesh& M) const
 		};
 		G.P.Reserve(G.NU * 24);
 		// a pole at the crotch
-		for (int32 a = 0; a < G.NU; a++) G.Add(W(FVector(0, 0, Base + Prof[0].Z - .012)), Bottom, SurfCloth);
+		for (int32 a = 0; a < G.NU; a++) G.Add(W(FVector(0, 0, Base + Prof[0].Z - .012)), Bottom, uint8(bFem ? SurfVinyl : SurfCloth));
 		for (int32 k = 0; k < NP; k++)
 		{
 			Ring(Prof[k].Z, Prof[k].W, Prof[k].D, Prof[k].X);
@@ -329,8 +329,8 @@ void FKeysHuman::Build(FKeysMesh& M) const
 			for (int32 i = 0; i < 2; i++)
 			{
 				const double Sx = i == 0 ? -1 : 1;
-				M.Surf = SurfCloth;
-				AddBlob(M, W(FVector(.062, Sx * .058, Base + .4)), FVector(.06, .066, .062), Q * FQuat(FVector::ZAxisVector, Sx * .25), Bottom, 10, 6);
+				M.Surf = SurfVinyl;
+				AddBlob(M, W(FVector(.058, Sx * .056, Base + .395)), FVector(.056, .062, .058), Q * FQuat(FVector::ZAxisVector, Sx * .25) * FQuat(FVector::YAxisVector, .15), Bottom, 12, 7);
 				M.Surf = KeepSurf;
 			}
 	}

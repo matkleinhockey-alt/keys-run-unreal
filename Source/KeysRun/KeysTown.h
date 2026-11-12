@@ -37,6 +37,12 @@ struct FTownBatch
 	void Tube3(const FVector& A3, const FVector& B3, double RA, double RB, int32 Sides, uint32 Color);
 	// a hip roof over a W x D rectangle turned RY about the vertical, eaves at Y0, ridge Rise above them
 	void HipRoof(double CX, double Y0, double CZ, double W, double D, double Rise, const FLinearColor& Color, double RY);
+	// a smooth-shaded triangle with its own vertex normals (frame as above)
+	void TriN(const FVector& A3, const FVector& B3, const FVector& C3, const FVector& NA, const FVector& NB, const FVector& NC, const FLinearColor& Col);
+	// A coconut palm standing at Base3: a curving, tapering ringed trunk with a flared foot, a crown of arching fronds
+	// whose leaflets hang in a V from the rachis, and a cluster of nuts. Lean is the top's offset (x, z) as a fraction of
+	// the height; Seed varies the rest.
+	void Palm(const FVector& Base3, double Ht, double LeanX, double LeanZ, double Seed, int32 Fronds = 11);
 	int32 Tris() const { return M.T.Num() / 3; }
 };
 

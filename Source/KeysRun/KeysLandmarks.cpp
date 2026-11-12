@@ -418,8 +418,7 @@ void AKeysLandmarks::BuildEstates(FTownBatch& B)
 		for (int32 s = -1; s <= 1; s += 2)
 		{
 			const FVector2D Q = At(Dp / 2 + 9, s * (Wd / 2 + 2));
-			B.Cyl(Q.X, G, Q.Y, .16, .26, 7, 0x8c7758, 6);
-			for (int32 k = 0; k < 7; k++) { const double A = k / 7.0 * 2 * PI; B.Box(Q.X + FMath::Sin(A) * 1.2, G + 7, Q.Y + FMath::Cos(A) * 1.2, .7, .05, 2.6, 0x4f9a3c, .2, A); }
+			B.Palm(FVector(Q.X, G, Q.Y), 7, .04 * s, .03, Q.X * .013 + Q.Y * .007, 11);
 		}
 		// the private dock out to the lift, pilings, the lift and a center console up out of the water
 		const double D0 = 24, D1 = E.DockLen;

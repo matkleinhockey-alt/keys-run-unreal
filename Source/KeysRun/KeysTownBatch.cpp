@@ -107,6 +107,128 @@ void FTownBatch::Quad3(const FVector& A3, const FVector& B3, const FVector& C3, 
 	else M.T.Append({I0, I2, I1, I0, I3, I2});
 }
 
+void FTownBatch::TriN(const FVector& A3, const FVector& B3, const FVector& C3, const FVector& NA, const FVector& NB, const FVector& NC, const FLinearColor& Col)
+{
+	const FVector A = ToUEL(A3), B = ToUEL(B3), C = ToUEL(C3);
+	const FVector Na = ToUEL(NA).GetSafeNormal(), Nb = ToUEL(NB).GetSafeNormal(), Nc = ToUEL(NC).GetSafeNormal();
+	const double D = FVector::DotProduct(FVector::CrossProduct(B - A, C - A), Na + Nb + Nc);
+	const int32 I0 = M.AddVert(A, Na, Col), I1 = M.AddVert(B, Nb, Col), I2 = M.AddVert(C, Nc, Col);
+	if (D * WindSign() > 0) M.T.Append({I0, I1, I2});
+	else M.T.Append({I0, I2, I1});
+}
+
+void FTownBatch::Palm(const FVector& Base3, double Ht, double LeanX, double LeanZ, double Seed, int32 Fronds)
+{
+	auto Hs = [Seed](double K) { const double H = FMath::Sin(Seed * 91.7 + K * 12.9898) * 43758.5453; return H - FMath::FloorToDouble(H); };
+	const uint8 Keep = M.Surf;
+	// the trunk: rings of shared vertices along a leaning curve
+	auto At = [&](double F) { return Base3 + FVector(LeanX * Ht * F * F, Ht * F, LeanZ * Ht * F * F); };
+	auto Rad = [&](double F) { return .27 * (1 - .42 * F) + .16 * FMath::Exp(-F * 16); };
+	const int32 NS = 9, NR = 9;
+	const FLinearColor BarkA = KeysTownPaint::Hex(0x8c7758), BarkB = KeysTownPaint::Hex(0x9e8a6a);
+	M.Surf = SurfBark;
+	{
+		TArray<FVector> Pts, Nrm;
+		TArray<FLinearColor> Cols;
+		for (int32 r = 0; r <= NR; r++)
+		{
+			const double F = double(r) / NR;
+			const FVector C = At(F), T = (At(FMath::Min(1.0, F + .02)) - At(FMath::Max(0.0, F - .02))).GetSafeNormal();
+			FVector U = FVector::CrossProduct(T, FVector(0, 0, 1)).GetSafeNormal();
+			if (U.IsNearlyZero()) U = FVector(1, 0, 0);
+			const FVector W = FVector::CrossProduct(T, U);
+			for (int32 k = 0; k <= NS; k++)
+			{
+				const double A = 2 * PI * k / NS;
+				const FVector O = U * FMath::Cos(A) + W * FMath::Sin(A);
+				Pts.Add(C + O * Rad(F));
+				Nrm.Add(O);
+				Cols.Add(FMath::Lerp(BarkA, BarkB, float(.5 + .5 * FMath::Sin(F * 9 + Seed * 5))) * (r == 0 ? .8f : 1.f));
+			}
+		}
+		const int32 W1 = NS + 1;
+		for (int32 r = 0; r < NR; r++)
+			for (int32 k = 0; k < NS; k++)
+			{
+				const int32 a = r * W1 + k, b = a + 1, c = a + W1 + 1, d = a + W1;
+				TriN(Pts[a], Pts[b], Pts[c], Nrm[a], Nrm[b], Nrm[c], Cols[a]);
+				TriN(Pts[a], Pts[c], Pts[d], Nrm[a], Nrm[c], Nrm[d], Cols[a]);
+			}
+	}
+	const FVector Top = At(1);
+	// the boot: old frond bases round the top of the trunk, and the nuts under the crown
+	M.Surf = SurfBark;
+	{
+		const FLinearColor Boot = KeysTownPaint::Hex(0x6f6440);
+		const int32 NB = 8;
+		for (int32 k = 0; k < NB; k++)
+		{
+			const double A = 2 * PI * k / NB + Seed;
+			const FVector O(FMath::Sin(A), 0, FMath::Cos(A));
+			const FVector P0 = Top + O * .12 - FVector(0, .35, 0), P1 = Top + O * .32 + FVector(0, .05, 0), P2 = Top + O * .12 + FVector(0, .15, 0);
+			const FVector S0 = FVector(O.Z, 0, -O.X) * .1;
+			TriN(P0 - S0, P0 + S0, P1, O, O, O + FVector(0, .5, 0), Boot);
+			TriN(P0 + S0, P2, P1, O, O, O + FVector(0, .5, 0), Boot * .9f);
+		}
+	}
+	// fronds: a rachis arching out and down, leaflets hanging in a V on either side, longest mid-frond
+	M.Surf = SurfLeaf;
+	static const uint32 FrondC[] = {0x3f8a35, 0x4f9a3c, 0x58a443, 0x467f30, 0x5c9a3a};
+	const int32 NSt = 7;
+	for (int32 f = 0; f < Fronds; f++)
+	{
+		const double Ang = f * 2 * PI / Fronds + Seed * 7 + (Hs(f) - .5) * .35;
+		const double Len = (3.0 + Hs(f + 20) * 1.3) * FMath::Clamp(Ht / 8, .75, 1.2);
+		const double Pitch0 = .55 + Hs(f + 40) * .45 - (f % 3) * .12;   // the young ones stand up, the old ones droop
+		const double Droop = .2 + Hs(f + 60) * .12;
+		const FVector Dir0(FMath::Sin(Ang), 0, FMath::Cos(Ang));
+		const FVector Side(Dir0.Z, 0, -Dir0.X);
+		const FLinearColor Base = KeysTownPaint::Hex(FrondC[(f + FMath::Abs(int32(Seed * 9))) % 5]);
+		TArray<FVector> R;
+		R.Add(Top + FVector(0, .1, 0));
+		for (int32 k = 1; k <= NSt; k++)
+		{
+			const double Pitch = Pitch0 - Droop * k * (1 + k * .12);
+			const FVector D = Dir0 * FMath::Cos(Pitch) + FVector(0, FMath::Sin(Pitch), 0);
+			R.Add(R.Last() + D * (Len / NSt));
+		}
+		for (int32 k = 0; k < NSt; k++)
+		{
+			const FVector A = R[k], B = R[k + 1];
+			const FVector D = (B - A).GetSafeNormal();
+			const FVector Up = FVector::CrossProduct(D, Side).GetSafeNormal() * -1;
+			const double T0 = double(k) / NSt, T1 = double(k + 1) / NSt;
+			const double LW = .2 + .85 * FMath::Sin(PI * FMath::Min(1.0, (T0 + T1) * .5 * 1.1));
+			const FLinearColor C = FMath::Lerp(Base, Base * FLinearColor(1.15f, 1.1f, .7f), float(T1 * .5));
+			for (int32 s = -1; s <= 1; s += 2)
+			{
+				// two leaflets per station, swept forward and hanging down
+				for (int32 l = 0; l < 2; l++)
+				{
+					const FVector Root = FMath::Lerp(A, B, .1 + .45 * l);
+					const FVector Tip = Root + Side * (s * LW) + D * (LW * .45) - Up * (LW * .55);
+					const FVector Root2 = Root + D * (Len / NSt * .45);
+					const FVector Nn = (Up + Side * (s * .3)).GetSafeNormal();
+					TriN(Root, Root2, Tip, Nn, Nn, (Nn - Up * .3).GetSafeNormal(), l ? C : C * .92f);
+				}
+			}
+			// the rachis: a thin ribbon
+			TriN(A - Side * .04, B - Side * .025, B + Side * .025, Up, Up, Up, Base * .8f);
+			TriN(A - Side * .04, B + Side * .025, A + Side * .04, Up, Up, Up, Base * .8f);
+		}
+	}
+	// coconuts
+	M.Surf = SurfGelcoat;
+	for (int32 k = 0; k < 3; k++)
+	{
+		const double A = k * 2.1 + Seed * 3;
+		const FVector Cn = Top + FVector(FMath::Sin(A) * .2, -.25 - k * .04, FMath::Cos(A) * .2);
+		const FVector UE = ToUEL(Cn);
+		KeysShapes::AddBlob(M, UE, FVector(.12, .12, .14), FQuat::Identity, KeysTownPaint::Hex(k == 1 ? 0x6a5a30 : 0x5a4a2a), 6, 4);
+	}
+	M.Surf = Keep;
+}
+
 void FTownBatch::BoxC(double CX, double CY, double CZ, double W, double H, double D, const FLinearColor& Col, double RX, double RY, double RZ)
 {
 	const FVector C(CX, CY, CZ);

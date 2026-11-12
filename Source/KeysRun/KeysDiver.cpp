@@ -794,6 +794,8 @@ void AKeysDiver::UpdateUnderwaterLook(double Dt)
 		PostMID->SetScalarParameterValue(TEXT("Under"), float(UnderAmt));
 		PostMID->SetScalarParameterValue(TEXT("Wet"), float(Wet));
 		PostMID->SetScalarParameterValue(TEXT("Haze"), float(UnderwaterHaze));
+		if (const AKeysWorld* Wd = AKeysWorld::Get(this)) { const FVector Sd = Wd->SunDir(); PostMID->SetVectorParameterValue(TEXT("SunDir"), FLinearColor(Sd.X, Sd.Y, Sd.Z, 0)); }
+		PostMID->SetScalarParameterValue(TEXT("Time"), float(GetWorld()->GetTimeSeconds()));
 	}
 	Post->bEnabled = UnderAmt > 0 || Wet > 0;
 	if (AKeysAudio* A = AKeysAudio::Get(this))

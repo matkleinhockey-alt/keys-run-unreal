@@ -10,6 +10,8 @@
 #include "Components/SkyAtmosphereComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/VolumetricCloudComponent.h"
+#include "Components/PostProcessComponent.h"
+#include "KeysGfx.h"
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -109,6 +111,28 @@ AKeysWorld::AKeysWorld()
 
 	Clouds = CreateDefaultSubobject<UVolumetricCloudComponent>(TEXT("Clouds"));
 	Clouds->SetupAttachment(Root);
+
+	// the game's look, everywhere: a gentle filmic grade (a touch more contrast and saturation, warm highlights,
+	// cool shadows), soft bloom, a light vignette, ambient occlusion and Lumen a notch finer than the defaults
+	Grade = CreateDefaultSubobject<UPostProcessComponent>(TEXT("Grade"));
+	Grade->SetupAttachment(Root);
+	Grade->bUnbound = true;
+	Grade->Priority = -1.f;
+	FPostProcessSettings& S = Grade->Settings;
+	S.bOverride_ColorSaturation = true; S.ColorSaturation = FVector4(1.07, 1.07, 1.07, 1.0);
+	S.bOverride_ColorContrast = true; S.ColorContrast = FVector4(1.06, 1.06, 1.06, 1.0);
+	S.bOverride_ColorGainHighlights = true; S.ColorGainHighlights = FVector4(1.03, 1.0, .96, 1.0);
+	S.bOverride_ColorGammaShadows = true; S.ColorGammaShadows = FVector4(.98, 1.0, 1.04, 1.0);
+	S.bOverride_BloomIntensity = true; S.BloomIntensity = .55f;
+	S.bOverride_BloomThreshold = true; S.BloomThreshold = 1.2f;
+	S.bOverride_VignetteIntensity = true; S.VignetteIntensity = .32f;
+	S.bOverride_AmbientOcclusionIntensity = true; S.AmbientOcclusionIntensity = .55f;
+	S.bOverride_AmbientOcclusionRadius = true; S.AmbientOcclusionRadius = 90.f;
+	S.bOverride_FilmToe = true; S.FilmToe = .58f;
+	S.bOverride_SceneFringeIntensity = true; S.SceneFringeIntensity = .15f;
+	S.bOverride_LumenFinalGatherQuality = true; S.LumenFinalGatherQuality = 1.5f;
+	S.bOverride_LumenReflectionQuality = true; S.LumenReflectionQuality = 1.5f;
+	S.bOverride_LumenSceneLightingQuality = true; S.LumenSceneLightingQuality = 1.25f;
 }
 
 void AKeysWorld::BeginPlay()
@@ -123,6 +147,13 @@ void AKeysWorld::BeginPlay()
 	Fog->SetFogDensity(.004f);
 	Fog->SetFogHeightFalloff(.15f);
 	Fog->SetFogInscatteringColor(FLinearColor(.45f, .62f, .75f));
+	// the haze glows toward the sun
+	Fog->SetDirectionalInscatteringExponent(6.f);
+	Fog->SetDirectionalInscatteringStartDistance(2000.f);
+	Fog->SetDirectionalInscatteringColor(FLinearColor(.55f, .45f, .32f));
+	// contact shadows tuck the small things (cleats, feet, rod butts) into what they stand on
+	Sun->ContactShadowLength = KeysGfx::ContactShadowsOn() ? .04f : 0.f;
+	Sun->MarkRenderStateDirty();
 	if (UMaterialInterface* CloudMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineSky/VolumetricClouds/m_SimpleVolumetricCloud_Inst.m_SimpleVolumetricCloud_Inst")))
 		Clouds->SetMaterial(CloudMat);
 	ApplySun(0);
@@ -229,7 +260,10 @@ void AKeysWorld::BuildTerrain()
 					if (FMath::Max(FMath::Max(H0, H1), FMath::Max(H2, H3)) < -.3f) continue;
 					T.Append({K, K + S, K + 1, K + 1, K + S, K + S + 1});
 				}
-			Terrain->CreateMeshSection_LinearColor(Section, V, T, N, UV, C, TArray<FProcMeshTangent>(), false);
+			// the ground shader (sand ripples and grain; grass where it's green)
+			TArray<FVector2D> K;
+			K.Init(FVector2D(SurfSand, 0), V.Num());
+			Terrain->CreateMeshSection_LinearColor(Section, V, T, N, UV, K, TArray<FVector2D>(), TArray<FVector2D>(), C, TArray<FProcMeshTangent>(), false);
 			Terrain->SetMaterial(Section, VertexColorMaterial());
 			Section++;
 		}
@@ -256,6 +290,7 @@ void AKeysWorld::BuildScenery()
 	UInstancedStaticMeshComponent* Concrete = MakeISM(TEXT("TowersWhite"), Cube, Srgb(.88, .88, .86), .5);
 
 	// palms and mangroves (kept out of creeks, off the beach, and out of downtown)
+	int32 PalmCount = 0;
 	const double PS = 16;
 	for (double Z = WorldZ0; Z < WorldZ0 + WorldSize; Z += PS)
 		for (double X = WorldX0; X < WorldX0 + WorldSize; X += PS)
@@ -282,19 +317,8 @@ void AKeysWorld::BuildScenery()
 			const double Tall = 6 + Hash2(JZ, JX * 2) * 5;
 			const double Lean = (Hash2(JX * 3, JZ) - .5) * .5, LeanA = Hash2(JX, JZ * 3) * 2 * PI;
 			FTownBatch& PB = PalmLot >= 0 ? ParcelBatches.FindOrAdd(PalmLot) : HouseChunks.FindOrAdd(ChunkOf(JX, JZ));
-			auto TrunkAt = [&](double F) { return FVector(JX + FMath::Cos(LeanA) * Lean * Tall * .35 * F * F, H + Tall * F, JZ + FMath::Sin(LeanA) * Lean * Tall * .35 * F * F); };
-			for (int32 k = 0; k < 4; k++) PB.Tube3(TrunkAt(k / 4.0), TrunkAt((k + 1) / 4.0), .26 - .04 * k, .22 - .04 * k, 5, k % 2 ? 0x8c7758 : 0x7a6648);
-			const FVector Top = TrunkAt(1);
-			const int32 NF = 9;
-			for (int32 k = 0; k < NF; k++)
-			{
-				const double Ang = k * 2 * PI / NF + R * 7, Len = 3.0 + Hash2(JX + k, JZ) * 1.4;
-				const FVector Dir(FMath::Sin(Ang), 0, FMath::Cos(Ang)), Side(FMath::Cos(Ang), 0, -FMath::Sin(Ang));
-				const FLinearColor C = KeysTownPaint::Hex(FrondC[(k + int32(R * 9)) % 4]);
-				const FVector A = Top, Bm = Top + Dir * Len * .5 + FVector(0, .35, 0), Cd = Top + Dir * Len - FVector(0, .9 + .3 * (k % 2), 0);
-				PB.Quad3(A - Side * .15, A + Side * .15, Bm + Side * .5, Bm - Side * .5, FVector(0, 1, 0) + Dir * .2, C);
-				PB.Quad3(Bm - Side * .5, Bm + Side * .5, Cd + Side * .08, Cd - Side * .08, FVector(0, 1, 0) + Dir * .5, C * .9f);
-			}
+			PB.Palm(FVector(JX, H - .1, JZ), Tall, FMath::Cos(LeanA) * Lean * .35, FMath::Sin(LeanA) * Lean * .35, R * 13.7 + JX * .01, 10);
+			PalmCount++;
 		}
 
 	// Conch houses (web world/islands.ts): each with its own footprint, wall height and roof pitch, a hip roof of silver tin,
@@ -332,36 +356,45 @@ void AKeysWorld::BuildScenery()
 			const double Cs = FMath::Cos(Ry), Sn = FMath::Sin(Ry);
 			auto At = [&](double LX, double LZ) { return FVector2D(JX + LX * Cs + LZ * Sn, JZ - LX * Sn + LZ * Cs); };
 			KeysTown::AddObstacleBox(JX, JZ, Cs, -Sn, W / 2, D / 2, Lot);
+			B.M.Surf = SurfConcrete;
 			if (bPiers)
 			{
 				B.Box(JX, H + Lift / 2 - .3, JZ, W - .4, Lift + .6, D - .4, 0x8e8b82, 0, Ry);
 				for (int32 sx = -1; sx <= 1; sx += 2) for (int32 sz = -1; sz <= 1; sz += 2) { const FVector2D Q = At(sx * (W / 2 - .3), sz * (D / 2 - .3)); B.Box(Q.X, H + Lift / 2 - .2, Q.Y, .35, Lift + .4, .35, 0xe8e4d8, 0, Ry); }
 			}
 			else B.Box(JX, H - .3 + .25, JZ, W + .3, .5 + .6, D + .3, 0xd8d0be, 0, Ry);
+			B.M.Surf = SurfSiding;
 			B.Box(JX, Base + WallH / 2, JZ, W, WallH, D, Wall, 0, Ry);
+			B.M.Surf = R3 < .7 ? SurfTin : SurfShingle;
 			// the hip roof, silver tin, with a little overhang and its own pitch
 			const double Pitch = FMath::Lerp(.82, 1.35, R2) * 1.2, Over = FMath::Lerp(1.0, 1.12, R1);
 			B.HipRoof(JX, Base + WallH, JZ, W * Over + .6, D * Over + .6, Pitch * FMath::Min(W, D) * .25, KeysTownPaint::Hex(R3 < .7 ? 0xb8bcc2 : 0xc0603a), Ry);
 			// the porch across the front, a porch roof on posts, the door and windows with shutters
+			B.M.Surf = SurfWood;
 			const FVector2D PC = At(0, D / 2 + 1.15);
 			B.Box(PC.X, Base + .1, PC.Y, W, .22, 2.3, 0xf4f2ec, 0, Ry);
 			for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q = At(k * (W / 2 - .2), D / 2 + 2.1); B.Box(Q.X, Base + 1.3, Q.Y, .14, 2.4, .14, 0xffffff, 0, Ry); }
 			const FVector2D PR = At(0, D / 2 + 1.2);
+			B.M.Surf = SurfTin;
 			B.Box(PR.X, Base + 2.55, PR.Y, W + .2, .1, 2.6, 0xb8bcc2, -.12, Ry);
+			B.M.Surf = SurfDefault;
 			const FVector2D Dr = At(W * .18, D / 2 + .04);
 			B.Box(Dr.X, Base + 1.1, Dr.Y, 1.0, 2.1, .08, Trim, 0, Ry);
 			for (double WX : {-W * .25, W * .4})
 			{
 				if (FMath::Abs(WX - W * .18) < 1.0) continue;
 				const FVector2D Q = At(WX, D / 2 + .04);
-				B.Box(Q.X, Base + 1.7, Q.Y, 1.1, 1.3, .06, 0x27414f, 0, Ry);
+				B.M.Surf = SurfGlass; B.Box(Q.X, Base + 1.7, Q.Y, 1.1, 1.3, .06, 0x27414f, 0, Ry); B.M.Surf = SurfDefault;
 				for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q2 = At(WX + k * .8, D / 2 + .05); B.Box(Q2.X, Base + 1.7, Q2.Y, .4, 1.4, .06, Trim, 0, Ry); }
 			}
 			for (int32 sd = -1; sd <= 1; sd += 2)
-				for (double WZ : {-D * .22, D * .22}) { const FVector2D Q = At(sd * (W / 2 + .03), WZ); B.Box(Q.X, Base + 1.7, Q.Y, .06, 1.2, 1.0, 0x27414f, 0, Ry); }
+				for (double WZ : {-D * .22, D * .22}) { const FVector2D Q = At(sd * (W / 2 + .03), WZ); B.M.Surf = SurfGlass; B.Box(Q.X, Base + 1.7, Q.Y, .06, 1.2, 1.0, 0x27414f, 0, Ry); B.M.Surf = SurfDefault; }
 			const FVector2D Bk = At(-W * .2, -D / 2 - .03);
+			B.M.Surf = SurfGlass;
 			B.Box(Bk.X, Base + 1.7, Bk.Y, 1.1, 1.2, .06, 0x27414f, 0, Ry);
+			B.M.Surf = SurfDefault;
 		}
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: %d island palms"), PalmCount);
 	for (TPair<int32, FTownBatch>& C : ParcelBatches)
 	{
 		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
@@ -561,6 +594,7 @@ void AKeysWorld::ApplySun(double K)
 	Sun->SetWorldRotation((-ToSun).Rotation());
 	Sun->SetLightColor(FMath::Lerp(FLinearColor(1.f, .96f, .9f), FLinearColor(1.f, .72f, .48f), float(K)));
 	Fog->SetFogInscatteringColor(FMath::Lerp(FLinearColor(.45f, .62f, .75f), FLinearColor(.75f, .5f, .38f), float(K)));
+	Fog->SetDirectionalInscatteringColor(FMath::Lerp(FLinearColor(.55f, .45f, .32f), FLinearColor(1.4f, .7f, .32f), float(K)));
 }
 
 void AKeysWorld::ToggleSunset() { SunsetTarget = SunsetTarget > .5 ? 0 : 1; }
