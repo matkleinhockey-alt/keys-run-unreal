@@ -16,7 +16,10 @@ void FKeysMesh::AddQuad(const FVector& A, const FVector& B, const FVector& Cc, c
 	if (Nrm.IsNearlyZero()) Nrm = Out.GetSafeNormal();
 	if (FVector::DotProduct(Nrm, Out) < 0) Nrm = -Nrm;
 	const int32 I0 = AddVert(A, Nrm, Color), I1 = AddVert(B, Nrm, Color), I2 = AddVert(Cc, Nrm, Color), I3 = AddVert(D, Nrm, Color);
-	T.Append({I0, I1, I2, I0, I2, I3});
+	// Unreal's front face: Cross(B - A, C - A) points away from the normal. Wound the other way the face is drawn
+	// as the two-sided material's back face, lit as if it pointed inward (dark), so turn it round here.
+	if (FVector::DotProduct(FVector::CrossProduct(B - A, Cc - A), Nrm) > 0) T.Append({I0, I2, I1, I0, I3, I2});
+	else T.Append({I0, I1, I2, I0, I2, I3});
 }
 
 void FKeysMesh::AddTri(const FVector& A, const FVector& B, const FVector& Cc, const FLinearColor& Color, const FVector& Out)
@@ -25,7 +28,8 @@ void FKeysMesh::AddTri(const FVector& A, const FVector& B, const FVector& Cc, co
 	if (Nrm.IsNearlyZero()) Nrm = Out.GetSafeNormal();
 	if (FVector::DotProduct(Nrm, Out) < 0) Nrm = -Nrm;
 	const int32 I0 = AddVert(A, Nrm, Color), I1 = AddVert(B, Nrm, Color), I2 = AddVert(Cc, Nrm, Color);
-	T.Append({I0, I1, I2});
+	if (FVector::DotProduct(FVector::CrossProduct(B - A, Cc - A), Nrm) > 0) T.Append({I0, I2, I1});
+	else T.Append({I0, I1, I2});
 }
 
 void FKeysMesh::AddBox(const FVector& Ctr, const FVector& Size, const FLinearColor& Color, const FQuat& Rot)
