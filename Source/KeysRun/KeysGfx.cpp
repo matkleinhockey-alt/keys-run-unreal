@@ -94,7 +94,10 @@ namespace
 		// sharpen what TSR upscales, more when it upscales more
 		SetCVar(TEXT("r.Tonemapper.Sharpen"), Q == KeysGfx::Low ? 1.f : Q == KeysGfx::Medium ? .8f : Q == KeysGfx::High ? .6f : .4f);
 		// Lumen: the final gather and reflections a notch finer on the bigger presets
-		SetCVar(TEXT("r.Lumen.ScreenProbeGather.ScreenSpaceBentNormal"), Q >= KeysGfx::Medium ? 1.f : 0.f);
+		// no short-range AO: its screen-space noise never settles on a hull that pitches and rolls under the camera, and
+		// it read as grain all over the white decks and liners (contact shadows still ground things at Medium and up)
+		SetCVarInt(TEXT("r.Lumen.ScreenProbeGather.ShortRangeAO"), 0);
+		SetCVar(TEXT("r.Lumen.ScreenProbeGather.ScreenSpaceBentNormal"), 0.f);
 		SetCVarInt(TEXT("r.Lumen.Reflections.DownsampleFactor"), Q >= KeysGfx::High ? 1 : 2);
 		SetCVarInt(TEXT("r.Lumen.ScreenProbeGather.DownsampleFactor"), Q >= KeysGfx::Epic ? 16 : Q >= KeysGfx::High ? 16 : 32);
 		// contact shadows and screen space AO

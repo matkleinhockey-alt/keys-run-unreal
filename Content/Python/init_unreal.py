@@ -149,6 +149,9 @@ struct KRF {
     for (int i = 0; i < oct; i++) { float4 n = nd(x * fr + i * 7.31); s += float4(n.x * a, n.yzw * a * fr); fr *= 2.03; a *= 0.5; }
     return s;
   }
+  // fade for detail of F cycles per meter: 1 while a cell spans 5+ pixels, 0 by 1.5 (finer than that it only aliases
+  // into speckle and sparkle, worst on a moving boat under TSR)
+  float aa(float f, float fw) { return smoothstep(1.5, 5.0, 1.0 / max(f * fw, 1e-6)); }
 };
 """
 
@@ -156,6 +159,12 @@ SURFACE_FN = KRF_NOISE + """
 KRF F;
 float kind = floor(K.x + 0.5);
 float3 p = LP / 100.0;
+// meters per pixel here, from the screen-space derivatives of the position (before the wrap below)
+#if PIXELSHADER
+float fw = max(length(ddx(p)), length(ddy(p)));
+#else
+float fw = max(D, 1.0) / 100.0 * 0.0012;
+#endif
 p = p - floor(p / 256.0) * 256.0;
 float3 ax = normalize(AX), ay = normalize(AY), az = normalize(AZ);
 float3 N0 = normalize(VN) * TS;
@@ -179,52 +188,57 @@ if (kind < 0.5) {
   float4 m = F.nd(p * 1.3);
   float4 b = F.fbm(p * 7.0, 2);
   df = lerp(0.94, 1.05, m.x) * lerp(0.97, 1.02, b.x);
-  g = b.yzw * 0.035 * nearF;
+  g = b.yzw * 0.035 * F.aa(14.0, fw);
   rough = 0.64 + 0.12 * m.x;
 } else if (kind < 1.5) {           // skin
   float4 m = F.nd(p * 22.0);
   float4 pr = F.nd(p * 240.0);
   df = lerp(0.95, 1.04, m.x);
-  g = pr.yzw * 0.015 * closeF + m.yzw * 0.012 * nearF;
-  rough = 0.46 - 0.08 * m.x + 0.06 * pr.x; spec = 0.4;
+  float apr = F.aa(240.0, fw);
+  g = pr.yzw * 0.015 * apr + m.yzw * 0.012 * F.aa(22.0, fw);
+  rough = 0.46 - 0.08 * m.x + 0.06 * pr.x * apr; spec = 0.4;
   col += fres * 0.18 * float3(1.0, 0.5, 0.4) * VC.rgb;
 } else if (kind < 2.5) {           // cloth: a fine weave and soft folds, with a velvety rim
   float wv = 6.2831853 * 140.0;
   float s1 = sin(q.x * wv), s2 = sin(q.y * wv);
   float4 fo = F.fbm(p * 5.0, 2);
-  df = lerp(1.0, 0.95 + 0.05 * (0.5 + 0.5 * s1 * s2), closeF) * lerp(0.93, 1.04, fo.x);
-  g = (qa * cos(q.x * wv) * s2 + qb * s1 * cos(q.y * wv)) * 0.04 * closeF + fo.yzw * 0.06 * nearF;
+  float awv = F.aa(140.0, fw);
+  df = lerp(1.0, 0.95 + 0.05 * (0.5 + 0.5 * s1 * s2), awv) * lerp(0.93, 1.04, fo.x);
+  g = (qa * cos(q.x * wv) * s2 + qb * s1 * cos(q.y * wv)) * 0.04 * awv + fo.yzw * 0.06 * F.aa(10.0, fw);
   rough = 0.86; spec = 0.3;
   col += fres * 0.14 * VC.rgb;
 } else if (kind < 3.5) {           // hair: strands running down
   float4 st = F.nd(p * float3(260.0, 260.0, 7.0));
   float4 cl = F.nd(p * float3(40.0, 40.0, 3.0));
-  df = lerp(1.0, lerp(0.72, 1.18, st.x), nearF) * lerp(0.9, 1.08, cl.x);
-  g = (st.yzw * float3(1.0, 1.0, 0.03)) * 0.12 * nearF + cl.yzw * 0.05;
+  float ast = F.aa(260.0, fw);
+  df = lerp(1.0, lerp(0.72, 1.18, st.x), ast) * lerp(0.9, 1.08, cl.x);
+  g = (st.yzw * float3(1.0, 1.0, 0.03)) * 0.12 * ast + cl.yzw * 0.05 * F.aa(40.0, fw);
   rough = 0.36 + 0.1 * cl.x; spec = 0.45;
 } else if (kind < 4.5) {           // gelcoat: glossy, a faint orange peel
   float4 op = F.nd(p * 55.0);
-  g = op.yzw * 0.006 * nearF;
-  rough = 0.07 + 0.03 * F.nd(p * 2.0).x; spec = 0.6;
-} else if (kind < 5.5) {           // non-skid: raised diamonds
+  g = op.yzw * 0.006 * F.aa(55.0, fw);
+  rough = 0.08 + 0.03 * F.nd(p * 2.0).x; spec = 0.6;
+} else if (kind < 5.5) {           // non-skid: a fine field of low rounded bumps, gone before it can alias
   float2 c = frac(q * 38.0) - 0.5;
-  float h = abs(c.x) + abs(c.y);
-  float2 sg = sign(c) * (h < 0.36 ? 1.0 : 0.0);
-  g = (qa * sg.x + qb * sg.y) * 0.22 * closeF;
+  float r = length(c);
+  float an = F.aa(38.0, fw);
+  float dome = smoothstep(0.34, 0.16, r);
+  g = (qa * c.x + qb * c.y) * 0.45 * dome * an;
   float4 dirt = F.nd(p * 3.0);
-  df = lerp(1.0, lerp(0.9, 1.0, step(0.36, h)), closeF) * lerp(0.93, 1.02, dirt.x);
+  df = lerp(1.0, lerp(0.965, 1.0, dome), an) * lerp(0.95, 1.02, dirt.x);
   rough = 0.78; spec = 0.4;
 } else if (kind < 6.5) {           // stainless: brushed, bright
   float4 br = F.nd(p * float3(4.0, 4.0, 90.0));
   metal = 1.0; rough = 0.05 + 0.07 * br.x;
-  g = br.yzw * 0.006 * nearF;
+  g = br.yzw * 0.006 * F.aa(90.0, fw);
   col = lerp(col, float3(0.92, 0.93, 0.95), 0.6);
 } else if (kind < 7.5) {           // marine vinyl
   float4 gr = F.nd(p * 160.0);
   float4 pu = F.nd(p * 6.0);
   df = lerp(0.97, 1.03, pu.x);
-  g = gr.yzw * 0.012 * closeF + pu.yzw * 0.025;
-  rough = 0.4 + 0.08 * gr.x; spec = 0.45;
+  float agr = F.aa(160.0, fw);
+  g = gr.yzw * 0.012 * agr + pu.yzw * 0.025;
+  rough = 0.4 + 0.08 * gr.x * agr; spec = 0.45;
   col += fres * 0.06;
 } else if (kind < 8.5) {           // wood: grain along the plank, darker late-wood rings, weathered
   // grain: long streaks along the plank (the longest local axis of most timber here is x or y), late-wood lines
@@ -235,19 +249,19 @@ if (kind < 0.5) {
   float4 wx = F.nd(p * 2.5);
   df = lerp(0.74, 1.08, smoothstep(0.0, 0.85, ring)) * lerp(0.86, 1.06, wx.x);
   df = lerp(0.92, df, midF);
-  g = n.yzw * float3(0.02, 0.2, 0.2) * nearF + F.nd(p * float3(8.0, 90.0, 90.0)).yzw * 0.01 * closeF;
+  g = n.yzw * float3(0.02, 0.2, 0.2) * F.aa(80.0, fw) + F.nd(p * float3(8.0, 90.0, 90.0)).yzw * 0.01 * F.aa(90.0, fw);
   rough = 0.8; spec = 0.35;
 } else if (kind < 9.5) {           // stucco
   float4 b = F.fbm(p * 34.0, 3);
   float4 lo = F.nd(p * 0.9);
   df = lerp(0.92, 1.04, b.x) * lerp(0.93, 1.03, lo.x);
-  g = b.yzw * 0.13 * nearF + F.nd(p * 5.0).yzw * 0.02;
+  g = b.yzw * 0.13 * F.aa(70.0, fw) + F.nd(p * 5.0).yzw * 0.02;
   rough = 0.92; spec = 0.35;
 } else if (kind < 10.5) {          // corrugated tin
   float3 t = cross(ln, float3(0, 0, 1));
   t = dot(t, t) < 0.01 ? float3(1, 0, 0) : normalize(t);
   float ph = dot(p, t) * 6.2831853 * 11.0;
-  g = t * cos(ph) * 0.5 * midF;
+  g = t * cos(ph) * 0.5 * F.aa(11.0, fw);
   float4 r = F.nd(p * 2.6);
   df = lerp(1.0, 0.9 + 0.1 * (0.5 + 0.5 * sin(ph)), midF);
   col = lerp(col, col * float3(0.78, 0.58, 0.45), smoothstep(0.62, 0.92, r.x) * 0.6);
@@ -256,8 +270,9 @@ if (kind < 0.5) {
   float4 n1 = F.nd(p * 85.0);
   float4 n2 = F.nd(p * 2.0);
   float4 n3 = F.nd(p * 0.35);
-  df = lerp(1.0, lerp(0.8, 1.15, n1.x), nearF) * lerp(0.9, 1.06, n2.x) * lerp(0.92, 1.06, n3.x);
-  g = n1.yzw * 0.08 * nearF;
+  float an1 = F.aa(85.0, fw);
+  df = lerp(1.0, lerp(0.8, 1.15, n1.x), an1) * lerp(0.9, 1.06, n2.x) * lerp(0.92, 1.06, n3.x);
+  g = n1.yzw * 0.08 * an1;
   rough = 0.86 + 0.08 * n2.x; spec = 0.4;
 } else if (kind < 12.5) {          // the ground: sand with wind ripples and grain, grass where it is green
   float veg = saturate((VC.g - VC.r) * 9.0 + 0.1);
@@ -265,13 +280,15 @@ if (kind < 0.5) {
   float4 w = F.nd(p * 0.6);
   float ph = dot(p.xy, dir) * 6.2831853 * 2.6 + w.x * 7.0;
   float4 gr = F.nd(p * 110.0);
-  float sdf = lerp(1.0, lerp(0.92, 1.06, gr.x), nearF) * lerp(0.96, 1.03, 0.5 + 0.5 * sin(ph));
-  float3 sg = float3(dir * cos(ph) * 0.1, 0) * midF + gr.yzw * 0.03 * nearF;
+  float agd = F.aa(110.0, fw);
+  float sdf = lerp(1.0, lerp(0.92, 1.06, gr.x), agd) * lerp(0.96, 1.03, 0.5 + 0.5 * sin(ph));
+  float3 sg = float3(dir * cos(ph) * 0.1, 0) * midF + gr.yzw * 0.03 * agd;
   float4 bl = F.fbm(p * 18.0, 2);
   float4 lo = F.nd(p * 0.3);
   float4 lo2 = F.nd(p * 0.07);
-  float gdf = lerp(1.0, lerp(0.78, 1.14, bl.x), midF) * lerp(0.82, 1.12, lo.x) * lerp(0.88, 1.08, lo2.x);
-  float3 gg = bl.yzw * 0.12 * nearF + lo.yzw * 0.04;
+  float abl = F.aa(36.0, fw);
+  float gdf = lerp(1.0, lerp(0.78, 1.14, bl.x), abl) * lerp(0.82, 1.12, lo.x) * lerp(0.88, 1.08, lo2.x);
+  float3 gg = bl.yzw * 0.12 * abl + lo.yzw * 0.04;
   df = lerp(sdf, gdf, veg);
   g = lerp(sg, gg, veg);
   // patches of dry, yellower grass
@@ -281,7 +298,7 @@ if (kind < 0.5) {
   float4 v = F.nd(p * 26.0);
   float4 lo = F.nd(p * 2.0);
   df = lerp(0.86, 1.1, v.x) * lerp(0.9, 1.08, lo.x);
-  g = v.yzw * 0.05 * nearF;
+  g = v.yzw * 0.05 * F.aa(26.0, fw);
   rough = 0.5; spec = 0.38;
   col = lerp(col, col * float3(1.12, 1.12, 0.8), fres * 0.6);
 } else if (kind < 14.5) {          // glass
@@ -291,20 +308,22 @@ if (kind < 0.5) {
   sq.y += 0.5 * floor(sq.x);
   float2 c = frac(sq) - 0.5;
   float rim = smoothstep(0.25, 0.5, length(c));
-  g = (qa * c.x + qb * c.y) * 0.22 * closeF + F.nd(p * 9.0).yzw * 0.025 + F.nd(p * 600.0).yzw * 0.01 * closeF;
+  float asc = F.aa(90.0, fw);
+  g = (qa * c.x + qb * c.y) * 0.22 * asc + F.nd(p * 9.0).yzw * 0.025 + F.nd(p * 600.0).yzw * 0.01 * F.aa(600.0, fw);
   float3 ir = 0.5 + 0.5 * cos(6.2831853 * (ndv * 1.4 + float3(0.0, 0.33, 0.67)));
-  col = col * lerp(1.0, 0.86, rim * closeF) * (1.0 + 0.45 * ir * (1.0 - ndv)) + 0.03 * ir;
-  rough = 0.07 + 0.08 * rim * closeF; spec = 0.95;
+  col = col * lerp(1.0, 0.86, rim * asc) * (1.0 + 0.45 * ir * (1.0 - ndv)) + 0.03 * ir;
+  rough = 0.07 + 0.08 * rim * asc; spec = 0.95;
 } else if (kind < 16.5) {          // bark / palm trunk: rings and fibres
   float4 w = F.nd(p * 3.0);
   float ph = p.z * 6.2831853 * 4.5 + w.x * 2.0;
   float4 fb = F.nd(p * float3(36.0, 36.0, 2.5));
-  df = lerp(0.8, 1.06, 0.5 + 0.5 * sin(ph)) * lerp(0.84, 1.06, fb.x);
-  g = float3(0, 0, cos(ph)) * 0.35 * midF + fb.yzw * float3(0.12, 0.12, 0.01) * nearF;
+  float afb = F.aa(36.0, fw);
+  df = lerp(0.8, 1.06, 0.5 + 0.5 * sin(ph)) * lerp(1.0, lerp(0.84, 1.06, fb.x), afb);
+  g = float3(0, 0, cos(ph)) * 0.35 * midF + fb.yzw * float3(0.12, 0.12, 0.01) * afb;
   rough = 0.9; spec = 0.3;
 } else if (kind < 17.5) {          // rubber, dark plastic
   float4 n = F.nd(p * 70.0);
-  g = n.yzw * 0.02 * nearF;
+  g = n.yzw * 0.02 * F.aa(70.0, fw);
   rough = 0.55; spec = 0.35;
 } else if (kind < 18.5) {          // lap siding
   float s = frac(p.z / 0.19);
@@ -315,12 +334,13 @@ if (kind < 0.5) {
 } else if (kind < 19.5) {          // concrete
   float4 n = F.fbm(p * 11.0, 3);
   df = lerp(0.88, 1.06, n.x) * lerp(0.94, 1.03, F.nd(p * 0.7).x);
-  g = n.yzw * 0.06 * nearF;
+  g = n.yzw * 0.06 * F.aa(44.0, fw);
   rough = 0.86; spec = 0.4;
 } else if (kind < 20.5) {          // fins: thin, glossy, with rays
   float4 r = F.nd(p * float3(160.0, 160.0, 12.0));
-  df = lerp(0.88, 1.08, r.x);
-  g = r.yzw * 0.04 * closeF;
+  float afn = F.aa(160.0, fw);
+  df = lerp(1.0, lerp(0.88, 1.08, r.x), afn);
+  g = r.yzw * 0.04 * afn;
   rough = 0.16; spec = 0.75;
   col += fres * 0.1 * VC.rgb;
 } else if (kind < 21.5) {          // eyes, lenses, wet things
@@ -332,7 +352,7 @@ if (kind < 0.5) {
   t = dot(t, t) < 0.01 ? float3(1, 0, 0) : normalize(t);
   float tab = floor(dot(p, t) * 3.0 + floor(row) * 0.5);
   float hv = F.hash(float3(tab, floor(row), 3.0));
-  df = lerp(1.0, lerp(0.72, 1.0, smoothstep(0.0, 0.2, s)) * lerp(0.86, 1.08, hv), midF) * lerp(0.92, 1.04, F.nd(p * 60.0).x);
+  df = lerp(1.0, lerp(0.72, 1.0, smoothstep(0.0, 0.2, s)) * lerp(0.86, 1.08, hv), midF) * lerp(1.0, lerp(0.92, 1.04, F.nd(p * 60.0).x), F.aa(60.0, fw));
   g = float3(0, 0, lerp(0.6, -0.1, smoothstep(0.0, 0.15, s))) * midF;
   rough = 0.85; spec = 0.35;
 } else if (kind > 23.5 && kind < 24.5) {   // diamond-quilted cushion
@@ -342,7 +362,7 @@ if (kind < 0.5) {
   float seam = 1.0 - smoothstep(0.0, 0.08, puff);
   float2 sg = sign(c) * step(abs(c.yx), abs(c));
   float2 gq = float2(sg.x + sg.y, sg.x - sg.y) * 0.7071;
-  g = (qa * gq.x + qb * gq.y) * 0.35 * (1.0 - puff) * nearF + F.nd(p * 150.0).yzw * 0.01 * closeF;
+  g = (qa * gq.x + qb * gq.y) * 0.35 * (1.0 - puff) * F.aa(16.0, fw) + F.nd(p * 150.0).yzw * 0.01 * F.aa(150.0, fw);
   df = lerp(1.0, 0.72, seam * nearF) * lerp(0.96, 1.03, puff);
   rough = 0.48; spec = 0.45;
 } else if (kind > 24.5 && kind < 25.5) {   // honeycomb-quilted leather with dark stitching
@@ -356,30 +376,33 @@ if (kind < 0.5) {
   float puff = 1.0 - saturate(hd * 2.0);
   float seam = 1.0 - smoothstep(0.03, 0.09, 0.5 - hd);
   float2 gq = hc / max(length(hc), 1e-3) * (1.0 - puff);
-  g = (qa * gq.x + qb * gq.y) * 0.3 * nearF + F.nd(p * 140.0).yzw * 0.012 * closeF;
+  g = (qa * gq.x + qb * gq.y) * 0.3 * F.aa(22.0, fw) + F.nd(p * 140.0).yzw * 0.012 * F.aa(140.0, fw);
   df = lerp(1.0, 0.35, seam * nearF) * lerp(0.95, 1.04, puff);
   rough = 0.42; spec = 0.5;
 } else if (kind > 25.5 && kind < 26.5) {   // metallic paint with flake, under a glossy clear
   float4 fl = F.nd(p * 420.0);
   float4 lo = F.nd(p * 1.5);
-  g = fl.yzw * 0.03 * closeF + lo.yzw * 0.004;
+  float afl = F.aa(420.0, fw);
+  g = fl.yzw * 0.03 * afl + lo.yzw * 0.004;
   // fully metallic so the sky it reflects is tinted by the paint (a dielectric layer would wash it to grey), a little
   // rougher so the reflection is a soft sheen, and grazing angles brightening the paint's own colour, not white
-  metal = 0.92; rough = 0.26 + 0.08 * fl.x * nearF; spec = 0.35;
-  col *= lerp(0.95, 1.06, fl.x * nearF + 0.5 * (1.0 - nearF));
+  metal = 0.92; rough = 0.26 + 0.08 * (fl.x * afl + 0.5 * (1.0 - afl)); spec = 0.35;
+  col *= lerp(0.95, 1.06, fl.x * afl + 0.5 * (1.0 - afl));
   col *= 1.0 + fres * 0.35;
 } else if (kind > 26.5 && kind < 27.5) {   // teak-look foam decking with black caulk lines, fore and aft
   float pl = frac(p.y / 0.07);
   float caulk = 1.0 - smoothstep(0.0, 0.08, min(pl, 1.0 - pl));
   float4 gr = F.fbm(p * float3(2.0, 40.0, 40.0), 2);
-  df = lerp(lerp(0.9, 1.06, gr.x), 0.12, caulk * midF);
-  g = float3(0, sign(pl - 0.5) * caulk * 0.4, 0) * nearF + gr.yzw * 0.02 * nearF;
+  float acl = F.aa(14.0, fw);
+  df = lerp(lerp(0.9, 1.06, gr.x), lerp(0.75, 0.12, acl), caulk * midF);
+  g = float3(0, sign(pl - 0.5) * caulk * 0.4, 0) * acl + gr.yzw * 0.02 * F.aa(40.0, fw);
   rough = 0.8; spec = 0.3;
 } else {                           // grass, ground cover
   float4 n = F.fbm(p * 22.0, 2);
   float4 lo = F.nd(p * 0.45);
-  df = lerp(1.0, lerp(0.8, 1.12, n.x), nearF) * lerp(0.86, 1.1, lo.x);
-  g = n.yzw * 0.08 * nearF;
+  float agc = F.aa(44.0, fw);
+  df = lerp(1.0, lerp(0.8, 1.12, n.x), agc) * lerp(0.86, 1.1, lo.x);
+  g = n.yzw * 0.08 * agc;
   rough = 0.88; spec = 0.35;
 }
 col *= df;
