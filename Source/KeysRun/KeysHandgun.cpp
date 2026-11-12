@@ -115,6 +115,7 @@ AKeysHandgun::AKeysHandgun()
 	ViewModel = Make(TEXT("PistolView"));
 	Solid = Make(TEXT("PistolSolid"));
 	Glow = Make(TEXT("PistolGlow"));
+	FlareStar = Make(TEXT("FlareStar"));
 	FlareLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("FlareLight"));
 	FlareLight->SetupAttachment(Root);
 	FlareLight->SetIntensity(0);
@@ -140,6 +141,8 @@ void AKeysHandgun::BeginPlay()
 	{
 		GlowMID = UMaterialInstanceDynamic::Create(GM, this);
 		GlowMID->SetScalarParameterValue(TEXT("Bright"), 1.6f);
+		FlareMID = UMaterialInstanceDynamic::Create(GM, this);
+		FlareMID->SetScalarParameterValue(TEXT("Bright"), 40.f);
 	}
 	ViewModel->SetVisibility(false);
 	// the harbour gang: four gulls and two terns, orbit radii and heights spread so they read as a scatter
@@ -633,7 +636,15 @@ void AKeysHandgun::Tick(float DeltaSeconds)
 	for (FCarcass& C : Carcasses) C.Age += Dt;
 	Carcasses.RemoveAll([](const FCarcass& C) { return C.Age > CarcassLifeS + SinkS; });
 	if (Carcasses.Num() > 4) Carcasses.RemoveAt(0);
-	for (FFlare& F : FlaresUp) F.T += Dt;
+	for (FFlare& F : FlaresUp)
+	{
+		F.T += Dt;
+		// a puff of smoke every so often while it burns
+		F.SmokeT -= Dt;
+		double G; bool bO;
+		const FVector FP = FlareAt(F, G, bO);
+		if (F.SmokeT <= 0 && G > 0) { F.SmokeT = .12; F.Smoke.Add(FP); if (F.Smoke.Num() > 90) F.Smoke.RemoveAt(0); }
+	}
 	FlaresUp.RemoveAll([this](const FFlare& F) { double G; bool bO; FlareAt(F, G, bO); return bO; });
 	Render(T);
 }
@@ -705,7 +716,7 @@ void AKeysHandgun::Render(double T)
 	}
 	S.Commit(Solid, 0, AKeysWorld::VertexColorMaterial());
 	// glow: tracers, the muzzle flash and the flares
-	FKeysMesh Gm;
+	FKeysMesh Gm, Gf;
 	for (const FStreak& Sk : Streaks)
 	{
 		const int32 From = Gm.V.Num();
@@ -727,11 +738,27 @@ void AKeysHandgun::Render(double T)
 		const double Fl = G * (.85 + .15 * FMath::Sin(T * 23 + F.O.X) * FMath::Sin(T * 7.3));
 		const FVector U = ToUE(P.X, P.Y, P.Z) / 100.0;
 		if (G <= 0) Gm.AddGlowBlob(U, .25, FLinearColor(1.f, .6f, .4f, 1.f));
-		else { Gm.AddGlowBlob(U, 1.1 + Fl * .6, FLinearColor(1.f, .35f, .25f, 1.f)); Gm.AddGlowBlob(U, .5, FLinearColor(1.f, .9f, .8f, 1.f)); Gm.AddGlowBlob(U, 8 * Fl, FLinearColor(1.f, .25f, .2f, float(.5 * Fl))); }
+		else
+		{
+			// the burning star: white-hot core, a hard red flame round it, then the soft red light it throws
+			Gf.AddGlowBlob(U, .45 + Fl * .15, FLinearColor(1.f, .95f, .9f, 1.f));
+			Gf.AddGlowBlob(U, 1.2 + Fl * .5, FLinearColor(1.f, .16f, .1f, .85f));
+			Gm.AddGlowBlob(U, 3.5 + Fl * 1.5, FLinearColor(1.f, .3f, .22f, float(.7 * Fl)));
+			Gm.AddGlowBlob(U, 10 * Fl, FLinearColor(1.f, .25f, .2f, float(.35 * Fl)));
+		}
+		// the smoke trail it leaves hanging, drifting and spreading
+		for (int32 k = 0; k < F.Smoke.Num(); k++)
+		{
+			const double Age = (F.Smoke.Num() - k) * .12;
+			const FVector Sp = F.Smoke[k] + FVector(1.6 * Age * .6, Age * .15, .9 * Age * .6);   // FlareAt's wind
+			Gm.AddGlowBlob(ToUE(Sp.X, Sp.Y, Sp.Z) / 100.0, .35 + Age * .12, FLinearColor(.62f, .6f, .6f, float(.32 * FMath::Exp(-Age / 9))));
+		}
 		if (Fl > Best) { Best = Fl; BestP = ToUE(P.X, P.Y, P.Z); }
 	}
 	if (Gm.V.Num()) { Gm.Commit(Glow, 0, GlowMID ? (UMaterialInterface*)GlowMID : AKeysWorld::GlowMaterial()); Glow->SetVisibility(true); }
 	else Glow->SetVisibility(false);
+	if (Gf.V.Num()) { Gf.Commit(FlareStar, 0, FlareMID ? (UMaterialInterface*)FlareMID : AKeysWorld::GlowMaterial()); FlareStar->SetVisibility(true); }
+	else FlareStar->SetVisibility(false);
 	FlareLight->SetVisibility(Best > 0);
 	if (Best > 0) { FlareLight->SetWorldLocation(BestP); FlareLight->SetIntensity(float(400000 * Best)); }
 }

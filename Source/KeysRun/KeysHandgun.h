@@ -71,7 +71,7 @@ private:
 	struct FFall { FVector P, V; double T; uint8 Kind; };
 	struct FCarcass { double X, Z, Age; };
 	struct FStreak { FVector A, B; double T; };
-	struct FFlare { FVector O, V; double T; };
+	struct FFlare { FVector O, V; double T; double SmokeT = 0; TArray<FVector> Smoke; };
 	struct FGull { double R, H, Sp, Ph, DownUntil = -1; uint8 Kind; FVector Pos; };
 
 	void Draw();
@@ -95,6 +95,10 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Glow;
 	UPROPERTY() TObjectPtr<UPointLightComponent> FlareLight;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> GlowMID;
+	// the flare's burning star: its own section and material, many times brighter than the soft glows, so it reads as
+	// a magnesium flare in daylight and not a pink smudge; with a trail of smoke behind it
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FlareStar;
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> FlareMID;
 
 	bool bOut = false;
 	double LookYaw = 0, LookPitch = .04, FireT = 0, Kick = 0, MuzzleT = 0, SlideT = 0;
