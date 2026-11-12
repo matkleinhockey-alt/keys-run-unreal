@@ -83,6 +83,12 @@ public:
 	int32 Gear = 0;   // 0 drive, 1 neutral, 2 reverse
 	FString GearName() const { return Gear == 0 ? TEXT("D") : Gear == 1 ? TEXT("N") : TEXT("R"); }
 	bool bAutoChase = true, bAutoOn = false;
+	// backing down on a heavy fish (AutoChase): eased 0..1, the on/off burst timer, the first-time toast shown
+	double BackK = 0, BackBurstT = 0;
+	bool bBackBurst = false, bBackMsg = false;
+	double AcLogT = 0;
+	bool bScriptLog = false;
+	FString DbgTrollKey;       // -KRScript trollstrike=<species>   // -KRScript runs log the auto-chase once a second
 	FString AutoMode;
 	bool bBigMap = false;
 	FString Toast;

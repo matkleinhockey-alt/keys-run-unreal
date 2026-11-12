@@ -134,7 +134,7 @@ FString AKeysBoatPawn::TrollSideName(int32 Station) const
 void AKeysBoatPawn::TrollRaise(double Q)
 {
 	if (FState != EKeysFish::Idle || !PendKey.IsEmpty()) return;
-	const FString K = TrollSpecies(Q);
+	const FString K = !DbgTrollKey.IsEmpty() && Species(DbgTrollKey) ? DbgTrollKey : TrollSpecies(Q);
 	const FSpecies* S = K.IsEmpty() ? nullptr : Species(K);
 	if (!S) return;
 	// trolling is how the big ones are caught: a well-trimmed spread skews the weight heavy

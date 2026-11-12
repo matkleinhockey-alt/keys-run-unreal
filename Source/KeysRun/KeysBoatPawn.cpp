@@ -495,6 +495,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			TArray<FString> Parts;
 			Script.ParseIntoArray(Parts, TEXT(";"));
 			Save = nullptr;   // test runs never write your leaderboard
+			bScriptLog = true;
 			for (const FString& Pt : Parts)
 			{
 				FString When, What;
@@ -676,7 +677,13 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("troll")) { if (!bTrolling) ToggleTroll(); }
 		else if (Cmd == TEXT("trollin")) { if (bTrolling) ToggleTroll(); }
 		else if (Cmd == TEXT("trollraise")) { if (bTrolling && PendKey.IsEmpty()) TrollRaise(.9); }   // a fish comes up on the spread now
-		else if (Cmd == TEXT("trollstrike")) { if (bTrolling && PendKey.IsEmpty()) { TrollRaise(.9); if (!PendKey.IsEmpty()) TrollCommit(); } }
+		else if (Cmd == TEXT("trollstrike") || Cmd.StartsWith(TEXT("trollstrike=")))
+		{
+			// trollstrike=<species>: that species takes the spread
+			DbgTrollKey = Cmd.Len() > 12 ? Cmd.Mid(12) : FString();
+			if (bTrolling && PendKey.IsEmpty()) { TrollRaise(.9); if (!PendKey.IsEmpty()) TrollCommit(); }
+			DbgTrollKey.Reset();
+		}
 		else if (Cmd.StartsWith(TEXT("buff=")))
 		{
 			// buff=diner.coffee: as if bought at the counter
@@ -1603,21 +1610,39 @@ void AKeysBoatPawn::CycleView()
 // ================================================================ boat
 bool AKeysBoatPawn::AutoChase(double TopMs, bool bCanDrive, double& OutThr, double& OutSteer)
 {
-	if (!bAutoChase || !bCanDrive || FState != EKeysFish::Fight || bFwd || bLeft || bRight) { bAutoOn = false; return false; }
+	if (!bAutoChase || !bCanDrive || FState != EKeysFish::Fight || bFwd || bLeft || bRight) { bAutoOn = false; BackK = 0; bBackBurst = false; BackBurstT = 0; return false; }
 	const double DX = FX - X, DZ = FZ - Z, Dist = Hyp(DX, DZ);
 	const double Want = FMath::Atan2(-DX, -DZ);
 	const double Diff = WrapPi(Want - H), DiffStern = WrapPi(Want - (H + PI));
 	double T = 0, St = 0;
-	// keep the stern swung toward the fish without ever backing down on it (the player asked for no reversing while reeling);
-	// only run forward, bow first, for a fish far out ahead
+	const double Dt = FMath::Min(.1, double(GetWorld()->GetDeltaSeconds()));
+	// keep the stern squared to the line; for a genuinely heavy fish (150 lb and up: big tuna, marlin, the larger
+	// swordfish) that is running off line, or hanging far astern where the reel can't gain on it, back down on it the
+	// way a sportfisher does: slowly, a couple of knots at most, in bursts that ease on and off, and never once it has
+	// stopped running or is close. Light and medium fish are only ever held stern-to. Only a fish far out ahead gets the
+	// bow turned on it and run up on.
 	if (!(FMath::Abs(Diff) < .9 && Dist > 90))
 	{
-		St = Clamp(-DiffStern * 2.2, -1, 1);
-		T = 0;
-		AutoMode = TEXT("Holding the stern on the fish");
+		// a hull turns the other way going astern: steer so the stern swings onto the fish either way
+		St = Clamp(DiffStern * 2.2, -1, 1) * (Speed < -.2 ? -1 : 1);
+		const bool bHeavy = Weight >= 150;
+		const bool bWant = bHeavy && Dist > 18 && FMath::Abs(DiffStern) < .7 && (bRunningFish || Dist > 75);
+		// bursts: a few seconds astern, then a breather in neutral to let the angler gain, for as long as it is wanted
+		BackBurstT -= Dt;
+		if (!bWant) { bBackBurst = false; BackBurstT = 0; }
+		else if (BackBurstT <= 0) { bBackBurst = !bBackBurst; BackBurstT = bBackBurst ? Rand(3.0, 5.5) : Rand(1.5, 3.0); }
+		BackK += ((bWant && bBackBurst ? 1.0 : 0.0) - BackK) * FMath::Min(1.0, Dt * (bWant && bBackBurst ? .8 : 1.4));
+		// 0.5 - 1 m/s astern (1 - 2 knots), harder for a bigger fish and while it is taking line fast
+		const double WK = FMath::Clamp((Weight - 150) / 450, 0.0, 1.0);
+		const double RunSp = bRunningFish ? (3 + Str * 6.5) * (.4 + .6 * Stamina) : 0;
+		const double V = FMath::Lerp(.5, .85, WK) + FMath::Min(.18, RunSp * .015);
+		T = BackK > .02 ? -BackK * FMath::Min(1.03, V) / TopMs : 0;
+		AutoMode = BackK > .15 ? TEXT("Backing down on a big fish") : TEXT("Holding the stern on the fish");
+		if (BackK > .15 && !bBackMsg) { bBackMsg = true; ShowToast(TEXT("Big fish - backing down on it.")); }
 	}
 	else
 	{
+		BackK = 0; bBackBurst = false; BackBurstT = 0;
 		St = Clamp(Diff * 2.5, -1, 1);
 		const double V = Clamp((Dist - 60) * .3 + (bRunningFish ? 3 : 0), 0, 12) * (FMath::Abs(Diff) > 1 ? .4 : 1);
 		T = V / TopMs;
@@ -1633,6 +1658,11 @@ bool AKeysBoatPawn::AutoChase(double TopMs, bool bCanDrive, double& OutThr, doub
 		if (Now - AcMsgT > 5) { AcMsgT = Now; ShowToast(TEXT("Auto-chase stopped: shallow water. Steer it yourself.")); }
 	}
 	bAutoOn = true;
+	if (bScriptLog && (AcLogT -= Dt) <= 0)
+	{
+		AcLogT = 1;
+		UE_LOG(LogTemp, Log, TEXT("KRDBG chase %s %.0flb dist %.1f run %d stern-off %.2f speed %.2f thr %.3f %s"), *Key, Weight, Dist, bRunningFish ? 1 : 0, DiffStern, Speed, T, *AutoMode);
+	}
 	OutThr = T;
 	OutSteer = St;
 	return true;
@@ -1809,7 +1839,8 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	{
 		TrailT = 0;
 		const double V = FMath::Abs(Speed);
-		const double Wash = bAir ? 0 : FMath::SmoothStep(2.0, 9.0, V) * (.55 + .45 * FMath::Min(1.0, F * 1.5));   // little white water off a displacement-speed hull (trolling)
+		double Wash = bAir ? 0 : FMath::SmoothStep(2.0, 9.0, V) * (.55 + .45 * FMath::Min(1.0, F * 1.5));   // little white water off a displacement-speed hull (trolling)
+		if (Speed < -.2 && !bAir) Wash = FMath::Max(Wash, .45 * BackK + .15 * FMath::SmoothStep(.2, 1.0, -Speed));   // backing down: the props churn white water up against the transom
 		EmitTrail(0, X - Fx * S.Len * .48, Z - Fz * S.Len * .48, S.Beam * (.32 + .3 * FMath::Min(1.0, F * 1.4)), Wash, T);
 	}
 
@@ -2128,6 +2159,7 @@ void AKeysBoatPawn::SetHook()
 	const double SizeT = (Weight - Sp->Min) / (Sp->Max - Sp->Min);
 	Str = Sp->Str * (.8 + .55 * SizeT);
 	MaxLine = Sp->Str > 1.2 ? 320 : 200;
+	bBackMsg = false; BackK = 0; bBackBurst = false; BackBurstT = 0;
 	Tension = .55; Stamina = 1; bRunningFish = true; RunT = Rand(2, 4); RunAng = Rand(-.7, .7); Pull = Str * 1.05; SlackT = 0; OverT = 0;
 	JumpQ = 0; Deep = 0; DeepT = 0; ShakeT = Rand(.6, 1.4);
 	FState = EKeysFish::Fight;
@@ -2192,6 +2224,7 @@ void AKeysBoatPawn::Lose(const FString& Msg)
 {
 	if (Msg.StartsWith(TEXT("Snap")))
 		if (AKeysAudio* A = AKeysAudio::Get(this)) A->Snap();
+	if (bScriptLog) UE_LOG(LogTemp, Log, TEXT("KRDBG lost %s: %s"), *Key, *Msg);
 	ReelIn(FString());
 	ShowToast(Msg);
 }
