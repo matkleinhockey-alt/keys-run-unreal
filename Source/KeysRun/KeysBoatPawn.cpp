@@ -1999,7 +1999,10 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	{
 		const double Dist = (S.Len * 1.5 + 11) * CamZoom, Ht = (S.Len * .32 + 4.2) * CamZoom * (1 + CamPitchOff);
 		if (!bDragging && FMath::Abs(Speed) > 5) CamYaw *= 1 - FMath::Min(1.0, Dt * 1.2);
-		const double A = H + CamYaw;
+		double A = H + CamYaw;
+		// a fish on: frame the boat and the line from beyond the boat, a little off the line so the hull doesn't hide
+		// it, rather than from astern (with the stern held on the fish, astern would put the boat behind the lens)
+		if (FState == EKeysFish::Fight && FMath::Abs(Speed) < 6) A = FMath::Atan2(-(FX - X), -(FZ - Z)) + .45 + CamYaw;
 		WantPos = FVector(X + FMath::Sin(A) * Dist, Y + Ht, Z + FMath::Cos(A) * Dist);
 		if (!bRunning)
 		{
