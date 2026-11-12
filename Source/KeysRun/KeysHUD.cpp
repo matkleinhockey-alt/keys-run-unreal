@@ -9,6 +9,8 @@
 #include "KeysAudio.h"
 #include "KeysLife.h"
 #include "KeysOnline.h"
+#include "KeysWalker.h"
+#include "KeysTownData.h"
 #include "EngineUtils.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -149,10 +151,17 @@ void AKeysHUD::DrawHUD()
 	UpdateElectronics(P, Now);
 	AKeysDiver* Dv = AKeysDiver::Get(this);
 	const bool bDive = Dv && Dv->IsDiving();
+	AKeysWalker* Wk = AKeysWalker::Get(this);
+	const bool bAshore = Wk && Wk->IsAshore();
 	if (bDive) DrawDiving(P, Dv);
 	DrawExtras(P);
 	DrawFriends(P);
-	if (!bDive)
+	if (bAshore)
+	{
+		DrawAshore(P, Wk);
+		if (P->bBigMap) DrawChart(P);
+	}
+	else if (!bDive)
 	{
 		// over the side the helm gauges, the chart and the driving hint mean nothing (web setDiveUI)
 		DrawGauges(P);
@@ -171,7 +180,7 @@ void AKeysHUD::DrawHUD()
 		Panel(Cx - W * .5f - 18 * U, 28 * U, W + 36 * U, H + 16 * U, .55f);
 		Text(P->Toast, Cx, 36 * U, 1.05f, FLinearColor::White, nullptr, true);
 	}
-	const FString Hint = bDive ? FString() : P->Hint();
+	const FString Hint = bDive || bAshore ? FString() : P->Hint();
 	if (!Hint.IsEmpty()) Text(Hint, Canvas->SizeX * .5f, Canvas->SizeY - 44 * U, .95f, Dim, nullptr, true);
 	if (P->bBoardOpen) DrawBoard(P);
 	if (P->bLoginOpen) DrawLogin(P);
@@ -303,6 +312,10 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
 		{TEXT("O"), TEXT("Sunset")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
 		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}};
+	static const FRow Ashore[] = {
+		{TEXT("Q"), TEXT("Tie up at a dock and go ashore / back aboard")}, {TEXT("W A S D + mouse"), TEXT("Walk where you look (Shift runs)")},
+		{TEXT("F"), TEXT("Use a counter, a slot machine, a sign")}, {TEXT("Up / Down, Enter, 1-9"), TEXT("Pick and buy at a counter")},
+		{TEXT("1"), TEXT("Third person / first person")}};
 	static const FRow Dive[] = {
 		{TEXT("J"), TEXT("Jump in / climb back aboard")}, {TEXT("W A S D + mouse"), TEXT("Swim where you look")},
 		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
@@ -324,7 +337,8 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	const float Y2 = Block(TEXT("Fishing"), Fish, UE_ARRAY_COUNT(Fish), X + ColW, Y);
 	const float Y3 = FMath::Max(Y + 44 * U + Row * UE_ARRAY_COUNT(Drive), Y2) + 30 * U;
 	Block(TEXT("Everything else"), More, UE_ARRAY_COUNT(More), X, Y3);
-	Block(TEXT("Diving and spearfishing"), Dive, UE_ARRAY_COUNT(Dive), X + ColW, Y3);
+	const float Y4 = Block(TEXT("Diving and spearfishing"), Dive, UE_ARRAY_COUNT(Dive), X + ColW, Y3);
+	Block(TEXT("Ashore in Boot Key Harbor City"), Ashore, UE_ARRAY_COUNT(Ashore), X + ColW, Y4 + 20 * U);
 }
 
 // ================================================================ online
@@ -1048,4 +1062,52 @@ void AKeysHUD::DrawExtras(AKeysBoatPawn* P)
 	const FString Call = E->GetCallout();
 	if (!Call.IsEmpty())
 		Text(Call, W * .5f, H * .4f, 2.2f, FLinearColor(1.f, .95f, .75f), GEngine->GetLargeFont(), true);
+}
+
+// ================================================================ ashore: where you are, what F does here, the counter panel
+void AKeysHUD::DrawAshore(AKeysBoatPawn* P, AKeysWalker* W)
+{
+	const float SW = Canvas->SizeX, SH = Canvas->SizeY;
+	// top left: the place and the wallet
+	Panel(24 * U, 24 * U, 420 * U, 92 * U, .5f);
+	Text(W->PlaceName(), 40 * U, 32 * U, 1.15f, Gold);
+	Text(FString::Printf(TEXT("$%s   -   boat %d m %s"), *FText::AsNumber(P->Cash).ToString(), FMath::RoundToInt(W->BoardDistance()), *W->BoatBearing()), 40 * U, 72 * U, .95f, Dim);
+	// the prompt for whatever is in reach
+	if (!W->bShopOpen && !W->Prompt().IsEmpty())
+	{
+		float TW = 0, TH = 0;
+		GetTextSize(W->Prompt(), TW, TH, GEngine->GetMediumFont(), 1.2f * U);
+		Panel(SW * .5f - TW * .5f - 20 * U, SH * .64f, TW + 40 * U, TH + 18 * U, .6f);
+		Text(W->Prompt(), SW * .5f, SH * .64f + 9 * U, 1.2f, FLinearColor::White, nullptr, true);
+	}
+	if (!W->bShopOpen)
+	{
+		Text(TEXT("WASD + mouse walk - Shift run - F use - 1 view - M chart - Q back aboard"), SW * .5f, SH - 44 * U, .95f, Dim, nullptr, true);
+		return;
+	}
+	// the counter: name, greeting, the shelf, what you can afford
+	const KeysTown::FVenue* V = KeysTown::Venue(W->ShopVenue);
+	if (!V) return;
+	const float PW = 760 * U, X = SW * .5f - PW * .5f, Y = SH * .18f;
+	const int32 N = V->Sells.Num();
+	const float PH = (190 + N * 62 + 60) * U;
+	Panel(X, Y, PW, PH, .88f);
+	Text(V->Name, X + 28 * U, Y + 18 * U, 1.35f, Gold, GEngine->GetLargeFont());
+	Text(V->Tagline, X + 28 * U, Y + 70 * U, .9f, Teal);
+	Wrapped(FString::Printf(TEXT("\"%s\""), *W->ShopGreeting), X + 28 * U, Y + 104 * U, PW - 56 * U, .9f, Dim);
+	float RY = Y + 170 * U;
+	for (int32 i = 0; i < N; i++, RY += 62 * U)
+	{
+		const KeysTown::FShelfItem& It = V->Sells[i];
+		const bool bSel = i == W->ShopSel;
+		const bool bOwned = P->Owned.Contains(It.Effect);
+		if (bSel) DrawRect(FLinearColor(.2f, .5f, .55f, .35f), X + 16 * U, RY - 4 * U, PW - 32 * U, 58 * U);
+		Text(FString::Printf(TEXT("%d  %s"), i + 1, It.Name), X + 28 * U, RY, 1.0f, bOwned ? Dim : FLinearColor::White);
+		Text(It.Blurb, X + 58 * U, RY + 28 * U, .78f, Dim);
+		const FString Price = bOwned ? FString(TEXT("owned")) : FString::Printf(TEXT("$%s"), *FText::AsNumber(It.Price).ToString());
+		float TW = 0, TH = 0;
+		GetTextSize(Price, TW, TH, GEngine->GetMediumFont(), 1.0f * U);
+		Text(Price, X + PW - 32 * U - TW, RY, 1.0f, bOwned ? Dim : P->Cash >= It.Price ? Gold : Red);
+	}
+	Text(FString::Printf(TEXT("You have $%s.   Up / Down + Enter or 1-%d to buy   -   F or Esc to step away"), *FText::AsNumber(P->Cash).ToString(), FMath::Min(9, N)), X + 28 * U, Y + PH - 44 * U, .85f, Dim);
 }

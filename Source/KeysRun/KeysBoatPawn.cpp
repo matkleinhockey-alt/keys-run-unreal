@@ -8,6 +8,9 @@
 #include "KeysAudio.h"
 #include "KeysOnline.h"
 #include "KeysDiver.h"
+#include "KeysWalker.h"
+#include "KeysTown.h"
+#include "KeysTownData.h"
 #include "ProceduralMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -98,6 +101,14 @@ void AKeysBoatPawn::BeginPlay()
 	Bobber->SetVisibility(false);
 	FishMesh->SetVisibility(false);
 	Save = UKeysSave::LoadOrCreate();
+	if (Save)
+	{
+		Cash = Save->Cash;
+		for (const FString& O : Save->Owned) Owned.Add(O);
+		Estates = Save->Estates;
+	}
+	if (AKeysTown* Tn = AKeysTown::Get(this)) Tn->SetOwnedEstates(Estates);
+	ApplyOutfit();
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		PC->SetInputMode(FInputModeGameOnly());
@@ -449,6 +460,49 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (P.Num() >= 3) CamZoom = FCString::Atod(*P[2]);
 		}
 		else if (Cmd == TEXT("dive")) { if (!IsDiving()) ToggleDive(); }
+		else if (Cmd == TEXT("tie"))
+		{
+			// bring the boat alongside the town marina's main pier, stopped, and step ashore
+			const FMarina& M = Marinas()[0];
+			X = M.SX + 4.8; Z = M.SZ + M.Dir * 30; H = M.Dir > 0 ? PI : 0;
+			Speed = Thr = DVX = DVZ = 0; bCamInit = false;
+			if (!IsAshore()) ToggleAshore();
+		}
+		else if (Cmd == TEXT("ashore")) { if (!IsAshore()) ToggleAshore(); }
+		else if (Cmd == TEXT("board")) { if (IsAshore()) ToggleAshore(); }
+		else if (Cmd.StartsWith(TEXT("walk=")))
+		{
+			// walk=u,v,yaw: put the walker at a spot in the town's own frame (u along the frontage, v inland; yaw 0 faces +u, 1.57 inland)
+			TArray<FString> Pp;
+			Cmd.Mid(5).ParseIntoArray(Pp, TEXT(","));
+			if (AKeysWalker* Wk = AKeysWalker::Get(this); Wk && Pp.Num() >= 3)
+				if (!Wk->DebugPlaceLocal(FCString::Atod(*Pp[0]), FCString::Atod(*Pp[1]), FCString::Atod(*Pp[2])))
+					UE_LOG(LogTemp, Warning, TEXT("KRScript walk: nowhere to stand at %s"), *Cmd);
+		}
+		else if (Cmd.StartsWith(TEXT("wlook=")))
+		{
+			// wlook=yawoffset,pitch relative to the body's heading
+			TArray<FString> Pp;
+			Cmd.Mid(6).ParseIntoArray(Pp, TEXT(","));
+			if (AKeysWalker* Wk = AKeysWalker::Get(this); Wk && Pp.Num() >= 2) Wk->DebugLook(Wk->BodyYaw() + FCString::Atod(*Pp[0]), FCString::Atod(*Pp[1]));
+		}
+		else if (Cmd == TEXT("wview")) { if (AKeysWalker* Wk = AKeysWalker::Get(this)) Wk->CycleView(); }
+		else if (Cmd == TEXT("use")) WalkInteract();
+		else if (Cmd.StartsWith(TEXT("buy="))) ShopBuy(FCString::Atoi(*Cmd.Mid(4)));
+		else if (Cmd == TEXT("shopclose")) ShopClose();
+		else if (Cmd.StartsWith(TEXT("cash="))) Cash = FCString::Atoi64(*Cmd.Mid(5));
+		else if (Cmd == TEXT("sunset")) { if (AKeysWorld* Wd = World()) Wd->ToggleSunset(); }
+		else if (Cmd.StartsWith(TEXT("con=")))
+		{
+			// con=stat unit: any console command
+			if (APlayerController* PC = Cast<APlayerController>(GetController())) PC->ConsoleCommand(Cmd.Mid(4));
+		}
+		else if (Cmd == TEXT("perf:town0") || Cmd == TEXT("perf:town1"))
+		{
+			// frame-time comparison: hide the town and the landmarks
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+				if (It->GetClass()->GetName() == TEXT("KeysTown") || It->GetClass()->GetName() == TEXT("KeysLandmarks")) It->SetActorHiddenInGame(Cmd == TEXT("perf:town0"));
+		}
 		else if (Cmd == TEXT("perf:old") || Cmd == TEXT("perf:new"))
 		{
 			// frame-time comparison: perf:old puts back the opaque chart-colored sea and hides the floor and the reef
@@ -573,6 +627,186 @@ void AKeysBoatPawn::LandSpeared(const FString& InKey, double InWeight, double In
 	ShowFishMesh(true);
 }
 
+// ================================================================ ashore (web game entities/land/**, entities/town/**, sim/shop.ts)
+bool AKeysBoatPawn::IsAshore() const
+{
+	const AKeysWalker* W = AKeysWalker::Get(this);
+	return W && W->IsAshore();
+}
+
+void AKeysBoatPawn::ToggleAshore()
+{
+	AKeysWalker* W = AKeysWalker::Get(this);
+	if (!W || !bRunning) return;
+	if (!W->IsAshore())
+	{
+		if (FState == EKeysFish::Caught) { ShowToast(TEXT("Finish with your catch first.")); return; }
+		FString Why;
+		if (!W->TryEnter(X, Z, H, Speed, Spec().Len, Why)) { ShowToast(Why); return; }
+		if (bCharging || IsLineOut()) ReelIn(FString());
+		bCharging = false;
+		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+		bTrimMode = false;
+		PinX = X; PinZ = Z; PinH = H;
+		Thr = Speed = 0;
+		ShowToast(FString::Printf(TEXT("Tied up at %s. WASD and the mouse to walk, Shift to run, F at a counter or a door, 1 for the view, Q back aboard."), *Why), 6);
+		return;
+	}
+	switch (W->RequestBoard())
+	{
+		case AKeysWalker::EBoard::Boarded: SyncChaseCam(); bCamInit = false; ShowToast(TEXT("Back aboard. Cast off!")); break;
+		case AKeysWalker::EBoard::Far: ShowToast(FString::Printf(TEXT("The boat is %d m %s of you. Press Q again for a cab back to the dock."), FMath::RoundToInt(W->BoardDistance()), *W->BoatBearing()), 4); break;
+		case AKeysWalker::EBoard::Cab: ShowToast(TEXT("The cab drops you back on the dock. The driver says your boat's still there.")); break;
+	}
+}
+
+void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
+{
+	auto Down = [PC](const FKey& K) { return PC->IsInputKeyDown(K); };
+	auto Hit = [PC](const FKey& K) { return PC->WasInputKeyJustPressed(K); };
+	AKeysWalker* W = AKeysWalker::Get(this);
+	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+	bCharging = false;
+	if (!W) return;
+	if (W->bShopOpen)
+	{
+		// the counter panel: Up / Down (W / S) pick, Enter or Space buys, 1-9 buy that row, F / Esc / Q walks away
+		const KeysTown::FVenue* V = KeysTown::Venue(W->ShopVenue);
+		const int32 N = V ? V->Sells.Num() : 0;
+		if (N)
+		{
+			if (Hit(EKeys::Up) || Hit(EKeys::W)) W->ShopSel = (W->ShopSel + N - 1) % N;
+			if (Hit(EKeys::Down) || Hit(EKeys::S)) W->ShopSel = (W->ShopSel + 1) % N;
+			if (Hit(EKeys::Enter) || Hit(EKeys::SpaceBar)) ShopBuy(W->ShopSel);
+			static const FKey Digits[9] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
+			for (int32 i = 0; i < FMath::Min(9, N); i++) if (Hit(Digits[i])) { W->ShopSel = i; ShopBuy(i); }
+		}
+		if (Hit(EKeys::F) || Hit(EKeys::Q)) ShopClose();
+		W->SetButtons(FKeysWalkButtons());
+		return;
+	}
+	FKeysWalkButtons B;
+	B.bFwd = Down(EKeys::W) || Down(EKeys::Up);
+	B.bBack = Down(EKeys::S) || Down(EKeys::Down);
+	B.bLeft = Down(EKeys::A);
+	B.bRight = Down(EKeys::D);
+	B.bSprint = Down(EKeys::LeftShift) || Down(EKeys::RightShift);
+	B.Turn = (Down(EKeys::Right) ? 1 : 0) - (Down(EKeys::Left) ? 1 : 0);
+	float MX = 0, MY = 0;
+	PC->GetInputMouseDelta(MX, MY);
+	B.LookYaw = MX * .004;
+	B.LookPitch = MY * .004;
+	W->SetButtons(B);
+	if (Hit(EKeys::Q)) ToggleAshore();
+	if (Hit(EKeys::F)) WalkInteract();
+	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne) || Hit(EKeys::V)) ShowToast(W->CycleView() + TEXT(" - press 1 to switch"));
+	if (Hit(EKeys::M)) bBigMap = !bBigMap;
+	if (Hit(EKeys::O))
+		if (AKeysWorld* Wd = World()) { Wd->ToggleSunset(); ShowToast(Wd->IsSunset() ? TEXT("Sunset over the harbour - the neon comes on.") : TEXT("Back to daylight.")); }
+}
+
+void AKeysBoatPawn::WalkInteract()
+{
+	AKeysWalker* W = AKeysWalker::Get(this);
+	if (!W) return;
+	if (!W->NearText().IsEmpty()) { ShowToast(W->NearText(), 7); return; }
+	const FString V = W->NearVenue();
+	if (V.IsEmpty()) { ShowToast(TEXT("Nothing to do here. Walk up to a counter, a slot machine or a For Sale sign.")); return; }
+	if (V.StartsWith(TEXT("estate:")))
+	{
+		// Harbor Row: a town lot behind the casino (content/estates.ts tier 'harbor')
+		const FString Id = V.Mid(7);
+		for (const KeysTown::FEstateLot& E : KeysTown::HarborRow())
+		{
+			if (Id != E.Id) continue;
+			if (Estates.Contains(Id)) { ShowToast(FString::Printf(TEXT("%s is yours. The pool is warm and the neighbours are the casino."), E.Name)); return; }
+			if (Cash < E.Price) { ShowToast(FString::Printf(TEXT("%s - $%s. You have $%s. Sell some fillets at a weigh-in (E at a marina dock)."), E.Name, *Commas(E.Price), *Commas(Cash)), 5); return; }
+			Cash -= E.Price;
+			Estates.Add(Id);
+			SaveEconomy();
+			if (AKeysTown* Tn = AKeysTown::Get(this)) Tn->SetOwnedEstates(Estates);
+			ShowToast(FString::Printf(TEXT("SOLD! %s is yours - the builders were suspiciously quick. $%s left."), E.Name, *Commas(Cash)), 6);
+			return;
+		}
+		return;
+	}
+	const KeysTown::FVenue* Vn = KeysTown::Venue(V);
+	if (!Vn) return;
+	W->bShopOpen = true;
+	W->ShopVenue = V;
+	W->ShopSel = 0;
+	W->ShopGreeting = Vn->Greeting.Num() ? Vn->Greeting[W->Visits % Vn->Greeting.Num()] : TEXT("");
+	W->Visits++;
+}
+
+void AKeysBoatPawn::ShopClose()
+{
+	if (AKeysWalker* W = AKeysWalker::Get(this)) W->bShopOpen = false;
+}
+
+void AKeysBoatPawn::ShopBuy(int32 Index)
+{
+	AKeysWalker* W = AKeysWalker::Get(this);
+	if (!W) return;
+	const KeysTown::FVenue* V = KeysTown::Venue(W->ShopVenue);
+	if (!V || !V->Sells.IsValidIndex(Index)) return;
+	const KeysTown::FShelfItem& It = V->Sells[Index];
+	const FString Eff = It.Effect;
+	const bool bGear = Eff.StartsWith(TEXT("rod.")) || Eff.StartsWith(TEXT("reel.")) || Eff.StartsWith(TEXT("dive.")) || Eff.StartsWith(TEXT("spear.long")) || Eff.StartsWith(TEXT("cosmetic."));
+	if (bGear && Owned.Contains(Eff)) { ShowToast(FString::Printf(TEXT("You already own the %s."), It.Name)); return; }
+	if (Cash < It.Price) { ShowToast(FString::Printf(TEXT("%s is $%s and you have $%s. Sell fillets at a weigh-in (E at a marina dock)."), It.Name, *Commas(It.Price), *Commas(Cash)), 4); return; }
+	Cash -= It.Price;
+	const double T = GetWorld()->GetTimeSeconds();
+	FString Msg = FString::Printf(TEXT("Bought: %s ($%s). $%s left."), It.Name, *Commas(It.Price), *Commas(Cash));
+	if (bGear) Owned.Add(Eff);
+	if (Eff == TEXT("diner.coffee")) { CoffeeUntil = T + 600; Msg += TEXT(" Strike window is longer for ten minutes."); }
+	else if (Eff == TEXT("diner.breakfast")) { BreakfastUntil = T + 600; CoffeeUntil = FMath::Max(CoffeeUntil, T + 300); Msg += TEXT(" Steady hands for a while."); }
+	else if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
+	else if (Eff == TEXT("bait.ballyhoo")) { BaitCasts += 6; Msg += TEXT(" Quicker bites on your next 6 casts."); }
+	else if (Eff == TEXT("motel.night"))
+	{
+		if (AKeysWorld* Wd = World()) Wd->ToggleSunset();
+		Msg = TEXT("You sleep it off in room 7. The light has changed when you come out.");
+	}
+	else if (Eff == TEXT("casino.slot"))
+	{
+		// three reels of fish: two of a kind pays 2x, three pays 10x (sim/slots.ts, simplified)
+		static const TCHAR* Reel[] = {TEXT("Tarpon"), TEXT("Permit"), TEXT("Bonefish"), TEXT("Marlin"), TEXT("Snook")};
+		const int32 A = FMath::RandRange(0, 4), B = FMath::RandRange(0, 4), C = FMath::RandRange(0, 4);
+		const int32 Payout = (A == B && B == C) ? It.Price * 10 : (A == B || B == C || A == C) ? It.Price * 2 : 0;
+		Cash += Payout;
+		Msg = FString::Printf(TEXT("%s | %s | %s  -  %s  ($%s)"), Reel[A], Reel[B], Reel[C], Payout ? *FString::Printf(TEXT("you win $%d!"), Payout) : TEXT("nothing"), *Commas(Cash));
+	}
+	else if (Eff == TEXT("liquor.scratch"))
+	{
+		const int32 Payout = FMath::FRand() < .02 ? 500 : FMath::FRand() < .15 ? 10 : 0;
+		Cash += Payout;
+		Msg = Payout ? FString::Printf(TEXT("Scratch-off: $%d winner!"), Payout) : TEXT("Scratch-off: not a winner. The clerk saw that coming.");
+	}
+	else if (Eff.StartsWith(TEXT("cosmetic."))) { ApplyOutfit(); Msg += TEXT(" You're wearing it."); }
+	SaveEconomy();
+	ShowToast(Msg, 5);
+}
+
+void AKeysBoatPawn::ApplyOutfit()
+{
+	AKeysWalker* W = AKeysWalker::Get(this);
+	if (!W) return;
+	FLinearColor Shirt(FColor(0x3f, 0xb6, 0xc9)), Cap(FColor(0x1d, 0x35, 0x57));
+	if (Owned.Contains(TEXT("cosmetic.shirt.hawaiian"))) Shirt = FLinearColor(FColor(0xf2, 0x6b, 0x5b));
+	if (Owned.Contains(TEXT("cosmetic.cap.conch"))) Cap = FLinearColor(FColor(0xf2, 0xc1, 0x4e));
+	W->SetOutfit(Shirt, true, Cap, true);
+}
+
+void AKeysBoatPawn::SaveEconomy()
+{
+	if (!Save) return;
+	Save->Cash = Cash;
+	Save->Owned = Owned.Array();
+	Save->Estates = Estates;
+	Save->Write();
+}
+
 void AKeysBoatPawn::ApplyDiveCamera(const FVector& PosUE, const FRotator& Rot, float FovH)
 {
 	Camera->SetWorldLocationAndRotation(PosUE, Rot);
@@ -669,6 +903,8 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::B)) { bBoardOpen = true; BoardTab = 0; bFwd = bBack = bLeft = bRight = bAction = false; bCharging = false; return; }
 
 	// menus: Up / Down (or W / S, or the mouse) pick, Enter or Space chooses, Left / Right change a setting, Esc goes back
+	if (Menu == EMenu::None && bRunning && IsAshore() && Hit(EKeys::Escape))
+		if (AKeysWalker* Wk = AKeysWalker::Get(this); Wk && Wk->bShopOpen) { ShopClose(); return; }
 	if (Menu == EMenu::None && bRunning && Hit(EKeys::Escape)) { Menu = EMenu::Pause; MenuSel = 0; bCharging = false; return; }
 	if (Menu != EMenu::None)
 	{
@@ -698,7 +934,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 
 	// drag with either mouse button: orbits the chase camera, or looks around in the first-person views; the wheel zooms
-	bDragging = !IsDiving() && (Down(EKeys::LeftMouseButton) || Down(EKeys::RightMouseButton));
+	bDragging = !IsDiving() && !IsAshore() && (Down(EKeys::LeftMouseButton) || Down(EKeys::RightMouseButton));
 	if (bDragging)
 	{
 		float MX = 0, MY = 0;
@@ -716,7 +952,9 @@ void AKeysBoatPawn::HandleInput(float Dt)
 
 	if (!bRunning) return;
 	if (IsDiving()) { HandleDiveInput(PC, Dt); return; }
+	if (IsAshore()) { HandleWalkInput(PC, Dt); return; }
 	if (Hit(EKeys::J)) { ToggleDive(); return; }
+	if (Hit(EKeys::Q)) { ToggleAshore(); return; }
 
 	bFwd = Down(EKeys::W) || (!bTrimMode && Down(EKeys::Up));
 	bBack = Down(EKeys::S) || (!bTrimMode && Down(EKeys::Down));
@@ -1068,7 +1306,7 @@ void AKeysBoatPawn::SyncChaseCam()
 
 void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 {
-	if (IsDiving()) return;   // the diver actor places the camera (ApplyDiveCamera)
+	if (IsDiving() || IsAshore()) return;   // the diver / walker actor places the camera (ApplyDiveCamera)
 	const FBoatSpec& S = Spec();
 
 	// first person while fishing (V), and the helm view (1) while driving
@@ -1205,6 +1443,7 @@ void AKeysBoatPawn::CastLine(double Power)
 	double Dist = 12 + Power * 73;
 	for (int32 k = 0; k < 8 && LandH(X + Dir.X * Dist, Z + Dir.Y * Dist) > -.4; k++) Dist *= .8;
 	CastTo = FVector(X + Dir.X * Dist, 0, Z + Dir.Y * Dist);
+	if (BaitCasts > 0) BaitCasts--;
 	CastFrom = RodTip(CastTo);
 	CastT = 0;
 	CastDur = .5 + Power * .9;
@@ -1410,7 +1649,7 @@ void AKeysBoatPawn::Land()
 void AKeysBoatPawn::KeepFish()
 {
 	if (FState != EKeysFish::Caught || !bCanKeep) return;
-	Cooler.Add({Sp->Name, Weight, int32(LastPts)});
+	Cooler.Add({Sp->Name, Weight, int32(LastPts), Key});
 	ShowToast(FString::Printf(TEXT("%s is on ice. %d fish in the cooler."), *Sp->Name, Cooler.Num()));
 	FinishCatch();
 }
@@ -1444,7 +1683,14 @@ void AKeysBoatPawn::WeighIn()
 	const FKeysCooler* BigF = &Cooler[0];
 	for (const FKeysCooler& C : Cooler) if (C.Weight > BigF->Weight) BigF = &C;
 	Score += Bonus;
-	ShowToast(FString::Printf(TEXT("Weighed in %d fish (%d lb) at %s. Top fish: %s, %.1f lb. +%s points!"), Cooler.Num(), FMath::RoundToInt(Lb), *M->Name, *BigF->Name, BigF->Weight, *Commas(Bonus)), 6);
+	// the fillets go to the fish house at the dock price (content/economy.ts MEAT_PRICE); game fish and billfish don't sell
+	double Sale = 0;
+	for (const FKeysCooler& C : Cooler) Sale += C.Weight * .45 * KeysTown::MeatPrice(C.Key);
+	const int64 Paid = FMath::RoundToInt64(Sale);
+	Cash += Paid;
+	SaveEconomy();
+	ShowToast(FString::Printf(TEXT("Weighed in %d fish (%d lb) at %s. Top fish: %s, %.1f lb. +%s points%s"), Cooler.Num(), FMath::RoundToInt(Lb), *M->Name, *BigF->Name, BigF->Weight, *Commas(Bonus),
+		Paid > 0 ? *FString::Printf(TEXT(", and the fish house paid $%s for the fillets."), *Commas(Paid)) : TEXT("!")), 6);
 	Cooler.Reset();
 	if (Save) Save->RecordScore(Score);
 	if (AKeysOnline* O = AKeysOnline::Get(this)) O->ReportScore(Score);
@@ -1483,7 +1729,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 				Weight = AKeysLife::TunaWeight(*Sp, Bob.X, Bob.Z);
 				FX = TS.FX; FZ = TS.FZ; OFX = OFZ = 0;
 				BuildHookedMesh();
-				FState = EKeysFish::Bite; Win = 1.6; bStrikeShown = true; Shake = FMath::Max(Shake, .3);
+				FState = EKeysFish::Bite; Win = 1.6 * (T < CoffeeUntil ? 1.5 : 1); bStrikeShown = true; Shake = FMath::Max(Shake, .3);
 				if (AKeysAudio* A = AKeysAudio::Get(this)) { A->Strike(Bob.X, Bob.Z); A->Splash(TS.FX, TS.FZ, 30, 1.5); }
 			}
 		}
@@ -1505,7 +1751,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 			AKeysLife* L = AKeysLife::Get(this);
 			if (L) Spot = L->SpotAt(Bob.X, Bob.Z);
 			Zone = Spot.Zone;
-			BiteT = Rand(4, 10) * AKeysLife::BiteTimeScale(Spot);
+			BiteT = Rand(4, 10) * AKeysLife::BiteTimeScale(Spot) * (BaitCasts > 0 ? .6 : 1);
 			Key.Reset();
 			Sp = nullptr;
 			if (L) L->OnCastLanded(Spot, Bob.X, Bob.Z);
@@ -1539,7 +1785,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 				AKeysAudio* A = AKeysAudio::Get(this);
 				if (Nibs <= 0)
 				{
-					FState = EKeysFish::Bite; Win = 1.4; bStrikeShown = true; Shake = FMath::Max(Shake, .15);
+					FState = EKeysFish::Bite; Win = 1.4 * (T < CoffeeUntil ? 1.5 : 1); bStrikeShown = true; Shake = FMath::Max(Shake, .15);
 					if (A) { A->Strike(Bob.X, Bob.Z); A->Splash(Bob.X, Bob.Z, 20, 1.2); }
 				}
 				else { Nibs--; DipT = .28; NibT = Rand(.8, 1.6); if (A) A->Nibble(Bob.X, Bob.Z); }
@@ -1623,12 +1869,12 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 		}
 		if (bReel)
 		{
-			const double R = FMath::Max(4.0, 10.5 * (1 - .22 * S)) * (bRunningFish ? .3 : 1) * (.75 + .35 * (1 - Stamina)) * (.7 + .1 * Dg);
+			const double R = FMath::Max(4.0, 10.5 * (1 - .22 * S)) * (bRunningFish ? .3 : 1) * (.75 + .35 * (1 - Stamina)) * (.7 + .1 * Dg) * (HasGear(TEXT("reel.lever")) ? 1.3 : 1);
 			FX -= DX * R * Dt;
 			FZ -= DZ * R * Dt;
 		}
 		Stamina = FMath::Max(0.0, Stamina - Dt * .1 * (.45 + Tension) / FMath::Sqrt(S));
-		if (Tension >= 1.06) { OverT += Dt; if (OverT > .6) { Lose(TEXT("Snap! Too much pressure and the line parted.")); return; } }
+		if (Tension >= (HasGear(TEXT("rod.heavy")) ? 1.12 : 1.06)) { OverT += Dt; if (OverT > .6) { Lose(TEXT("Snap! Too much pressure and the line parted.")); return; } }
 		else OverT = FMath::Max(0.0, OverT - Dt);
 		if (Tension < .06) { SlackT += Dt; if (SlackT > 2.6) { Lose(TEXT("Slack line - the fish shook the hook.")); return; } }
 		else SlackT = 0;
@@ -1844,7 +2090,9 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 		if (O->Toasts.Num() && T > ToastUntil - 1) { ShowToast(O->Toasts[0], 4); O->Toasts.RemoveAt(0); }
 	}
 	if (bRunning && OffshoreF(X, Z) > .5 && !bDeepTip) { bDeepTip = true; ShowToast(TEXT("Deep blue water - the farther out you run, the bigger the fish.")); }
+	if (IsAshore()) { Thr = 0; Speed = 0; DVX = DVZ = 0; Steer = 0; }
 	UpdateBoat(Dt, T);
+	if (IsAshore()) { X = PinX; Z = PinZ; H = PinH; Speed = 0; }
 	if (bRunning) UpdateFishing(Dt, T);
 	if (AKeysAudio* A = AKeysAudio::Get(this))
 	{

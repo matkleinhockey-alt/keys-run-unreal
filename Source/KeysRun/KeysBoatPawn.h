@@ -21,6 +21,7 @@ struct FKeysCooler
 	FString Name;
 	double Weight;
 	int32 Pts;
+	FString Key;
 };
 
 // The player's center console: wave-riding physics, the chase camera, and the whole fishing loop.
@@ -138,6 +139,14 @@ public:
 	void LandSpeared(const FString& InKey, double InWeight, double InFX, double InFZ);
 	void ApplyDiveCamera(const FVector& PosUE, const FRotator& Rot, float FovH);
 	bool bDiveChase = false;   // Settings: start dives in the chase view instead of the dive mask
+	// ---- ashore (Q): tie up and walk Boot Key Harbor City; the walker actor drives the camera through ApplyDiveCamera
+	bool IsAshore() const;
+	int64 Cash = 0;            // dollars: fillets sold at weigh-in, spent in the shops
+	TSet<FString> Owned;       // shop items you own (gear, cosmetics)
+	TArray<FString> Estates;   // Harbor Row lots you own
+	bool HasGear(const TCHAR* Effect) const { return Owned.Contains(Effect); }
+	void ShopBuy(int32 Index);
+	void ShopClose();
 	double UnderwaterHaze = 1; // Settings: how bright the underwater haze is
 
 private:
@@ -203,6 +212,14 @@ private:
 	void RunTestScript(double T);
 	void ToggleDive();
 	void HandleDiveInput(class APlayerController* PC, float Dt);
+	void ToggleAshore();
+	void HandleWalkInput(class APlayerController* PC, float Dt);
+	void WalkInteract();
+	void SaveEconomy();
+	void ApplyOutfit();
+	double CoffeeUntil = -1, BreakfastUntil = -1;   // diner buffs (game seconds)
+	int32 BaitCasts = 0;                            // live shrimp left: quicker bites
+	double PinX = 0, PinZ = 0, PinH = 0;            // where the boat is tied up while you are ashore
 	bool bAir = false;
 	double TrimVent = 0, TrimMsgT = -99, CollideMsgT = -99, SlamT = -99, AcMsgT = -99;
 	bool bTrimUp = false, bTrimDn = false;

@@ -36,6 +36,11 @@ public:
 	UPROPERTY() FString OnlineCrew;
 	UPROPERTY() bool bOnlineAuto = false;
 
+	// the town economy: cash from fillets sold at weigh-in, what you bought in the shops, the Harbor Row lots you own
+	UPROPERTY() int64 Cash = 0;
+	UPROPERTY() TArray<FString> Owned;
+	UPROPERTY() TArray<FString> Estates;
+
 	static constexpr int32 MaxTop = 12;
 
 	// lbRecord: count it, keep the species record and the overall best, then write the slot

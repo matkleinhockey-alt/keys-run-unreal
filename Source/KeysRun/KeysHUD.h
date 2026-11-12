@@ -40,6 +40,7 @@ private:
 	void DrawCard(AKeysBoatPawn* P);
 	void DrawDiving(AKeysBoatPawn* P, class AKeysDiver* D);
 	void DrawExtras(AKeysBoatPawn* P);
+	void DrawAshore(AKeysBoatPawn* P, class AKeysWalker* W);
 	// chartplotter + fish finder (the JS ELEC block) and the local leaderboard
 	void UpdateElectronics(AKeysBoatPawn* P, double Now);
 	void PushSonarColumn(AKeysBoatPawn* P);
