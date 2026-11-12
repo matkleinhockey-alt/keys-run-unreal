@@ -594,6 +594,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("keep")) KeepFish();
 		else if (Cmd == TEXT("harbour")) { X = AKeysEvents::HarbourX(); Z = AKeysEvents::HarbourZ(); Speed = Thr = 0; bCamInit = false; }
 		else if (Cmd.StartsWith(TEXT("ev:"))) { if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->DebugCmd(Cmd.Mid(3)); }
+		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
 		else if (Cmd == TEXT("ownall")) { for (const FBoatSpec& B : Boats()) Owned.Add(TEXT("boat.") + B.Id); }
 		else if (Cmd.StartsWith(TEXT("boat=")))
 		{

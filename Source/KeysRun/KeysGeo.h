@@ -16,6 +16,7 @@ namespace KeysGeo
 		FString Name;
 		double X, Z, A, B, Th, C, S;
 		bool bSmall, bMainland, bMiami, bNoHouses;
+		int32 Coast = -1;   // its real OSM outline (KeysCoastData.h), or -1 for the procedural mainland's ellipse
 	};
 
 	struct FMarina
@@ -57,6 +58,20 @@ namespace KeysGeo
 	const TArray<FHump>& Humps();
 
 	FShore ShoreInfo(double X, double Z);
+	// Real coastlines (web shared/world/coast.ts, chain.ts): the signed distance outside island I's shore in meters
+	// (negative on land, exact within 120 m), the normalized shore radius (<1 land, 1 shore, >1 sea), the outward
+	// direction (the gradient of the distance), and the outline rings themselves (null for the mainland).
+	double IslandDist(const FIsland& I, double X, double Z);
+	double IslandE(const FIsland& I, double X, double Z);
+	FVector2D IslandOutward(const FIsland& I, double X, double Z);
+	const TArray<TArray<FVector2D>>* CoastRings(const FIsland& I);
+	void IslandLocalXZ(const FIsland& I, double X, double Z, double& LX, double& LZ);
+	void IslandWorldXZ(const FIsland& I, double LX, double LZ, double& X, double& Z);
+	const FIsland* FindIsland(const TCHAR* Name);
+	// the town's fill pad, US-1's causeway fill, the golf courses and the runway (web depth.ts inFill)
+	bool InFill(double X, double Z);
+	// how far inside the dredged cut of a marina basin (web depth.ts marinaCutDepth): > 0 inside
+	double MarinaCutDepth(double X, double Z);
 	double CreekDist(double X, double Z);
 	bool OnCourse(const FIsland* I, double LX, double LZ);
 	double LandH(double X, double Z);

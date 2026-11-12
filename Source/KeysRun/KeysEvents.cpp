@@ -174,13 +174,14 @@ void AKeysEvents::BeginPlay()
 // ================================================================ race
 void AKeysEvents::BuildCourse()
 {
-	// sim/race.ts MARATHON_COURSE: x along the chain, dz offshore of it. This port's islands are the ellipses rather than
-	// the real outlines, so a mark that would sit on land or in skinny water is walked further offshore until it floats.
+	// sim/race.ts MARATHON_COURSE: x along the chain, dz offshore of it, at the web game's own coordinates now that the
+	// islands have their real coastlines (a mark is only walked offshore if it would still be on land)
 	Course.Reset();
 	for (const FCourseBuoy& B : MarathonCourse)
 	{
 		double DZ = B.DZ;
-		for (int32 k = 0; k < 60 && (DepthAt(B.X, ChainZ(B.X) + DZ) < 3.5 || ShoreInfo(B.X, ChainZ(B.X) + DZ).D < 60); k++) DZ += 15;
+		for (int32 k = 0; k < 60 && LandH(B.X, ChainZ(B.X) + DZ) > -.5; k++) DZ += 15;
+		if (DZ != B.DZ) UE_LOG(LogTemp, Warning, TEXT("Keys Run: race mark %s moved %.0f m offshore"), B.Name, DZ - B.DZ);
 		Course.Add({B.Name, B.X, ChainZ(B.X) + DZ});
 	}
 	// the AI's line: a closed Catmull-Rom through the marks, in 4 m steps

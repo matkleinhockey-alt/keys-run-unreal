@@ -1,5 +1,6 @@
 #include "KeysGeo.h"
 #include "Async/ParallelFor.h"
+#include "KeysCoastData.h"
 
 namespace KeysGeo
 {
@@ -28,7 +29,7 @@ namespace KeysGeo
 	// old Seven Mile Bridge, with the swing-span gap
 	static constexpr double OldBrX0 = -3820, OldBrX1 = -2010, OldBrDZ = -58, OldGap0 = -3200, OldGap1 = -3080;
 	// runway on Vaca Key, in island-local coordinates
-	static constexpr double RunLX0 = 700, RunLX1 = 1420, RunLZ = -150, RunW = 34;
+	static constexpr double RunLX0 = 700, RunLX1 = 1420, RunLZ = 80, RunW = 34;
 
 	// fast depth lookup grid (10 m) so the water surface can follow the boat
 	static constexpr double DG = 10;
@@ -66,6 +67,163 @@ namespace KeysGeo
 		LX = DX * I.C + DZ * I.S;
 		LZ = -DX * I.S + DZ * I.C;
 	}
+
+	// ---------------------------------------------------------------- real coastlines (web shared/world/coast.ts)
+	// Each island's edges go in two small indexes: a CELL x CELL grid over its box grown by CAP, each cell listing the
+	// edges that can be within CAP of any point in it, and CELL-high rows listing the edges that span them for the
+	// inside / outside ray test. Only the first CAP meters are exact; beyond, it is CAP plus the distance to the box.
+	static constexpr double CoastCap = 120, CoastCell = 24, ShoreScale = 120;
+	struct FCoast
+	{
+		double X0 = 0, Z0 = 0, X1 = 0, Z1 = 0, GX0 = 0, GZ0 = 0;
+		int32 NX = 0, NZ = 0;
+		TArray<double> Seg;
+		TArray<int32> CellStart, CellSeg, RowStart, RowSeg;
+		TArray<TArray<FVector2D>> Rings;
+	};
+	static TArray<FCoast> GCoasts;
+	static TArray<FVector2D> GUS1Runs;
+
+	static double SegDist2(const double* S, double X, double Z)
+	{
+		const double AX = S[0], AZ = S[1], DX = S[2] - AX, DZ = S[3] - AZ, L = DX * DX + DZ * DZ;
+		double T = L > 0 ? ((X - AX) * DX + (Z - AZ) * DZ) / L : 0;
+		T = T < 0 ? 0 : T > 1 ? 1 : T;
+		const double PX = AX + DX * T - X, PZ = AZ + DZ * T - Z;
+		return PX * PX + PZ * PZ;
+	}
+
+	template <typename FRange>
+	static void Csr(int32 N, int32 Buckets, FRange Range, TArray<int32>& Start, TArray<int32>& Out)
+	{
+		Start.Init(0, Buckets + 1);
+		for (int32 i = 0; i < N; i++) Range(i, [&](int32 B) { Start[B + 1]++; });
+		for (int32 B = 0; B < Buckets; B++) Start[B + 1] += Start[B];
+		TArray<int32> Fill;
+		Fill.Append(Start.GetData(), Buckets);
+		Out.SetNumZeroed(Start[Buckets]);
+		for (int32 i = 0; i < N; i++) Range(i, [&](int32 B) { Out[Fill[B]++] = i; });
+	}
+
+	static FCoast BuildCoast(const KeysCoastData::FIsl& Src)
+	{
+		FCoast C;
+		int32 N = 0;
+		for (int32 r = 0; r < Src.NumRings; r++) N += Src.Rings[r].N / 2;
+		C.Seg.SetNumUninitialized(N * 4);
+		double X0 = 1e18, Z0 = 1e18, X1 = -1e18, Z1 = -1e18;
+		int32 K = 0;
+		for (int32 r = 0; r < Src.NumRings; r++)
+		{
+			const double* P = Src.Rings[r].P;
+			const int32 M = Src.Rings[r].N / 2;
+			TArray<FVector2D>& Ring = C.Rings.AddDefaulted_GetRef();
+			for (int32 i = 0; i < M; i++)
+			{
+				const int32 j = (i + 1) % M;
+				C.Seg[K++] = P[i * 2]; C.Seg[K++] = P[i * 2 + 1]; C.Seg[K++] = P[j * 2]; C.Seg[K++] = P[j * 2 + 1];
+				X0 = FMath::Min(X0, P[i * 2]); X1 = FMath::Max(X1, P[i * 2]); Z0 = FMath::Min(Z0, P[i * 2 + 1]); Z1 = FMath::Max(Z1, P[i * 2 + 1]);
+				Ring.Add(FVector2D(P[i * 2], P[i * 2 + 1]));
+			}
+		}
+		C.X0 = X0; C.Z0 = Z0; C.X1 = X1; C.Z1 = Z1;
+		C.GX0 = X0 - CoastCap; C.GZ0 = Z0 - CoastCap;
+		C.NX = FMath::CeilToInt((X1 - X0 + 2 * CoastCap) / CoastCell);
+		C.NZ = FMath::CeilToInt((Z1 - Z0 + 2 * CoastCap) / CoastCell);
+		const double Reach = CoastCap + CoastCell * UE_INV_SQRT_2, Reach2 = Reach * Reach;
+		const double* Sg = C.Seg.GetData();
+		Csr(N, C.NX * C.NZ, [&](int32 i, auto Add)
+		{
+			const double* O = Sg + i * 4;
+			const int32 CX0 = FMath::Max(0, FMath::FloorToInt((FMath::Min(O[0], O[2]) - Reach - C.GX0) / CoastCell));
+			const int32 CX1 = FMath::Min(C.NX - 1, FMath::FloorToInt((FMath::Max(O[0], O[2]) + Reach - C.GX0) / CoastCell));
+			const int32 CZ0 = FMath::Max(0, FMath::FloorToInt((FMath::Min(O[1], O[3]) - Reach - C.GZ0) / CoastCell));
+			const int32 CZ1 = FMath::Min(C.NZ - 1, FMath::FloorToInt((FMath::Max(O[1], O[3]) + Reach - C.GZ0) / CoastCell));
+			for (int32 CZ = CZ0; CZ <= CZ1; CZ++)
+				for (int32 CX = CX0; CX <= CX1; CX++)
+					if (SegDist2(O, C.GX0 + (CX + .5) * CoastCell, C.GZ0 + (CZ + .5) * CoastCell) <= Reach2) Add(CZ * C.NX + CX);
+		}, C.CellStart, C.CellSeg);
+		Csr(N, C.NZ, [&](int32 i, auto Add)
+		{
+			const double* O = Sg + i * 4;
+			const int32 R0 = FMath::Max(0, FMath::FloorToInt((FMath::Min(O[1], O[3]) - C.GZ0) / CoastCell));
+			const int32 R1 = FMath::Min(C.NZ - 1, FMath::FloorToInt((FMath::Max(O[1], O[3]) - C.GZ0) / CoastCell));
+			for (int32 R = R0; R <= R1; R++) Add(R);
+		}, C.RowStart, C.RowSeg);
+		return C;
+	}
+
+	static bool CoastInside(const FCoast& C, double X, double Z)
+	{
+		if (X < C.X0 || X > C.X1 || Z < C.Z0 || Z > C.Z1) return false;
+		const int32 R = FMath::FloorToInt((Z - C.GZ0) / CoastCell);
+		const double* S = C.Seg.GetData();
+		bool bIn = false;
+		for (int32 k = C.RowStart[R], E = C.RowStart[R + 1]; k < E; k++)
+		{
+			const double* O = S + C.RowSeg[k] * 4;
+			const double AZ = O[1], BZ = O[3];
+			if ((AZ > Z) != (BZ > Z))
+			{
+				const double IX = O[0] + ((Z - AZ) / (BZ - AZ)) * (O[2] - O[0]);
+				if (IX > X) bIn = !bIn;
+			}
+		}
+		return bIn;
+	}
+
+	static double CoastDist(const FCoast& C, double X, double Z)
+	{
+		const double GX = X - C.GX0, GZ = Z - C.GZ0, W = C.NX * CoastCell, H = C.NZ * CoastCell;
+		if (GX < 0 || GZ < 0 || GX >= W || GZ >= H)
+		{
+			const double OX = GX < 0 ? -GX : GX > W ? GX - W : 0, OZ = GZ < 0 ? -GZ : GZ > H ? GZ - H : 0;
+			return CoastCap + FMath::Sqrt(OX * OX + OZ * OZ);
+		}
+		const int32 Cell = FMath::FloorToInt(GZ / CoastCell) * C.NX + FMath::FloorToInt(GX / CoastCell);
+		const double* S = C.Seg.GetData();
+		double Best = CoastCap * CoastCap;
+		for (int32 k = C.CellStart[Cell], E = C.CellStart[Cell + 1]; k < E; k++)
+		{
+			const double D2 = SegDist2(S + C.CellSeg[k] * 4, X, Z);
+			if (D2 < Best) Best = D2;
+		}
+		const double D = FMath::Sqrt(Best);
+		return CoastInside(C, X, Z) ? -D : D;
+	}
+
+	double IslandDist(const FIsland& I, double X, double Z)
+	{
+		if (I.Coast >= 0) return CoastDist(GCoasts[I.Coast], X, Z);
+		double LX, LZ;
+		IslandLocal(I, X, Z, LX, LZ);
+		return (FMath::Sqrt(FMath::Square(LX / I.A) + FMath::Square(LZ / I.B)) - 1) * (I.A + I.B) * .5;
+	}
+
+	double IslandE(const FIsland& I, double X, double Z)
+	{
+		if (I.Coast < 0)
+		{
+			double LX, LZ;
+			IslandLocal(I, X, Z, LX, LZ);
+			return FMath::Sqrt(FMath::Square(LX / I.A) + FMath::Square(LZ / I.B));
+		}
+		// the beach is measured on the island's own scale, capped so a big key's beach is ~20 m, not a tenth of the key
+		return 1 + CoastDist(GCoasts[I.Coast], X, Z) / FMath::Min((I.A + I.B) * .5, ShoreScale);
+	}
+
+	FVector2D IslandOutward(const FIsland& I, double X, double Z)
+	{
+		const double D = 7;
+		const double GX = IslandDist(I, X + D, Z) - IslandDist(I, X - D, Z), GZ = IslandDist(I, X, Z + D) - IslandDist(I, X, Z - D);
+		const double L = FMath::Sqrt(GX * GX + GZ * GZ);
+		return L < 1e-6 ? FVector2D(0, 1) : FVector2D(GX / L, GZ / L);
+	}
+
+	const TArray<TArray<FVector2D>>* CoastRings(const FIsland& I) { return I.Coast >= 0 ? &GCoasts[I.Coast].Rings : nullptr; }
+	void IslandLocalXZ(const FIsland& I, double X, double Z, double& LX, double& LZ) { IslandLocal(I, X, Z, LX, LZ); }
+	void IslandWorldXZ(const FIsland& I, double LX, double LZ, double& X, double& Z) { X = I.X + LX * I.C - LZ * I.S; Z = I.Z + LX * I.S + LZ * I.C; }
+	const FIsland* FindIsland(const TCHAR* Name) { for (const FIsland& I : GIslands) if (I.Name == Name) return &I; return nullptr; }
 
 	static FCreek Snake(const TCHAR* Name, double X0, double DZ0, double X1, double DZ1, double Amp, double Waves, double W)
 	{
@@ -149,9 +307,17 @@ namespace KeysGeo
 			I.bNoHouses = I.Name == TEXT("Miami Beach") || I.Name == TEXT("Dodge Island (PortMiami)") || I.Name == TEXT("Brickell Key") || I.Name == TEXT("Virginia Key");
 			GIslands.Add(I);
 		}
-		auto FindIsl = [](const TCHAR* Name) { for (const FIsland& I : GIslands) if (I.Name == Name) return &I; return (const FIsland*)nullptr; };
+		// the real outlines (web chain.ts: every island but the mainland)
+		GCoasts.Reset();
+		for (int32 i = 0; i < GIslands.Num() && i < KeysCoastData::NumIslands; i++)
+			if (KeysCoastData::Islands[i].Rings)
+			{
+				GIslands[i].Coast = GCoasts.Num();
+				GCoasts.Add(BuildCoast(KeysCoastData::Islands[i]));
+			}
+		auto FindIsl = [](const TCHAR* Name) { return FindIsland(Name); };
 		GVaca = FindIsl(TEXT("Marathon (Vaca Key)"));
-		GGolf = {{GVaca, 300, -30, 290, 150}, {FindIsl(TEXT("Key Colony Beach")), 0, 0, 175, 72}};
+		GGolf = {{GVaca, 330, 100, 290, 150}, {FindIsl(TEXT("Key Colony Beach")), -30, 30, 175, 72}};
 
 		GMiamiCh = {{2312, 2380, -2010, -1420, 13}, {2376, 2480, -2640, -1950, 11}, {2140, 2224, -2640, -1960, 9}, {2224, 2380, -2740, -2640, 8}};
 		GChannels = {{-1700, -480, 200, 430, 3.8}, {-2000, -1560, 150, 800, 4.2}, {-1750, -1350, -420, -180, 3.4}, {-800, -420, -420, -180, 3.4}};
@@ -159,20 +325,33 @@ namespace KeysGeo
 
 		// marinas: two in Boot Key Harbor, two on the Gulf side
 		struct FMar { const TCHAR* Name; double SX; int32 Dir; };
-		const FMar Mars[] = {{TEXT("Boot Key Harbor City Marina"), -900, 1}, {TEXT("Burdines Waterfront"), -1380, 1}, {TEXT("Faro Blanco Marina"), -1560, -1}, {TEXT("Keys Fisheries"), -600, -1}};
+		const FMar Mars[] = {{TEXT("Boot Key Harbor City Marina"), -900, 1}, {TEXT("Burdines Waterfront"), -1400, 1}, {TEXT("Faro Blanco Marina"), -1560, -1}, {TEXT("Keys Fisheries"), -600, -1}};
 		GMarinas.Reset();
 		for (const FMar& M : Mars)
 		{
+			// walk out from the island's middle until past the real shore (land first, so a canal doesn't count)
 			const FIsland& I = *GVaca;
 			double SZ = I.Z;
+			bool bLand = false;
 			for (int32 k = 0; k < 1200; k++)
 			{
-				const double Z = I.Z + M.Dir * k * .5;
-				double LX, LZ;
-				IslandLocal(I, M.SX, Z, LX, LZ);
-				if (FMath::Sqrt(FMath::Square(LX / I.A) + FMath::Square(LZ / I.B)) >= 1.03) { SZ = Z; break; }
+				const double Z = I.Z + M.Dir * k * .5, E = IslandE(I, M.SX, Z);
+				if (E < 1) bLand = true;
+				else if (bLand && E >= 1.03) { SZ = Z; break; }
 			}
 			GMarinas.Add({M.Name, M.SX, SZ, SZ + M.Dir * 48, M.Dir});
+		}
+
+		// US-1's causeway fill across the keys it runs over (web depth.ts US1_RUNS)
+		GUS1Runs.Reset();
+		for (const TCHAR* Name : {TEXT("Little Duck Key"), TEXT("Knight's Key"), TEXT("Marathon (Vaca Key)"), TEXT("Fat Deer Key"), TEXT("Crawl Key"), TEXT("Grassy Key")})
+		{
+			const FIsland* I = FindIsl(Name);
+			if (!I || I->Coast < 0) continue;
+			const FCoast& C = GCoasts[I->Coast];
+			double A = 1e18, B = -1e18;
+			for (double X = C.X0; X <= C.X1; X += 2) if (IslandDist(*I, X, ChainZ(X)) < -4) { A = FMath::Min(A, X); B = FMath::Max(B, X); }
+			if (B > A) GUS1Runs.Add(FVector2D(A, B));
 		}
 
 		// winding creeks cut through the keys and the mainland
@@ -252,12 +431,10 @@ namespace KeysGeo
 		const FIsland* BI = nullptr;
 		for (const FIsland& I : GIslands)
 		{
-			double LX, LZ;
-			IslandLocal(I, X, Z, LX, LZ);
-			const double E = FMath::Sqrt(FMath::Square(LX / I.A) + FMath::Square(LZ / I.B));
-			const double D = (E - 1) * (I.A + I.B) * .5;
-			if (D < Best) { Best = D; BI = &I; BE = E; }
+			const double D = IslandDist(I, X, Z);
+			if (D < Best) { Best = D; BI = &I; }
 		}
+		if (BI) BE = BI->Coast >= 0 ? 1 + Best / FMath::Min((BI->A + BI->B) * .5, ShoreScale) : IslandE(*BI, X, Z);
 		return {Best, BI, BE};
 	}
 
@@ -289,28 +466,67 @@ namespace KeysGeo
 	// ground height: beaches slope into the water, creeks carve through, golf courses and the runway are graded flat
 	// the town is built on fill (web depth.ts TOWN_FILL, in the frame of MARINAS[0]): the ground under the pad is raised to
 	// at least 1.6 m and kept under the pad's 2.35 m top so it never pokes through the streets
-	static bool InTownFill(double X, double Z)
+	bool InFill(double X, double Z)
 	{
-		if (!GMarinas.Num()) return false;
-		const FMarina& M = GMarinas[0];
-		const double U = M.Dir * (X - M.SX), V = M.Dir * (M.SZ - Z);
-		return U >= -112 && U <= 112 && V >= 14 && V <= 180;
+		if (FMath::Abs(Z - ChainZ(X)) <= 9)
+			for (const FVector2D& R : GUS1Runs) if (X >= R.X && X <= R.Y) return true;
+		if (GMarinas.Num())
+		{
+			const FMarina& M = GMarinas[0];
+			const double U = M.Dir * (X - M.SX), V = M.Dir * (M.SZ - Z);
+			if (U >= -112 && U <= 112 && V >= 14 && V <= 180) return true;
+		}
+		for (const FGolf& G : GGolf)
+		{
+			if (!G.I) continue;
+			double LX, LZ;
+			IslandLocal(*G.I, X, Z, LX, LZ);
+			if (FMath::Sqrt(FMath::Square((LX - G.LX) / G.RA) + FMath::Square((LZ - G.LZ) / G.RB)) < 1.03) return true;
+		}
+		if (!GVaca) return false;
+		double LX, LZ;
+		IslandLocal(*GVaca, X, Z, LX, LZ);
+		return LX > RunLX0 - 30 && LX < RunLX1 + 30 && LZ > RunLZ - RunW / 2 - 4 && LZ < RunLZ + 95;
+	}
+
+	// the dredged basin past each marina's channel mouth (web depth.ts MARINA_CUT): r0..r1 out, halfW across
+	static constexpr double CutR0 = 66, CutR1 = 190, CutHalfW = 45, CutD = 3.2, CutFeather = 12;
+	double MarinaCutDepth(double X, double Z)
+	{
+		double Best = -1e9;
+		for (const FMarina& M : GMarinas)
+		{
+			const double R = (Z - M.SZ) * M.Dir;
+			if (R < CutR0 || R > CutR1) continue;
+			const double EndFade = FMath::Min(1.0, (CutR1 - R) / 18), In = (CutHalfW - FMath::Abs(X - M.SX)) * EndFade;
+			if (In > Best) Best = In;
+		}
+		return Best;
 	}
 
 	double LandH(double X, double Z)
 	{
 		const FShore S = ShoreInfo(X, Z);
 		const double E = S.E;
-		const bool bFill = InTownFill(X, Z);
+		const bool bFill = InFill(X, Z);
 		if (E > 1.08) return bFill ? 1.6 : -2;
 		double H = -1.2 + 2.85 * SS(1.07, .9, E);
-		if (E < .92) H += .25 * (FMath::Sin(X * .021) * FMath::Cos(Z * .017) + FMath::Sin(X * .0063 + Z * .0081)) * SS(.92, .72, E);
+		if (E < .92) H += (S.Isl->Coast >= 0 ? .15 : .25) * (FMath::Sin(X * .021) * FMath::Cos(Z * .017) + FMath::Sin(X * .0063 + Z * .0081)) * SS(.92, .72, E);
 		double LX, LZ;
 		IslandLocal(*S.Isl, X, Z, LX, LZ);
 		if (OnCourse(S.Isl, LX, LZ)) H = FMath::Min(H, 1.85);
 		const double CD = CreekDist(X, Z);
 		if (CD < 10) H = FMath::Min(H, Lerp(-1.6, H, SS(-2, 10, CD)));
-		if (bFill) H = FMath::Clamp(H, 1.6, 2.2);
+		const double MC = MarinaCutDepth(X, Z);
+		if (MC > -CutFeather) H = FMath::Min(H, Lerp(H, -1.6, Clamp((MC + CutFeather) / CutFeather, 0, 1)));
+		if (bFill) H = FMath::Max(H, 1.6);
+		if (GMarinas.Num())
+		{
+			// under the town's pad the ground stays below the pad's 2.35 m top so it never pokes through the streets
+			const FMarina& M = GMarinas[0];
+			const double U = M.Dir * (X - M.SX), V = M.Dir * (M.SZ - Z);
+			if (U >= -112 && U <= 112 && V >= 14 && V <= 180) H = FMath::Min(H, 2.2);
+		}
 		return H;
 	}
 
@@ -345,6 +561,10 @@ namespace KeysGeo
 		{
 			const double R = (Z - M.SZ) * M.Dir;
 			if (FMath::Abs(X - M.SX) < 34 && R > -2 && R < 78) D = FMath::Max(D, 3.2);
+		}
+		{
+			const double MC = MarinaCutDepth(X, Z);
+			if (MC > 0) D = FMath::Max(D, .35 + (CutD - .35) * FMath::Min(1.0, MC / CutFeather));
 		}
 		return FMath::Max(.3, D);
 	}

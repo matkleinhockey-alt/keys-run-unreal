@@ -1,4 +1,5 @@
 #include "KeysTownData.h"
+#include "KeysSea.h"
 #include "KeysGeo.h"
 
 // Ported from the web game: packages/shared/src/world/town.ts (lots, streets, props, interiors, NPCs, walkability),
@@ -485,11 +486,6 @@ namespace KeysTown
 	// ------------------------------------------------------------------ piers and waterfront estates
 	namespace
 	{
-		void IslandToWorld(const KeysGeo::FIsland& I, double LX, double LZ, double& X, double& Z)
-		{
-			X = I.X + LX * I.C - LZ * I.S;
-			Z = I.Z + LX * I.S + LZ * I.C;
-		}
 		bool UnderBridge(double X, double Z, double Clear)
 		{
 			if (X >= KeysGeo::WBX0 && X <= KeysGeo::WBX1 && FMath::Abs(Z - KeysGeo::ChainZ(X)) < Clear) return true;
@@ -511,44 +507,50 @@ namespace KeysTown
 		struct FCand { double X0, Z0, NX, NZ, Len, D; FString Isl; };
 		TArray<FCand> Cands;
 		const KeysGeo::FMarina& Town = KeysGeo::Marinas()[0];
+		// web shared/world/piers.ts: walk each key's real shoreline, every edge's midpoint plus a point every 40 m along
+		// long edges, and keep the ones where a pier can run from deck-height ground straight out to fishing water
 		for (const KeysGeo::FIsland& I : KeysGeo::Islands())
 		{
-			if (I.bMiami || I.bMainland || I.A < 60) continue;
-			const int32 N = FMath::Clamp(int32(I.A * 2 * PI / 40), 24, 260);
-			for (int32 k = 0; k < N; k++)
+			const TArray<TArray<FVector2D>>* Rings = KeysGeo::CoastRings(I);
+			if (!Rings || !Rings->Num() || I.bMiami || I.bMainland) continue;
+			const TArray<FVector2D>& Ring = (*Rings)[0];
+			const int32 M = Ring.Num();
+			for (int32 e = 0; e < M; e++)
 			{
-				const double T = 2 * PI * (k + .5) / N;
-				double SX, SZ;
-				IslandToWorld(I, FMath::Cos(T) * I.A, FMath::Sin(T) * I.B, SX, SZ);
-				const double D = FMath::Sqrt(FMath::Square(SX - Town.SX) + FMath::Square(SZ - Town.SZ));
-				if (D > 6000 || InFootprint(SX, SZ, 80) || NearMarinaPt(SX, SZ, 250) || FMath::Abs(SZ - KeysGeo::ChainZ(SX)) < 45 || KeysGeo::CreekDist(SX, SZ) < 40) continue;
-				// outward: the ellipse normal
-				double NLX = FMath::Cos(T) / I.A, NLZ = FMath::Sin(T) / I.B;
-				const double NL = FMath::Sqrt(NLX * NLX + NLZ * NLZ);
-				NLX /= NL; NLZ /= NL;
-				const double NX = NLX * I.C - NLZ * I.S, NZ = NLX * I.S + NLZ * I.C;
-				int32 Root = -1;
-				for (int32 R = 0; R <= 40; R++)
+				const FVector2D Pa = Ring[e], Pb = Ring[(e + 1) % M];
+				const int32 NSeg = FMath::Max(1, FMath::FloorToInt(FVector2D::Distance(Pa, Pb) / 40));
+				for (int32 k = 0; k < NSeg; k++)
 				{
-					const double H = KeysGeo::LandH(SX - NX * R, SZ - NZ * R);
-					if (H > PierTop + .45) break;
-					if (H >= PierTop - .45) { Root = R; break; }
+					const FVector2D Sp = FMath::Lerp(Pa, Pb, (k + .5) / NSeg);
+					const double SX = Sp.X, SZ = Sp.Y;
+					const double D = FMath::Sqrt(FMath::Square(SX - Town.SX) + FMath::Square(SZ - Town.SZ));
+					if (D > 6000 || InFootprint(SX, SZ, 80) || NearMarinaPt(SX, SZ, 250) || FMath::Abs(SZ - KeysGeo::ChainZ(SX)) < 45 || KeysGeo::CreekDist(SX, SZ) < 40) continue;
+					const FVector2D Out = KeysGeo::IslandOutward(I, SX, SZ);
+					const double NX = Out.X, NZ = Out.Y;
+					int32 Root = -1;
+					for (int32 R = 0; R <= 30; R++)
+					{
+						const double H = KeysGeo::LandH(SX - NX * R, SZ - NZ * R);
+						if (H > PierTop + .45) break;
+						if (H >= PierTop - .45) { Root = R; break; }
+					}
+					if (Root < 0) continue;
+					double Len = -1;
+					bool bBad = false;
+					for (int32 R = 6; R <= 150 && !bBad; R += 3)
+					{
+						const double PX = SX + NX * R, PZ = SZ + NZ * R;
+						if (KeysGeo::LandH(PX, PZ) > -.3) { if (R > 12) bBad = true; continue; }
+						if (R >= 30 && KeysGeo::DepthAt(PX, PZ) >= 2.4) { Len = R + 10; break; }
+					}
+					if (bBad || Len < 0) continue;
+					for (double R = Len; R <= Len + PierHeadD && !bBad; R += 2) bBad = KeysGeo::LandH(SX + NX * R, SZ + NZ * R) > -.3;
+					for (double R = -Root; R <= Len + PierHeadD && !bBad; R += 3)
+						for (double C : {-PierHeadW / 2, 0.0, PierHeadW / 2})
+							if (UnderBridge(SX + NX * R - NZ * C, SZ + NZ * R + NX * C, 16)) { bBad = true; break; }
+					if (bBad) continue;
+					Cands.Add({SX - NX * Root, SZ - NZ * Root, NX, NZ, Len + Root, D, I.Name});
 				}
-				if (Root < 0) continue;
-				double Len = -1;
-				bool bBad = false;
-				for (int32 R = 6; R <= 150 && !bBad; R += 3)
-				{
-					const double PX = SX + NX * R, PZ = SZ + NZ * R;
-					if (KeysGeo::LandH(PX, PZ) > -.3) { if (R > 12) bBad = true; continue; }
-					if (R >= 30 && KeysGeo::DepthAt(PX, PZ) >= 2.4) { Len = R + 10; break; }
-				}
-				if (bBad || Len < 0) continue;
-				for (double R = -Root; R <= Len + PierHeadD && !bBad; R += 3)
-					for (double C : {-PierHeadW / 2, 0.0, PierHeadW / 2})
-						if (UnderBridge(SX + NX * R - NZ * C, SZ + NZ * R + NX * C, 16)) { bBad = true; break; }
-				if (bBad) continue;
-				Cands.Add({SX - NX * Root, SZ - NZ * Root, NX, NZ, Len + Root, D, I.Name});
 			}
 		}
 		Cands.Sort([](const FCand& L, const FCand& R) { return L.D < R.D; });
@@ -559,7 +561,22 @@ namespace KeysTown
 			for (const FPier& Pp : A)
 				bClose |= FMath::Sqrt(FMath::Square(Pp.X0 + Pp.NX * Pp.Len - C.X0 - C.NX * C.Len) + FMath::Square(Pp.Z0 + Pp.NZ * Pp.Len - C.Z0 - C.NZ * C.Len)) < 900;
 			if (bClose) continue;
-			A.Add({C.Isl + TEXT(" Fishing Pier"), C.X0, C.Z0, C.NX, C.NZ, C.Len});
+			A.Add({C.Isl, C.X0, C.Z0, C.NX, C.NZ, C.Len});
+		}
+		// "<key> Fishing Pier", or West / East ones where a key has two
+		TArray<FString> Labels;
+		for (const FPier& Pp : A)
+		{
+			double MinX = 1e18, MaxX = -1e18;
+			int32 Same = 0;
+			for (const FPier& Q : A) if (Q.Name == Pp.Name) { Same++; MinX = FMath::Min(MinX, Q.X0); MaxX = FMath::Max(MaxX, Q.X0); }
+			const TCHAR* Side = Same < 2 ? TEXT("") : Pp.X0 == MinX ? TEXT("West ") : Pp.X0 == MaxX ? TEXT("East ") : TEXT("Middle ");
+			Labels.Add(FString::Printf(TEXT("%s %sFishing Pier"), *Pp.Name, Side));
+		}
+		for (int32 i = 0; i < A.Num(); i++)
+		{
+			A[i].Name = Labels[i];
+			UE_LOG(LogTemp, Log, TEXT("Keys Run: %s at %.0f, %.0f"), *A[i].Name, A[i].X0, A[i].Z0);
 		}
 		return A;
 	}
@@ -571,37 +588,49 @@ namespace KeysTown
 		if (bBuilt) return A;
 		bBuilt = true;
 		static const uint32 Cols[] = {0xf3ead8, 0xf7d6c4, 0xcfe6e0, 0xf6e7a8, 0xd6e4f2, 0xffffff, 0xf2c6c6};
+		// web world/waterfront.ts: walk each big key's real shoreline at hashed points, set the house back from the
+		// water along the outward normal (the gradient of the shore distance, so a dock runs the steepest way out
+		// rather than away from the island's middle), and keep sites whose dock reaches water deep enough for a lift
+		int32 II = 0;
 		for (const KeysGeo::FIsland& I : KeysGeo::Islands())
 		{
-			if (I.bMiami || I.bMainland || I.A < 150 || I.bNoHouses) continue;
+			const TArray<TArray<FVector2D>>* Rings = KeysGeo::CoastRings(I);
+			if (!Rings || !Rings->Num() || I.bSmall || I.bMiami) continue;
+			const int32 IIx = II++;
+			const TArray<FVector2D>& Ring = (*Rings)[0];
+			const int32 M = Ring.Num();
+			if (M < 3) continue;
 			int32 Count = 0;
-			const int32 N = 320;
-			for (int32 k = 0; k < N && Count < 7; k++)
+			for (int32 k = 0; k < 320 && Count < 7; k++)
 			{
-				const double H1 = FMath::Frac(FMath::Sin(k * 91.7 + I.X * .013) * 43758.5453);
-				const double T = 2 * PI * (k * .618034 + H1 * .1);
-				double SX, SZ;
-				IslandToWorld(I, FMath::Cos(T) * I.A * 1.0, FMath::Sin(T) * I.B * 1.0, SX, SZ);
-				double NLX = FMath::Cos(T) / I.A, NLZ = FMath::Sin(T) / I.B;
-				const double NL = FMath::Sqrt(NLX * NLX + NLZ * NLZ);
-				NLX /= NL; NLZ /= NL;
-				const double NX = NLX * I.C - NLZ * I.S, NZ = NLX * I.S + NLZ * I.C;
-				const double HX = SX - NX * 30, HZ = SZ - NZ * 30;   // the house, set back
-				if (InFootprint(HX, HZ, 60) || NearMarinaPt(HX, HZ, 140) || FMath::Abs(HZ - KeysGeo::ChainZ(HX)) < 60 || KeysGeo::CreekDist(HX, HZ) < 40) continue;
-				if (KeysGeo::SurfaceKind(HX, HZ) != 0 || KeysGeo::LandH(HX, HZ) < .9) continue;
+				const double U = KeysSea::HashCell(20240817, IIx, k, 111);   // WORLD_SEED, SALT.HOUSE_ANG
+				const double F = U * M, Fl = FMath::FloorToDouble(F);
+				const int32 i0 = int32(Fl) % M;
+				const FVector2D Sp = FMath::Lerp(Ring[i0], Ring[(i0 + 1) % M], F - Fl);
+				const double SX = Sp.X, SZ = Sp.Y;
+				const FVector2D Out = KeysGeo::IslandOutward(I, SX, SZ);
+				const double NX = Out.X, NZ = Out.Y;
+				const double HX = SX - NX * 26, HZ = SZ - NZ * 26;   // the house, set back
+				if (InFootprint(HX, HZ, 40) || KeysGeo::CreekDist(HX, HZ) < 30) continue;
+				{
+					double LX, LZ;
+					KeysGeo::IslandLocalXZ(I, HX, HZ, LX, LZ);
+					if (KeysGeo::OnCourse(&I, LX, LZ)) continue;
+				}
+				if (FMath::Abs(HZ - KeysGeo::ChainZ(HX)) < 20 || KeysGeo::LandH(HX, HZ) < 1.4 || KeysGeo::IslandDist(I, HX, HZ) > -14) continue;
 				bool bClose = false;
 				for (const FEstateSite& E : A) bClose |= FMath::Sqrt(FMath::Square(E.X - HX) + FMath::Square(E.Z - HZ)) < 150;
-				for (const FPier& Pp : Piers()) bClose |= FMath::Sqrt(FMath::Square(Pp.X0 - HX) + FMath::Square(Pp.Z0 - HZ)) < 120;
+				for (const FPier& Pp : Piers())
+					bClose |= FMath::Sqrt(FMath::Square(Pp.X0 - SX) + FMath::Square(Pp.Z0 - SZ)) < 120
+						|| FMath::Sqrt(FMath::Square(Pp.X0 + Pp.NX * Pp.Len - SX) + FMath::Square(Pp.Z0 + Pp.NZ * Pp.Len - SZ)) < 160;
 				if (bClose) continue;
-				// the dock runs out until the lift has 1.15 m under it
-				double Dock = -1;
-				for (int32 R = 18; R <= 30 + 46; R += 2)
-				{
-					const double PX = HX + NX * R, PZ = HZ + NZ * R;
-					if (KeysGeo::LandH(PX, PZ) < -.4 && KeysGeo::DepthAt(PX, PZ) >= 1.15) { Dock = R + 6; break; }
-				}
-				if (Dock < 0) continue;
-				A.Add({HX, HZ, NX, NZ, Dock, int32(H1 * 3) % 3, Cols[(k + int32(I.X)) % 7], I.Name});
+				// the dock runs out until the lift has 1.15 m under it; DockLen is from the house
+				double Reach = 0;
+				for (int32 R = 10; R <= 46; R += 2)
+					if (KeysGeo::DepthAt(SX + NX * R, SZ + NZ * R) >= 1.15) { Reach = R + 8; break; }
+				if (Reach <= 0 || Reach > 46) continue;
+				const double Dock = 26 + Reach;
+				A.Add({HX, HZ, NX, NZ, Dock, int32(U * 3) % 3, Cols[(k + int32(I.X)) % 7], I.Name});
 				Count++;
 			}
 		}
