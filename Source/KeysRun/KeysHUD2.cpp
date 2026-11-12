@@ -6,6 +6,7 @@
 #include "KeysHandgun.h"
 #include "KeysTreasure.h"
 #include "KeysEstates.h"
+#include "KeysTourneyShow.h"
 #include "KeysData.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Canvas.h"
@@ -102,6 +103,30 @@ void AKeysHUD::DrawChartMore(AKeysBoatPawn* P, float X, float Y, float Size)
 
 void AKeysHUD::DrawMore(AKeysBoatPawn* P)
 {
+	// the tournament's titles and ceremony (intro.ts): letterbox bars and a lower-third card
+	if (const AKeysTourneyShow* Sh = AKeysTourneyShow::Get(this); Sh && (Sh->bLetterbox || Sh->CardKind))
+	{
+		const float Bar = Canvas->SizeY * .11f;
+		if (Sh->bLetterbox) { DrawRect(FLinearColor(0, 0, 0, .96f), 0, 0, Canvas->SizeX, Bar); DrawRect(FLinearColor(0, 0, 0, .96f), 0, Canvas->SizeY - Bar, Canvas->SizeX, Bar); }
+		if (Sh->CardKind)
+		{
+			const float A = float(FMath::Clamp(Sh->CardAge / .35, 0.0, 1.0)), X = 80 * U - (1 - A) * 40 * U;
+			const float Y = Canvas->SizeY - Bar - (Sh->CardKind == 1 ? 210 : 150) * U;
+			const FLinearColor TitleC = Sh->CardKind == 3 || Sh->CardKind == 4 ? Gold : FLinearColor::White;
+			DrawRect(FLinearColor(Gold.R, Gold.G, Gold.B, A), X - 18 * U, Y + 6 * U, 6 * U, (Sh->CardKind == 1 ? 150 : 96) * U);
+			Text(Sh->CardKind == 4 ? FString(TEXT("CHAMPION")) : Sh->CardTitle.ToUpper(), X, Y, Sh->CardKind == 1 ? 2.4f : 2.1f, TitleC * A);
+			Text(Sh->CardSub, X, Y + (Sh->CardKind == 1 ? 58 : 52) * U, 1.15f, FLinearColor(.85f, .9f, .95f, A));
+			float CX = X;
+			for (const FString& C : Sh->CardChips)
+			{
+				float TW = 0, TH = 0;
+				GetTextSize(C, TW, TH, GEngine->GetMediumFont(), .95f * U);
+				DrawRect(FLinearColor(.1f, .35f, .45f, .85f * A), CX, Y + 100 * U, TW + 24 * U, TH + 10 * U);
+				Text(C, CX + 12 * U, Y + 105 * U, .95f, FLinearColor(1, 1, 1, A));
+				CX += TW + 34 * U;
+			}
+		}
+	}
 	// the wreck treasure prompt under water (wreck-treasure.ts): "F  Prise open the strongbox", or what is in sight and how far
 	if (const AKeysTreasure* Tr = AKeysTreasure::Get(this); Tr && !Tr->Prompt.IsEmpty())
 	{

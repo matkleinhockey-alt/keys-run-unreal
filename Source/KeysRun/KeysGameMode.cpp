@@ -5,6 +5,7 @@
 #include "KeysHandgun.h"
 #include "KeysTreasure.h"
 #include "KeysEstates.h"
+#include "KeysTourneyShow.h"
 #include "KeysBoatPawn.h"
 #include "KeysHUD.h"
 #include "KeysWorld.h"
@@ -68,6 +69,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	SpawnOnce<AKeysHandgun>(W);
 	SpawnOnce<AKeysTreasure>(W);
 	SpawnOnce<AKeysEstates>(W);
+	SpawnOnce<AKeysTourneyShow>(W);
 	AKeysExtras* Ex = SpawnOnce<AKeysExtras>(W);
 	AKeysAudio* Au = SpawnOnce<AKeysAudio>(W);
 	if (Ex && Au)

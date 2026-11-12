@@ -57,6 +57,13 @@ public:
 	static constexpr double HarbourR = 90;
 	FString DebugCmd(const FString& Cmd);   // -KRScript ev:...
 	FString FirstSpecies() const { return TSpecies.Num() ? TSpecies[0] : FString(); }
+	// for the tournament's titles, fleet and ceremony (KeysTourneyShow.cpp)
+	double TourneyClock() const;                 // seconds since lines in; negative through the countdown
+	const TArray<double>& MyWeights() const { return MyW; }
+	FString WinnerId0() const { return WinnerId; }
+	static FString FieldName(int32 I);
+	static FString FieldHull(int32 I);
+	static FString FieldCaptain(int32 I);
 
 private:
 	AKeysBoatPawn* Pawn() const;

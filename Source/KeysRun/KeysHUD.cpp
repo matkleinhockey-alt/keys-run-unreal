@@ -14,6 +14,7 @@
 #include "KeysTownData.h"
 #include "KeysKit.h"
 #include "KeysHandgun.h"
+#include "KeysTourneyShow.h"
 #include "EngineUtils.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -166,7 +167,7 @@ void AKeysHUD::DrawHUD()
 	AKeysWalker* Wk = AKeysWalker::Get(this);
 	const bool bAshore = Wk && Wk->IsAshore();
 	if (bDive) DrawDiving(P, Dv);
-	DrawExtras(P);
+	if (const AKeysTourneyShow* Sh0 = AKeysTourneyShow::Get(this); !Sh0 || !Sh0->bLetterbox) DrawExtras(P);
 	DrawFriends(P);
 	{
 		// the buff strip (web game/buffs.ts): what you ate and drank in town, and how long it has left
@@ -185,7 +186,9 @@ void AKeysHUD::DrawHUD()
 		}
 	}
 	const AKeysHandgun* Gun = AKeysHandgun::Get(this);
-	const bool bGun = Gun && Gun->IsOut();
+	const AKeysTourneyShow* Show = AKeysTourneyShow::Get(this);
+	// the pistol has its own HUD, and the tournament's titles and ceremony take the whole screen
+	const bool bGun = (Gun && Gun->IsOut()) || (Show && Show->bLetterbox);
 	if (bGun) { if (P->bBigMap) DrawChart(P); }
 	else if (bAshore)
 	{

@@ -431,6 +431,11 @@ AKeysEvents::ETourney AKeysEvents::TourneyPhase() const
 double AKeysEvents::TimeLeft() const { return FMath::Clamp(T0 + TourneyDuration - GetWorld()->GetTimeSeconds(), 0.0, TourneyDuration); }
 double AKeysEvents::CountdownLeft() const { return FMath::Max(0.0, T0 - GetWorld()->GetTimeSeconds()); }
 
+double AKeysEvents::TourneyClock() const { return GetWorld()->GetTimeSeconds() - T0; }
+FString AKeysEvents::FieldName(int32 I) { return Field[FMath::Clamp(I, 0, 2)].Name; }
+FString AKeysEvents::FieldHull(int32 I) { return Field[FMath::Clamp(I, 0, 2)].Boat; }
+FString AKeysEvents::FieldCaptain(int32 I) { return NpcCaptains[FMath::Clamp(I, 0, 2)]; }
+
 FString AKeysEvents::WinnerName() const
 {
 	if (WinnerId == TEXT("me")) return TEXT("You");

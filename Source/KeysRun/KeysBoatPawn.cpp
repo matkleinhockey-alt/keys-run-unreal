@@ -14,6 +14,7 @@
 #include "KeysHandgun.h"
 #include "KeysTreasure.h"
 #include "KeysEstates.h"
+#include "KeysTourneyShow.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -997,6 +998,7 @@ void AKeysBoatPawn::PrepareToLeaveHelm()
 
 bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const
 {
+	if (const AKeysTourneyShow* Sh = AKeysTourneyShow::Get(this); Sh && Sh->CameraFor(OutPos, OutRot, OutFov)) return true;
 	if (const AKeysHandgun* G = AKeysHandgun::Get(this); G && G->CameraFor(OutPos, OutRot, OutFov)) return true;
 	return false;
 }
