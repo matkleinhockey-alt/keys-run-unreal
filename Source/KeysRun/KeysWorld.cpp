@@ -15,6 +15,9 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "Async/ParallelFor.h"
+#include "EngineUtils.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 namespace
 {
@@ -32,6 +35,21 @@ namespace
 		}
 		return M;
 	}
+}
+
+AKeysWorld* AKeysWorld::Get(const UObject* WorldContext)
+{
+	UWorld* W = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!W) return nullptr;
+	TActorIterator<AKeysWorld> It(W);
+	return It ? *It : nullptr;
+}
+
+void AKeysWorld::SetUnderside(bool bOn)
+{
+	if (bOn == bUnderside || !bWaterBuilt) { bUnderside = bOn; return; }
+	bUnderside = bOn;
+	Water->SetMeshSectionVisible(2, bOn);
 }
 
 UMaterialInterface* AKeysWorld::VertexColorMaterial() { static TWeakObjectPtr<UMaterialInterface> M; if (!M.IsValid()) M = LoadMat(TEXT("/Game/KeysRun/Materials/M_KR_VertexColor.M_KR_VertexColor")); return M.Get(); }
@@ -186,7 +204,8 @@ void AKeysWorld::BuildTerrain()
 					const double X = WorldX0 + i * Cell, Z = WorldZ0 + j * Cell, H = HG[j * GN + i];
 					const int32 i0 = FMath::Max(i - 1, 0), i1 = FMath::Min(i + 1, GN - 1), j0 = FMath::Max(j - 1, 0), j1 = FMath::Min(j + 1, GN - 1);
 					const double DX = (HG[j * GN + i1] - HG[j * GN + i0]) / ((i1 - i0) * Cell), DZ = (HG[j1 * GN + i] - HG[j0 * GN + i]) / ((j1 - j0) * Cell);
-					V.Add(ToUE(X, H, Z));
+					// below the waterline the beach dives steeply, so the sea floor mesh (KeysSeafloor) is what you see through the water
+					V.Add(ToUE(X, H < -.25 ? -.25 + (H + .25) * 3 : H, Z));
 					N.Add(FVector(-DX, -DZ, 1).GetSafeNormal());
 					UV.Add(FVector2D(X / 20, Z / 20));
 					C.Add(ColorAt(i, j));
@@ -197,7 +216,8 @@ void AKeysWorld::BuildTerrain()
 					const int32 K = b * S + a;
 					const float H0 = HG[(CY * CH + b) * GN + CX * CH + a], H1 = HG[(CY * CH + b) * GN + CX * CH + a + 1];
 					const float H2 = HG[(CY * CH + b + 1) * GN + CX * CH + a], H3 = HG[(CY * CH + b + 1) * GN + CX * CH + a + 1];
-					if (FMath::Max(FMath::Max(H0, H1), FMath::Max(H2, H3)) < -1.5f) continue;
+					// under the water the sea floor (KeysSeafloor) takes over, so only the beach is drawn here
+					if (FMath::Max(FMath::Max(H0, H1), FMath::Max(H2, H3)) < -.3f) continue;
 					T.Append({K, K + S, K + 1, K + 1, K + S, K + S + 1});
 				}
 			Terrain->CreateMeshSection_LinearColor(Section, V, T, N, UV, C, TArray<FProcMeshTangent>(), false);
@@ -371,11 +391,11 @@ void AKeysWorld::UpdateWater()
 			const double U = -1 + 2.0 * i / WN;
 			WGrid[i] = U * (C0 + (1 - C0) * FMath::Pow(FMath::Abs(U), 4.0)) * WR;
 		}
-		WV.SetNum(S * S);
-		WN_.SetNum(S * S);
-		WUV.SetNum(S * S);
-		WC.SetNum(S * S);
-		WH.SetNum(S * S);
+		WV.Init(FVector::ZeroVector, S * S);
+		WN_.Init(FVector::UpVector, S * S);
+		WUV.Init(FVector2D::ZeroVector, S * S);
+		WC.Init(FLinearColor::Black, S * S);
+		WH.Init(0, S * S);
 		TArray<int32> T;
 		T.Reserve(WN * WN * 6);
 		for (int32 j = 0; j < WN; j++)
@@ -385,7 +405,24 @@ void AKeysWorld::UpdateWater()
 				T.Append({K, K + S, K + 1, K + 1, K + S, K + S + 1});
 			}
 		Water->CreateMeshSection_LinearColor(0, WV, T, WN_, WUV, WC, TArray<FProcMeshTangent>(), false);
-		Water->SetMaterial(0, WaterMaterial());
+		WaterMID = UMaterialInstanceDynamic::Create(WaterMaterial(), this);
+		{
+			// -KRScat=r,g,b / -KRAbs=r,g,b override the water's scattering / absorption (per meter) for tuning
+			auto Vec = [](const TCHAR* Key, FLinearColor& Out)
+			{
+				FString V;
+				if (!FParse::Value(FCommandLine::Get(), Key, V)) return false;
+				TArray<FString> P;
+				V.ParseIntoArray(P, TEXT(","));
+				if (P.Num() < 3) return false;
+				Out = FLinearColor(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]), 1);
+				return true;
+			};
+			FLinearColor C;
+			if (WaterMID && Vec(TEXT("KRScat="), C)) WaterMID->SetVectorParameterValue(TEXT("Scattering"), C);
+			if (WaterMID && Vec(TEXT("KRAbs="), C)) WaterMID->SetVectorParameterValue(TEXT("Absorption"), C);
+		}
+		Water->SetMaterial(0, WaterMID ? (UMaterialInterface*)WaterMID : WaterMaterial());
 
 		// deep blue out past the fine grid, so the horizon never shows a hole
 		const double Far = 80000;
@@ -397,7 +434,25 @@ void AKeysWorld::UpdateWater()
 		TArray<FLinearColor> FC = {Deep, Deep, Deep, Deep};
 		const TArray<int32> FT = {0, 2, 1, 1, 2, 3};
 		Water->CreateMeshSection_LinearColor(1, FV, FT, FN, FUV, FC, TArray<FProcMeshTangent>(), false);
-		Water->SetMaterial(1, WaterMaterial());
+		Water->SetMaterial(1, WaterMID ? (UMaterialInterface*)WaterMID : WaterMaterial());
+
+		// the underside, seen from below: the same grid wound the other way, with Snell's window in its material
+		TArray<int32> TU;
+		TU.Reserve(WN * WN * 6);
+		for (int32 j = 0; j < WN; j++)
+			for (int32 i = 0; i < WN; i++)
+			{
+				const int32 K = j * S + i;
+				TU.Append({K, K + 1, K + S, K + 1, K + S + 1, K + S});
+			}
+		WNU.Init(-FVector::UpVector, S * S);
+		Water->CreateMeshSection_LinearColor(2, WV, TU, WNU, WUV, WC, TArray<FProcMeshTangent>(), false);
+		if (UMaterialInterface* UM = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_WaterUnder.M_KR_WaterUnder")))
+		{
+			UnderMID = UMaterialInstanceDynamic::Create(UM, this);
+			Water->SetMaterial(2, UnderMID);
+		}
+		Water->SetMeshSectionVisible(2, bUnderside);
 		bWaterBuilt = true;
 	}
 
@@ -460,6 +515,16 @@ void AKeysWorld::UpdateWater()
 		}
 	});
 	Water->UpdateMeshSection_LinearColor(0, WV, WN_, WUV, WC, TArray<FProcMeshTangent>());
+	if (bUnderside)
+	{
+		for (int32 k = 0; k < WN_.Num(); k++) WNU[k] = -WN_[k];
+		Water->UpdateMeshSection_LinearColor(2, WV, WNU, WUV, WC, TArray<FProcMeshTangent>());
+		if (UnderMID)
+		{
+			UnderMID->SetVectorParameterValue(TEXT("SunDir"), FLinearColor(SunDirUE.X, SunDirUE.Y, SunDirUE.Z, 0));
+			UnderMID->SetVectorParameterValue(TEXT("Sky"), FMath::Lerp(FLinearColor(.49f, .69f, .81f), FLinearColor(.85f, .6f, .45f), float(SunK)));
+		}
+	}
 }
 
 // ---------------------------------------------------------------- sky
@@ -468,6 +533,7 @@ void AKeysWorld::ApplySun(double K)
 	// day: high sun to the southeast; sunset: golden hour low over the Seven Mile Bridge to the west
 	const FVector Day = KeysGeo::ToUE(.55, .32, -.62).GetSafeNormal(), Dusk = KeysGeo::ToUE(-.96, .055, .2).GetSafeNormal();
 	const FVector ToSun = FMath::Lerp(Day, Dusk, K).GetSafeNormal();
+	SunDirUE = ToSun;
 	Sun->SetWorldRotation((-ToSun).Rotation());
 	Sun->SetLightColor(FMath::Lerp(FLinearColor(1.f, .96f, .9f), FLinearColor(1.f, .72f, .48f), float(K)));
 	Fog->SetFogInscatteringColor(FMath::Lerp(FLinearColor(.45f, .62f, .75f), FLinearColor(.75f, .5f, .38f), float(K)));

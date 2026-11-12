@@ -131,6 +131,15 @@ public:
 	bool IsFirstPerson() const { return bFpOn || bDriveOn; }
 	void NudgeBoat(double DX, double DZ, double SpeedMul) { X += DX; Z += DZ; Speed *= SpeedMul; }
 
+	// ---- diving (J): the diver actor drives the camera and reports toasts and speared catches back here
+	bool IsDiving() const;
+	void ShowMsg(const FString& Msg, double Secs = 3.2) { ShowToast(Msg, Secs); }
+	// a speared fish was hauled in: the same catch card, cooler and scoring as a rod catch
+	void LandSpeared(const FString& InKey, double InWeight, double InFX, double InFZ);
+	void ApplyDiveCamera(const FVector& PosUE, const FRotator& Rot, float FovH);
+	bool bDiveChase = false;   // Settings: start dives in the chase view instead of the dive mask
+	double UnderwaterHaze = 1; // Settings: how bright the underwater haze is
+
 private:
 	void Rebuild();
 	void PlaceAtSpawn();
@@ -192,6 +201,8 @@ private:
 	void StartRun(bool bDemo);
 	void UpdateCursor();
 	void RunTestScript(double T);
+	void ToggleDive();
+	void HandleDiveInput(class APlayerController* PC, float Dt);
 	bool bAir = false;
 	double TrimVent = 0, TrimMsgT = -99, CollideMsgT = -99, SlamT = -99, AcMsgT = -99;
 	bool bTrimUp = false, bTrimDn = false;

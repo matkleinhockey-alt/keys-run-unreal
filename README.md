@@ -3,7 +3,7 @@
 An Unreal Engine 5 port of the three.js game in `~/Downloads/keys-run-deploy.zip`: center console fishing in Marathon, Florida Keys.
 
 Nearly the whole game is ported. Everything is built in C++ at runtime, the same way the JS game builds it in code,
-so there are no hand-made assets. The editor script creates the four materials and the empty map the first time you open the project.
+so there are no hand-made assets. The editor script creates the materials and the empty map the first time you open the project.
 
 ## What's in it
 
@@ -11,8 +11,24 @@ so there are no hand-made assets. The editor script creates the four materials a
   `zoneAt` math (`KeysGeo.cpp`), plus Miami and Biscayne Bay. US-1 and the old Seven Mile Bridge (with its missing swing span) have pilings you can hit.
   It also has palms, mangroves, conch houses, the Miami skyline, and docks at all four marinas.
 - **The sea:** the same 8-wave swell and chop, and smooth Kelvin wakes (V-shaped, at the real 19.5° angle) from every boat.
-  The water is colored by depth like the chart. The `M_KR_Ocean` material adds wind ripples that catch the sun, light glowing through
-  thin wave tops, and foam broken into real-looking patches on breaking crests, along fresh wake arms and at the beach.
+  The water is see-through: `M_KR_Ocean` is Unreal's Single Layer Water, so you look down through real refraction and per-channel
+  absorption at the sea floor. The flats are clear turquoise over sand and seagrass, Hawk Channel is green-blue, and the Gulf Stream is
+  deep blue. The material also adds wind ripples that catch the sun, light glowing through thin wave tops, and foam broken into
+  real-looking patches on breaking crests, along fresh wake arms and at the beach.
+- **The sea floor:** real bathymetry plus the web game's relief (rock outcrops, coral heads, spur-and-groove on the reef front, the
+  terraced reef wall, sand waves), colored sand, seagrass, rubble, coral and deep rock by depth and zone, with moving caustics.
+  It streams in 64 m chunks around the camera with more detail up close (finer still under water), plus a coarse skirt to the horizon.
+- **The reef:** elkhorn, staghorn, brain and star coral, sea fans and plumes, barrel and tube sponges, encrusting mounds and seagrass
+  beds, placed deterministically on Sombrero Reef, the patch reefs and the Hawk Channel micro-patches (seagrass on the flats), at three
+  levels of detail. Fans, plumes and grass sway with the current and the wave surge.
+- **Diving and spearfishing (J):** jump over the side and free-dive. Breath-hold air that burns faster with depth and effort,
+  buoyancy that lifts you toward the surface, fin kicks in pulses, drag along and across the body, the current pushing you around,
+  narcosis below 25 m, blackout and shallow-water blackout (you wake up on the boat), and an ascent warning that gets louder as the air
+  runs out. Dive-mask and chase views (1). Under water there is per-channel light extinction, depth-banded visibility, Snell's window
+  overhead, caustics, marine snow, your own bubbles and seep bubbles on the bottom, and the lens wetting when you cross the surface.
+  The speargun has a hauled reload (R), a drag-limited shaft with aim assist that leads moving fish, and a float-line fight (hold S to
+  haul, ease off before the shaft tears free); a landed fish goes on the same catch card, cooler and score as a rod catch.
+  Fish stand off a diver who is finning hard, bolt from a near-miss, and fill in around you in schools on the reef.
   Planing boats leave a white prop-wash trail that spreads, breaks up and fades to pale green churned water. H cycles the four sea states.
 - **Boats:** all five (Robalo R230, Grady-White Canyon 306, Freeman 42LR, Midnight Express 43, MTI V42) with their real specs.
   The physics is ported line for line: 15-point buoyancy, trim and hole shot, prop ventilation, wave surfing, slams and air, beaching, reverse and neutral.
@@ -57,7 +73,7 @@ engine sounds for other boats, and playing your own music files on the radio.
 3. Double-click `KeysRun.uproject`. When it says the KeysRun module is missing, click **Yes** to build it.
    - If it asks which engine version to use, pick the one you installed.
    - If the build fails, right-click the `.uproject` → *Generate Xcode project*, open `KeysRun.xcworkspace`, and build the `KeysRunEditor` scheme to see the errors.
-4. The first time the editor opens, the Output Log shows `Keys Run: created ...` for four materials and the map `/Game/KeysRun/Maps/Keys`.
+4. The first time the editor opens, the Output Log shows `Keys Run: created ...` for the materials and the map `/Game/KeysRun/Maps/Keys`.
    Then open that map (it should already be open) and press **Play**.
 
 To ship a standalone app: Platforms → Mac → Package Project.
@@ -91,9 +107,17 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Esc | pause menu |
 | N | sound on / off |
 | Y | buddy boat |
-| J | shower |
+| Z | shower |
+| J | jump in to dive / climb back aboard |
 | X | travel to Miami and back |
 | C / mouse wheel | zoom |
+| **Diving:** W A S D + mouse | swim where you look |
+| Space / C (or Ctrl) | ascend / descend |
+| Shift | sprint |
+| Click | fire the speargun |
+| R | haul the bands back (reload) |
+| hold S | haul a speared fish in |
+| 1 | dive mask / chase view |
 | Mouse drag | orbit the camera, or look around in first person |
 
 ## Code map
@@ -108,7 +132,12 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysHUD.*` | all on-screen UI, including the chartplotter, fish finder and leaderboard |
 | `KeysSave.*` | the local leaderboard save game |
 | `KeysTraffic.*` | AI boat traffic and racers |
-| `KeysLife.*` | birds, bird piles, weedlines, oil rigs and fish schools, and how they change the fishing |
+| `KeysLife.*` | birds, bird piles, weedlines, oil rigs and fish schools, and how they change the fishing; the near-field schools, flight and spear targets under water |
+| `KeysSea.*` | sea floor relief and colors, currents and surge, deterministic hashing (ported from the web game) |
+| `KeysSeafloor.*` | the streamed, LOD'd sea floor mesh |
+| `KeysReef.*` | reef placement and the instanced coral, sponges, fans and seagrass |
+| `KeysDive.*` | free-dive physiology and the speargun rules (pure) |
+| `KeysDiver.*` | diving: controller, cameras, diver and gun models, bubbles, marine snow, the underwater post-process |
 | `KeysAudio.*`, `KeysSfxSynth.*`, `KeysMusicSynth.*`, `KeysSynth.*` | the sound engine, effects synth and radio |
 | `KeysExtras.*`, `KeysCrew.cpp`, `KeysHuman.*` | buddy boat, Luigi mode, Caelen, crew, party, shower and flags |
 | `KeysGameMode.*` | wires it together; the map can stay empty |
@@ -151,4 +180,8 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
 - `-KRScript="12:play;16:cast;19:hook=sailfish;21:jump;21.3:shot;25:quit"`: runs steps on a timer (seconds since launch). Steps are
   menu ids (`play`, `settings`, `controls`, `back`, `board`, `resume`, `mainmenu`, ...), `esc`, `sel=N`, `login`, `closeall`,
   `cast`, `hook=<species>`, `jump`, `catch=<species>`, `shot` (saves a screenshot with the HUD to `Saved/Screenshots`) and `quit`.
+  For looking around: `tp=X,Z[,heading]`, `goto=flats|bay|hawk|reef|wall|offshore`, `cam=yaw,pitch,zoom`. For diving: `dive`, then
+  `dv:hold=5` (stay at 5 m), `dv:depth=N`, `dv:look=yaw,pitch`, `dv:aimfish`, `dv:fishahead`, `dv:spear`, `dv:reload`, `dv:haul=1`,
+  `dv:swim=1`, `dv:air=0.2`, `dv:chase` / `dv:mask`. `-KRScat=r,g,b` / `-KRAbs=r,g,b` override the water's scattering / absorption,
+  and `-KRSeaDebug` paints the sea floor's LOD rings.
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.

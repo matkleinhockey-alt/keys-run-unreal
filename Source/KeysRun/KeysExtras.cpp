@@ -144,11 +144,11 @@ void AKeysExtras::Tick(float DeltaSeconds)
 		CamX = C.X / 100;
 		CamZ = C.Y / 100;
 	}
-	if (bHandleKeys && P->bRunning && !P->IsCapturingKeys())
+	if (bHandleKeys && P->bRunning && !P->IsCapturingKeys() && !P->IsDiving())
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
 			if (PC->WasInputKeyJustPressed(EKeys::Y)) ToggleBuddy();
-			if (PC->WasInputKeyJustPressed(EKeys::J)) ToggleShower();
+			if (PC->WasInputKeyJustPressed(EKeys::Z)) ToggleShower();   // J is diving now, as in the web game
 		}
 
 	UpdateCrew(Dt, T);

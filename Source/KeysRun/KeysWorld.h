@@ -29,6 +29,10 @@ public:
 	void ToggleSunset();
 	bool IsSunset() const { return SunsetTarget > .5; }
 
+	static AKeysWorld* Get(const UObject* WorldContext);
+	// the camera is under the surface: draw the sea's underside (Snell's window) and keep it in step with the waves
+	void SetUnderside(bool bOn);
+
 	static UMaterialInterface* VertexColorMaterial();
 	static UMaterialInterface* WaterMaterial();
 	static UMaterialInterface* SolidMaterial();
@@ -48,6 +52,11 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Terrain;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Water;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> WaterMID;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> UnderMID;
+	bool bUnderside = false;
+	TArray<FVector> WNU;
+	FVector SunDirUE = FVector::UpVector;
 	UPROPERTY() TObjectPtr<UDirectionalLightComponent> Sun;
 	UPROPERTY() TObjectPtr<USkyLightComponent> SkyLight;
 	UPROPERTY() TObjectPtr<USkyAtmosphereComponent> Atmosphere;

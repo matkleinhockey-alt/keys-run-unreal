@@ -1,4 +1,5 @@
 #include "KeysHUD.h"
+#include "KeysDiver.h"
 #include "KeysBoatPawn.h"
 #include "KeysGeo.h"
 #include "KeysData.h"
@@ -146,11 +147,19 @@ void AKeysHUD::DrawHUD()
 		return;
 	}
 	UpdateElectronics(P, Now);
+	AKeysDiver* Dv = AKeysDiver::Get(this);
+	const bool bDive = Dv && Dv->IsDiving();
+	if (bDive) DrawDiving(P, Dv);
 	DrawExtras(P);
 	DrawFriends(P);
-	DrawGauges(P);
-	DrawChart(P);
-	DrawFishing(P);
+	if (!bDive)
+	{
+		// over the side the helm gauges, the chart and the driving hint mean nothing (web setDiveUI)
+		DrawGauges(P);
+		DrawChart(P);
+		DrawFishing(P);
+	}
+	else if (P->bBigMap) DrawChart(P);
 	if (P->FState == EKeysFish::Caught) DrawCard(P);
 	else if (P->bElectronics && !P->bBigMap) DrawElectronics(P);
 
@@ -162,7 +171,7 @@ void AKeysHUD::DrawHUD()
 		Panel(Cx - W * .5f - 18 * U, 28 * U, W + 36 * U, H + 16 * U, .55f);
 		Text(P->Toast, Cx, 36 * U, 1.05f, FLinearColor::White, nullptr, true);
 	}
-	const FString Hint = P->Hint();
+	const FString Hint = bDive ? FString() : P->Hint();
 	if (!Hint.IsEmpty()) Text(Hint, Canvas->SizeX * .5f, Canvas->SizeY - 44 * U, .95f, Dim, nullptr, true);
 	if (P->bBoardOpen) DrawBoard(P);
 	if (P->bLoginOpen) DrawLogin(P);
@@ -291,7 +300,12 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	static const FRow More[] = {
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
 		{TEXT("O"), TEXT("Sunset")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
-		{TEXT("Y / J"), TEXT("Buddy boat / shower")}};
+		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}};
+	static const FRow Dive[] = {
+		{TEXT("J"), TEXT("Jump in / climb back aboard")}, {TEXT("W A S D + mouse"), TEXT("Swim where you look")},
+		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
+		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("R"), TEXT("Haul the bands back to reload")},
+		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}};
 	const float ColW = W * .5f, Row = 40 * U;
 	auto Block = [&](const TCHAR* Head, const FRow* Rows, int32 N, float BX, float BY)
 	{
@@ -306,7 +320,9 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	};
 	Block(TEXT("Driving"), Drive, UE_ARRAY_COUNT(Drive), X, Y);
 	const float Y2 = Block(TEXT("Fishing"), Fish, UE_ARRAY_COUNT(Fish), X + ColW, Y);
-	Block(TEXT("Everything else"), More, UE_ARRAY_COUNT(More), X, FMath::Max(Y + 44 * U + Row * UE_ARRAY_COUNT(Drive), Y2) + 30 * U);
+	const float Y3 = FMath::Max(Y + 44 * U + Row * UE_ARRAY_COUNT(Drive), Y2) + 30 * U;
+	Block(TEXT("Everything else"), More, UE_ARRAY_COUNT(More), X, Y3);
+	Block(TEXT("Diving and spearfishing"), Dive, UE_ARRAY_COUNT(Dive), X + ColW, Y3);
 }
 
 // ================================================================ online
@@ -515,6 +531,96 @@ void AKeysHUD::DrawFishing(AKeysBoatPawn* P)
 		for (int32 i = 1; i <= 5; i++) Pips += i <= P->Drag ? TEXT("#") : TEXT("-");
 		Text(FString::Printf(TEXT("%d m out   -   drag %s"), FMath::RoundToInt(P->LineDist), *Pips), Cx, Y + 132 * U, .85f, FLinearColor::White, nullptr, true);
 	}
+}
+
+// the diver's HUD (web entities/diver/hud.ts, entities/speargun/reload-hint.ts and fight-ui.ts)
+void AKeysHUD::DrawDiving(AKeysBoatPawn* P, AKeysDiver* D)
+{
+	const float SW = Canvas->SizeX, SH = Canvas->SizeY, Cx = SW * .5f;
+	const KeysDive::FState& S = D->State();
+	// tunnel vision closing in as the air runs out, black on a blackout
+	const float Tun = float(D->TunnelAmount());
+	if (Tun > .01f)
+	{
+		for (int32 k = 0; k < 10; k++)
+		{
+			const float F = (k + 1) / 10.f;
+			const float Ins = (1 - F) * FMath::Min(SW, SH) * .5f * (1.2f - Tun * .7f);
+			const float A = FMath::Clamp(Tun * .22f * F, 0.f, 1.f);
+			DrawRect(FLinearColor(0, 0, 0, A), 0, 0, SW, Ins);
+			DrawRect(FLinearColor(0, 0, 0, A), 0, SH - Ins, SW, Ins);
+			DrawRect(FLinearColor(0, 0, 0, A), 0, Ins, Ins, SH - 2 * Ins);
+			DrawRect(FLinearColor(0, 0, 0, A), SW - Ins, Ins, Ins, SH - 2 * Ins);
+		}
+		if (S.bBlackedOut) DrawRect(FLinearColor(0, 0, 0, FMath::Min(1.f, Tun)), 0, 0, SW, SH);
+	}
+	if (S.bBlackedOut) return;
+
+	// reticle: a ring that turns gold when the aim assist has a fish
+	if (!D->IsChaseView())
+	{
+		const FLinearColor RC = D->AimLocked() ? FLinearColor(Gold.R, Gold.G, Gold.B, .95f) : FLinearColor(1, 1, 1, .55f);
+		const float R = (D->AimLocked() ? 16 : 12) * U;
+		for (int32 k = 0; k < 24; k++)
+		{
+			const float A0 = k / 24.f * 2 * PI, A1 = (k + 1) / 24.f * 2 * PI;
+			DrawLine(Cx + FMath::Cos(A0) * R, SH * .5f + FMath::Sin(A0) * R, Cx + FMath::Cos(A1) * R, SH * .5f + FMath::Sin(A1) * R, RC, 1.5f * U);
+		}
+		DrawRect(RC, Cx - 1.5f * U, SH * .5f - 1.5f * U, 3 * U, 3 * U);
+	}
+
+	// air and depth
+	const float PX = 30 * U, PW = 330 * U, PH = 150 * U, PY = SH - PH - 30 * U;
+	Panel(PX, PY, PW, PH, .55f);
+	const float Af = float(D->AirFrac());
+	const FLinearColor AC = Af < .15f ? Red : Af < .3f ? FLinearColor(1.f, .6f, .2f) : Teal;
+	Text(TEXT("Air"), PX + 18 * U, PY + 12 * U, 1.0f, Dim);
+	Text(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Af * 100)), PX + PW - 90 * U, PY + 12 * U, 1.1f, AC);
+	Bar(PX + 18 * U, PY + 46 * U, PW - 36 * U, 14 * U, Af, AC);
+	Text(TEXT("Depth"), PX + 18 * U, PY + 70 * U, 1.0f, Dim);
+	Text(FString::Printf(TEXT("%.1f m"), S.Depth()), PX + PW - 110 * U, PY + 70 * U, 1.1f, FLinearColor::White);
+	float Yw = PY + 104 * U;
+	const FString Warn = D->AscentWarning();
+	if (!Warn.IsEmpty())
+	{
+		const bool bCrit = Warn.StartsWith(TEXT("SURFACE"));
+		const float Pulse = bCrit ? .6f + .4f * FMath::Sin(GetWorld()->GetRealTimeSeconds() * 8) : 1.f;
+		Text(Warn, PX + 18 * U, Yw, .82f, bCrit ? FLinearColor(Red.R, Red.G, Red.B, Pulse) : FLinearColor(1.f, .7f, .3f));
+		if (bCrit) Text(TEXT("SURFACE NOW"), Cx, SH * .2f, 2.2f, FLinearColor(Red.R, Red.G, Red.B, Pulse), GEngine->GetLargeFont(), true);
+	}
+	else if (S.bNarcosis) Text(TEXT("Narcosis - the deep plays tricks down here"), PX + 18 * U, Yw, .82f, FLinearColor(.8f, .6f, 1.f));
+	if (D->CanReboard()) Text(TEXT("Press J to climb aboard"), Cx, SH - 120 * U, 1.2f, Gold, nullptr, true);
+
+	// the reload prompt: brace, then press R to haul the bands back
+	if (!D->IsLoaded() && !D->HasSpeared() && !D->ShotInFlight())
+	{
+		const float RX = 30 * U, RW = 300 * U, RY = PY - 74 * U;
+		Panel(RX, RY, RW, 58 * U, D->NudgeFlash() > 0 ? .85f : .6f);
+		if (D->NudgeFlash() > 0) { DrawRect(Gold, RX, RY, RW, 2 * U); DrawRect(Gold, RX, RY + 56 * U, RW, 2 * U); }
+		const FString L = D->GunRecoverLeft() > 0 ? TEXT("Bracing the gun...") : D->IsDrawing() ? (D->DrawEffort() < .7 ? TEXT("Hold still - kicking costs you leverage") : TEXT("Hauling the bands...")) : TEXT("Press R - haul the bands back");
+		Text(L, RX + 12 * U, RY + 8 * U, .85f, FLinearColor(.87f, .96f, .97f));
+		Bar(RX + 12 * U, RY + 38 * U, RW - 24 * U, 6 * U, float(D->GunDraw()), FLinearColor(.95f, .76f, .31f));
+	}
+
+	// a fish on the spear: the same meter as a rod fight
+	if (D->HasSpeared())
+	{
+		const KeysDive::FFight& F = D->Fight();
+		const float W = 460 * U, X = Cx - W * .5f, Y = SH - 250 * U;
+		Panel(X, Y, W, 150 * U, .6f);
+		Text(D->FightLabel(), Cx, Y + 8 * U, 1.3f, Gold, nullptr, true);
+		const FString Sub = Af < .15f ? TEXT("Air critical - surface now, even mid-fight.") : Af < .3f ? TEXT("Air low - think about surfacing with it on.") : TEXT("Hold S to haul it in - ease off if the bar runs red.");
+		Text(Sub, Cx, Y + 44 * U, .8f, Dim, nullptr, true);
+		const float T = float(F.Tension);
+		const FLinearColor TC = T > .82f ? Red : T < .08f ? FLinearColor(.6f, .6f, .65f) : Teal;
+		Text(TEXT("Line tension"), X + 18 * U, Y + 76 * U, .8f, Dim);
+		Bar(X + 140 * U, Y + 82 * U, W - 160 * U, 14 * U, T, TC);
+		Text(TEXT("Fish stamina"), X + 18 * U, Y + 104 * U, .8f, Dim);
+		Bar(X + 140 * U, Y + 110 * U, W - 160 * U, 10 * U, float(F.Stam), Gold);
+		Text(FString::Printf(TEXT("%d m"), FMath::RoundToInt(F.Dist)), Cx, Y + 124 * U, .85f, FLinearColor::White, nullptr, true);
+	}
+	else if (!P->Toast.IsEmpty() && GetWorld()->GetTimeSeconds() < P->ToastUntil) {}
+	else Text(TEXT("Click fire  -  R reload  -  Space / C up / down  -  J climb aboard"), Cx, SH - 44 * U, .85f, Dim, nullptr, true);
 }
 
 void AKeysHUD::DrawCard(AKeysBoatPawn* P)

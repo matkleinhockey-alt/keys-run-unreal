@@ -38,6 +38,7 @@ private:
 	void DrawChart(AKeysBoatPawn* P);
 	void DrawFishing(AKeysBoatPawn* P);
 	void DrawCard(AKeysBoatPawn* P);
+	void DrawDiving(AKeysBoatPawn* P, class AKeysDiver* D);
 	void DrawExtras(AKeysBoatPawn* P);
 	// chartplotter + fish finder (the JS ELEC block) and the local leaderboard
 	void UpdateElectronics(AKeysBoatPawn* P, double Now);

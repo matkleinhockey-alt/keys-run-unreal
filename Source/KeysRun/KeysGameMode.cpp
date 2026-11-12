@@ -8,6 +8,9 @@
 #include "KeysLife.h"
 #include "KeysOnline.h"
 #include "KeysGeo.h"
+#include "KeysSeafloor.h"
+#include "KeysDiver.h"
+#include "KeysReef.h"
 #include "EngineUtils.h"
 #include "GameFramework/Controller.h"
 
@@ -39,6 +42,9 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		W->SpawnActor<AKeysWorld>(AKeysWorld::StaticClass(), FTransform::Identity, P);
 	}
+	SpawnOnce<AKeysSeafloor>(W);
+	SpawnOnce<AKeysDiver>(W);
+	SpawnOnce<AKeysReef>(W);
 	SpawnOnce<AKeysLife>(W);
 	SpawnOnce<AKeysTraffic>(W);
 	SpawnOnce<AKeysOnline>(W);

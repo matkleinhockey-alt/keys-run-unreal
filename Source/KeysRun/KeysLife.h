@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "KeysGeo.h"
 #include "KeysData.h"
+#include "KeysDive.h"
 #include "KeysLife.generated.h"
 
 class UProceduralMeshComponent;
@@ -101,7 +102,7 @@ struct FKeysPelicanFlock
 
 struct FKeysSwimmer
 {
-	double OX = 0, OZ = 0, OY = 0, Ph = 0, S = 1, Shade = 1;
+	double OX = 0, OZ = 0, OY = 0, Ph = 0, S = 1, Shade = 1, SizeU = .5;
 	uint8 Act = 0;   // 0 none, else EAct
 	double AP = 0, ActT = 0;
 	bool bSpl = false;
@@ -114,10 +115,12 @@ struct FKeysSchool
 	int32 Id = 0;
 	FString Type;
 	const FKeysVis* V = nullptr;
-	double CX = 0, CZ = 0, H = 0, Ph = 0, Turn = 0, Flee = 0, FleeH = 0, Glide = 0, KeepT = 0;
+	double CX = 0, CZ = 0, H = 0, Ph = 0, Turn = 0, Flee = 0, FleeH = 0, Glide = 0, KeepT = 0, FleeMul = 0;
 	bool bChased = false;
 	double DvT = -1, DvTarget = 0, Dv = 0;
-	uint8 AnchorKind = 0;   // 0 none, 1 rig, 2 bird pile, 3 weedline
+	uint8 AnchorKind = 0;   // 0 none, 1 rig, 2 bird pile, 3 weedline, 4 a fixed spot (the diver's near-field schools)
+	double AnchorX = 0, AnchorZ = 0;
+	int64 NearCell = 0;   // the 18 m cell a near-field school belongs to (0 for none)
 	int32 AnchorRef = -1;   // rig index, hotspot id, weedline index
 	double AnchorR = 10;
 	TArray<FKeysSwimmer> Members;
@@ -189,6 +192,18 @@ public:
 	// a burst of spray at a point on the water
 	void Splash(double X, double Z, int32 N, double Power);
 
+	// ---- diving (web game entities/fish: the diver as a threat, the near-field schools around a diver, spear targets)
+	// the diver is in the water at (X, Z), moving RelSpeed m/s through it; schools near it fill in and stand off
+	void SetDiver(bool bOn, double X, double Z, double RelSpeed);
+	// every catchable fish within R of a point, as a capsule the spear can hit
+	void SpearTargetsNear(double X, double Y, double Z, double R, TArray<KeysDive::FTarget>& Out) const;
+	// a fish was speared: it leaves its school
+	void TakeSpeared(int32 TargetId);
+	// a shaft hissed past here: schools nearby bolt
+	void SpookAt(double X, double Z);
+	// test hook: bring the nearest spearable school to (X, Z) and keep it there
+	void DebugBringSchool(double X, double Z);
+
 private:
 	void SpawnHotspot(const FString& Zone);
 	void BuildWeeds();
@@ -203,7 +218,7 @@ private:
 	void UpdateDrops(double Dt, double T);
 	void ManagePopulation(double RMin);
 	void TrySpawn(double RMin);
-	FKeysSchool* SpawnGroupAt(const FString& Type, double X, double Z, double H = 1e9);
+	FKeysSchool* SpawnGroupAt(const FString& Type, double X, double Z, double H = 1e9, bool bIgnoreCap = false);
 	void SpawnTunaNear(double X, double Z);
 	void EnsureAnchors();
 	bool AnchorPos(const FKeysSchool& G, double& OX, double& OZ) const;
@@ -220,6 +235,7 @@ private:
 	void EmitBird(const FKeysBird& B);
 	void Flush(UProceduralMeshComponent* M, FKeysLifeBuf& B);
 	void ReadViewer(double Dt);
+	void UpdateNearField();
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BirdMesh;
@@ -248,4 +264,9 @@ private:
 	bool bBait = false, bTunaClosing = false, bStrikePending = false;
 	double BaitX = 0, BaitZ = 0;
 	FKeysTunaStrike Pending;
+	bool bDiver = false;
+	double DiverX = 0, DiverZ = 0, DiverSpeed = 0;
+	TArray<FVector2D> Spooks;
+	TMap<int64, int32> NearCells;   // 18 m cell -> school id
+	double NearT = 0;
 };

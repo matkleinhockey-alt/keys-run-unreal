@@ -1,4 +1,5 @@
 #include "KeysLife.h"
+#include "KeysSea.h"
 #include "KeysBoatPawn.h"
 #include "KeysMesh.h"
 #include "KeysWorld.h"
@@ -203,6 +204,24 @@ namespace
 		const FKeysShape* S = M.Find(K);
 		return S ? *S : M[TEXT("mangrove")];
 	}
+
+	// web entities/fish/behavior.ts: how far each kind of fish stands off a diver or a near-miss shaft, and how fast it bolts
+	struct FLifeFlee { double DiverR, SpearR, SpeedMul; };
+	FLifeFlee LifeFleeParams(const FString& Key, const FKeysVis* V)
+	{
+		static const TSet<FString> Apex = {TEXT("barracuda"), TEXT("grouper"), TEXT("gag"), TEXT("redgrouper"), TEXT("goliath"), TEXT("marlin"), TEXT("blackmarlin"), TEXT("swordfish"),
+			TEXT("sailfish"), TEXT("wahoo"), TEXT("kingfish"), TEXT("amberjack"), TEXT("cobia"), TEXT("jackcrevalle"), TEXT("tripletail"), TEXT("lionfish")};
+		static const TSet<FString> Glide = {TEXT("turtle"), TEXT("manatee"), TEXT("stingray"), TEXT("eagleray"), TEXT("dolphin"), TEXT("pilotwhale"), TEXT("humpback")};
+		if (Key == TEXT("flyingfish")) return {9, 12, 3.2};
+		if (Glide.Contains(Key)) return {5, 8, 1.15};
+		if (V->Kind == EKeysKind::Shark || Apex.Contains(Key)) return {3, 6, 1.35};
+		if (V->SMax <= 2) return {7, 10, 2.2};
+		return {9, 12, 3.2};
+	}
+
+	// near-field schools around a diver (web entities/fish/spawn.ts nearFieldForCell): 18 m cells within 72 m
+	constexpr double LifeNearCell = 18, LifeNearRadius = 72;
+	constexpr uint32 LifeNearSeed = 0x4b52u;
 
 	// what you can see swimming in each zone (JS ZONE_LIFE)
 	const TArray<FZoneRow>& LifeZoneLife(const FString& Zone)
@@ -1439,14 +1458,14 @@ const FKeysHotspot* AKeysLife::FindHotspot(int32 Id) const
 	return nullptr;
 }
 
-FKeysSchool* AKeysLife::SpawnGroupAt(const FString& Type, double X, double Z, double H)
+FKeysSchool* AKeysLife::SpawnGroupAt(const FString& Type, double X, double Z, double H, bool bIgnoreCap)
 {
 	const FKeysVis* V = LifeVis(Type);
 	if (!V) return nullptr;
 	const double D = DepthAt(X, Z);
 	if (D < V->DMin || D > V->DMax || ShoreInfo(X, Z).D < 4) return nullptr;
 	const int32 N = V->SMin + FMath::RandRange(0, V->SMax - V->SMin);
-	if (FreeSlots(V) < N) return nullptr;
+	if (!bIgnoreCap && FreeSlots(V) < N) return nullptr;
 	FKeysSchool& G = Schools.AddDefaulted_GetRef();
 	G.Id = NextId++;
 	G.Type = Type;
@@ -1461,7 +1480,9 @@ FKeysSchool* AKeysLife::SpawnGroupAt(const FString& Type, double X, double Z, do
 		const double A = FMath::FRand() * PI * 2, R = FMath::Sqrt(FMath::FRand()) * V->Spread;
 		FKeysSwimmer M;
 		M.OX = FMath::Cos(A) * R; M.OZ = FMath::Sin(A) * R; M.OY = LRand(-1, 1); M.Ph = FMath::FRand() * 100;
-		M.S = LifeVSC * LRand(.8, 1.15) * (V->DMin >= 25 ? 1 + .45 * Of : 1);
+		const double Rr = LRand(.8, 1.15);
+		M.S = LifeVSC * Rr * (V->DMin >= 25 ? 1 + .45 * Of : 1);
+		M.SizeU = (Rr - .8) / .35;
 		M.ActT = LRand(1, 8);
 		M.Shade = LRand(.84, 1.08);   // no two fish quite the same shade
 		G.Members.Add(M);
@@ -1522,6 +1543,7 @@ bool AKeysLife::AnchorPos(const FKeysSchool& G, double& OX, double& OZ) const
 	if (G.AnchorKind == 1 && Rigs.IsValidIndex(G.AnchorRef)) { OX = Rigs[G.AnchorRef].X; OZ = Rigs[G.AnchorRef].Z; return true; }
 	if (G.AnchorKind == 2) { if (const FKeysHotspot* H = FindHotspot(G.AnchorRef)) { OX = H->X; OZ = H->Z; return true; } }
 	if (G.AnchorKind == 3 && Weeds.IsValidIndex(G.AnchorRef)) { OX = Weeds[G.AnchorRef].X; OZ = Weeds[G.AnchorRef].Z; return true; }
+	if (G.AnchorKind == 4) { OX = G.AnchorX; OZ = G.AnchorZ; return true; }
 	return false;
 }
 
@@ -1568,6 +1590,8 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 {
 	PopT -= Dt;
 	if (PopT <= 0) { PopT = .4; ManagePopulation(70); }
+	NearT -= Dt;
+	if (NearT <= 0) { NearT = .5; UpdateNearField(); }
 	const double Bs = BoatSpd;
 	const FLinearColor Water = LLin(FLinearColor(.03f, .22f, .30f));
 	for (FKeysSchool& G : Schools)
@@ -1582,10 +1606,33 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			G.Flee = 1.5;
 			G.FleeH = FMath::Atan2(-Bdx, -Bdz);
 		}
+		// a diver finning hard, or a shaft hissing past, spooks fish by species class (web entities/fish/behavior.ts)
+		if (bDiver || Spooks.Num())
+		{
+			const FLifeFlee FP = LifeFleeParams(G.Type, V);
+			double BestD = 1e9, TX = 0, TZ = 0;
+			if (bDiver)
+			{
+				const double Dd = LHyp(G.CX - DiverX, G.CZ - DiverZ);
+				const double K = LClamp((DiverSpeed - .5) / (2 - .5), 0, 1);
+				if (Dd < 1.6 + (FP.DiverR - 1.6) * K) { BestD = Dd; TX = DiverX; TZ = DiverZ; }
+			}
+			for (const FVector2D& Sp : Spooks)
+			{
+				const double Dd = LHyp(G.CX - Sp.X, G.CZ - Sp.Y);
+				if (Dd < FP.SpearR && Dd < BestD) { BestD = Dd; TX = Sp.X; TZ = Sp.Y; }
+			}
+			if (BestD < 1e8)
+			{
+				G.Flee = 1.5;
+				G.FleeH = FMath::Atan2(-(G.CX - TX), -(G.CZ - TZ));
+				G.FleeMul = FP.SpeedMul;
+			}
+		}
 		if (V->Act == EKeysAct::Glide && G.Glide <= 0 && FMath::FRand() < Dt * .03) G.Glide = LRand(1.6, 3.4);
 		double Sp = V->Speed;
-		if (G.Flee > 0) { G.Flee -= Dt; G.H = LAngLerp(G.H, G.FleeH, Dt * 4); Sp *= V->Level == 2 ? 1.8 : 3.2; }
-		else G.H += (FMath::Sin(T * .37 + G.Ph) * .35 + FMath::Sin(T * .11 + G.Ph * 2) * .2) * Dt;
+		if (G.Flee > 0) { G.Flee -= Dt; G.H = LAngLerp(G.H, G.FleeH, Dt * 4); Sp *= G.FleeMul > 0 ? G.FleeMul : V->Level == 2 ? 1.8 : 3.2; }
+		else { G.FleeMul = 0; G.H += (FMath::Sin(T * .37 + G.Ph) * .35 + FMath::Sin(T * .11 + G.Ph * 2) * .2) * Dt; }
 		// tuna run down a bait sitting in blue water
 		if (V->IsTuna() && !G.bChased && bBait && G.Members.Num())
 		{
@@ -1638,7 +1685,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 		else G.Turn = 0;
 		G.CX += Fx * Sp * Dt;
 		G.CZ += Fz * Sp * Dt;
-		const double D = DepthFast(G.CX, G.CZ), Amp = AmpFor(D), Floor = LFloorY(D), Rx = FMath::Cos(G.H), Rz = -FMath::Sin(G.H);
+		const double D = DepthFast(G.CX, G.CZ), Amp = AmpFor(D), Floor = KeysSea::SeafloorHeightAt(G.CX, G.CZ), Rx = FMath::Cos(G.H), Rz = -FMath::Sin(G.H);
 		// dive cycles: sound for a while, then come back up; spooked fish head down
 		G.DvT -= Dt;
 		if (G.DvT <= 0) { G.DvTarget = G.DvTarget > .3 ? 0 : (D > 3 ? LRand(.4, 1) : 0); G.DvT = G.DvTarget > 0 ? LRand(5, 14) : LRand(6, 18); }
@@ -1694,7 +1741,8 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			const FLifeR3 R = FLifeR3::YXZ(Pitch, M.Yaw, Roll);
 			const FVector Pos(Mx, Y, Mz);
 			const double S = M.S, Swp0 = T * 7.5 + Mx * .37 + Mz * .23;
-			const float Haze = float(FMath::Min(.96, 1 - FMath::Exp(-FMath::Max(0.0, -Y - .3) * .16)));
+			// the see-through sea (and the underwater post-process) absorb with depth now, so no painted-in haze
+			const float Haze = 0.f;
 			const int32 I0 = SeaBuf.V.Num();
 			for (int32 i = 0; i < Tpl.P.Num(); i++)
 			{
@@ -1713,6 +1761,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			SeaBuf.Sig = SeaBuf.Sig * 31 + uint32(Tpl.P.Num()) * 7 + uint32(V->Kind);
 		}
 	}
+	Spooks.Reset();
 }
 
 // ================================================================ fishing hooks
@@ -1871,4 +1920,143 @@ bool AKeysLife::BuildCreatureMesh(const FString& Key, FKeysMesh& Out, double Sca
 	}
 	for (const int32 Ix : Tp.T) Out.T.Add(I0 + Ix);
 	return true;
+}
+
+// ================================================================ diving
+void AKeysLife::SetDiver(bool bOn, double X, double Z, double RelSpeed)
+{
+	bDiver = bOn; DiverX = X; DiverZ = Z; DiverSpeed = RelSpeed;
+}
+
+void AKeysLife::SpookAt(double X, double Z) { Spooks.Add(FVector2D(X, Z)); }
+
+void AKeysLife::UpdateNearField()
+{
+	// free near-field schools once the diver is well away (or out of the water)
+	for (auto It = NearCells.CreateIterator(); It; ++It)
+	{
+		const int32 CX = int32(It.Key() >> 32), CZ = int32(uint32(It.Key() & 0xffffffff));
+		const double D = LHyp((CX + .5) * LifeNearCell - DiverX, (CZ + .5) * LifeNearCell - DiverZ);
+		const int32 Idx = Schools.IndexOfByPredicate([&](const FKeysSchool& G) { return G.Id == It.Value(); });
+		if (!bDiver || D > LifeNearRadius * 1.3 || Idx == INDEX_NONE)
+		{
+			if (Idx != INDEX_NONE) { FreeGroup(Schools[Idx]); Schools.RemoveAt(Idx); }
+			It.RemoveCurrent();
+		}
+	}
+	if (!bDiver) return;
+	static const TMap<FString, double> Density = {{TEXT("Reef"), 1.0}, {TEXT("Bridge"), 1.0}, {TEXT("Hawk Channel"), .55}, {TEXT("Flats"), .5},
+		{TEXT("Backcountry"), .4}, {TEXT("Creek"), .4}, {TEXT("Offshore"), .12}};
+	const int32 R = FMath::CeilToInt32(LifeNearRadius / LifeNearCell);
+	const int32 IX = FMath::FloorToInt32(DiverX / LifeNearCell), IZ = FMath::FloorToInt32(DiverZ / LifeNearCell);
+	for (int32 j = -R; j <= R; j++)
+		for (int32 i = -R; i <= R; i++)
+		{
+			const int32 CX = IX + i, CZ = IZ + j;
+			const double X0 = (CX + .5) * LifeNearCell, Z0 = (CZ + .5) * LifeNearCell;
+			if (LHyp(X0 - DiverX, Z0 - DiverZ) > LifeNearRadius) continue;
+			const int64 K = (int64(CX) << 32) ^ int64(uint32(CZ));
+			if (NearCells.Contains(K)) continue;
+			NearCells.Add(K, -1);   // rolled; -1 if it holds nothing
+			const FString Zone = ZoneAt(X0, Z0);
+			const double* Dn = Density.Find(Zone);
+			if (KeysSea::HashCell(LifeNearSeed, CX, CZ, 9701) >= (Dn ? *Dn : .4)) continue;
+			// a minority of cells hold one big fish rather than a shoal
+			const bool bBig = KeysSea::HashCell(LifeNearSeed, CX, CZ, 9708) < .22;
+			TArray<FZoneRow> Table;
+			for (const FZoneRow& Row : LifeZoneLife(Zone))
+			{
+				const FKeysVis* V = LifeVis(Row.Key);
+				if (!V || !KeysData::Species(Row.Key)) continue;
+				if (bBig ? V->Len >= .85 : V->SMax >= 4) Table.Add(Row);
+			}
+			if (!Table.Num())
+				for (const FZoneRow& Row : LifeZoneLife(Zone))
+					if (const FKeysVis* V = LifeVis(Row.Key)) if (KeysData::Species(Row.Key) && V->SMax >= 4) Table.Add(Row);
+			if (!Table.Num()) continue;
+			double Tot = 0;
+			for (const FZoneRow& Row : Table) Tot += Row.W;
+			double Pick = KeysSea::HashCell(LifeNearSeed, CX, CZ, 9702) * Tot;
+			FString Type = Table.Last().Key;
+			for (const FZoneRow& Row : Table) { Pick -= Row.W; if (Pick <= 0) { Type = Row.Key; break; } }
+			const double AX = X0 + (KeysSea::HashCell(LifeNearSeed, CX, CZ, 9704) - .5) * LifeNearCell;
+			const double AZ = Z0 + (KeysSea::HashCell(LifeNearSeed, CX, CZ, 9705) - .5) * LifeNearCell;
+			if (LandH(AX, AZ) >= 0) continue;
+			if (FKeysSchool* G = SpawnGroupAt(Type, AX, AZ, KeysSea::HashCell(LifeNearSeed, CX, CZ, 9706) * PI * 2, true))
+			{
+				G->AnchorKind = 4; G->AnchorX = AX; G->AnchorZ = AZ;
+				G->AnchorR = 3 + 6 * KeysSea::HashCell(LifeNearSeed, CX, CZ, 9707);
+				G->KeepT = 1e12;
+				G->NearCell = K;
+				NearCells[K] = G->Id;
+			}
+		}
+}
+
+void AKeysLife::SpearTargetsNear(double X, double Y, double Z, double R, TArray<KeysDive::FTarget>& Out) const
+{
+	const double R2 = R * R;
+	for (const FKeysSchool& G : Schools)
+	{
+		const FKeysVis* V = G.V;
+		if (!V || LHyp(G.CX - X, G.CZ - Z) > R + 40) continue;
+		const KeysData::FSpecies* Sp = KeysData::Species(G.Type);
+		if (!Sp) continue;   // ambient-only creatures have no catch
+		const bool bCatchable = V->Kind != EKeysKind::Dolphin && V->Kind != EKeysKind::Turtle && V->Kind != EKeysKind::Manatee;
+		const double Fx = -FMath::Sin(G.H), Fz = -FMath::Cos(G.H);
+		double Spd = V->Speed;
+		if (G.Flee > 0) Spd *= G.FleeMul > 0 ? G.FleeMul : 3.2;
+		for (int32 i = 0; i < G.Members.Num(); i++)
+		{
+			const FKeysSwimmer& M = G.Members[i];
+			const FVector C(M.WX, M.WY, M.WZ);
+			if ((C - FVector(X, Y, Z)).SizeSquared() > R2) continue;
+			// the body as a capsule along the nose-tail axis (web entities/fish/hitbox.ts)
+			const double L = M.Sz;
+			const double Girth = FMath::Max(V->H > 0 ? V->H * M.S : V->Len * .17 * M.S, V->W > 0 ? V->W * M.S : V->Len * .16 * M.S) / 2;
+			const double Rad = FMath::Min(L / 2, FMath::Max(.05 + .015 * L, Girth * 1.4));
+			const double Reach = FMath::Max(0.0, L / 2 - Rad);
+			const FVector N(-FMath::Sin(M.Yaw) * FMath::Cos(M.Pitch), FMath::Sin(M.Pitch), -FMath::Cos(M.Yaw) * FMath::Cos(M.Pitch));
+			KeysDive::FTarget T;
+			T.Id = G.Id * 1000 + i;
+			T.Key = G.Type;
+			T.Weight = FMath::RoundToDouble((Sp->Min + (Sp->Max - Sp->Min) * LClamp(M.SizeU, 0, 1)) * 10) / 10;
+			T.A = C + N * Reach;
+			T.B = C - N * (Reach + .1 * L);
+			T.Radius = Rad;
+			T.Vel = FVector(Fx * Spd, 0, Fz * Spd);
+			T.bCatchable = bCatchable;
+			Out.Add(T);
+		}
+	}
+}
+
+void AKeysLife::TakeSpeared(int32 TargetId)
+{
+	const int32 Gid = TargetId / 1000, Mi = TargetId % 1000;
+	for (FKeysSchool& G : Schools)
+		if (G.Id == Gid && G.Members.IsValidIndex(Mi))
+		{
+			G.Members.RemoveAt(Mi);
+			if (int32* U = Used.Find(G.V)) *U = FMath::Max(0, *U - 1);
+			G.Flee = 1.5;
+			G.FleeH = FMath::Atan2(-(G.CX - DiverX), -(G.CZ - DiverZ));
+			return;
+		}
+}
+
+void AKeysLife::DebugBringSchool(double X, double Z)
+{
+	FKeysSchool* Best = nullptr;
+	double BestD = 1e9;
+	for (FKeysSchool& G : Schools)
+	{
+		if (!G.V || !G.Members.Num() || !KeysData::Species(G.Type) || G.V->Kind == EKeysKind::Dolphin || G.V->Kind == EKeysKind::Turtle || G.V->Kind == EKeysKind::Manatee) continue;
+		const double D = LHyp(G.CX - X, G.CZ - Z);
+		if (D < BestD) { BestD = D; Best = &G; }
+	}
+	if (!Best) return;
+	Best->CX = X; Best->CZ = Z; Best->Flee = 0; Best->FleeMul = 0;
+	Best->AnchorKind = 4; Best->AnchorX = X; Best->AnchorZ = Z; Best->AnchorR = 3; Best->KeepT = 1e12;
+	UE_LOG(LogTemp, Log, TEXT("KRLife brought a school of %s (%d) to %.0f, %.0f"), *Best->Type, Best->Members.Num(), X, Z);
 }

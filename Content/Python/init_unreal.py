@@ -10,6 +10,13 @@ eal = unreal.EditorAssetLibrary
 mel = unreal.MaterialEditingLibrary
 
 
+def _link(a, ao, b, bi):
+    ok = mel.connect_material_expressions(a, ao, b, bi)
+    if not ok:
+        unreal.log_error("Keys Run: could not connect %s.%s -> %s.%s" % (a.get_name(), ao, b.get_name(), bi))
+    return ok
+
+
 def _const(mat, value, x, y):
     c = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, x, y)
     c.set_editor_property("r", value)
@@ -140,9 +147,27 @@ def _custom(mat, x, y, code, out_type, names, desc):
     return c
 
 
+OCEAN_SCATTER = """
+// Single Layer Water: per-meter scattering, boosted where light shines through the thin top of a crest,
+// and turned milky in the aerated prop wash. Returned per centimeter, which is what the water output wants.
+float glow = saturate((UV.x - 0.4) * 1.6) * (1.0 - saturate(F));
+float3 sc = Scat * (1.0 + glow * 3.0);
+sc = lerp(sc, float3(0.32, 0.5, 0.48), saturate(UV.y) * 0.55);
+return sc / 100.0;
+"""
+
+OCEAN_ABSORB = """
+return Absorb / 100.0;
+"""
+
+
 def _ocean(mat):
-    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_SUBSURFACE)
+    # Single Layer Water: the floor shows through with real refraction and per-channel absorption, so the flats
+    # read as clear turquoise over sand and the deep as blue. Foam is the material's own surface (Opacity = how much
+    # of it covers the water); the ripples, foam patches, wakes and wash are unchanged.
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_SINGLE_LAYER_WATER)
     mat.set_editor_property("tangent_space_normal", False)
+    mat.set_editor_property("two_sided", False)
     F1 = unreal.CustomMaterialOutputType.CMOT_FLOAT1
     F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
 
@@ -155,42 +180,51 @@ def _ocean(mat):
     aer = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1150, 650)
     aer.set_editor_property("r", False)
     aer.set_editor_property("g", True)
-    mel.connect_material_expressions(uv, "", aer, "")
+    _link(uv, "", aer, "")
     strength = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, 760)
     strength.set_editor_property("parameter_name", "RippleStrength")
     strength.set_editor_property("default_value", 1.0)
 
     foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D"], "Foam")
-    mel.connect_material_expressions(wp, "", foam, "WP")
-    mel.connect_material_expressions(tm, "", foam, "T")
-    mel.connect_material_expressions(vc, "A", foam, "A")
-    mel.connect_material_expressions(dp, "", foam, "D")
+    _link(wp, "", foam, "WP")
+    _link(tm, "", foam, "T")
+    _link(vc, "A", foam, "A")
+    _link(dp, "", foam, "D")
 
     nrm = _custom(mat, -500, 300, OCEAN_NORMAL, F3, ["WP", "T", "VN", "D", "F", "Aer", "Strength"], "Ripples")
     for src, pin in ((wp, "WP"), (tm, "T"), (vn, "VN"), (dp, "D"), (foam, "F"), (aer, "Aer"), (strength, "Strength")):
-        mel.connect_material_expressions(src, "", nrm, pin)
-
-    base = _custom(mat, -500, 0, OCEAN_BASE, F3, ["VC", "F", "Aer"], "Base color")
-    mel.connect_material_expressions(vc, "", base, "VC")
-    mel.connect_material_expressions(foam, "", base, "F")
-    mel.connect_material_expressions(aer, "", base, "Aer")
+        _link(src, "", nrm, pin)
 
     rough = _custom(mat, -500, 150, OCEAN_ROUGH, F1, ["F", "D"], "Roughness")
-    mel.connect_material_expressions(foam, "", rough, "F")
-    mel.connect_material_expressions(dp, "", rough, "D")
+    _link(foam, "", rough, "F")
+    _link(dp, "", rough, "D")
 
-    sss = _custom(mat, -500, 500, OCEAN_SSS, F1, ["UV", "F"], "Crest glow")
-    mel.connect_material_expressions(uv, "", sss, "UV")
-    mel.connect_material_expressions(foam, "", sss, "F")
-    sss_col = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -500, 650)
-    sss_col.set_editor_property("constant", unreal.LinearColor(0.04, 0.42, 0.34, 1.0))
+    foam_col = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -500, -150)
+    foam_col.set_editor_property("constant", unreal.LinearColor(0.84, 0.9, 0.93, 1.0))
 
-    mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    scat = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 900)
+    scat.set_editor_property("parameter_name", "Scattering")
+    scat.set_editor_property("default_value", unreal.LinearColor(0.003, 0.012, 0.034, 1.0))
+    absorb = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 1050)
+    absorb.set_editor_property("parameter_name", "Absorption")
+    absorb.set_editor_property("default_value", unreal.LinearColor(0.45, 0.085, 0.04, 1.0))
+    sc = _custom(mat, -500, 900, OCEAN_SCATTER, F3, ["Scat", "UV", "F"], "Scattering")
+    _link(scat, "", sc, "Scat")
+    _link(uv, "", sc, "UV")
+    _link(foam, "", sc, "F")
+    ab = _custom(mat, -500, 1050, OCEAN_ABSORB, F3, ["Absorb"], "Absorption")
+    _link(absorb, "", ab, "Absorb")
+    phase = _const(mat, 0.2, -500, 1200)
+    out = mel.create_material_expression(mat, unreal.MaterialExpressionSingleLayerWaterMaterialOutput, -150, 1000)
+    _link(sc, "", out, "ScatteringCoefficients")
+    _link(ab, "", out, "AbsorptionCoefficients")
+    _link(phase, "", out, "PhaseG")
+
+    mel.connect_material_property(foam_col, "", unreal.MaterialProperty.MP_BASE_COLOR)
     mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
-    mel.connect_material_property(_const(mat, 0.35, -500, 800), "", unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(_const(mat, 0.255, -500, 800), "", unreal.MaterialProperty.MP_SPECULAR)
     mel.connect_material_property(nrm, "", unreal.MaterialProperty.MP_NORMAL)
-    mel.connect_material_property(sss, "", unreal.MaterialProperty.MP_OPACITY)
-    mel.connect_material_property(sss_col, "", unreal.MaterialProperty.MP_SUBSURFACE_COLOR)
+    mel.connect_material_property(foam, "", unreal.MaterialProperty.MP_OPACITY)
 
 
 def _solid(mat):
@@ -202,6 +236,380 @@ def _solid(mat):
     rough.set_editor_property("parameter_name", "Roughness")
     rough.set_editor_property("default_value", 0.8)
     mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+
+
+
+# Water caustics: the bright net of focused sunlight on the bottom (a few warped layers, Dave Hoskins' trick),
+# strongest in the first 10 m and gone by 20 m. Shared by the sea floor and the reef.
+CAUSTICS_FN = """
+float2 cp = P * 1.9 + 250.0;
+float2 ci = cp;
+float cc = 1.0;
+const float inten = 0.005;
+for (int n = 0; n < 4; n++) {
+  float tt = T * 0.45 * (1.0 - (3.5 / float(n + 1)));
+  ci = cp + float2(cos(tt - ci.x) + sin(tt + ci.y), sin(tt - ci.y) + cos(tt + ci.x));
+  cc += 1.0 / length(float2(cp.x / (sin(ci.x + tt) / inten), cp.y / (cos(ci.y + tt) / inten)));
+}
+cc /= 4.0;
+cc = 1.17 - pow(abs(cc), 1.4);
+float caus = pow(abs(cc), 8.0);
+float cdepth = max(0.0, -WZ / 100.0);
+float band = (1.0 - smoothstep(10.0, 20.0, cdepth)) * saturate(cdepth * 1.5);
+// far away the net is finer than a pixel; fade to its average instead of shimmering
+float cfade = 1.0 - saturate((D / 100.0 - 25.0) / 90.0);
+caus = lerp(0.12, caus, cfade) * band;
+"""
+
+SEAFLOOR_BASE = """
+float2 p = WP.xy / 100.0;
+// sand grain: two octaves of value noise
+float2 q = p * 3.1;
+float g = 0.0, amp = 0.6;
+for (int i = 0; i < 2; i++) {
+  float2 ip = floor(q), fp = frac(q);
+  float2 u = fp * fp * (3.0 - 2.0 * fp);
+  float a0 = frac(sin(dot(ip, float2(127.1, 311.7))) * 43758.5453);
+  float a1 = frac(sin(dot(ip + float2(1, 0), float2(127.1, 311.7))) * 43758.5453);
+  float a2 = frac(sin(dot(ip + float2(0, 1), float2(127.1, 311.7))) * 43758.5453);
+  float a3 = frac(sin(dot(ip + float2(1, 1), float2(127.1, 311.7))) * 43758.5453);
+  g += amp * lerp(lerp(a0, a1, u.x), lerp(a2, a3, u.x), u.y);
+  q *= 4.3; amp *= 0.4;
+}
+float grain = lerp(0.9, 1.06, g);
+float2 P = p; float WZ = WP.z;
+""" + CAUSTICS_FN + """
+return saturate(VC.rgb * grain * (0.58 + 0.9 * caus));
+"""
+
+
+def _seafloor(mat):
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -900, 0)
+    wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -900, 150)
+    tm = mel.create_material_expression(mat, unreal.MaterialExpressionTime, -900, 300)
+    dp = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -900, 400)
+    base = _custom(mat, -500, 0, SEAFLOOR_BASE, F3, ["VC", "WP", "T", "D"], "Sand, grass and caustics")
+    for src, pin in ((vc, "VC"), (wp, "WP"), (tm, "T"), (dp, "D")):
+        _link(src, "", base, pin)
+    mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(_const(mat, 0.95, -500, 220), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(_const(mat, 0.3, -500, 320), "", unreal.MaterialProperty.MP_SPECULAR)
+
+
+# Coral, sponges and boulders. Instance color comes in per-instance custom data 0-2; vertex red is the mottle and
+# the darker ground-contact band baked into each model.
+REEF_BASE = """
+float2 P = WP.xy / 100.0; float WZ = WP.z;
+""" + CAUSTICS_FN + """
+return saturate(Inst * VC.r * (0.8 + 1.0 * caus));
+"""
+
+
+def _inst_color(mat, x, y):
+    parts = []
+    for i in range(3):
+        c = mel.create_material_expression(mat, unreal.MaterialExpressionPerInstanceCustomData, x, y + i * 90)
+        c.set_editor_property("data_index", i)
+        parts.append(c)
+    ap = mel.create_material_expression(mat, unreal.MaterialExpressionAppendVector, x + 200, y)
+    _link(parts[0], "", ap, "A")
+    _link(parts[1], "", ap, "B")
+    ap2 = mel.create_material_expression(mat, unreal.MaterialExpressionAppendVector, x + 350, y + 60)
+    _link(ap, "", ap2, "A")
+    _link(parts[2], "", ap2, "B")
+    return ap2
+
+
+def _reef(mat):
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    inst = _inst_color(mat, -1300, 0)
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -900, 300)
+    wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -900, 450)
+    tm = mel.create_material_expression(mat, unreal.MaterialExpressionTime, -900, 600)
+    dp = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -900, 700)
+    base = _custom(mat, -500, 0, REEF_BASE, F3, ["Inst", "VC", "WP", "T", "D"], "Coral color")
+    for src, pin in ((inst, "Inst"), (vc, "VC"), (wp, "WP"), (tm, "T"), (dp, "D")):
+        _link(src, "", base, pin)
+    mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(_const(mat, 0.85, -500, 220), "", unreal.MaterialProperty.MP_ROUGHNESS)
+
+
+# Sea fans, sea plumes, seagrass and far coral cards: alpha-tested cards that sway with the current and the surge.
+# Custom data 3 is the cut-out (0 seagrass blade, 1 sea fan lattice, 2 lacy plume), 4 the flexibility.
+# UV0.y runs 0 at the root to 1 at the tip.
+REEF_CARD_MASK = """
+float2 uv = UV;
+float a = 1.0;
+if (Kind < 0.5) {
+  float hw = 0.5 * (1.0 - 0.75 * uv.y);
+  a = 1.0 - smoothstep(hw - 0.08, hw, abs(uv.x - 0.5));
+} else if (Kind < 1.5) {
+  float2 c = (uv - float2(0.5, 0.52)) * float2(1.0, 1.08);
+  float shape = 1.0 - smoothstep(0.44, 0.5, length(c) + 0.04 * sin(atan2(c.y, c.x) * 9.0));
+  float stem = 1.0 - smoothstep(0.02, 0.035, abs(uv.x - 0.5));
+  stem *= 1.0 - step(0.3, uv.y);
+  // a fine, irregular mesh of branchlets rather than a grid
+  float2 w = uv + float2(sin(uv.y * 23.0 + uv.x * 7.0) * 0.012, sin(uv.x * 19.0 - uv.y * 5.0) * 0.012);
+  float2 g = abs(frac(w * float2(44.0, 52.0) + float2(sin(w.y * 11.0) * 0.4, 0.0)) - 0.5);
+  float lattice = max(step(0.41, g.x), step(0.42, g.y));
+  float rib = 1.0 - smoothstep(0.012, 0.03, abs(frac(atan2(c.y, c.x) * 2.2) - 0.5) * length(c));
+  a = max(shape * max(lattice, rib), stem);
+} else {
+  float2 c = uv - float2(0.5, 0.0);
+  float n = sin(uv.y * 41.0 + uv.x * 13.0) * sin(uv.x * 37.0 - uv.y * 7.0) + 0.6 * sin(uv.y * 87.0 + uv.x * 51.0);
+  float outline = 1.0 - smoothstep(0.32, 0.5, abs(c.x) / (0.25 + 0.75 * sin(min(1.0, uv.y * 1.05) * 3.14159)));
+  a = outline * step(-0.35, n) * (1.0 - step(0.98, uv.y));
+}
+return a;
+"""
+
+REEF_CARD_BASE = """
+float2 P = WP.xy / 100.0; float WZ = WP.z;
+""" + CAUSTICS_FN + """
+return saturate(Inst * (0.55 + 0.45 * UV.y) * (0.82 + 0.9 * caus));
+"""
+
+REEF_CARD_WPO = """
+// the web game's attachSway: lean with the steady current, swing with the wave surge, more at the tip
+float2 root = InstPos.xy / 100.0;
+float sPh = SurgePhase - dot(root, SurgeAxis.xy) * 0.18479957;
+float2 surge = SurgeAxis.xy * ((sin(sPh) + 0.35 * sin(2.0 * sPh + 1.3)) * 0.85 * SurgeAmp);
+float2 lean = Flow.xy / (1.0 + length(Flow.xy) * 0.75);
+float flex = UV.y * UV.y;
+float2 bend = (lean + surge) * Flex * flex;
+return float3(bend * 100.0, -length(bend) * flex * 45.0);
+"""
+
+
+def _reef_card(mat):
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    # thin fans, plumes and blades let the light through: lit from either side
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_TWO_SIDED_FOLIAGE)
+    F1 = unreal.CustomMaterialOutputType.CMOT_FLOAT1
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    inst = _inst_color(mat, -1500, 0)
+    kind = mel.create_material_expression(mat, unreal.MaterialExpressionPerInstanceCustomData, -1300, 400)
+    kind.set_editor_property("data_index", 3)
+    flex = mel.create_material_expression(mat, unreal.MaterialExpressionPerInstanceCustomData, -1300, 500)
+    flex.set_editor_property("data_index", 4)
+    uv = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1300, 600)
+    wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1300, 700)
+    tm = mel.create_material_expression(mat, unreal.MaterialExpressionTime, -1300, 800)
+    dp = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -1300, 900)
+    ip = mel.create_material_expression(mat, unreal.MaterialExpressionObjectPositionWS, -1300, 1000)
+    mask = _custom(mat, -700, 400, REEF_CARD_MASK, F1, ["UV", "Kind"], "Cut-out")
+    _link(uv, "", mask, "UV")
+    _link(kind, "", mask, "Kind")
+    base = _custom(mat, -700, 0, REEF_CARD_BASE, F3, ["Inst", "UV", "WP", "T", "D"], "Card color")
+    for src, pin in ((inst, "Inst"), (uv, "UV"), (wp, "WP"), (tm, "T"), (dp, "D")):
+        _link(src, "", base, pin)
+    params = []
+    for i, (nm, kindp, dv) in enumerate((("Flow", "v", (0, 0)), ("SurgeAxis", "v", (0, 1)), ("SurgePhase", "s", 0), ("SurgeAmp", "s", 0))):
+        if kindp == "v":
+            e = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1000, 1100 + i * 120)
+            e.set_editor_property("default_value", unreal.LinearColor(dv[0], dv[1], 0, 0))
+        else:
+            e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1000, 1100 + i * 120)
+            e.set_editor_property("default_value", dv)
+        e.set_editor_property("parameter_name", nm)
+        params.append((nm, e))
+    wpo = _custom(mat, -500, 800, REEF_CARD_WPO, F3, ["InstPos", "UV", "Flex", "Flow", "SurgeAxis", "SurgePhase", "SurgeAmp"], "Sway")
+    _link(ip, "", wpo, "InstPos")
+    _link(uv, "", wpo, "UV")
+    _link(flex, "", wpo, "Flex")
+    for nm, e in params:
+        _link(e, "", wpo, nm)
+    mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(base, "", unreal.MaterialProperty.MP_SUBSURFACE_COLOR)
+    mel.connect_material_property(mask, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+    mel.connect_material_property(_const(mat, 0.9, -500, 220), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(wpo, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+
+
+# Underwater: the web game's global fog override (per-channel extinction, depth-banded visibility, the deep
+# inscatter veil and its ambient falloff) as a post-process, plus its lens wetting (a soft vignette under water
+# and droplets on the mask right after crossing the surface).
+UNDERWATER = """
+float3 col = Col;
+float camDepth = max(0.0, -Cam.z / 100.0);
+float d = Dist / 100.0;
+// the web game's path: object-to-eye plus the camera's own depth (the light coming down to it). The pixel's own depth
+// is folded in at half weight, so a floor far below a diver near the surface still loses its reds.
+float pixDepth = clamp(-WP.z / 100.0, 0.0, 60.0);
+const float3 K = float3(0.22, 0.095, 0.045) * 0.38;
+float3 tr = exp(-K * (d + max(camDepth, 0.5 * (camDepth + pixDepth))));
+float amb = exp(-camDepth / 11.0);
+float3 insc = float3(0.045, 0.34, 0.47) * Haze / max(Ex, 1e-6);
+float3 below = col * tr + insc * amb * (1.0 - tr);
+float vis = 10.0;
+if (camDepth <= 0.0) vis = 30.0;
+else if (camDepth <= 5.0) vis = lerp(30.0, 25.0, camDepth / 5.0);
+else if (camDepth <= 10.0) vis = lerp(25.0, 20.0, (camDepth - 5.0) / 5.0);
+else if (camDepth <= 15.0) vis = lerp(20.0, 15.0, (camDepth - 10.0) / 5.0);
+else if (camDepth <= 20.0) vis = lerp(15.0, 10.0, (camDepth - 15.0) / 5.0);
+vis += Bonus;
+float turb = smoothstep(vis * 0.6, vis, d);
+below = lerp(below, insc * amb, turb);
+col = lerp(col, below, Under);
+float vig = smoothstep(0.35, 0.95, length(UV - 0.5));
+col = lerp(col, col * 0.9, vig * Under * 0.5);
+if (Wet > 0.003) {
+  float aspectR = View.ViewSizeAndInvSize.x / max(View.ViewSizeAndInvSize.y, 1.0);
+  float acc = 0.0;
+  for (int i = 0; i < 9; i++) {
+    float2 seed = float2(float(i) * 12.9898, float(i) * 78.233);
+    float2 center = float2(frac(sin(dot(seed, float2(41.3, 289.1))) * 43758.5453), frac(sin(dot(seed + 7.0, float2(41.3, 289.1))) * 43758.5453));
+    float r = 0.012 + 0.03 * frac(sin(dot(seed + 13.0, float2(41.3, 289.1))) * 43758.5453);
+    float2 dd = (UV - center) * float2(aspectR, 1.0);
+    float dist = length(dd) / r;
+    float drop = smoothstep(1.0, 0.75, dist) * (1.0 - smoothstep(0.0, 0.55, dist) * 0.6);
+    acc = max(acc, drop);
+  }
+  col += float3(0.75, 0.85, 0.9) * acc * Wet * 0.5 / max(Ex, 1e-6) * 0.18;
+  col = lerp(col, col * (1.0 - 0.25 * acc), Wet);
+}
+return col;
+"""
+
+
+def _underwater(mat):
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
+    mat.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_DOF)
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    col = mel.create_material_expression(mat, unreal.MaterialExpressionSceneTexture, -1200, 0)
+    col.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
+    dep = mel.create_material_expression(mat, unreal.MaterialExpressionSceneTexture, -1200, 200)
+    dep.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_SCENE_DEPTH)
+    dmask = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1000, 200)
+    dmask.set_editor_property("r", True); dmask.set_editor_property("g", False)
+    dmask.set_editor_property("b", False); dmask.set_editor_property("a", False)
+    _link(dep, "Color", dmask, "")
+    cmask = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1000, 0)
+    cmask.set_editor_property("r", True); cmask.set_editor_property("g", True)
+    cmask.set_editor_property("b", True); cmask.set_editor_property("a", False)
+    _link(col, "Color", cmask, "")
+    cam = mel.create_material_expression(mat, unreal.MaterialExpressionCameraPositionWS, -1200, 350)
+    sp = mel.create_material_expression(mat, unreal.MaterialExpressionScreenPosition, -1200, 450)
+    ex = mel.create_material_expression(mat, unreal.MaterialExpressionEyeAdaptation, -1200, 550)
+    params = {}
+    for i, (nm, dv) in enumerate((("Under", 0.0), ("Wet", 0.0), ("Bonus", 0.0), ("Haze", 1.0))):
+        e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1200, 700 + i * 100)
+        e.set_editor_property("parameter_name", nm)
+        e.set_editor_property("default_value", dv)
+        params[nm] = e
+    uw = _custom(mat, -600, 0, UNDERWATER, F3, ["Col", "Dist", "Cam", "WP", "UV", "Ex", "Under", "Wet", "Bonus", "Haze"], "Underwater")
+    wpp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1200, 1150)
+    _link(wpp, "", uw, "WP")
+    _link(cmask, "", uw, "Col")
+    _link(dmask, "", uw, "Dist")
+    _link(cam, "", uw, "Cam")
+    _link(sp, "ViewportUV", uw, "UV")
+    _link(ex, "", uw, "Ex")
+    for nm, e in params.items():
+        _link(e, "", uw, nm)
+    mel.connect_material_property(uw, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+# The underside of the sea seen from below: Snell's window (the whole sky squeezed into a ~97 degree cone overhead)
+# and, outside it, total internal reflection of the dim water below (web game world/water.ts, back-face branch).
+WATER_UNDER = """
+float3 Vw = normalize(Cam - WP);
+float3 rayDir = -Vw;
+float2 p = WP.xy / 100.0;
+float2 rip = float2(sin(p.x * 1.7 + T * 1.3) + sin(p.y * 2.3 - T * 1.1), cos(p.x * 2.1 - T * 0.9) + sin(p.y * 1.5 + T * 1.6)) * 0.035;
+float3 Nw = normalize(float3(-VN.x + rip.x, -VN.y + rip.y, abs(VN.z)));
+float cosT = clamp(dot(rayDir, Nw), -1.0, 1.0);
+float windowT = saturate(acos(cosT) / 0.84806);
+float3 refr = refract(rayDir, -Nw, 1.3333);
+float3 o;
+if (dot(refr, refr) < 1e-5) {
+  float shimmer = 0.5 + 0.5 * sin(p.x * 0.9 + reflect(rayDir, Nw).x * 3.0 + T * 0.7) * sin(p.y * 1.1 - T * 0.5);
+  o = float3(0.04, 0.1, 0.15) * (0.55 + 0.65 * shimmer) * 0.3;
+} else {
+  float3 skyDir = normalize(refr);
+  float3 zen = Sky * 0.78;
+  float3 rim = lerp(Sky, float3(1.0, 0.99, 0.95), 0.6);
+  o = lerp(zen, rim, pow(windowT, 1.8));
+  float sunCos = max(dot(skyDir, normalize(SunDir.xyz)), 0.0);
+  o += float3(1.0, 0.92, 0.78) * pow(sunCos, 140.0) * 1.6;
+  o += float3(1.0, 0.97, 0.92) * pow(sunCos, 1800.0) * 5.0;
+}
+return o * Bright / max(Ex, 1e-6);
+"""
+
+
+def _water_under(mat):
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("two_sided", False)
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1200, 0)
+    cam = mel.create_material_expression(mat, unreal.MaterialExpressionCameraPositionWS, -1200, 120)
+    vn = mel.create_material_expression(mat, unreal.MaterialExpressionVertexNormalWS, -1200, 240)
+    tm = mel.create_material_expression(mat, unreal.MaterialExpressionTime, -1200, 360)
+    ex = mel.create_material_expression(mat, unreal.MaterialExpressionEyeAdaptation, -1200, 480)
+    sky = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1200, 600)
+    sky.set_editor_property("parameter_name", "Sky")
+    sky.set_editor_property("default_value", unreal.LinearColor(0.49, 0.69, 0.81, 1))
+    sun = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1200, 750)
+    sun.set_editor_property("parameter_name", "SunDir")
+    sun.set_editor_property("default_value", unreal.LinearColor(0.55, -0.62, 0.32, 0))
+    br = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1200, 900)
+    br.set_editor_property("parameter_name", "Bright")
+    br.set_editor_property("default_value", 0.9)
+    c = _custom(mat, -600, 0, WATER_UNDER, F3, ["WP", "Cam", "VN", "T", "Ex", "Sky", "SunDir", "Bright"], "Snell's window")
+    for src, pin in ((wp, "WP"), (cam, "Cam"), (vn, "VN"), (tm, "T"), (ex, "Ex"), (sky, "Sky"), (sun, "SunDir"), (br, "Bright")):
+        _link(src, "", c, pin)
+    mel.connect_material_property(c, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+# Bubbles and marine snow: camera-facing quads, translucent and unlit. UV in [0,1] draws a bubble (bright rim and a
+# highlight), UV offset by 2 draws a soft speck of snow. Vertex color is the display color, alpha the opacity.
+BUBBLE = """
+bool snow = UV.x >= 1.5;
+float2 c = frac(UV) - 0.5;
+float d = length(c);
+float a;
+if (snow) a = smoothstep(0.5, 0.0, d);
+else {
+  float rim = smoothstep(0.5, 0.34, d) * (0.35 + 0.65 * smoothstep(0.2, 0.46, d));
+  float hl = smoothstep(0.12, 0.0, length(c - float2(-0.14, -0.14))) * 0.5;
+  a = rim + hl;
+}
+a *= step(d, 0.5);
+return float4(VC.rgb * Bright / max(Ex, 1e-6), saturate(a * VA));
+"""
+
+
+def _bubble(mat):
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    F4 = unreal.CustomMaterialOutputType.CMOT_FLOAT4
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -1000, 0)
+    uv = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1000, 150)
+    ex = mel.create_material_expression(mat, unreal.MaterialExpressionEyeAdaptation, -1000, 300)
+    br = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1000, 400)
+    br.set_editor_property("parameter_name", "Bright")
+    br.set_editor_property("default_value", 0.12)
+    c = _custom(mat, -600, 0, BUBBLE, F4, ["VC", "VA", "UV", "Ex", "Bright"], "Bubble")
+    for src, pin in ((vc, "VC"), (uv, "UV"), (ex, "Ex"), (br, "Bright")):
+        _link(src, "", c, pin)
+    _link(vc, "A", c, "VA")
+    rgb = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -300, 0)
+    rgb.set_editor_property("r", True); rgb.set_editor_property("g", True); rgb.set_editor_property("b", True); rgb.set_editor_property("a", False)
+    _link(c, "", rgb, "")
+    al = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -300, 150)
+    al.set_editor_property("r", False); al.set_editor_property("g", False); al.set_editor_property("b", False); al.set_editor_property("a", True)
+    _link(c, "", al, "")
+    mel.connect_material_property(rgb, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.connect_material_property(al, "", unreal.MaterialProperty.MP_OPACITY)
+
+
+BUILDERS = {
+    "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
+    "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
+    "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble,
+}
 
 
 def _make_map():
@@ -216,10 +624,9 @@ def _make_map():
 def _setup(_delta):
     unreal.unregister_slate_post_tick_callback(_handle)
     try:
-        made = _make_material("M_KR_VertexColor", _vertex_color)
-        made = _make_material("M_KR_Water", _water) or made
-        made = _make_material("M_KR_Ocean", _ocean) or made
-        made = _make_material("M_KR_Solid", _solid) or made
+        made = False
+        for name, build in BUILDERS.items():
+            made = _make_material(name, build) or made
         _make_map()
         if made:
             unreal.log("Keys Run: setup done. Press Play.")

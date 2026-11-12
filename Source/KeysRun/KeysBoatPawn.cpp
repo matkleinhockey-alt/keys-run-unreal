@@ -7,6 +7,7 @@
 #include "KeysExtras.h"
 #include "KeysAudio.h"
 #include "KeysOnline.h"
+#include "KeysDiver.h"
 #include "ProceduralMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -200,6 +201,8 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		Add(TEXT("view"), TEXT("Camera"), View == 0 ? TEXT("Chase") : View == 1 ? TEXT("Helm") : TEXT("Tuna tower"), true);
 		Add(TEXT("fpview"), TEXT("Fishing view"), bFpPref ? TEXT("First person") : TEXT("Third person"), true);
 		Add(TEXT("autochase"), TEXT("Auto-chase hooked fish"), bAutoChase ? TEXT("On") : TEXT("Off"), true);
+		Add(TEXT("diveview"), TEXT("Dive view"), bDiveChase ? TEXT("Chase") : TEXT("Dive mask"), true);
+		Add(TEXT("haze"), TEXT("Underwater haze"), UnderwaterHaze < .8 ? TEXT("Clear") : UnderwaterHaze > 1.2 ? TEXT("Murky") : TEXT("Normal"), true);
 		Add(TEXT("back"), TEXT("Back"));
 		break;
 	}
@@ -249,6 +252,20 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 	else if (Id == TEXT("view")) CycleView();
 	else if (Id == TEXT("fpview")) bFpPref = !bFpPref;
 	else if (Id == TEXT("autochase")) bAutoChase = !bAutoChase;
+	else if (Id == TEXT("diveview"))
+	{
+		bDiveChase = !bDiveChase;
+		if (AKeysDiver* D = AKeysDiver::Get(this)) { D->SetDefaultChase(bDiveChase); if (D->IsDiving() && D->IsChaseView() != bDiveChase) D->CycleView(); }
+	}
+	else if (Id == TEXT("haze"))
+	{
+		// Clear 0.6, Normal 1, Murky 1.5
+		const double Steps[3] = {.6, 1, 1.5};
+		int32 I = UnderwaterHaze < .8 ? 0 : UnderwaterHaze > 1.2 ? 2 : 1;
+		I = (I + (Dir < 0 ? 2 : 1)) % 3;
+		UnderwaterHaze = Steps[I];
+		if (AKeysDiver* D = AKeysDiver::Get(this)) D->UnderwaterHaze = UnderwaterHaze;
+	}
 }
 
 void AKeysBoatPawn::OnHudClick(FName Box)
@@ -386,6 +403,60 @@ void AKeysBoatPawn::RunTestScript(double T)
 				SetHook();
 			}
 		}
+		else if (Cmd.StartsWith(TEXT("tp=")))
+		{
+			// tp=X,Z[,heading]: put the boat there (game meters)
+			TArray<FString> P;
+			Cmd.Mid(3).ParseIntoArray(P, TEXT(","));
+			if (P.Num() >= 2)
+			{
+				X = FCString::Atod(*P[0]); Z = FCString::Atod(*P[1]);
+				if (P.Num() >= 3) H = FCString::Atod(*P[2]);
+				Speed = Thr = 0; bCamInit = false;
+			}
+		}
+		else if (Cmd.StartsWith(TEXT("goto=")))
+		{
+			// goto=flats|bay|hawk|reef|wall|offshore: the nearest open water of that kind, searched in a spiral
+			const FString W = Cmd.Mid(5);
+			double DMin = 1, DMax = 2.2;
+			FString Zn = TEXT("Flats");
+			if (W == TEXT("bay")) { Zn = TEXT("Backcountry"); DMin = 2.6; DMax = 4; }
+			else if (W == TEXT("hawk")) { Zn = TEXT("Hawk Channel"); DMin = 6; DMax = 9; }
+			else if (W == TEXT("reef")) { Zn = TEXT("Reef"); DMin = 4; DMax = 7; }
+			else if (W == TEXT("wall")) { Zn = TEXT("Reef"); DMin = 12; DMax = 20; }
+			else if (W == TEXT("offshore")) { Zn = TEXT("Offshore"); DMin = 100; DMax = 400; }
+			bool bFound = false;
+			for (double R = 0; R < 6000 && !bFound; R += 25)
+				for (int32 k = 0; k < FMath::Max(1, int32(R / 12)) && !bFound; k++)
+				{
+					const double A = k * 2 * PI / FMath::Max(1, int32(R / 12));
+					const double PX = X + FMath::Cos(A) * R, PZ = Z + FMath::Sin(A) * R;
+					const double D = DepthAt(PX, PZ);
+					if (D < DMin || D > DMax || ShoreInfo(PX, PZ).D < 40 || ZoneAt(PX, PZ) != Zn) continue;
+					X = PX; Z = PZ; bFound = true;
+				}
+			Speed = Thr = 0; bCamInit = false;
+			UE_LOG(LogTemp, Log, TEXT("KRScript goto %s -> %.0f, %.0f depth %.1f found %d"), *W, X, Z, DepthAt(X, Z), bFound ? 1 : 0);
+		}
+		else if (Cmd.StartsWith(TEXT("cam=")))
+		{
+			// cam=yaw,pitchoff,zoom for the chase camera
+			TArray<FString> P;
+			Cmd.Mid(4).ParseIntoArray(P, TEXT(","));
+			if (P.Num() >= 1) CamYaw = FCString::Atod(*P[0]);
+			if (P.Num() >= 2) CamPitchOff = FCString::Atod(*P[1]);
+			if (P.Num() >= 3) CamZoom = FCString::Atod(*P[2]);
+		}
+		else if (Cmd == TEXT("dive")) { if (!IsDiving()) ToggleDive(); }
+		else if (Cmd.StartsWith(TEXT("dv:")))
+		{
+			// dv:depth=6, dv:look=1.2,-0.3, dv:aimfish, dv:spear, dv:reload, dv:air=0.2, dv:swim=1, dv:haul=1, dv:chase, dv:mask
+			FString C = Cmd.Mid(3), A;
+			Cmd.Mid(3).Split(TEXT("="), &C, &A);
+			if (C.IsEmpty()) C = Cmd.Mid(3);
+			if (AKeysDiver* Dv = AKeysDiver::Get(this)) Dv->DebugCmd(C, A);
+		}
 		else if (Cmd == TEXT("jump")) { if (FState == EKeysFish::Fight) StartJump(false); }
 		else if (Cmd.StartsWith(TEXT("catch=")))
 		{
@@ -403,6 +474,111 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd == TEXT("quit")) { if (APlayerController* PC = Cast<APlayerController>(GetController())) PC->ConsoleCommand(TEXT("quit")); }
 		else MenuActivate(FName(*Cmd));
+	}
+}
+
+// ================================================================ diving (web game entities/diver + entities/speargun)
+bool AKeysBoatPawn::IsDiving() const
+{
+	const AKeysDiver* D = AKeysDiver::Get(this);
+	return D && D->IsDiving();
+}
+
+void AKeysBoatPawn::ToggleDive()
+{
+	AKeysDiver* D = AKeysDiver::Get(this);
+	if (!D || !bRunning) return;
+	if (!D->IsDiving())
+	{
+		if (FState == EKeysFish::Caught) { ShowToast(TEXT("Finish with your catch first.")); return; }
+		// going over the side with a line out (or a cast still charging) would leave the rod with nobody on it
+		if (bCharging || IsLineOut()) ReelIn(FString());
+		bCharging = false;
+		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+		bTrimMode = false;
+		D->SetDefaultChase(bDiveChase);
+		D->UnderwaterHaze = UnderwaterHaze;
+		D->EnterWater(X, Z, H);
+		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to climb back aboard."), 6);
+	}
+	else if (!D->RequestReboard()) ShowToast(TEXT("Too far from the boat to climb aboard."));
+	else { SyncChaseCam(); bCamInit = false; }
+}
+
+void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
+{
+	auto Down = [PC](const FKey& K) { return PC->IsInputKeyDown(K); };
+	auto Hit = [PC](const FKey& K) { return PC->WasInputKeyJustPressed(K); };
+	AKeysDiver* D = AKeysDiver::Get(this);
+	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+	bCharging = false;
+	if (!D) return;
+	FKeysDiverButtons B;
+	B.bFwd = Down(EKeys::W) || Down(EKeys::Up);
+	B.bBack = Down(EKeys::S) || Down(EKeys::Down);
+	B.bLeft = Down(EKeys::A) || Down(EKeys::Left);
+	B.bRight = Down(EKeys::D) || Down(EKeys::Right);
+	B.bAscend = Down(EKeys::SpaceBar);
+	B.bDescend = Down(EKeys::C) || Down(EKeys::LeftControl) || Down(EKeys::RightControl);
+	B.bSprint = Down(EKeys::LeftShift) || Down(EKeys::RightShift);
+	B.bHaul = B.bBack;
+	B.bFire = Hit(EKeys::LeftMouseButton);
+	B.bDrawToggle = Hit(EKeys::R);
+	float MX = 0, MY = 0;
+	PC->GetInputMouseDelta(MX, MY);
+	B.LookYaw = MX * .004;
+	B.LookPitch = -MY * .004;
+	D->SetButtons(B);
+	if (Hit(EKeys::J)) ToggleDive();
+	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) ShowToast(D->CycleView() + TEXT(" - press 1 to switch"));
+	// a speared catch: K keeps it, Space releases it (once the card has been up a moment)
+	if (FState == EKeysFish::Caught)
+	{
+		if (Hit(EKeys::K) && GetWorld()->GetTimeSeconds() - CaughtT > .7) KeepFish();
+		else if (Hit(EKeys::SpaceBar) && GetWorld()->GetTimeSeconds() - CaughtT > 1.6) ReleaseFish();
+	}
+	if (Hit(EKeys::M)) bBigMap = !bBigMap;
+	if (Hit(EKeys::H))
+	{
+		const int32 I = (SeaIndex() + 1) % SeaStates().Num();
+		SetSeaState(I);
+		ShowToast(SeaStates()[I].Name + TEXT(" - ") + SeaStates()[I].Desc);
+	}
+	if (Hit(EKeys::O))
+		if (AKeysWorld* W = World()) { W->ToggleSunset(); ShowToast(W->IsSunset() ? TEXT("Sunset mode - golden hour over the Seven Mile Bridge.") : TEXT("Back to daylight.")); }
+}
+
+void AKeysBoatPawn::LandSpeared(const FString& InKey, double InWeight, double InFX, double InFZ)
+{
+	if (FState == EKeysFish::Caught) FinishCatch();
+	Sp = Species(InKey);
+	if (!Sp) return;
+	Key = InKey;
+	Weight = InWeight;
+	FX = InFX; FZ = InFZ;
+	Zone = ZoneAt(FX, FZ);
+	Spot = FKeysFishSpot();
+	Spot.Zone = Zone;
+	BuildHookedMesh();
+	Land();
+	CardBonus = CardBonus.IsEmpty() ? FString(TEXT("Speared underwater")) : TEXT("Speared underwater - ") + CardBonus;
+	ShowFishMesh(true);
+}
+
+void AKeysBoatPawn::ApplyDiveCamera(const FVector& PosUE, const FRotator& Rot, float FovH)
+{
+	Camera->SetWorldLocationAndRotation(PosUE, Rot);
+	Camera->SetFieldOfView(FovH);
+	// a speared catch is held up in front of the mask for the photo
+	if (FState == EKeysFish::Caught)
+	{
+		const double Age = GetWorld()->GetTimeSeconds() - CaughtT;
+		const FQuat Q = Rot.Quaternion();
+		// centimeters in the camera's frame: far enough out that the whole fish fits, a little left and low of center
+		const double Back = (1.1 + FishLen * 1.2) * 100;
+		const FVector P = PosUE + Q.RotateVector(FVector(Back, -FishLen * 30, -FishLen * 25 + FMath::Sin(Age * 2.1) * 3));
+		const double Kick = FMath::Sin(Age * 5.3) * .14 * FMath::Exp(-Age * .35) + FMath::Sin(Age * 1.7) * .04;
+		FishMesh->SetWorldLocationAndRotation(P, (Q * FRotator(10, 90 + FMath::RadiansToDegrees(Kick), FMath::RadiansToDegrees(Kick * .6)).Quaternion()).Rotator());
 	}
 }
 
@@ -505,7 +681,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 
 	// drag with either mouse button: orbits the chase camera, or looks around in the first-person views; the wheel zooms
-	bDragging = Down(EKeys::LeftMouseButton) || Down(EKeys::RightMouseButton);
+	bDragging = !IsDiving() && (Down(EKeys::LeftMouseButton) || Down(EKeys::RightMouseButton));
 	if (bDragging)
 	{
 		float MX = 0, MY = 0;
@@ -522,6 +698,8 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::MouseScrollDown)) CamZoom = FMath::Min(3.0, CamZoom / .9);
 
 	if (!bRunning) return;
+	if (IsDiving()) { HandleDiveInput(PC, Dt); return; }
+	if (Hit(EKeys::J)) { ToggleDive(); return; }
 
 	bFwd = Down(EKeys::W) || (!bTrimMode && Down(EKeys::Up));
 	bBack = Down(EKeys::S) || (!bTrimMode && Down(EKeys::Down));
@@ -873,6 +1051,7 @@ void AKeysBoatPawn::SyncChaseCam()
 
 void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 {
+	if (IsDiving()) return;   // the diver actor places the camera (ApplyDiveCamera)
 	const FBoatSpec& S = Spec();
 
 	// first person while fishing (V), and the helm view (1) while driving
@@ -1520,6 +1699,7 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 // When a hooked fish jumps, the camera zooms in and swings to it, then eases back out once it's in the water again.
 void AKeysBoatPawn::UpdateJumpCam(double Dt)
 {
+	if (IsDiving()) return;
 	const bool bOn = bJumping && FState == EKeysFish::Fight;
 	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : 1.2);
 	float Want = 88.f;
