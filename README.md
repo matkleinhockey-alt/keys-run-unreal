@@ -194,6 +194,44 @@ so there are no hand-made assets. The editor script creates the materials and th
   whatever you drive); the club's cover charge; the Gaff & Gill's slot machine on its own screen (`sim/slots.ts`: three reels of
   fish, five lines, bets of $5 to $100, a seeded draw, 90.5 cents on the dollar); Run to (`ui/runto.ts`, in the Esc menu); and
   the gear screen (Tab, `ui/gear.ts`): what you own, carry and wear and what it adds up to.
+- **Tag-and-release** (`sim/tagging.ts`, `game/catch/tags.ts`): T on the catch card puts a tag in an untagged rod catch and
+  lets it go (+40%). A tagged fish lives on as one individual: it grows toward its own ceiling (drawn from its tag number) and
+  wanders farther the longer it is at large, and a fish you hook near where it could have got to may be that one (an even
+  chance), fought at its grown weight. Its card shows the tag, who tagged it and when, every recapture since, and how much it
+  has grown; Space releases it again and reports the recapture (+60%), K retires the tag in your cooler. Saved with the rest.
+- **The dock trophy** (`entities/land/dock-celebration.ts`): step ashore at a marina with a fish in the run's book and the
+  biggest one goes up on a weigh station on the planks (posts, the scale, the fish hung by the tail, a sign with its weight),
+  with a crowd round it: phones up and flashing, arms in the air, clapping, then admiring once the noise dies down.
+- **The catch photo** (`game/catch/portrait.ts`, `display-mode.ts`, `underwater-trophy.ts`): every card has its photo beside
+  it: the captain holding the fish up on deck, anything past 25 lb or 1.5 m hung on the gin pole instead, and a speared
+  fish held up under water by a diver in a wetsuit, mask and snorkel.
+- **Fishing from the planks** (`game/fishing/shore.ts`): ashore, standing on a pier, a dock or a marina's decking facing open
+  water, Space casts. The rod's whole state machine runs with you standing in for the boat: bites, the fight (S reels), the
+  card, keeping, releasing, tagging.
+- **The gold bluefin** (`entities/fish/legend-path.ts`): three gilded 3 m giants on a closed loop through deep water at
+  least 60 m off any shore, routed on a grid with A* between hashed targets and rounded; where they are is a function of
+  the wall clock, so they are in the same place for everyone. They bust the surface now and then. They can't be caught.
+- **Whales** (`content/creatures.ts`, `entities/fish/spout.ts`): pilot whales round the offshore humps and in the Gulf
+  Stream, the odd humpback and sperm whale, cruising at depth and coming up to blow: a plume of vapour that rises seven
+  metres and thins, then the flukes as they sound.
+- **The web game's later species and creatures:** flounder, hogchoker sole and halibut (flatfish, lying over on one side),
+  bluerunner, schoolmaster, lane and vermilion snapper, lookdown, palometa, Spanish mackerel, skipjack and bigeye tuna,
+  mako and tiger sharks, warsaw grouper and cubera snapper to catch; the whale shark, giant manta, sawfish, great white and
+  mola to see. The fishing and sight tables are the web game's current ones (rigs, weedlines and wrecks included).
+- **The town's services** (`sim/services.ts`, `game/services`): the Pink Flamingo's doorstep (the cover charge, the bottle
+  and the tip jar play as a full-screen neon scene: the rope, the bouncer's opinion of you, which warms as you spend, then
+  what's going on inside, with a sparkler or a spotlight); the motel fades to black on a room card and you wake at sunset,
+  sober; the scratch-off is the web game's seeded card (six cells scratched one by one, 69 cents on the dollar, a ticket
+  can't be re-rolled); the wash takes the drink out of your shirt (and refuses if there is none); the laundromat's lost-and-
+  found bin has eight socks to collect; the Stop-N-Go won't sell you fuel the boat can't use.
+- **Air fills** (`sim/dive-gear.ts`): Scuba Steve's sells fills; the pony bottle only counts while you hold one, and a dive
+  spends one the first time you pass 2 m. Buying the bottle comes with the first fill.
+- **Wrecks found** (`entities/life/wreck-chart.ts`): every wreck is on the chart (as in the web game), and the ones you
+  have passed over within 260 m (by boat or swimming) are inked in red with their names, remembered between sessions.
+- **Caelen as a target** (`entities/life/caelen.ts`, `entities/handgun/index.ts`): the pistol's rounds are tested against his
+  capsule as they pass. A hit: "that's assault", he climbs away, says he's off to Milan, and is gone for two minutes while
+  the deck cheers; a near miss gets "you suck at this". He's never an aim-assist target.
+- **Estates:** building on a lot clears the island's houses and palms standing on it, and the residence is solid to walk into.
 
 - **Online with friends:** press L, type a name and a crew code, and Enter. Everyone who uses the same crew code sees each other's
   boats live (with name tags, wakes you can ride, and green dots on the chart), gets "Sam landed a 41 lb cobia!" messages, and shares a
@@ -202,16 +240,17 @@ so there are no hand-made assets. The editor script creates the materials and th
 Town and land differences from the web game: facades and signs are geometry and text instead of painted canvases (no
 window notices; the sunset glow is soft halos rather than bloom); the dancers are the game's own figures (the web game's rigged
 glTF dancers are not ported); the estates registry is local (the web game's server-held registry, other players' lots and the
-#1 angler's party at their estate are not ported), and the houses a lot clears on the island are not removed.
+#1 angler's party at their estate are not ported).
 
-Not ported: the dockside weigh station that strings up your biggest fish when you step ashore, tag-and-release
-(`sim/tagging.ts`), the gold bluefin's wall-clock path, whale spouts, the cabaret's doorstep vignette and the laundromat's sock
-collection (`sim/services.ts`), Caelen as a pistol target, the underwater catch portrait, the wreck chart's "found" memory,
-spray particles (splashes are simple shapes), text-to-speech (the DJ and Luigi callouts are on-screen text), engine sounds for
-other boats, quilted upholstery details, and playing your own music files on the radio.
+Not ported: spray particles (splashes are simple shapes), text-to-speech (the DJ, Luigi and Caelen speak in on-screen text),
+engine sounds for other boats, quilted upholstery details, playing your own music files on the radio, the shop windows'
+painted notices, the god rays and the underwater breathing loop, the web game's ReefWall / DeepWall sight tables (this
+port's zones stop at the reef and offshore; the humps have their own list), and Caelen coming down to orbit a diver (he is a
+target for the pistol, not the speargun). The tag registry is this computer's (the web game's offline registry); the
+web game's shared server registry, where you can hook a fish someone else tagged, is not ported.
 
-Diving differs from the web game in a few places: the dive shop's pony bottle, wetsuit and fins only lengthen the breath
-hold (the wide mask and the gun shop's long gun are for show), and the speargun is the stock gun with unlimited shafts; the god rays (the web game's high/ultra quality
+Diving differs from the web game in a few places: the dive shop's pony bottle (with an air fill in hand), wetsuit and fins
+only lengthen the breath hold (the wide mask and the gun shop's long gun are for show), and the speargun is the stock gun with unlimited shafts; the god rays (the web game's high/ultra quality
 setting), and the breathing loop in the underwater sound are not ported; the near-field reef schools are
 ported on top of this port's existing fish population (the web game's resident and roaming layers are not); the diver
 dives with J, so the shower moved to Z; and the underwater fog is a post-process rather than a per-material fog.
@@ -241,6 +280,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Space | strike on the bite; hold to reel during a fight; release a landed fish |
 | R | reel in |
 | K | keep the fish |
+| T (on the catch card) | tag and release it (+40%); a tagged fish's card releases with Space and reports the recapture |
 | = | trolling: outriggers and lines out, hold trolling speed / lines in |
 | R (lines in) | Marathon race: start / abandon |
 | Esc, Fishing tournament | start / quit a fishing tournament |
@@ -265,6 +305,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Q | tie up at a dock and go ashore / back aboard (twice when far: a cab back to the dock) |
 | **Ashore:** W A S D + mouse | walk where you look (Shift runs, arrow keys turn) |
 | F | use a counter, a slot machine, a sign or a plaque |
+| Space (on a pier, a dock or the marina's planks, facing the water) | cast from the shore; S reels, R reels in |
 | Up / Down + Enter, or 1-9 | pick and buy at a counter (F or Esc walks away) |
 | 1 | third person / first person |
 | X | travel to Miami and back |
@@ -330,6 +371,9 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysSlots.*` | the Gaff & Gill's slot machine |
 | `KeysAudioMore.cpp` | the second pass's synthesized sounds (bark, bell, gunshot, flare, slots, cheering, treasure) |
 | `KeysHUD2.cpp` | world tags and speech bubbles, the pistol HUD, the land office, the slots, the gear screen, the tournament cards |
+| `KeysFinal.*` | the gold bluefin, whale spouts, the dock trophy and its crowd, the catch photo studio, the wreck chart's memory |
+| `KeysTags.cpp` | tag-and-release, the town's services, air fills, fishing from the planks, the `fin:` test steps |
+| `KeysHUD3.cpp` | the service scenes: the cabaret's doorstep, the scratch-off card, the motel's fade |
 | `KeysGameMode.*` | wires it together; the map can stay empty |
 | `Content/Python/init_unreal.py` | creates the materials and map on first launch |
 
@@ -390,4 +434,10 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   five), `catch=tourney` (land the first of the five), `keep`, `harbour` (put the boat at the tournament finish).
   World: `bigmap` (the large chart), `indoorev=<EV100>` (the dark rooms' locked exposure), `pirates[=dist]` (the pirates sail
   in now from that far, 300 m by default), `banner` (a banner plane pass now).
+  The last pass adds `fin:tag` (tag the fish on the card), `fin:recapture` (the next fish of a tagged species is the tagged
+  one), `fin:age=N` (every tag was last seen N days earlier), `fin:svc=club.cover` (any service, as if bought), `fin:legend`
+  (the boat beside the gold bluefin), `fin:spout`, `fin:best=tarpon,120` (the run's best fish, for the dock trophy),
+  `fin:spear=hogfish` (a speared catch card), `fin:shorecast=0.6` (cast from where the walker stands), `fin:caelen` /
+  `fin:caelen=2.2` (fire the pistol at Caelen / beside him), `fin:spawn=mako,mola` (schools of those round the boat),
+  `fin:lot=N` (log the Nth plat parcel with scenery on it), `fin:fills=N`, `fin:wrecksreset`.
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.
