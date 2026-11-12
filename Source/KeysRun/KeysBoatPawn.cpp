@@ -1195,6 +1195,18 @@ bool AKeysBoatPawn::InChair() const
 	return KeysMesh::HasFightChair(Spec()) && FState == EKeysFish::Fight && HookedStation >= 0 && !IsDiving() && !IsAshore();
 }
 
+FVector AKeysBoatPawn::ChairEyeLocal() const
+{
+	return KeysMesh::FightChairBase(Spec()) + FQuat(FVector::UpVector, ChairYaw).RotateVector(FVector(.05, 0, 1.05));
+}
+
+bool AKeysBoatPawn::FpEyeLocal(FVector& Out) const
+{
+	if (InChair() && bFpPref) { Out = ChairEyeLocal(); return true; }
+	Out = FpEyeL;
+	return bFpOn;
+}
+
 bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const
 {
 	if (bDbgCam && BoatMesh)
@@ -1205,21 +1217,51 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		OutFov = DbgCamFov;
 		return true;
 	}
-	if (InChair() && BoatMesh && !bJumping)
+	if (InChair() && BoatMesh)
 	{
-		// the chair fight: over the angler's shoulder from in front of the chair, the fish and the wake beyond; or (the
-		// view key) from the angler's own eyes in the chair
 		const FTransform BT = BoatMesh->GetComponentTransform();
 		const FVector Base = KeysMesh::FightChairBase(Spec());
 		const FQuat Q(FVector::UpVector, ChairYaw);
 		const FVector FishW = ToUE(FX, 0, FZ);
-		FVector LocalCam = bFpPref ? Base + Q.RotateVector(FVector(.05, 0, 1.05)) : Base + Q.RotateVector(FVector(-1.7, 1.4, 2.05));
+		if (bFpPref)
+		{
+			// the angler's own eyes in the chair, down the rod at the fish
+			OutPos = BT.TransformPosition(ChairEyeLocal() * 100.0);
+			OutRot = (FishW - OutPos).Rotation();
+			OutFov = 75.f;
+			return true;
+		}
+		// the chair fight from outside the boat: a drone's-eye view from well off the side and above the hull, behind
+		// the angler's shoulder as the chair faces the fish, so the angler, the bent rod and the line running out to the
+		// fish are all in frame. Of the two shoulders, the one that keeps the lens further aft (clear of the hardtop and
+		// the console between it and the chair), holding its side until the other is clearly better.
+		const FBoatSpec& S = Spec();
+		const double Sole = KeysMesh::SoleAt(S, Base.X), R = 13.5, Off = .62;
+		auto Cand = [&](double Sd) { const double A = ChairYaw + PI + Sd * Off; return FVector(Base.X + FMath::Cos(A) * R, Base.Y + FMath::Sin(A) * R, Sole + 5.0); };
+		if (ChairCamSide == 0) ChairCamSide = FMath::Sin(ChairYaw) < -.05 ? -1 : 1;
+		const FVector Mine = Cand(ChairCamSide), Other = Cand(-ChairCamSide);
+		if (Other.X < Mine.X - 1.5) ChairCamSide = -ChairCamSide;
+		FVector LocalCam = Cand(ChairCamSide);
+		// never inside the hull's footprint, and well clear of the outriggers however far they're swung out
+		LocalCam.Y = FMath::Sign(LocalCam.Y == 0 ? ChairCamSide : LocalCam.Y) * FMath::Max(FMath::Abs(LocalCam.Y), S.Beam * .5 + 2.5);
+		FVector Tip[2], RB[2];
+		if (KeysMesh::RiggerTips(S, RigOut(), Tip, RB))
+			for (int32 i = 0; i < 2; i++)
+			{
+				const FVector Cl = FMath::ClosestPointOnSegment(LocalCam, RB[i], Tip[i]);
+				if (FVector::Dist(Cl, LocalCam) < 2.5) LocalCam.Z = FMath::Max(LocalCam.Z, Cl.Z + 2.5);
+			}
 		OutPos = BT.TransformPosition(LocalCam * 100.0);
-		const FVector Look = bFpPref ? FishW : FMath::Lerp(BT.TransformPosition((Base + FVector(0, 0, .6)) * 100.0), FishW, .35);
+		// aim a little way out along the line from the angler, so the chair sits low in frame and the line runs up it
+		const FVector Head = BT.TransformPosition((Base + FVector(0, 0, .9)) * 100.0);
+		const FVector ToFish = FishW - Head;
+		const double Out = FMath::Min(ToFish.Size2D() * .15, 450.0);
+		const FVector Look = Head + ToFish.GetSafeNormal2D() * Out - FVector(0, 0, 60);
 		OutRot = (Look - OutPos).Rotation();
-		OutFov = bFpPref ? 75.f : 62.f;
+		OutFov = 54.f;
 		return true;
 	}
+	ChairCamSide = 0;
 	if (const AKeysTourneyShow* Sh = AKeysTourneyShow::Get(this); Sh && Sh->CameraFor(OutPos, OutRot, OutFov)) return true;
 	if (const AKeysHandgun* G = AKeysHandgun::Get(this); G && G->CameraFor(OutPos, OutRot, OutFov)) return true;
 	return false;
@@ -2537,10 +2579,13 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 // When a hooked fish jumps, the camera zooms in and swings to it, then eases back out once it's in the water again.
 void AKeysBoatPawn::UpdateJumpCam(double Dt)
 {
-	if (IsDiving() || bExtCam) return;
+	// the chair fight's own cameras take the jump cam too (it swings and zooms from where they put the lens)
+	if (IsDiving() || (bExtCam && (!InChair() || bDbgCam))) return;
 	const bool bOn = bJumping && FState == EKeysFish::Fight;
 	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : 1.2);
-	float Want = 88.f;
+	// the chair cameras set their own field of view each frame: start the zoom from it and hand it back after
+	if (bExtCam && !bOn && JumpLook < .001) { JumpFov = Camera->FieldOfView; return; }
+	float Want = bExtCam ? Camera->FieldOfView : 88.f;
 	if (bOn)
 	{
 		const FVector F = FishMesh->GetComponentLocation(), C = Camera->GetComponentLocation();
