@@ -142,24 +142,77 @@ so there are no hand-made assets. The editor script creates the materials and th
   wallet in the web game's own lines, chat, and sail off; they never take anything. And a banner plane
   (`entities/life/banner-plane.ts`) drones past every few minutes towing one of the town's businesses' slogans.
 
+- **The boat pistol (9):** every boat has one in the console (web `sim/handgun.ts`, `entities/handgun/**`): 350 m/s rounds with drag
+  in path length and gravity, the water stops a round inside 2.4 m and skips one that hits under 5 degrees, a 12-round magazine
+  (18 with the extended one), reloads that take time, a hand that shakes with fast shots, an aim assist that leads what it locks.
+  It shoots fish near the surface (a hit one bobs up stunned, wakes offended and swims off; nothing to land it with) and
+  seabirds, including the harbour gang of gulls and terns that follows the boat (`life/boat-gulls.ts`); a report spooks fish
+  under the boat and along the shot and scatters birds. A bird shot down floats for two minutes and the toothy fish come to it:
+  a cast near a carcass fishes for sharks, barracuda, jacks, cobia and the like (`life/carcass.ts`, `sim/chum.ts`). Z fires a
+  parachute flare from the pistol grip that burns red for 18 s and lights the water at dusk. 24 rounds to start with; Deadeye
+  Guns sells 9 mm by the box, the extended magazine, a red-dot sight and flare kits.
+- **The locals:** the working fleet (`entities/life/commercial.ts`): Hot Tuna (king mackerel troller), Dog Pound (stone
+  crabber), Pin Wheel (shrimp trawler), No Limits (lobster boat) and Fat Tuna (western-rig trawler) on their grounds at working
+  speed, with names and port on the transoms. Larry's POS (`life/larry.ts`): a plywood raft on three blue drums with a sagging
+  tent and a 2 hp kicker, out on some eleven-minute windows of the wall clock on one of five slow loops; get close and he says
+  "yeahhhhh dude". The sandbar party (`life/sandbar.ts`): eight boats rafted round a bar people stand on, waist deep, with
+  floats, on one of the real bars the bathymetry has, a different one every forty minutes (a dot on the chart). Boats on the hook
+  off Sombrero Beach, East Sister Rock and Bamboo Key with dancers and a beat across the water (`life/party-boats.ts`). And the
+  boat's Jack Russell (`life/dog.ts`), who trots the cockpit, sits, braces when you get on the throttle and goes mad for a fish.
+- **Street life** in Boot Key Harbor City (`shared/world/town-life.ts`, `entities/town/wildlife.ts`, `critters.ts`,
+  `streetlife.ts`): closed-form scripts on the wall clock, so the street is the same for everybody. People run errands into the
+  tackle shop, the diner, the liquor store, the bar, the gifts shop, the pawn shop, the laundromat, the dive shop, the motel,
+  the ice-cream parlour and the Stop-N-Go and come out carrying what they bought; joggers, a couple, an angler with his rod,
+  people at the zebra crossings, a mum and her kid, a man loading a cooler into his truck and taking it out again, talkers,
+  bench sitters. Dogs on leads, a beagle by the benches, a black lab tied outside the Stop-N-Go and three loose; squirrels
+  up the palms, skunks round the bins at dusk, the cat on the dumpster lid, gulls hopping between rooftops and lamps; litter,
+  puddles, washing across the alley, news boxes, bike racks, sandwich boards.
+- **Wreck treasure** (`sim/treasure.ts`, `entities/life/wreck-treasure.ts`): two to five containers beside each wreck - the
+  purser's strongbox, coin spills, cargo crates, ammunition cans - half buried in level sand, with the web game's hashed loot
+  (about $11k in all, deeper wrecks pay more). Under water the prompt says what is in sight and how far; F prises one open from
+  3.5 m. Cash to the wallet, rounds to the pistol; what you have emptied is saved.
+- **Keys Run Estates** (`content/estates-plat.ts`, `content/estates.ts`, `ui/estates/panel.ts`, `entities/estates/**`): the
+  235-parcel plat from Harbor Row to the islands off Miami, cut from the real outlines. The land office (, or Esc > Land
+  office) shows a chart per region with every lot in its tier's colour, the deed (tier, area, frontage, distance), and Enter
+  buys it from your wallet (prices from the tier and the lot's area; three lots each; the founders' lots are not for sale). On
+  your own lots the build sheet chooses the residence (villa, fishing shack, Japanese garden, stilt house, modern glass), the
+  dock (none, skiff dock, sportfish slip, superyacht T-head with a helipad), the biggest catch hung over the door, on a dock
+  gallows or on a pedestal, trophies round the grounds, a pool and a fire pit, and it is built in the world where the web game
+  puts it (the dock along the best open water off the lot). Your docks are somewhere to tie up and walk ashore. The founders'
+  Pigeon Key (a Japanese garden) and Fisher Island (a villa with a superyacht dock) stand built.
+- **The tournament as a show** (`game/tournament/intro.ts`, `fleet.ts`, `ceremony.ts`): letterboxed titles over the countdown
+  (an aerial push over the harbour with the five species, a dolly past each boat with its skipper's name, "Lines in"), the AI
+  field lined up abreast in the harbour and running out up the exit route, and ten seconds on the promenade for the winner:
+  the podium, the cup over their head, the five fish on a rack under the champion's banner, a cheering crowd and confetti.
+- **Glass helm and lights:** two screens on every console, the chartplotter and the fish finder (`entities/boat/electronics.ts`);
+  red and green sidelights and the white all-round light, brighter at dusk; ; switches the teal underwater lights (with their
+  pools on the water) and the blue cockpit line (`entities/boat/model.ts`). The pirates talk in speech bubbles over the sloop
+  and ring a ship's bell as they come and go.
+- **More from the web game's shelves and screens:** the tackle shop's 80 lb and 130 lb line rungs (`content/tackle.ts`; the
+  fight's line strength scales with the rung, the rod and reel on top) and fluorocarbon leaders (spent on toothy fish); every
+  shirt, cap, pair of shades and flag at Conch Republic Gifts (worn per slot, `sim/wardrobe.ts`; a flag flies from the stern of
+  whatever you drive); the club's cover charge; the Gaff & Gill's slot machine on its own screen (`sim/slots.ts`: three reels of
+  fish, five lines, bets of $5 to $100, a seeded draw, 90.5 cents on the dollar); Run to (`ui/runto.ts`, in the Esc menu); and
+  the gear screen (Tab, `ui/gear.ts`): what you own, carry and wear and what it adds up to.
+
 - **Online with friends:** press L, type a name and a crew code, and Enter. Everyone who uses the same crew code sees each other's
   boats live (with name tags, wakes you can ride, and green dots on the chart), gets "Sam landed a 41 lb cobia!" messages, and shares a
   Crew tab on the leaderboard (B). The game remembers your login and reconnects next time; L again logs out. See "Online play" below.
 
 Town and land differences from the web game: facades and signs are geometry and text instead of painted canvases (no
-window notices; the sunset glow is soft halos rather than bloom); the dancers are the game's own figures (the web game's rigged glTF dancers are not
-ported); street life is people on loops along the sidewalks (no visit scripts, dogs, squirrels, gulls or litter);
-estates other than Harbor Row and the estate builder are not ported; the casino's slots are a single shelf item rather
-than the machine screen; and the shop shelves are a subset of the web game's (no handgun, flags or tackle-ladder rungs).
+window notices; the sunset glow is soft halos rather than bloom); the dancers are the game's own figures (the web game's rigged
+glTF dancers are not ported); the estates registry is local (the web game's server-held registry, other players' lots and the
+#1 angler's party at their estate are not ported), and the houses a lot clears on the island are not removed.
 
-Not ported: the boat pistol (`sim/handgun.ts`), the commercial fleet, Larry's raft, the sandbar party, the boat dog and the
-street animals, the wreck treasure hunt, the estate plat beyond Harbor Row, the tournament ceremony, the boats' glass-helm screens, cabin, deck lights and quilted upholstery details, the 3D screens on the dash (the electronics are a HUD panel instead),
-spray particles (splashes are simple shapes), text-to-speech (the DJ and Luigi callouts are on-screen text),
-engine sounds for other boats, and playing your own music files on the radio.
+Not ported: the dockside weigh station that strings up your biggest fish when you step ashore, tag-and-release
+(`sim/tagging.ts`), the gold bluefin's wall-clock path, whale spouts, the cabaret's doorstep vignette and the laundromat's sock
+collection (`sim/services.ts`), Caelen as a pistol target, the underwater catch portrait, the wreck chart's "found" memory,
+spray particles (splashes are simple shapes), text-to-speech (the DJ and Luigi callouts are on-screen text), engine sounds for
+other boats, quilted upholstery details, and playing your own music files on the radio.
 
 Diving differs from the web game in a few places: the dive shop's pony bottle, wetsuit and fins only lengthen the breath
 hold (the wide mask and the gun shop's long gun are for show), and the speargun is the stock gun with unlimited shafts; the god rays (the web game's high/ultra quality
-setting), the breathing loop in the underwater sound and the wreck treasure are not ported; the near-field reef schools are
+setting), and the breathing loop in the underwater sound are not ported; the near-field reef schools are
 ported on top of this port's existing fish population (the web game's resident and roaming layers are not); the diver
 dives with J, so the shower moved to Z; and the underwater fog is a post-process rather than a per-material fog.
 
@@ -224,6 +277,16 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | hold S | haul a speared fish in |
 | 1 | dive mask / chase view |
 | Mouse drag | orbit the camera, or look around in first person |
+| F (under water) | prise open a wreck's box |
+| **Boat pistol:** 9 | draw / holster (Esc also holsters) |
+| Click / Space | fire |
+| Mouse / arrow keys | aim |
+| R / Z | reload / fire a parachute flare |
+| , (comma) | the land office: Up / Down a lot, Left / Right the region, Enter buys or edits, Tab the build sheet |
+| Tab | gear screen |
+| ; (semicolon) | underwater and cockpit lights (the web game's L) |
+| Esc > Run to | Left / Right a destination, Enter goes |
+| **Casino counter**, F | a slot machine: Space spins, Left / Right the bet, Esc or F gets up |
 
 ## Code map
 
@@ -256,6 +319,17 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysTown.*`, `KeysTownInterior.cpp`, `KeysTownBatch.cpp` | builds Boot Key Harbor City: streets, buildings, signs, props, cars, interiors, the casino, people |
 | `KeysWalker.*` | going ashore: the walker, its cameras and body, interaction points |
 | `KeysLandmarks.*` | bridges, marinas, Sombrero Key Light, Faro Blanco, channel marks, mooring balls, fishing piers, waterfront estates |
+| `KeysKit.*` | shared helpers for the second pass: web-frame boxes and tubes, riding the waves, fish models by length, world tags |
+| `KeysLocals.*`, `KeysDog.*` | the working fleet, Larry's raft, the sandbar party, party boats on the hook, the boat dog (and every dog) |
+| `KeysStreet.*` | street life: the town-life scripts, people's errands, dogs, squirrels, skunks, the cat, gulls, litter |
+| `KeysHandgun.*` | the boat pistol: ballistics, the magazine, flares, harbour gulls, carcasses and chum |
+| `KeysTreasure.*` | the containers on the wrecks and their loot |
+| `KeysEstates.*`, `KeysPlatData.h` | Keys Run Estates: the plat (generated from `estates-plat.ts`), pricing, the land office, the builds |
+| `KeysTourneyShow.*` | the tournament's titles, the field leaving the harbour and the trophy ceremony |
+| `KeysHelm.cpp` | the glass helm screens and the boat's lights |
+| `KeysSlots.*` | the Gaff & Gill's slot machine |
+| `KeysAudioMore.cpp` | the second pass's synthesized sounds (bark, bell, gunshot, flare, slots, cheering, treasure) |
+| `KeysHUD2.cpp` | world tags and speech bubbles, the pistol HUD, the land office, the slots, the gear screen, the tournament cards |
 | `KeysGameMode.*` | wires it together; the map can stay empty |
 | `Content/Python/init_unreal.py` | creates the materials and map on first launch |
 
@@ -296,6 +370,10 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
 - `-KRScript="12:play;16:cast;19:hook=sailfish;21:jump;21.3:shot;25:quit"`: runs steps on a timer (seconds since launch). Steps are
   menu ids (`play`, `settings`, `controls`, `back`, `board`, `resume`, `mainmenu`, ...), `esc`, `sel=N`, `login`, `closeall`,
   `cast`, `hook=<species>`, `jump`, `catch=<species>`, `shot` (saves a screenshot with the HUD to `Saved/Screenshots`) and `quit`.
+  The second pass adds `lc:larry`, `lc:sandbar`, `lc:fleetN`, `lc:partyN` (the boat beside them), `gun`, `fire=yaw,pitch`,
+  `gunlook=yaw,pitch`, `flare`, `give=key[,n]`, `wear=cosmetic.x.y`, `treasure` / `treasuredive` / `open`, `estates`,
+  `estsel=id`, `estbuy=id`, `estbuild=id|res=stilt;dock=yacht`, `estgo=id`, `lights`, `view=N`, `slots`, `spin`, `gear`,
+  `runto=N`, `pirates`, `tourney` (then `ev:tourneyall` and `harbour` for the ceremony).
   For looking around: `tp=X,Z[,heading]`, `goto=flats|bay|hawk|reef|wall|offshore`, `cam=yaw,pitch,zoom`. For diving: `dive`, then
   `dv:hold=5` (stay at 5 m), `dv:depth=N`, `dv:look=yaw,pitch`, `dv:aimfish`, `dv:fishahead`, `dv:spear`, `dv:reload`, `dv:haul=1`,
   `dv:swim=1`, `dv:air=0.2`, `dv:chase` / `dv:mask`. `-KRScat=r,g,b` / `-KRAbs=r,g,b` override the water's scattering / absorption,
