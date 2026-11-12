@@ -313,32 +313,31 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("O"), TEXT("Sunset")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
 		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}};
 	static const FRow Ashore[] = {
-		{TEXT("Q"), TEXT("Tie up at a dock and go ashore / back aboard")}, {TEXT("W A S D + mouse"), TEXT("Walk where you look (Shift runs)")},
-		{TEXT("F"), TEXT("Use a counter, a slot machine, a sign")}, {TEXT("Up / Down, Enter, 1-9"), TEXT("Pick and buy at a counter")},
-		{TEXT("1"), TEXT("Third person / first person")}};
+		{TEXT("Q"), TEXT("Tie up and go ashore / back aboard")}, {TEXT("W A S D + mouse, 1"), TEXT("Walk (Shift runs), first / third person")},
+		{TEXT("F, then 1-9 / Enter"), TEXT("Use a counter, buy, read a sign")}};
 	static const FRow Dive[] = {
 		{TEXT("J"), TEXT("Jump in / climb back aboard")}, {TEXT("W A S D + mouse"), TEXT("Swim where you look")},
 		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
 		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("R"), TEXT("Haul the bands back to reload")},
 		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}};
-	const float ColW = W * .5f, Row = 40 * U;
+	const float ColW = W * .5f, Row = 31 * U;
 	auto Block = [&](const TCHAR* Head, const FRow* Rows, int32 N, float BX, float BY)
 	{
-		Text(Head, BX, BY, 1.3f, Teal);
-		BY += 44 * U;
+		Text(Head, BX, BY, 1.2f, Teal);
+		BY += 40 * U;
 		for (int32 i = 0; i < N; i++, BY += Row)
 		{
-			Text(Rows[i].K, BX, BY, 1.05f, Gold);
-			Text(Rows[i].A, BX + 220 * U, BY, 1.05f, FLinearColor::White);
+			Text(Rows[i].K, BX, BY, .98f, Gold);
+			Text(Rows[i].A, BX + 220 * U, BY, .98f, FLinearColor::White);
 		}
 		return BY;
 	};
 	Block(TEXT("Driving"), Drive, UE_ARRAY_COUNT(Drive), X, Y);
 	const float Y2 = Block(TEXT("Fishing"), Fish, UE_ARRAY_COUNT(Fish), X + ColW, Y);
-	const float Y3 = FMath::Max(Y + 44 * U + Row * UE_ARRAY_COUNT(Drive), Y2) + 30 * U;
-	Block(TEXT("Everything else"), More, UE_ARRAY_COUNT(More), X, Y3);
-	const float Y4 = Block(TEXT("Diving and spearfishing"), Dive, UE_ARRAY_COUNT(Dive), X + ColW, Y3);
-	Block(TEXT("Ashore in Boot Key Harbor City"), Ashore, UE_ARRAY_COUNT(Ashore), X + ColW, Y4 + 20 * U);
+	const float Y3 = FMath::Max(Y + 40 * U + Row * UE_ARRAY_COUNT(Drive), Y2) + 24 * U;
+	const float Y4 = Block(TEXT("Everything else"), More, UE_ARRAY_COUNT(More), X, Y3);
+	Block(TEXT("Diving and spearfishing"), Dive, UE_ARRAY_COUNT(Dive), X + ColW, Y3);
+	Block(TEXT("Ashore in Boot Key Harbor City"), Ashore, UE_ARRAY_COUNT(Ashore), X, Y4 + 20 * U);
 }
 
 // ================================================================ online
