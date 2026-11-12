@@ -211,6 +211,8 @@ public:
 	// test hook: bring the nearest spearable school to (X, Z) and keep it there
 	void DebugBringSchool(double X, double Z);
 
+	// test hook: a school of that kind there now, past the population cap
+	bool DebugSpawn(const FString& Type, double X, double Z);
 private:
 	void SpawnHotspot(const FString& Zone);
 	void BuildWeeds();

@@ -32,7 +32,7 @@ struct FKeysVis
 	FLinearColor Back, Belly, Fin, Finlet;   // sRGB values
 	EKeysPat Pattern = EKeysPat::None;
 	EKeysAct Act = EKeysAct::None;
-	bool bBlunt = false, bWings = false, bSail = false, bFlap = false, bLongPec = false;
+	bool bBlunt = false, bWings = false, bSail = false, bFlap = false, bLongPec = false, bFlat = false, bNoCatch = false;
 	int32 Level = 1;   // 0 surface, 1 mid, 2 bottom
 	int32 SMin = 1, SMax = 1;
 	bool IsTuna() const { return Kind == EKeysKind::Tuna; }
@@ -149,6 +149,29 @@ namespace
 	// the whales (web content/creatures.ts): pilot whales round the humps and offshore, the odd humpback; they blow at the surface
 	{ FKeysVis& V = Add(TEXT("pilotwhale")); V.Kind = EKeysKind::Dolphin; V.Len = 6; V.H = 1.05; V.W = .95; V.Back = LHex(0x2a2a2c); V.Belly = LHex(0x3a3a3c); V.Fin = V.Back; V.Finlet = V.Fin; V.Level = 0; V.Speed = 2.4; V.SMin = 5; V.SMax = 14; V.Spread = 6; V.DMin = 12; V.DMax = 100000; V.Act = EKeysAct::Blow; }
 	{ FKeysVis& V = Add(TEXT("humpback")); V.Kind = EKeysKind::Dolphin; V.Len = 15; V.H = 2.6; V.W = 2.1; V.Back = LHex(0x1c2430); V.Belly = LHex(0x8f97a0); V.Fin = V.Back; V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 0; V.Speed = 1.8; V.SMin = 1; V.SMax = 2; V.Spread = 10; V.DMin = 25; V.DMax = 100000; V.Act = EKeysAct::Blow; }
+	// the web game's later creatures (content/creatures.ts VIS)
+	{ FKeysVis& V = Add(TEXT("flounder")); V.Kind = EKeysKind::Fish; V.Len = 0.5; V.H = 0.3; V.W = 0.055; V.Back = LHex(0x6b5f4a); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x5e5342); V.Finlet = V.Fin; V.Pattern = EKeysPat::Spot; V.Level = 2; V.Speed = 0.45; V.SMin = 1; V.SMax = 2; V.Spread = 2.2; V.DMin = 0.5; V.DMax = 14; V.bFlat = true; }
+	{ FKeysVis& V = Add(TEXT("sole")); V.Kind = EKeysKind::Fish; V.Len = 0.26; V.H = 0.17; V.W = 0.03; V.Back = LHex(0x5e5444); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x4e4639); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.38; V.SMin = 1; V.SMax = 3; V.Spread = 1.8; V.DMin = 0.5; V.DMax = 18; V.bFlat = true; }
+	{ FKeysVis& V = Add(TEXT("halibut")); V.Kind = EKeysKind::Fish; V.Len = 1.25; V.H = 0.72; V.W = 0.13; V.Back = LHex(0x4a4a44); V.Belly = LHex(0xf0ece2); V.Fin = LHex(0x3e3e39); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.6; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 18; V.DMax = 240; V.bFlat = true; }
+	{ FKeysVis& V = Add(TEXT("bluerunner")); V.Kind = EKeysKind::Fish; V.Len = 0.5; V.H = 0.15; V.W = 0.09; V.Back = LHex(0x43707d); V.Belly = LHex(0xeef2f2); V.Fin = LHex(0xcdb94e); V.Finlet = V.Fin; V.Level = 1; V.Speed = 2; V.SMin = 12; V.SMax = 26; V.Spread = 4.2; V.DMin = 1.5; V.DMax = 120; }
+	{ FKeysVis& V = Add(TEXT("schoolmaster")); V.Kind = EKeysKind::Fish; V.Len = 0.45; V.H = 0.16; V.W = 0.09; V.Back = LHex(0x8a7347); V.Belly = LHex(0xe8dcc0); V.Fin = LHex(0xe0ac3c); V.Finlet = V.Fin; V.Pattern = EKeysPat::Bars; V.Level = 1; V.Speed = 1.1; V.SMin = 8; V.SMax = 18; V.Spread = 3; V.DMin = 1.5; V.DMax = 30; }
+	{ FKeysVis& V = Add(TEXT("lanesnapper")); V.Kind = EKeysKind::Fish; V.Len = 0.34; V.H = 0.12; V.W = 0.07; V.Back = LHex(0xc07a68); V.Belly = LHex(0xf2ded2); V.Fin = LHex(0xe8c050); V.Finlet = V.Fin; V.Pattern = EKeysPat::Yline; V.Level = 2; V.Speed = 1.1; V.SMin = 7; V.SMax = 15; V.Spread = 2.8; V.DMin = 2; V.DMax = 45; }
+	{ FKeysVis& V = Add(TEXT("vermilion")); V.Kind = EKeysKind::Fish; V.Len = 0.4; V.H = 0.14; V.W = 0.08; V.Back = LHex(0xad3a2a); V.Belly = LHex(0xeec6b6); V.Fin = LHex(0xc24631); V.Finlet = V.Fin; V.Level = 1; V.Speed = 1.3; V.SMin = 9; V.SMax = 20; V.Spread = 3.2; V.DMin = 8; V.DMax = 90; }
+	{ FKeysVis& V = Add(TEXT("lookdown")); V.Kind = EKeysKind::Fish; V.Len = 0.3; V.H = 0.33; V.W = 0.045; V.Back = LHex(0xb9c8d2); V.Belly = LHex(0xf4f8fa); V.Fin = LHex(0xd8e2e8); V.Finlet = V.Fin; V.Level = 1; V.Speed = 1.2; V.SMin = 6; V.SMax = 14; V.Spread = 2.4; V.DMin = 1.5; V.DMax = 25; }
+	{ FKeysVis& V = Add(TEXT("palometa")); V.Kind = EKeysKind::Fish; V.Len = 0.3; V.H = 0.17; V.W = 0.05; V.Back = LHex(0x9fb0b8); V.Belly = LHex(0xf4f0e0); V.Fin = LHex(0x2a3038); V.Finlet = V.Fin; V.Pattern = EKeysPat::Bars; V.Level = 1; V.Speed = 1.8; V.SMin = 6; V.SMax = 13; V.Spread = 2.8; V.DMin = 0.6; V.DMax = 12; }
+	{ FKeysVis& V = Add(TEXT("spanishmack")); V.Kind = EKeysKind::Fish; V.Len = 0.6; V.H = 0.13; V.W = 0.08; V.Back = LHex(0x3a6b8c); V.Belly = LHex(0xeef3f6); V.Fin = LHex(0x2d5370); V.Finlet = V.Fin; V.Pattern = EKeysPat::Gspots; V.Level = 0; V.Speed = 2.6; V.SMin = 7; V.SMax = 16; V.Spread = 4; V.DMin = 2; V.DMax = 50; }
+	{ FKeysVis& V = Add(TEXT("bigeye")); V.Kind = EKeysKind::Tuna; V.Len = 1.6; V.H = 0.42; V.W = 0.34; V.Back = LHex(0x1c3050); V.Belly = LHex(0xe6ebf0); V.Fin = LHex(0x27405e); V.Finlet = LHex(0xf0c63a); V.Sickle = 0.5; V.Level = 1; V.Speed = 3; V.SMin = 5; V.SMax = 11; V.Spread = 5; V.DMin = 40; V.DMax = 100000; V.Act = EKeysAct::Bust; }
+	{ FKeysVis& V = Add(TEXT("skipjack")); V.Kind = EKeysKind::Tuna; V.Len = 0.75; V.H = 0.2; V.W = 0.17; V.Back = LHex(0x23344f); V.Belly = LHex(0xdfe6ec); V.Fin = LHex(0x2b3a52); V.Finlet = LHex(0xc8d0d8); V.Sickle = 0.35; V.Pattern = EKeysPat::Line; V.Level = 0; V.Speed = 3.4; V.SMin = 14; V.SMax = 30; V.Spread = 5.5; V.DMin = 25; V.DMax = 100000; V.Act = EKeysAct::Bust; }
+	{ FKeysVis& V = Add(TEXT("whaleshark")); V.Kind = EKeysKind::Shark; V.Len = 9; V.H = 1.5; V.W = 1.6; V.Back = LHex(0x3f4a55); V.Belly = LHex(0xe8ecee); V.Fin = LHex(0x35404a); V.Finlet = V.Fin; V.Pattern = EKeysPat::Gspots; V.Level = 0; V.Speed = 1.1; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 8; V.DMax = 100000; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("giantmanta")); V.Kind = EKeysKind::Ray; V.Len = 2.4; V.Back = LHex(0x1d2127); V.Belly = LHex(0xf4f4f2); V.Fin = V.Back; V.Finlet = V.Fin; V.Pattern = EKeysPat::Spots; V.Level = 1; V.Speed = 1.5; V.SMin = 1; V.SMax = 2; V.Spread = 6; V.DMin = 4; V.DMax = 100000; V.Wing = 5.5; V.bFlap = true; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("sawfish")); V.Kind = EKeysKind::Shark; V.Len = 4.2; V.H = 0.42; V.W = 0.5; V.Back = LHex(0x8d8c7c); V.Belly = LHex(0xe6e3d4); V.Fin = LHex(0x7b7a6b); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.6; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 0.8; V.DMax = 12; V.Bill = 0.26; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("tigershark")); V.Kind = EKeysKind::Shark; V.Len = 4.2; V.H = 0.78; V.W = 0.72; V.Back = LHex(0x5f6a63); V.Belly = LHex(0xeceeea); V.Fin = LHex(0x515b55); V.Finlet = V.Fin; V.Pattern = EKeysPat::Bars; V.Level = 1; V.Speed = 1.5; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 6; V.DMax = 100000; }
+	{ FKeysVis& V = Add(TEXT("mako")); V.Kind = EKeysKind::Shark; V.Len = 3.6; V.H = 0.58; V.W = 0.56; V.Back = LHex(0x1f4f86); V.Belly = LHex(0xf2f5f8); V.Fin = LHex(0x1b4472); V.Finlet = V.Fin; V.Level = 1; V.Speed = 3.4; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 20; V.DMax = 100000; }
+	{ FKeysVis& V = Add(TEXT("greatwhite")); V.Kind = EKeysKind::Shark; V.Len = 5; V.H = 1.05; V.W = 1; V.Back = LHex(0x6a7078); V.Belly = LHex(0xf4f4f2); V.Fin = LHex(0x565c63); V.Finlet = V.Fin; V.Level = 1; V.Speed = 1.6; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 12; V.DMax = 100000; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("spermwhale")); V.Kind = EKeysKind::Dolphin; V.Len = 14; V.H = 2.3; V.W = 2.1; V.Back = LHex(0x4a4542); V.Belly = LHex(0x6b6460); V.Fin = V.Back; V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 0; V.Speed = 1.6; V.SMin = 1; V.SMax = 3; V.Spread = 12; V.DMin = 35; V.DMax = 100000; V.Act = EKeysAct::Blow; V.bBlunt = true; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("mola")); V.Kind = EKeysKind::Fish; V.Len = 3; V.H = 2.6; V.W = 0.55; V.Back = LHex(0x8d939a); V.Belly = LHex(0xd8dce0); V.Fin = V.Back; V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 0; V.Speed = 0.5; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 18; V.DMax = 100000; V.Act = EKeysAct::Roll; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("warsaw")); V.Kind = EKeysKind::Fish; V.Len = 2.3; V.H = 0.72; V.W = 0.5; V.Back = LHex(0x3b332e); V.Belly = LHex(0x6d625a); V.Fin = LHex(0x2c2521); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.45; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 25; V.DMax = 100000; }
+	{ FKeysVis& V = Add(TEXT("cubera")); V.Kind = EKeysKind::Fish; V.Len = 1.6; V.H = 0.52; V.W = 0.28; V.Back = LHex(0x5a4a46); V.Belly = LHex(0xb9a89c); V.Fin = LHex(0x3e3330); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.8; V.SMin = 1; V.SMax = 3; V.Spread = 3; V.DMin = 8; V.DMax = 60; }
 	// the gold bluefin (entities/fish/legend-path.ts): never caught, placed by the wall clock (AKeysFinal)
 	{ FKeysVis& V = Add(TEXT("goldbluefin")); V.Kind = EKeysKind::Tuna; V.Len = 3.1; V.H = .84; V.W = .66; V.Back = LHex(0x8a6a1c); V.Belly = LHex(0xf6e7a8); V.Fin = LHex(0xb8902c); V.Finlet = LHex(0xffd84a); V.Sickle = .46; V.Pattern = EKeysPat::Spots; V.Level = 0; V.Speed = 3.4; V.SMin = 3; V.SMax = 3; V.Spread = 5; V.DMin = 6; V.DMax = 100000; V.Act = EKeysAct::Bust; }
 		return M;
@@ -209,6 +232,29 @@ namespace
 	{ FKeysShape& S = Add(TEXT("dolphin")); S.Peak = 0.38; S.Nose = 0.7; S.Ped = 0.14; S.Tail = EKeysTail::Flukes; S.TL = 0.2; S.TH = 1; S.Pec = 0.2; S.Dor.Add({0.42, 0.55, 0.7, EKeysFin::Sickle}); S.Hump = 0.18; }
 	{ FKeysShape& S = Add(TEXT("pilotwhale")); S.Peak = .3; S.Nose = .5; S.Ped = .16; S.Tail = EKeysTail::Flukes; S.TL = .22; S.TH = 1.1; S.Pec = .16; S.Dor.Add({.28, .4, .4, EKeysFin::Sickle}); S.Hump = .5; }
 	{ FKeysShape& S = Add(TEXT("humpback")); S.Peak = .3; S.Nose = .6; S.Ped = .2; S.Tail = EKeysTail::Flukes; S.TL = .26; S.TH = 1.15; S.Pec = .34; S.Dor.Add({.56, .63, .15, EKeysFin::Round}); S.bWings = true; S.Hump = .18; }
+	// and their shapes (SHAPE); sole and halibut borrow the flounder's
+	{ FKeysShape& S = Add(TEXT("flounder")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
+	{ FKeysShape& S = Add(TEXT("sole")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
+	{ FKeysShape& S = Add(TEXT("halibut")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
+	{ FKeysShape& S = Add(TEXT("bluerunner")); S.Peak = 0.38; S.Nose = 0.7; S.Ped = 0.1; S.Tail = EKeysTail::Fork; S.TL = 0.3; S.TH = 0.8; S.Pec = 0.18; S.Dor.Add({0.34, 0.74, 0.28, EKeysFin::Sickle}); S.Anal.Add({0.56, 0.74, 0.26, EKeysFin::Sickle}); }
+	{ FKeysShape& S = Add(TEXT("schoolmaster")); S.Peak = 0.38; S.Nose = 0.8; S.Ped = 0.2; S.Tail = EKeysTail::Truncate; S.TL = 0.2; S.TH = 0.55; S.Pec = 0.15; S.Dor.Add({0.3, 0.74, 0.32, EKeysFin::Spiny}); S.Anal.Add({0.64, 0.77, 0.3, EKeysFin::Round}); }
+	{ FKeysShape& S = Add(TEXT("lanesnapper")); S.Peak = 0.38; S.Nose = 0.8; S.Ped = 0.18; S.Tail = EKeysTail::Fork; S.TL = 0.24; S.TH = 0.6; S.Pec = 0.15; S.Dor.Add({0.3, 0.74, 0.3, EKeysFin::Spiny}); S.Anal.Add({0.64, 0.77, 0.28, EKeysFin::Round}); }
+	{ FKeysShape& S = Add(TEXT("vermilion")); S.Peak = 0.36; S.Nose = 0.85; S.Ped = 0.16; S.Tail = EKeysTail::Fork; S.TL = 0.3; S.TH = 0.75; S.Pec = 0.16; S.Dor.Add({0.3, 0.75, 0.28, EKeysFin::Spiny}); S.Anal.Add({0.64, 0.78, 0.24, EKeysFin::Tri}); }
+	{ FKeysShape& S = Add(TEXT("lookdown")); S.Peak = 0.26; S.Nose = 0.32; S.Ped = 0.1; S.Tail = EKeysTail::Fork; S.TL = 0.3; S.TH = 0.78; S.Pec = 0.16; S.Dor.Add({0.3, 0.84, 0.5, EKeysFin::Trail}); S.Anal.Add({0.42, 0.84, 0.42, EKeysFin::Trail}); }
+	{ FKeysShape& S = Add(TEXT("palometa")); S.Peak = 0.42; S.Nose = 0.4; S.Ped = 0.1; S.Tail = EKeysTail::Fork; S.TL = 0.32; S.TH = 0.9; S.Pec = 0.14; S.Dor.Add({0.44, 0.72, 0.78, EKeysFin::Trail}); S.Anal.Add({0.48, 0.74, 0.7, EKeysFin::Trail}); }
+	{ FKeysShape& S = Add(TEXT("spanishmack")); S.Peak = 0.4; S.Nose = 1.3; S.Ped = 0.12; S.Tail = EKeysTail::Lunate; S.TL = 0.2; S.TH = 1.1; S.Pec = 0.1; S.Dor.Add({0.2, 0.4, 0.25, EKeysFin::Spiny}); S.Dor.Add({0.48, 0.58, 0.3, EKeysFin::Tri}); S.Anal.Add({0.56, 0.64, 0.3, EKeysFin::Tri}); S.bFinlets = true; }
+	{ FKeysShape& S = Add(TEXT("bigeye")); S.Peak = 0.42; S.Nose = 0.85; S.Ped = 0.06; S.Tail = EKeysTail::Lunate; S.TL = 0.25; S.TH = 1.2; S.Pec = 0.22; S.Dor.Add({0.3, 0.4, 0.44, EKeysFin::Tri}); S.bFinlets = true; }
+	{ FKeysShape& S = Add(TEXT("skipjack")); S.Peak = 0.44; S.Nose = 0.9; S.Ped = 0.06; S.Tail = EKeysTail::Lunate; S.TL = 0.24; S.TH = 1.15; S.Pec = 0.18; S.Dor.Add({0.3, 0.4, 0.36, EKeysFin::Tri}); S.bFinlets = true; }
+	{ FKeysShape& S = Add(TEXT("whaleshark")); S.Peak = 0.22; S.Nose = 0.35; S.Ped = 0.16; S.Tail = EKeysTail::Hetero; S.TL = 0.26; S.TH = 1.15; S.Pec = 0.5; S.Dor.Add({0.42, 0.56, 0.6, EKeysFin::Tri}); S.Dor.Add({0.72, 0.79, 0.25, EKeysFin::Tri}); S.Anal.Add({0.74, 0.8, 0.22, EKeysFin::Tri}); S.Belly = 0.8; S.bShark = true; }
+	{ FKeysShape& S = Add(TEXT("giantmanta")); S.Peak = 0.3; S.Nose = 0.3; S.Ped = 0.05; S.Tail = EKeysTail::Truncate; S.TL = 0.9; S.TH = 0.08; S.Pec = 0.1; }
+	{ FKeysShape& S = Add(TEXT("sawfish")); S.Peak = 0.34; S.Nose = 0.9; S.Ped = 0.14; S.Tail = EKeysTail::Hetero; S.TL = 0.26; S.TH = 0.85; S.Pec = 0.34; S.Dor.Add({0.56, 0.68, 0.6, EKeysFin::Tri}); S.Dor.Add({0.74, 0.82, 0.45, EKeysFin::Tri}); S.Anal.Add({0.76, 0.83, 0.2, EKeysFin::Tri}); S.bShark = true; }
+	{ FKeysShape& S = Add(TEXT("tigershark")); S.Peak = 0.3; S.Nose = 0.75; S.Ped = 0.12; S.Tail = EKeysTail::Hetero; S.TL = 0.3; S.TH = 1.2; S.Pec = 0.42; S.Dor.Add({0.32, 0.44, 1.1, EKeysFin::Tri}); S.Dor.Add({0.74, 0.8, 0.3, EKeysFin::Tri}); S.Anal.Add({0.74, 0.8, 0.3, EKeysFin::Tri}); S.bShark = true; }
+	{ FKeysShape& S = Add(TEXT("mako")); S.Peak = 0.34; S.Nose = 1.1; S.Ped = 0.08; S.Tail = EKeysTail::Lunate; S.TL = 0.24; S.TH = 1.25; S.Pec = 0.36; S.Dor.Add({0.33, 0.44, 0.95, EKeysFin::Tri}); S.Dor.Add({0.74, 0.79, 0.22, EKeysFin::Tri}); S.Anal.Add({0.74, 0.79, 0.22, EKeysFin::Tri}); S.bShark = true; }
+	{ FKeysShape& S = Add(TEXT("greatwhite")); S.Peak = 0.3; S.Nose = 0.8; S.Ped = 0.1; S.Tail = EKeysTail::Hetero; S.TL = 0.28; S.TH = 1.3; S.Pec = 0.46; S.Dor.Add({0.33, 0.45, 1.25, EKeysFin::Tri}); S.Dor.Add({0.76, 0.81, 0.28, EKeysFin::Tri}); S.Anal.Add({0.75, 0.8, 0.28, EKeysFin::Tri}); S.bShark = true; }
+	{ FKeysShape& S = Add(TEXT("spermwhale")); S.Peak = 0.18; S.Nose = 0.3; S.Ped = 0.2; S.Tail = EKeysTail::Flukes; S.TL = 0.24; S.TH = 1.3; S.Pec = 0.12; S.Dor.Add({0.62, 0.7, 0.12, EKeysFin::Round}); S.Hump = 0.62; }
+	{ FKeysShape& S = Add(TEXT("mola")); S.Peak = 0.45; S.Nose = 0.4; S.Ped = 0.62; S.Tail = EKeysTail::Truncate; S.TL = 0.06; S.TH = 1.4; S.Pec = 0.1; S.Dor.Add({0.3, 0.52, 1.5, EKeysFin::Tri}); S.Anal.Add({0.3, 0.52, 1.5, EKeysFin::Tri}); }
+	{ FKeysShape& S = Add(TEXT("warsaw")); S.Peak = 0.4; S.Nose = 0.5; S.Ped = 0.34; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.2; S.Dor.Add({0.26, 0.8, 0.26, EKeysFin::Spiny}); S.Anal.Add({0.64, 0.82, 0.26, EKeysFin::Round}); S.Belly = 1.1; }
+	{ FKeysShape& S = Add(TEXT("cubera")); S.Peak = 0.38; S.Nose = 0.8; S.Ped = 0.22; S.Tail = EKeysTail::Truncate; S.TL = 0.2; S.TH = 0.62; S.Pec = 0.17; S.Dor.Add({0.3, 0.76, 0.3, EKeysFin::Spiny}); S.Anal.Add({0.64, 0.78, 0.3, EKeysFin::Round}); S.Belly = 1.02; }
 	{ FKeysShape& S = Add(TEXT("goldbluefin")); S.Peak = .43; S.Nose = .88; S.Ped = .06; S.Tail = EKeysTail::Lunate; S.TL = .23; S.TH = 1.1; S.Pec = .15; S.Dor.Add({.3, .4, .42, EKeysFin::Tri}); S.bFinlets = true; }
 		}
 		const FKeysShape* S = M.Find(K);
@@ -240,13 +286,13 @@ namespace
 		if (!T.Num())
 		{
 			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(FString(Name), TArray<FZoneRow>(Rows)); };
-		Z(TEXT("Creek"), {{TEXT("snook"), 3}, {TEXT("redfish"), 2}, {TEXT("tarpon"), 1.5}, {TEXT("manatee"), 1}, {TEXT("mangrove"), 3}, {TEXT("ladyfish"), 2}});
-		Z(TEXT("Flats"), {{TEXT("bonefish"), 5}, {TEXT("permit"), 2}, {TEXT("stingray"), 3}, {TEXT("barracuda"), 2}, {TEXT("blacktip"), 1.5}, {TEXT("lemonshark"), 1}, {TEXT("ladyfish"), 2}});
-		Z(TEXT("Backcountry"), {{TEXT("redfish"), 4}, {TEXT("snook"), 3}, {TEXT("trout"), 3}, {TEXT("tarpon"), 2}, {TEXT("manatee"), 1.2}, {TEXT("stingray"), 2}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}, {TEXT("tripletail"), 0.6}});
-		Z(TEXT("Bridge"), {{TEXT("tarpon"), 5}, {TEXT("snook"), 2}, {TEXT("mangrove"), 3}, {TEXT("eagleray"), 1}, {TEXT("sheepshead"), 3}, {TEXT("goliath"), 0.6}, {TEXT("jackcrevalle"), 1.5}});
-		Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("eagleray"), 2}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("nurse"), 1.5}, {TEXT("mutton"), 2}, {TEXT("dolphin"), 1}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("graytrigger"), 1.2}});
-		Z(TEXT("Reef"), {{TEXT("yellowtail"), 5}, {TEXT("parrotfish"), 3}, {TEXT("angelfish"), 2}, {TEXT("hogfish"), 2}, {TEXT("grouper"), 2}, {TEXT("gag"), 1.2}, {TEXT("redgrouper"), 1.2}, {TEXT("nurse"), 1}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 1.5}, {TEXT("mutton"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("cero"), 2}, {TEXT("goliath"), 0.4}});
-		Z(TEXT("Offshore"), {{TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), .12}, {TEXT("humpback"), .02}});
+		Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.6}, {TEXT("snook"), 3}, {TEXT("redfish"), 2.5}, {TEXT("tarpon"), 1.5}, {TEXT("manatee"), 1}, {TEXT("mangrove"), 3.5}, {TEXT("ladyfish"), 2.5}, {TEXT("trout"), 1.5}, {TEXT("jackcrevalle"), 1}});
+		Z(TEXT("Flats"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.2}, {TEXT("sawfish"), 0.012}, {TEXT("bonefish"), 5}, {TEXT("permit"), 2.2}, {TEXT("stingray"), 3}, {TEXT("redfish"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("blacktip"), 1.5}, {TEXT("lemonshark"), 1}, {TEXT("eagleray"), 1}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.2}, {TEXT("palometa"), 3}, {TEXT("bluerunner"), 2}, {TEXT("manatee"), 0.7}});
+		Z(TEXT("Backcountry"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.8}, {TEXT("sawfish"), 0.01}, {TEXT("redfish"), 4}, {TEXT("snook"), 3}, {TEXT("trout"), 3}, {TEXT("mangrove"), 2.5}, {TEXT("tarpon"), 2}, {TEXT("bonefish"), 1.5}, {TEXT("permit"), 1}, {TEXT("barracuda"), 1.2}, {TEXT("manatee"), 1.2}, {TEXT("stingray"), 2.2}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.5}, {TEXT("tripletail"), 0.6}, {TEXT("dolphin"), 1.5}});
+		Z(TEXT("Bridge"), {{TEXT("flounder"), 1.5}, {TEXT("tarpon"), 5}, {TEXT("snook"), 2}, {TEXT("mangrove"), 3}, {TEXT("eagleray"), 1}, {TEXT("sheepshead"), 3}, {TEXT("goliath"), 0.6}, {TEXT("jackcrevalle"), 1.5}, {TEXT("nurse"), 1}, {TEXT("cobia"), 1}, {TEXT("barracuda"), 1}, {TEXT("dolphin"), 1.2}, {TEXT("lookdown"), 3.5}, {TEXT("bluerunner"), 4}, {TEXT("schoolmaster"), 2}, {TEXT("manatee"), 0.9}});
+		Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("eagleray"), 2}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("nurse"), 1.5}, {TEXT("mutton"), 2}, {TEXT("dolphin"), 1.8}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("graytrigger"), 1.2}, {TEXT("jackcrevalle"), 1.8}, {TEXT("yellowtail"), 1.5}, {TEXT("sheepshead"), 1.2}, {TEXT("tarpon"), 1.6}, {TEXT("goliath"), 0.5}, {TEXT("bullshark"), 0.35}, {TEXT("bluerunner"), 4.5}, {TEXT("lanesnapper"), 3}, {TEXT("spanishmack"), 3}, {TEXT("lookdown"), 1.5}, {TEXT("schoolmaster"), 2}});
+		Z(TEXT("Reef"), {{TEXT("cubera"), 0.5}, {TEXT("yellowtail"), 5}, {TEXT("parrotfish"), 3}, {TEXT("angelfish"), 2}, {TEXT("hogfish"), 2}, {TEXT("grouper"), 2}, {TEXT("gag"), 1.2}, {TEXT("redgrouper"), 1.2}, {TEXT("nurse"), 1}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 1.5}, {TEXT("mutton"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("cero"), 2}, {TEXT("goliath"), 1.1}, {TEXT("hammerhead"), 0.3}, {TEXT("bullshark"), 0.3}, {TEXT("tarpon"), 1.2}, {TEXT("dolphin"), 1}, {TEXT("schoolmaster"), 4.5}, {TEXT("lanesnapper"), 3.5}, {TEXT("bluerunner"), 4}, {TEXT("vermilion"), 2}, {TEXT("spanishmack"), 2}});
+		Z(TEXT("Offshore"), {{TEXT("halibut"), 1.1}, {TEXT("mako"), 0.5}, {TEXT("mola"), 0.03}, {TEXT("greatwhite"), 0.025}, {TEXT("whaleshark"), 0.04}, {TEXT("giantmanta"), 0.04}, {TEXT("tigershark"), 0.14}, {TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2.5}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), 0.12}, {TEXT("humpback"), 0.02}, {TEXT("skipjack"), 4}, {TEXT("bigeye"), 0.7}});
 		}
 		const TArray<FZoneRow>* R = T.Find(Zone);
 		return R ? *R : T[TEXT("Hawk Channel")];
@@ -255,19 +301,22 @@ namespace
 	// fishing tables the JS keeps in ZONE_TABLE but KeysData doesn't have (index.html 528-529)
 	const TArray<FZoneRow>& LifeRigFishing()
 	{
+		// the web game's ZONE_TABLE['Oil Rig']
 		static const TArray<FZoneRow> L{{TEXT("amberjack"), 6}, {TEXT("blackfin"), 3}, {TEXT("cobia"), 3}, {TEXT("grouper"), 1.5}, {TEXT("gag"), 1.2}, {TEXT("barracuda"), 2},
-			{TEXT("kingfish"), 2.5}, {TEXT("mahi"), 1.5}, {TEXT("wahoo"), 1.5}, {TEXT("yellowfin"), .8}};
+			{TEXT("kingfish"), 2.5}, {TEXT("mahi"), 1.5}, {TEXT("wahoo"), 1.5}, {TEXT("yellowfin"), 1.2}, {TEXT("sailfish"), .4}, {TEXT("goliath"), .5}, {TEXT("bullshark"), .35}};
 		return L;
 	}
 	const TArray<FZoneRow>& LifeWreckFishing()
 	{
-		static TArray<FZoneRow> L;
-		if (!L.Num()) for (const TPair<FString, double>& R : KeysWrecks::Residents()) L.Add({R.Key, R.Value});
+		// the web game's ZONE_TABLE['Wreck']: steel on the bottom is where the big structure-holders live
+		static const TArray<FZoneRow> L{{TEXT("cubera"), 2}, {TEXT("warsaw"), .8}, {TEXT("tigershark"), .3}, {TEXT("amberjack"), 6}, {TEXT("grouper"), 3.6}, {TEXT("cobia"), 3.2},
+			{TEXT("gag"), 2.6}, {TEXT("goliath"), 2.6}, {TEXT("barracuda"), 2.5}, {TEXT("jackcrevalle"), 2.5}, {TEXT("kingfish"), 2.5}, {TEXT("bullshark"), .9}, {TEXT("mutton"), .5}, {TEXT("blacktip"), .3}};
 		return L;
 	}
 	const TArray<FZoneRow>& LifeWeedFishing()
 	{
-		static const TArray<FZoneRow> L{{TEXT("mahi"), 8}, {TEXT("tripletail"), 3}, {TEXT("blackfin"), 2}, {TEXT("graytrigger"), 2}, {TEXT("wahoo"), 1}, {TEXT("sailfish"), 1}, {TEXT("jackcrevalle"), 1.5}};
+		static const TArray<FZoneRow> L{{TEXT("mahi"), 8}, {TEXT("tripletail"), 3}, {TEXT("blackfin"), 2}, {TEXT("graytrigger"), 2}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 1.6}, {TEXT("jackcrevalle"), 1.5},
+			{TEXT("yellowfin"), .7}, {TEXT("marlin"), .3}};
 		return L;
 	}
 	// schools that hang around each kind of structure (JS ensureAnchors, 2146)
@@ -1553,10 +1602,16 @@ void AKeysLife::TrySpawn(double RMin)
 		if (X < WBX0 || X > WBX1 || Z < WBZ0 || Z > WBZ1) return;
 		Type = LifeWeighted(LifeZoneLife(ZoneAt(X, Z)));
 		// the web game's Humps life table: pilot whales hang round the offshore humps
-		if (const FHump* Hm = NearHump(X, Z); Hm && !Hm->bPatch && FMath::FRand() < .09) Type = TEXT("pilotwhale");
+		if (const FHump* Hm = NearHump(X, Z); Hm && !Hm->bPatch && FMath::FRand() < .35)
+		{
+			static const TArray<FZoneRow> Humps{{TEXT("spermwhale"), 0.3}, {TEXT("warsaw"), 1.2}, {TEXT("mako"), 0.35}, {TEXT("amberjack"), 4}, {TEXT("grouper"), 2.5}, {TEXT("gag"), 1.5}, {TEXT("redgrouper"), 1.5}, {TEXT("cobia"), 2}, {TEXT("kingfish"), 1.5}, {TEXT("pilotwhale"), 2.6}, {TEXT("vermilion"), 3}, {TEXT("bluerunner"), 3}, {TEXT("skipjack"), 2}};
+			Type = LifeWeighted(Humps);
+		}
 	}
 	SpawnGroupAt(Type, X, Z);
 }
+
+bool AKeysLife::DebugSpawn(const FString& Type, double X, double Z) { return SpawnGroupAt(Type, X, Z, 1e9, true) != nullptr; }
 
 void AKeysLife::SpawnTunaNear(double X, double Z)
 {
@@ -1776,6 +1831,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			if (G.Glide > 0) { Y = Surf + .45 + FMath::Sin(T * 3 + M.Ph) * .12; Pitch = .05; }
 			if (V->bFlap) Roll = FMath::Sin(T * 2.2 + M.Ph) * .28;
 			else if (V->Kind == EKeysKind::Ray) Roll = FMath::Sin(T * 1.5 + M.Ph) * .05;
+			else if (V->bFlat) Roll = PI / 2 + FMath::Sin(T * 1.1 + M.Ph) * .04;   // a flatfish lies over on one side (creatures.ts flat)
 			M.Yaw = G.H + FMath::Sin(T * Wf + M.Ph) * (G.Glide > 0 ? 0 : Wa);
 			M.WX = Mx; M.WY = Y; M.WZ = Mz; M.Pitch = Pitch; M.Roll = Roll;
 			M.Sz = V->Len * M.S;
@@ -2050,7 +2106,7 @@ void AKeysLife::SpearTargetsNear(double X, double Y, double Z, double R, TArray<
 		if (!V || LHyp(G.CX - X, G.CZ - Z) > R + 40) continue;
 		const KeysData::FSpecies* Sp = KeysData::Species(G.Type);
 		if (!Sp) continue;   // ambient-only creatures have no catch
-		const bool bCatchable = V->Kind != EKeysKind::Dolphin && V->Kind != EKeysKind::Turtle && V->Kind != EKeysKind::Manatee;
+		const bool bCatchable = V->Kind != EKeysKind::Dolphin && V->Kind != EKeysKind::Turtle && V->Kind != EKeysKind::Manatee && !V->bNoCatch;
 		const double Fx = -FMath::Sin(G.H), Fz = -FMath::Cos(G.H);
 		double Spd = V->Speed;
 		if (G.Flee > 0) Spd *= G.FleeMul > 0 ? G.FleeMul : 3.2;
@@ -2099,7 +2155,7 @@ void AKeysLife::DebugBringSchool(double X, double Z)
 	double BestD = 1e9;
 	for (FKeysSchool& G : Schools)
 	{
-		if (!G.V || !G.Members.Num() || !KeysData::Species(G.Type) || G.V->Kind == EKeysKind::Dolphin || G.V->Kind == EKeysKind::Turtle || G.V->Kind == EKeysKind::Manatee) continue;
+		if (!G.V || !G.Members.Num() || !KeysData::Species(G.Type) || G.V->Kind == EKeysKind::Dolphin || G.V->Kind == EKeysKind::Turtle || G.V->Kind == EKeysKind::Manatee || G.V->bNoCatch) continue;
 		const double D = LHyp(G.CX - X, G.CZ - Z);
 		if (D < BestD) { BestD = D; Best = &G; }
 	}

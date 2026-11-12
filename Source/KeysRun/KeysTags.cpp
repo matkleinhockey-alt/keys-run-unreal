@@ -9,6 +9,7 @@
 #include "KeysDiver.h"
 #include "KeysWalker.h"
 #include "KeysFinal.h"
+#include "KeysLife.h"
 #include "KeysPlatData.h"
 #include "KeysExtras.h"
 #include "KeysHandgun.h"
@@ -498,6 +499,19 @@ void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 		// shorecast=0.6: cast from where the walker stands, with that much power
 		if (ShoreFishable()) { bFpOn = false; StartCharge(); bCharging = false; BeginShoreSwap(); bCharging = true; CastLine(FCString::Atod(*A)); bCharging = false; EndShoreSwap(); }
 		else UE_LOG(LogTemp, Warning, TEXT("KRScript shorecast: nowhere to fish from here"));
+	}
+	else if (C == TEXT("spawn"))
+	{
+		// spawn=mako,mola,...: a school of each, spread round the boat 25 m out
+		TArray<FString> Ks;
+		A.ParseIntoArray(Ks, TEXT(","));
+		if (AKeysLife* L = AKeysLife::Get(this))
+			for (int32 i = 0; i < Ks.Num(); i++)
+			{
+				const double Ang = H + PI + (i - (Ks.Num() - 1) * .5) * .5;
+				const bool bOk = L->DebugSpawn(Ks[i], X - FMath::Sin(Ang) * 25, Z - FMath::Cos(Ang) * 25);
+				UE_LOG(LogTemp, Log, TEXT("KRScript spawn %s: %s"), *Ks[i], bOk ? TEXT("ok") : TEXT("refused"));
+			}
 	}
 	else if (C == TEXT("fills")) AddCount(TEXT("dive.fill"), FCString::Atoi(*A));
 }

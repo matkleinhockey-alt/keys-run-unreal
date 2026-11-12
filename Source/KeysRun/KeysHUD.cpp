@@ -355,9 +355,9 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	static const FRow Fish[] = {
 		{TEXT("Hold Space"), TEXT("Power up a cast, release to throw")}, {TEXT("Space"), TEXT("Strike when a fish bites")},
 		{TEXT("Hold Space or S"), TEXT("Reel during the fight")}, {TEXT("T / Shift+T"), TEXT("Drag tighter / looser")}, {TEXT("R"), TEXT("Reel in")},
-		{TEXT("K / Space"), TEXT("Keep / release the fish")}, {TEXT("E"), TEXT("Weigh in at a marina dock")}, {TEXT("F / V"), TEXT("Auto-chase / first-person view")},
+		{TEXT("K / Space / T"), TEXT("Keep / release / tag and release the fish")}, {TEXT("E"), TEXT("Weigh in at a marina dock")}, {TEXT("F / V"), TEXT("Auto-chase / first-person view")},
 		{TEXT("="), TEXT("Troll: riggers out, lines out, hold 5 kn")},
-		{TEXT("Cast at a wreck"), TEXT("Wreck fish (the crossed hulls on the chart)")}};
+		{TEXT("Cast at a wreck"), TEXT("Wreck fish (the crossed hulls on the chart)")}, {TEXT("Space, ashore"), TEXT("Fish from a pier, a dock or the marina's planks")}};
 	static const FRow More[] = {
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
 		{TEXT("O"), TEXT("Sunset: lighthouse beam, neon")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
@@ -368,14 +368,14 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("Q"), TEXT("Tie up and go ashore / back aboard")}, {TEXT("W A S D + mouse, 1"), TEXT("Walk (Shift runs), first / third person")},
 		{TEXT("F, then 1-9 / Enter"), TEXT("Use a counter, buy, read a sign")}, {TEXT("Casino counter"), TEXT("A slot machine: Space spins, Left / Right bets")}};
 	static const FRow Gun[] = {
-		{TEXT("9"), TEXT("Draw / holster the boat pistol")}, {TEXT("Click / Space"), TEXT("Fire (fish near the surface, seabirds)")},
+		{TEXT("9"), TEXT("Draw / holster the boat pistol")}, {TEXT("Click / Space"), TEXT("Fire (fish near the surface, seabirds, Caelen)")},
 		{TEXT("Mouse / arrows"), TEXT("Aim")}, {TEXT("R / Z"), TEXT("Reload / fire a parachute flare")}};
 	static const FRow Dive[] = {
 		{TEXT("J"), TEXT("Jump in / climb back aboard")}, {TEXT("W A S D + mouse"), TEXT("Swim where you look")},
 		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
 		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("R"), TEXT("Haul the bands back to reload")},
 		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}, {TEXT("F"), TEXT("Prise open a wreck's box (treasure)")}};
-	const float ColW = W * .5f, Row = 24.5f * U;
+	const float ColW = W * .5f, Row = 23.2f * U;
 	auto Block = [&](const TCHAR* Head, const FRow* Rows, int32 N, float BX, float BY)
 	{
 		Text(Head, BX, BY, 1.1f, Teal);

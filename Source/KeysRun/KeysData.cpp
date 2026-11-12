@@ -52,6 +52,23 @@ namespace KeysData
 		S(TEXT("blackmarlin"), TEXT("Black Marlin"), 200, 900, 1.55, 5, 0x2b3340, true, TEXT("The only marlin whose pectoral fins lock rigidly out to the sides - a true giant, rarely seen this side of the Pacific."));
 		S(TEXT("gag"), TEXT("Gag Grouper"), 6, 45, .9, 7, 0x6f6a60, false, TEXT("Gags hang over ledges and wrecks; the big ones are almost always males."));
 		S(TEXT("redgrouper"), TEXT("Red Grouper"), 5, 30, .85, 7, 0x9a5a46, false, TEXT("Red groupers dig out holes in the bottom that other reef fish move into."));
+		// the web game's later species (content/species.ts): flatfish, the reef's schooling snappers and jacks, the wreck giants, more pelagics
+		S(TEXT("flounder"), TEXT("Southern Flounder"), 1, 12, 0.4, 18, 0x6b5f4a, false, TEXT("Both eyes end up on one side: a flounder starts life upright and one eye migrates across its skull as it settles onto the bottom."));
+		S(TEXT("sole"), TEXT("Hogchoker Sole"), 0.4, 4, 0.3, 22, 0x5e5444, false, TEXT("A true sole, and small enough that it earned its name from hogs choking on the ones thrown to them: the rough scales catch in the throat."));
+		S(TEXT("halibut"), TEXT("Atlantic Halibut"), 3, 400, 1.5, 9, 0x4a4a44, false, TEXT("The largest flatfish in the world, and it hunts like one: it will leave the bottom entirely and run down a fish in open water."));
+		S(TEXT("mako"), TEXT("Shortfin Mako"), 80, 600, 1.7, 5, 0x1f4f86, false, TEXT("Makos have been clocked at over 40 mph and will jump clear of the water when hooked."));
+		S(TEXT("warsaw"), TEXT("Warsaw Grouper"), 60, 440, 1.55, 3.5, 0x3b332e, false, TEXT("Warsaw grouper live past fifty years and almost never leave the deep ledges they settle on."));
+		S(TEXT("cubera"), TEXT("Cubera Snapper"), 25, 120, 1.3, 6, 0x5a4a46, false, TEXT("Cubera snapper gather on Keys wrecks in summer to spawn, and have teeth that can take a finger."));
+		S(TEXT("tigershark"), TEXT("Tiger Shark"), 200, 900, 1.6, 3, 0x5f6a63, false, TEXT("Tiger sharks eat almost anything, and have been found with licence plates in their stomachs."));
+		S(TEXT("bluerunner"), TEXT("Blue Runner"), 1, 8, 0.5, 16, 0x5e8392, false, TEXT("Blue runners travel in big fast schools and make outstanding live bait for everything bigger."));
+		S(TEXT("schoolmaster"), TEXT("Schoolmaster Snapper"), 1, 8, 0.4, 15, 0xc99a3c, false, TEXT("Named for the way it hangs over patch reef in tight schools. Yellow fins give it away."));
+		S(TEXT("lanesnapper"), TEXT("Lane Snapper"), 0.5, 6, 0.3, 17, 0xd08a74, false, TEXT("Pink with yellow stripes and a smudge under the back  -  a small, willing reef snapper."));
+		S(TEXT("vermilion"), TEXT("Vermilion Snapper"), 1, 7, 0.35, 16, 0xb8402e, false, TEXT("Called the beeliner. They stack up in big schools just off the reef drop."));
+		S(TEXT("lookdown"), TEXT("Lookdown"), 0.5, 4, 0.35, 20, 0xc3d2dc, false, TEXT("A living mirror  -  flat as a plate, with a face that looks permanently unimpressed."));
+		S(TEXT("palometa"), TEXT("Palometa"), 0.5, 3, 0.4, 22, 0xd7d2bd, false, TEXT("The long black fin streamers trail behind it like ribbons in the surf."));
+		S(TEXT("spanishmack"), TEXT("Spanish Mackerel"), 1, 9, 0.55, 14, 0x44739a, false, TEXT("Golden spots and no bars is how you tell a Spanish from a cero. They slash through bait schools at speed."));
+		S(TEXT("bigeye"), TEXT("Bigeye Tuna"), 30, 300, 1.2, 7, 0x24405f, false, TEXT("That enormous eye is for hunting in deep, dark water  -  bigeye feed far below the other tunas."));
+		S(TEXT("skipjack"), TEXT("Skipjack Tuna"), 4, 30, 0.8, 11, 0x2b4160, false, TEXT("The striped belly is unique among tunas. Skipjack school in the thousands and churn the surface when they feed."));
 		return M;
 	}
 
@@ -71,13 +88,13 @@ namespace KeysData
 		if (!T.Num())
 		{
 			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(Name, FRow(Rows)); };
-			Z(TEXT("Creek"), {{TEXT("snook"), 5}, {TEXT("redfish"), 3}, {TEXT("tarpon"), 2}, {TEXT("mangrove"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}});
-			Z(TEXT("Flats"), {{TEXT("bonefish"), 5}, {TEXT("permit"), 2}, {TEXT("barracuda"), 3}, {TEXT("tarpon"), 1}, {TEXT("ladyfish"), 2}, {TEXT("lemonshark"), .8}, {TEXT("blacktip"), 1}});
-			Z(TEXT("Backcountry"), {{TEXT("snook"), 4}, {TEXT("redfish"), 4}, {TEXT("trout"), 5}, {TEXT("tarpon"), 2}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("tripletail"), .8}, {TEXT("bullshark"), .6}});
-			Z(TEXT("Bridge"), {{TEXT("tarpon"), 5}, {TEXT("mangrove"), 4}, {TEXT("snook"), 2}, {TEXT("sheepshead"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("goliath"), .6}, {TEXT("bullshark"), .6}});
-			Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("yellowtail"), 3}, {TEXT("mutton"), 2}, {TEXT("redgrouper"), 1.2}, {TEXT("gag"), .8}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("jackcrevalle"), 1.5}, {TEXT("graytrigger"), 1.5}});
-			Z(TEXT("Reef"), {{TEXT("yellowtail"), 5}, {TEXT("mutton"), 3}, {TEXT("hogfish"), 3}, {TEXT("grouper"), 2.5}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2.5}, {TEXT("kingfish"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("goliath"), .4}});
-			Z(TEXT("Offshore"), {{TEXT("mahi"), 6}, {TEXT("blackfin"), 4}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 2}, {TEXT("marlin"), 1.3}, {TEXT("blackmarlin"), .5}, {TEXT("swordfish"), 1.1}, {TEXT("yellowfin"), .8}, {TEXT("albacore"), .3}, {TEXT("bluefin"), .2}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("cobia"), .5}, {TEXT("hammerhead"), .3}});
+			Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.5}, {TEXT("snook"), 5}, {TEXT("redfish"), 3}, {TEXT("tarpon"), 2}, {TEXT("mangrove"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}});
+			Z(TEXT("Flats"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.2}, {TEXT("bonefish"), 11}, {TEXT("permit"), 2}, {TEXT("barracuda"), 3}, {TEXT("tarpon"), 1}, {TEXT("ladyfish"), 2}, {TEXT("lemonshark"), 0.8}, {TEXT("blacktip"), 1}, {TEXT("palometa"), 1.5}});
+			Z(TEXT("Backcountry"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.6}, {TEXT("snook"), 4}, {TEXT("redfish"), 4}, {TEXT("trout"), 5}, {TEXT("tarpon"), 2}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("tripletail"), 0.8}, {TEXT("bullshark"), 0.6}});
+			Z(TEXT("Bridge"), {{TEXT("flounder"), 1.5}, {TEXT("tarpon"), 11}, {TEXT("mangrove"), 4}, {TEXT("snook"), 2}, {TEXT("sheepshead"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("goliath"), 0.6}, {TEXT("bullshark"), 0.6}, {TEXT("lookdown"), 2}, {TEXT("bluerunner"), 2.5}});
+			Z(TEXT("Hawk Channel"), {{TEXT("halibut"), 0.4}, {TEXT("mangrove"), 4}, {TEXT("yellowtail"), 3}, {TEXT("mutton"), 2}, {TEXT("redgrouper"), 1.2}, {TEXT("gag"), 0.8}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("jackcrevalle"), 1.5}, {TEXT("graytrigger"), 1.5}, {TEXT("bluerunner"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("spanishmack"), 2.5}, {TEXT("lookdown"), 1}, {TEXT("tarpon"), 0.5}, {TEXT("amberjack"), 0.5}, {TEXT("kingfish"), 1.2}, {TEXT("blacktip"), 0.3}});
+			Z(TEXT("Reef"), {{TEXT("cubera"), 0.6}, {TEXT("yellowtail"), 5}, {TEXT("mutton"), 3}, {TEXT("hogfish"), 3}, {TEXT("grouper"), 2.5}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2.5}, {TEXT("kingfish"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("goliath"), 0.5}, {TEXT("amberjack"), 0.8}, {TEXT("cobia"), 0.6}, {TEXT("lemonshark"), 0.25}, {TEXT("schoolmaster"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("vermilion"), 2.5}, {TEXT("bluerunner"), 2.5}, {TEXT("spanishmack"), 1.5}});
+			Z(TEXT("Offshore"), {{TEXT("halibut"), 1}, {TEXT("mako"), 0.8}, {TEXT("tigershark"), 0.35}, {TEXT("mahi"), 6}, {TEXT("blackfin"), 4}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 2}, {TEXT("marlin"), 1.3}, {TEXT("blackmarlin"), 0.6}, {TEXT("swordfish"), 1.1}, {TEXT("yellowfin"), 0.8}, {TEXT("albacore"), 0.3}, {TEXT("bluefin"), 0.4}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("cobia"), 0.5}, {TEXT("hammerhead"), 0.5}, {TEXT("skipjack"), 3}, {TEXT("bigeye"), 0.7}});
 		}
 		const FRow* R = T.Find(Zone);
 		return R ? *R : T[TEXT("Hawk Channel")];
@@ -157,7 +174,8 @@ namespace KeysData
 	bool IsSounder(const FString& Key)
 	{
 		static const TSet<FString> S = {TEXT("blackfin"), TEXT("yellowfin"), TEXT("bluefin"), TEXT("albacore"), TEXT("amberjack"), TEXT("grouper"), TEXT("goliath"), TEXT("swordfish"),
-			TEXT("cobia"), TEXT("bullshark"), TEXT("hammerhead"), TEXT("lemonshark"), TEXT("blacktip"), TEXT("mutton"), TEXT("kingfish"), TEXT("wahoo")};
+			TEXT("cobia"), TEXT("bullshark"), TEXT("hammerhead"), TEXT("lemonshark"), TEXT("blacktip"), TEXT("mutton"), TEXT("kingfish"), TEXT("wahoo"),
+			TEXT("tigershark"), TEXT("mako"), TEXT("warsaw"), TEXT("cubera")};
 		return S.Contains(Key);
 	}
 
