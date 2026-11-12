@@ -311,7 +311,7 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 		const FString Sel = Items.IsValidIndex(P->MenuSel) ? Items[P->MenuSel].Id.ToString() : FString();
 		FString Help;
 		if (Sel == TEXT("sea")) Help = SeaStates()[SeaIndex()].Name + TEXT(": ") + SeaStates()[SeaIndex()].Desc;
-		else if (Sel == TEXT("time")) Help = TEXT("Golden hour over the Seven Mile Bridge, or full daylight.");
+		else if (Sel == TEXT("time")) Help = TEXT("Golden hour over the Seven Mile Bridge - Sombrero Key Light's beam sweeps and the town's lamps and neon glow - or full daylight.");
 		else if (Sel == TEXT("radio")) Help = TEXT("Three stations: Beno Bonanza, Margaritaville and Hip-hop, with DJ breaks.");
 		else if (Sel == TEXT("view")) Help = TEXT("Chase camera behind the boat, or first person from the helm.");
 		else if (Sel == TEXT("fpview")) Help = TEXT("First person puts you at the rod with your own hands on the reel whenever the line is out.");
@@ -336,11 +336,12 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	static const FRow Fish[] = {
 		{TEXT("Hold Space"), TEXT("Power up a cast, release to throw")}, {TEXT("Space"), TEXT("Strike when a fish bites")},
 		{TEXT("Hold Space or S"), TEXT("Reel during the fight")}, {TEXT("T / Shift+T"), TEXT("Drag tighter / looser")}, {TEXT("R"), TEXT("Reel in")},
-		{TEXT("K / Space"), TEXT("Keep / release the fish")}, {TEXT("E"), TEXT("Weigh in at a marina dock")}, {TEXT("F"), TEXT("Auto-chase on / off")},
-		{TEXT("V"), TEXT("First-person fishing view")}, {TEXT("="), TEXT("Troll: riggers out, lines out, hold 5 kn")}};
+		{TEXT("K / Space"), TEXT("Keep / release the fish")}, {TEXT("E"), TEXT("Weigh in at a marina dock")}, {TEXT("F / V"), TEXT("Auto-chase / first-person view")},
+		{TEXT("="), TEXT("Troll: riggers out, lines out, hold 5 kn")},
+		{TEXT("Cast at a wreck"), TEXT("Wreck fish (the crossed hulls on the chart)")}};
 	static const FRow More[] = {
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
-		{TEXT("O"), TEXT("Sunset")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
+		{TEXT("O"), TEXT("Sunset: lighthouse beam, neon")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
 		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}, {TEXT("R (lines in)"), TEXT("Marathon race; Esc for a tournament")}};
 	static const FRow Ashore[] = {
 		{TEXT("Q"), TEXT("Tie up and go ashore / back aboard")}, {TEXT("W A S D + mouse, 1"), TEXT("Walk (Shift runs), first / third person")},

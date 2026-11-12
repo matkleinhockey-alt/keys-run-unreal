@@ -8,12 +8,16 @@ so there are no hand-made assets. The editor script creates the materials and th
 ## What's in it
 
 - **The map:** every island, creek, channel, hump, reef line and marina from the JS game, using the same `landH` / `depthAt` /
-  `zoneAt` math (`KeysGeo.cpp`), plus Miami and Biscayne Bay. US-1 and the Seven Mile Bridge
+  `zoneAt` math (`KeysGeo.cpp`), plus Miami and Biscayne Bay. The keys and the Miami islands have their real OpenStreetMap
+  coastlines (the web game's `world/coast-data.ts` and `coast.ts`: bays, spits, canals and points, with the same edge-grid
+  signed distance), US-1's causeway fill, the town pad, the golf courses and the runway hold the ground up, and the marina
+  basins are dredged, so the marinas, the town, the fishing piers, the estates and the race marks all sit at the web game's
+  own coordinates. US-1 and the Seven Mile Bridge
   (barrier walls, striping, bents with pier caps, the hump over the channel) and the old bridge (lower and narrower, arch
   ribs, the missing swing span and its broken stubs) have pilings you can hit; US-1 runs across the keys as a road. The keys
   have real palms, mangroves and conch houses (each its own size, with a hip tin roof, a porch, shuttered windows, some up
-  on piers), 41 waterfront estates with pools, private docks and a boat on a lift, and six public fishing piers. Plus the
-  Miami skyline.
+  on piers), 31 waterfront estates with pools, private docks and a boat on a lift (walked along the real shoreline as
+  `world/waterfront.ts` does), and the web game's six public fishing piers at its own spots. Plus the Miami skyline.
 - **Boot Key Harbor City (the town):** the town built in the web game, at Boot Key Harbor City Marina, laid out from the same
   tables (`world/town.ts`, `world/casino.ts`, `content/venues.ts`): the fill pad with its seawall, rails and promenade;
   Harbor Drive, Palm Avenue, the back lane and Sombrero Boulevard with sidewalks, kerbs, markings and crossings; sixteen
@@ -26,7 +30,8 @@ so there are no hand-made assets. The editor script creates the materials and th
   Scuba Steve's, the Sunset Motor Lodge, Cone Zone and the Stop-N-Go; the Pink Flamingo Cabaret with its stage, two
   dancers, the bar and the DJ; and the Gaff & Gill Casino with its slot banks, the cage, the Go Fish table, the marlin
   fountain and the aquarium wall. Harbor Row's four lots behind the casino are for sale.
-- **Ashore (Q):** tie up alongside any dock (the four marinas, the fishing piers, an estate's dock) when you are slow,
+- **Ashore (Q):** the houses, palms, mangroves and estate houses out on the keys are solid, and the dark rooms (the casino,
+  the Pink Flamingo, the bars) hold their exposure so they stay moody instead of washing out. Tie up alongside any dock (the four marinas, the fishing piers, an estate's dock) when you are slow,
   and walk the docks, the town and the keys. F at a counter opens its shelf: buy with the cash the fish house pays for
   your fillets at the weigh-in (game fish, billfish and protected species don't sell). The heavy rod holds more tension,
   the lever reel brings fish in faster, diner coffee widens the strike window, live bait brings quicker bites, the dive
@@ -64,13 +69,16 @@ so there are no hand-made assets. The editor script creates the materials and th
   Planing boats leave a white prop-wash trail that spreads, breaks up and fades to pale green churned water. H cycles the four sea states.
 - **Boats:** all eight (Robalo R230, Grady-White Canyon 306, Freeman 42LR, Midnight Express 43, MTI V42, Yellowfin 36 CC,
   Contender 32ST and Nor-Tech 390 Sport) with their real specs (length, beam, engines, top speed, acceleration, turning, draft,
-  cooler) and fit-out from the web game's `content/boats.ts` hull styles: T-top or hardtop, paint, boot and cove stripes,
+  cooler). Each hull is the web game's loft (`entities/boat/hull.ts`, `KeysHull.cpp`) from its own `HULLS` row: deadrise that
+  warps from the transom to a deep-V forefoot, chine flats, flared and bulged topsides, sheer spring, a raked stem, the boot
+  stripe, cove stripe and rub rail in the boat's paint, and sharp notches for the steps; the Freeman is a catamaran with slim
+  asymmetric sponsons under a bridge deck. The fit-out comes from the web game's `content/boats.ts` hull styles: T-top or hardtop, paint, boot and cove stripes,
   leaning post with a rocket launcher of rods or helm seats, rod racks on the top, radar, bow rail, bow sun pad on the go-fast
   boats, steps in the running bottom, engines on the transom or set back on a bracket, cowl and lower-unit colours. The
   Yellowfin is a cream hull with navy trim and triple outboards and the fine 24-degree entry; the Contender is white and green;
   the Nor-Tech is black and orange with a stepped bottom. Boats are bought from the broker with the cash from your fillets
-  (`sim/economy.ts`): the Grady-White is yours to start, then the Robalo $9,000, Contender $20,000, Yellowfin $30,000, Freeman
-  $42,000, Midnight Express $56,000, MTI $70,000 and Nor-Tech $85,000. In the main menu, Left / Right on the Boat row shows each
+  (`sim/economy.ts`): the five original boats (Robalo, Grady-White, Freeman, Midnight Express, MTI) are always yours, so a save
+  from before the broker keeps them all; the Contender is $20,000, the Yellowfin $30,000 and the Nor-Tech $85,000. In the main menu, Left / Right on the Boat row shows each
   one and Enter buys it. The physics is ported line for line: 15-point buoyancy, trim and hole shot, prop ventilation, wave
   surfing, slams and air, beaching, reverse and neutral.
 - **Outriggers and trolling (=):** the tower boats (Grady-White and Freeman) carry two long outriggers on swivel bases that swing
@@ -92,7 +100,7 @@ so there are no hand-made assets. The editor script creates the materials and th
   through the turns and throw wakes. Orange race marks with a numbered flag (the start mark is yellow), a green pennant and a ring of
   floats over the mark you need next, the course and the field on the chart, and a board with your place, lap, clock, the next mark
   and its distance, and the running order. Marks within 55 m count as rounded. R again abandons it; your best time is saved.
-  (This port's islands are the ellipses, so a mark that would sit on land is walked offshore until it floats.)
+  The marks are at `sim/race.ts`'s own coordinates.
 - **Fishing tournament (Esc menu):** the web game's tournament (`sim/tournament.ts`, `game/tournament/**`): five species drawn
   for the day from the ones that are common somewhere and legal to keep, a 15-second countdown, fifteen minutes to keep one of
   each, then run them in to Boot Key Harbor and slow down inside it. The three AI boats' days are planned from the tournament's
@@ -122,22 +130,30 @@ so there are no hand-made assets. The editor script creates the materials and th
   Casting into a school bites faster and bigger, and rigs and weedlines have their own fish tables. All of it is marked on the chart.
 - **Extras:** the buddy boat (Y), the shower (Z), travel to Miami and back (X), the crew, party and flags on deck, Caelen the parrot,
   and Luigi mode: trim all the way up at speed and see what happens.
-- **Sky:** physically based sky, clouds, fog, and O for sunset over the Seven Mile Bridge.
+- **Sky:** physically based sky, clouds, fog, and O for sunset over the Seven Mile Bridge. At sunset Sombrero Key Light's lens
+  turns (`world/lighthouse.ts`: a bright narrow beam and a wide faint one, front and back, every 9 s, 620 m out) and the town
+  glows: halos round the street lamps with pools of light under them, and the neon along every sign (`entities/town/kit.ts`).
+- **Shipwrecks:** the web game's six (`shared/world/wrecks.ts`): a DC-3, a sand barge, a harbor tug and three freighters, placed
+  by the same hashed search against the real depth, zone and shore, lying along the contour with a list and the broken ones
+  in two pieces. You can see them through the clear water and dive on them; they are on the chart (a hull line with a cross),
+  and a cast within 28 m fishes the wreck table (amberjack, goliath and gag grouper, cobia, barracuda, jacks, sharks).
+- **Visitors:** the pirates (`entities/life/pirates.ts`, `shared/world/pirates.ts`): Cap'n Barnacle Bev and Mr. Mildew in a tired
+  wooden gaff sloop sail up once every half hour on the wall clock, heave to 44 m off, hail you, appraise your cooler and your
+  wallet in the web game's own lines, chat, and sail off; they never take anything. And a banner plane
+  (`entities/life/banner-plane.ts`) drones past every few minutes towing one of the town's businesses' slogans.
 
 - **Online with friends:** press L, type a name and a crew code, and Enter. Everyone who uses the same crew code sees each other's
   boats live (with name tags, wakes you can ride, and green dots on the chart), gets "Sam landed a 41 lb cobia!" messages, and shares a
   Crew tab on the leaderboard (B). The game remembers your login and reconnects next time; L again logs out. See "Online play" below.
 
-Town and land differences from the web game: the island outlines are still the ellipses (the web game's real OSM
-coastlines are not ported), so the town sits in the same place relative to its marina rather than on the same map
-coordinates; facades and signs are geometry and text instead of painted canvases (no window notices, no neon glow at
-night beyond the lamps and tubes); the dancers are the game's own figures (the web game's rigged glTF dancers are not
+Town and land differences from the web game: facades and signs are geometry and text instead of painted canvases (no
+window notices; the sunset glow is soft halos rather than bloom); the dancers are the game's own figures (the web game's rigged glTF dancers are not
 ported); street life is people on loops along the sidewalks (no visit scripts, dogs, squirrels, gulls or litter);
 estates other than Harbor Row and the estate builder are not ported; the casino's slots are a single shelf item rather
-than the machine screen; the shop shelves are a subset of the web game's (no handgun, flags or tackle-ladder rungs);
-and there is no lighthouse beam.
+than the machine screen; and the shop shelves are a subset of the web game's (no handgun, flags or tackle-ladder rungs).
 
-Not ported: the boats' glass-helm screens, cabin, deck lights and quilted upholstery details, the 3D screens on the dash (the electronics are a HUD panel instead),
+Not ported: the boat pistol (`sim/handgun.ts`), the commercial fleet, Larry's raft, the sandbar party, the boat dog and the
+street animals, the wreck treasure hunt, the estate plat beyond Harbor Row, the tournament ceremony, the boats' glass-helm screens, cabin, deck lights and quilted upholstery details, the 3D screens on the dash (the electronics are a HUD panel instead),
 spray particles (splashes are simple shapes), text-to-speech (the DJ and Luigi callouts are on-screen text),
 engine sounds for other boats, and playing your own music files on the radio.
 
@@ -215,7 +231,11 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | --- | --- |
 | `KeysGeo.*` | islands, depth, zones, waves, wakes, bridge pilings (ported from the JS) |
 | `KeysData.*` | species, zone tables, boats |
-| `KeysMesh.*` | procedural boat hulls and their fit-out, the outriggers, fish and tubes |
+| `KeysMesh.*` | the boats' fit-out, the outriggers, fish and tubes, soft glow blobs and fans |
+| `KeysHull.cpp` | the web game's hull loft and each boat's `HULLS` row; deck shape for the fit-out and the crew |
+| `KeysCoastData.h` | the islands' real outlines, generated from the web game's `coast-data.ts` (OpenStreetMap, ODbL) |
+| `KeysWrecks.*` | shipwreck placement, hulls and the wreck fish table |
+| `KeysVisitors.*` | the pirates' sloop and their visits, the banner plane |
 | `KeysEvents.*` | the Marathon race (course, AI field, marks, standings) and the fishing tournament (species draw, AI plans, delivery) |
 | `KeysBuffs.cpp` | timed food and drink buffs and what they do to your hands |
 | `KeysTroll.cpp` | trolling: the speed window and strike clock, the raise and the hookup, the spread of lines, lures and teasers |
@@ -290,4 +310,6 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   `buff=<key>` (diner.coffee, bar.beer, ...) as if bought at the counter.
   Events: `race` / `tourney` (as the pause-menu items), `ev:tourneylive` (skip the countdown), `ev:tourneyall` (tick off all
   five), `catch=tourney` (land the first of the five), `keep`, `harbour` (put the boat at the tournament finish).
+  World: `bigmap` (the large chart), `indoorev=<EV100>` (the dark rooms' locked exposure), `pirates[=dist]` (the pirates sail
+  in now from that far, 300 m by default), `banner` (a banner plane pass now).
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.
