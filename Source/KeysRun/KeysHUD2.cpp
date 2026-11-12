@@ -8,6 +8,7 @@
 #include "KeysEstates.h"
 #include "KeysTourneyShow.h"
 #include "KeysSlots.h"
+#include "KeysTownData.h"
 #include "KeysData.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Canvas.h"
@@ -174,6 +175,7 @@ bool AKeysHUD::DrawPanels(AKeysBoatPawn* P)
 {
 	if (const AKeysEstates* Es = AKeysEstates::Get(this); Es && Es->bOpen) { DrawEstates(P); return true; }
 	if (const AKeysSlots* Sl = AKeysSlots::Get(this); Sl && Sl->bOpen) { DrawSlots(P); return true; }
+	if (P->bGearOpen) { DrawGear(P); return true; }
 	return false;
 }
 
@@ -353,4 +355,61 @@ void AKeysHUD::DrawSlots(AKeysBoatPawn* P)
 	Text(FString::Printf(TEXT("Cash %s"), *KeysKit::Money(double(P->Cash))), X + W - 330 * U, BY, 1.4f, Gold);
 	if (!Sl->bSpinning && !Sl->ResultText.IsEmpty()) Text(Sl->ResultText, X + W * .5f, BY + 54 * U, 1.15f, Sl->LastWin > 0 ? Gold : FLinearColor(1.f, .85f, .8f), nullptr, true);
 	Text(TEXT("Space spin  -  Left / Right the bet  -  Esc or F to get up"), X + W * .5f, Y + H - 40 * U, .85f, Dim, nullptr, true);
+}
+
+// the gear screen (web ui/gear.ts): what you own, what you carry, what is running, and what it all adds up to
+void AKeysHUD::DrawGear(AKeysBoatPawn* P)
+{
+	const float W = 1100 * U, H = 720 * U, X = Canvas->SizeX * .5f - W * .5f, Y = Canvas->SizeY * .5f - H * .5f;
+	Panel(X, Y, W, H, .9f);
+	Text(TEXT("Gear"), X + 28 * U, Y + 18 * U, 1.5f, Gold);
+	Text(FString::Printf(TEXT("Cash %s"), *KeysKit::Money(double(P->Cash))), X + W - 280 * U, Y + 24 * U, 1.2f, Gold);
+	static const TCHAR* VenueIds[] = {TEXT("tackle"), TEXT("guns"), TEXT("bar"), TEXT("club"), TEXT("casino"), TEXT("diner"), TEXT("dive"), TEXT("liquor"), TEXT("gifts"), TEXT("pawn"), TEXT("laundromat"), TEXT("icecream"), TEXT("motel"), TEXT("convenience")};
+	auto NameOf = [](const FString& Eff) -> FString
+	{
+		for (const TCHAR* V : VenueIds) if (const KeysTown::FVenue* Ve = KeysTown::Venue(V)) for (const KeysTown::FShelfItem& It : Ve->Sells) if (Eff == It.Effect) return It.Name;
+		return Eff;
+	};
+	// owned
+	float LX = X + 28 * U, LY = Y + 80 * U;
+	Text(TEXT("Owned"), LX, LY, 1.0f, Teal); LY += 34 * U;
+	TArray<FString> Gear;
+	for (const FString& O : P->Owned) if (!O.StartsWith(TEXT("cosmetic.")) && !O.StartsWith(TEXT("boat."))) Gear.Add(NameOf(O));
+	Gear.Sort();
+	if (!Gear.Num()) { Text(TEXT("The stock rod and reel, 50 lb braid. The shops are in town (Q at a dock)."), LX, LY, .8f, Dim); LY += 28 * U; }
+	for (const FString& G : Gear) { Text(G, LX, LY, .85f, FLinearColor::White); LY += 26 * U; }
+	LY += 14 * U;
+	Text(TEXT("Carrying"), LX, LY, 1.0f, Teal); LY += 34 * U;
+	const TPair<const TCHAR*, const TCHAR*> Cons[] = {{TEXT("handgun.ammo"), TEXT("9 mm rounds (the console pistol, 9)")}, {TEXT("safety.flare"), TEXT("Parachute flares (Z with the pistol out)")},
+		{TEXT("spear.shafts"), TEXT("Spare spear shafts")}, {TEXT("leader.fluoro"), TEXT("Fluorocarbon leaders")}};
+	for (const auto& C : Cons) { Text(FString::Printf(TEXT("%d  %s"), P->CountOf(C.Key), C.Value), LX, LY, .85f, P->CountOf(C.Key) ? FLinearColor::White : Dim); LY += 26 * U; }
+	if (P->BaitLeft() > 0) { Text(FString::Printf(TEXT("%d  casts of live bait"), P->BaitLeft()), LX, LY, .85f); LY += 26 * U; }
+	LY += 14 * U;
+	Text(TEXT("Wearing"), LX, LY, 1.0f, Teal); LY += 34 * U;
+	for (const TCHAR* Slot : {TEXT("shirt"), TEXT("cap"), TEXT("glasses"), TEXT("flag")})
+	{
+		const FString K = P->Wearing.FindRef(Slot);
+		Text(FString::Printf(TEXT("%s:  %s"), Slot, K.IsEmpty() ? TEXT("the usual") : *NameOf(K)), LX, LY, .85f, K.IsEmpty() ? Dim : FLinearColor::White);
+		LY += 26 * U;
+	}
+	// what it adds up to, in human terms
+	float RX = X + W * .55f, RY = Y + 80 * U;
+	Text(TEXT("What it adds up to"), RX, RY, 1.0f, Teal); RY += 34 * U;
+	auto Row = [&](const FString& S, bool bOn) { Text(S, RX, RY, .85f, bOn ? FLinearColor::White : Dim); RY += 28 * U; };
+	const FString Rung = P->HasGear(TEXT("tackle.braid130")) ? TEXT("130 lb big-game rig") : P->HasGear(TEXT("tackle.braid80")) ? TEXT("80 lb braid, stand-up rig") : TEXT("50 lb braid, fluoro leader");
+	Row(FString::Printf(TEXT("Line: %s"), *Rung), true);
+	Row(FString::Printf(TEXT("Line holds %d%% of the stock outfit's strain"), FMath::RoundToInt(P->LineBreakNow() / 1.06 * 100)), P->LineBreakNow() > 1.07);
+	Row(P->HasGear(TEXT("reel.lever")) ? TEXT("Retrieve 30% faster (lever-drag reel)") : TEXT("Retrieve: the stock reel"), P->HasGear(TEXT("reel.lever")));
+	const double Air = (P->HasGear(TEXT("dive.tank")) ? 2.2 : 1) * (P->HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (P->HasGear(TEXT("dive.fins")) ? 1.1 : 1);
+	Row(FString::Printf(TEXT("Bottom time %d s -> %d s"), 90, FMath::RoundToInt(90 * Air)), Air > 1.01);
+	Row(P->HasGear(TEXT("spear.long")) ? TEXT("Speargun reach 18 m -> 24 m") : TEXT("Speargun reach 18 m"), P->HasGear(TEXT("spear.long")));
+	Row(FString::Printf(TEXT("Pistol magazine %d rounds%s"), P->HasGear(TEXT("handgun.extmag")) ? 18 : 12, P->HasGear(TEXT("handgun.dot")) ? TEXT(", red dot: a 45% tighter group") : TEXT("")), P->HasGear(TEXT("handgun.extmag")) || P->HasGear(TEXT("handgun.dot")));
+	Row(FString::Printf(TEXT("Lots held: %d of 3"), P->Estates.Num()), P->Estates.Num() > 0);
+	RY += 14 * U;
+	Text(TEXT("Running"), RX, RY, 1.0f, Teal); RY += 34 * U;
+	TArray<AKeysBoatPawn::FBuffShow> Bf;
+	P->LiveBuffs(Bf);
+	if (!Bf.Num()) Row(TEXT("Nothing. The diner does coffee."), false);
+	for (const AKeysBoatPawn::FBuffShow& B : Bf) Row(FString::Printf(TEXT("%s  %d:%02d"), *B.Label, B.Left / 60, B.Left % 60), true);
+	Text(TEXT("Tab or Esc to close"), X + W * .5f, Y + H - 40 * U, .85f, Dim, nullptr, true);
 }

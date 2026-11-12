@@ -73,6 +73,7 @@ private:
 	int32 EstChartRegion = -1;
 	void DrawEstates(AKeysBoatPawn* P);
 	void DrawSlots(AKeysBoatPawn* P);
+	void DrawGear(AKeysBoatPawn* P);
 	UPROPERTY() TObjectPtr<UTexture2D> VignetteTex;
 	TArray<FColor> GpsPx;
 	double GpsCX = 0, GpsCZ = 0, GpsRange = -1, GpsT = 0;   // where the GPS texture was last drawn

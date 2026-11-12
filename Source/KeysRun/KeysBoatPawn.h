@@ -111,6 +111,7 @@ public:
 	void OnHudHover(FName Box);
 	// true while a menu, the leaderboard or the login box owns the keyboard
 	bool IsCapturingKeys() const { return Menu != EMenu::None || bLoginOpen || bBoardOpen; }
+	int32 BaitLeft() const { return BaitCasts; }
 
 	// ---- online (L): log in with a name and a crew code
 	bool bLoginOpen = false;
@@ -180,6 +181,13 @@ public:
 	// the glass helm screens and the boat's lights (KeysHelm.cpp); ; switches the underwater and cockpit lights
 	void ToggleLights();
 	bool bUwLights = false;
+	// "Run to" (web ui/runto.ts): the marinas' approaches, Sombrero Reef, the humps and the rigs; the Esc menu picks one
+	struct FRunDest { FString Name, Note; double X, Z; };
+	void RunDests(TArray<FRunDest>& Out) const;
+	int32 RunSel = 0;
+	bool bGearOpen = false;   // the gear screen (Tab; web ui/gear.ts)
+	double LineBreakNow() const { return LineBreakAt(); }
+	void RunTo(int32 I);
 	bool HasGear(const TCHAR* Effect) const { return Owned.Contains(Effect); }
 	void ShopBuy(int32 Index);
 	void ShopClose();

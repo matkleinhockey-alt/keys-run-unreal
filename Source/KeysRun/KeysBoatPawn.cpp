@@ -230,6 +230,16 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		Add(TEXT("tourney"), TEXT("Fishing tournament"), bTour ? FString(TEXT("quit it")) : FString(TEXT("15 min, five species")));
 		Add(TEXT("race"), TEXT("Marathon race"), bRace ? FString(TEXT("abandon it")) : FString(TEXT("2 laps, R at the helm")));
 		Add(TEXT("estates"), TEXT("Land office"), TEXT("Keys Run Estates  ( , )"));
+		{
+			TArray<FRunDest> Ds;
+			RunDests(Ds);
+			if (Ds.Num())
+			{
+				const FRunDest& D = Ds[FMath::Clamp(RunSel, 0, Ds.Num() - 1)];
+				const double Km = FMath::Sqrt(FMath::Square(D.X - X) + FMath::Square(D.Z - Z)) / 1000;
+				Add(TEXT("runto"), TEXT("Run to"), FString::Printf(TEXT("%s - %s, %s"), *D.Name, *D.Note, Km < 1 ? *FString::Printf(TEXT("%d m"), FMath::RoundToInt(Km * 1000)) : *FString::Printf(TEXT("%.1f km"), Km)), true);
+			}
+		}
 		Add(TEXT("online"), OnlineLabel, OnlineValue);
 		Add(TEXT("board"), TEXT("Leaderboard"));
 		Add(TEXT("settings"), TEXT("Settings"));
@@ -272,6 +282,13 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 			*Spec().Brand, *Spec().Name, *Commas(Spec().Price), *Commas(Cash)), 5);
 	}
 	else if (Id == TEXT("resume")) Menu = EMenu::None;
+	else if (Id == TEXT("runto"))
+	{
+		TArray<FRunDest> Ds;
+		RunDests(Ds);
+		if (Dir != 0 && Ds.Num()) RunSel = (RunSel + Dir + Ds.Num()) % Ds.Num();
+		else if (Dir == 0) RunTo(RunSel);
+	}
 	else if (Id == TEXT("estates")) { Menu = EMenu::None; if (AKeysEstates* Es = AKeysEstates::Get(this)) Es->Open(true); }
 	else if (Id == TEXT("boat") && Dir == 0) BuyBoat();
 	else if (Id == TEXT("boat"))
@@ -675,6 +692,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 			Wearing.Add(K.Mid(9).Left(K.Mid(9).Find(TEXT("."))), K);
 			ApplyOutfit();
 		}
+		else if (Cmd == TEXT("gear")) bGearOpen = !bGearOpen;
+		else if (Cmd.StartsWith(TEXT("runto="))) RunTo(FCString::Atoi(*Cmd.Mid(6)));
 		else if (Cmd == TEXT("slots")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(!Sl->bOpen); }
 		else if (Cmd == TEXT("spin")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Spin(); }
 		else if (Cmd.StartsWith(TEXT("view="))) View = FCString::Atoi(*Cmd.Mid(5));
@@ -1024,6 +1043,42 @@ void AKeysBoatPawn::ApplyOutfit()
 	if (AKeysExtras* Ex = AKeysExtras::Get(this)) Ex->SetCosmeticFlag(Wearing.FindRef(TEXT("flag")));
 }
 
+void AKeysBoatPawn::RunDests(TArray<FRunDest>& Out) const
+{
+	Out.Reset();
+	for (const FMarina& M : Marinas()) Out.Add({M.Name, TEXT("marina"), M.SX, M.SZ + M.Dir * 48});
+	Out.Add({TEXT("Sombrero Reef"), TEXT("the crest"), 60, 1462});
+	for (const FHump& Hm : Humps()) Out.Add({Hm.Name, Hm.bPatch ? TEXT("patch reef") : TEXT("offshore hump"), Hm.X, ChainZ(Hm.X) + Hm.DZ});
+	if (const AKeysLife* L = AKeysLife::Get(this))
+	{
+		TArray<FKeysMarker> Mk;
+		L->GetMarkers(Mk);
+		int32 N = 0;
+		for (const FKeysMarker& M : Mk) if (M.Kind == 0) Out.Add({N++ == 0 ? FString(TEXT("The production platform")) : FString::Printf(TEXT("Oil rig %d"), N), TEXT("oil rig"), M.X + 130, M.Z});
+	}
+}
+
+void AKeysBoatPawn::RunTo(int32 I)
+{
+	TArray<FRunDest> Ds;
+	RunDests(Ds);
+	if (!Ds.IsValidIndex(I)) return;
+	// refuse while something is going on that teleporting would spoil
+	const AKeysEvents* Ev = AKeysEvents::Get(this);
+	FString Why;
+	if (IsBusy(Why) || IsLineOut()) { if (Why.IsEmpty()) Why = TEXT("Reel in first."); }
+	else if (Ev && (Ev->IsRacing() || (Ev->InTourney() && Ev->TourneyPhase() != AKeysEvents::ETourney::Over))) Why = TEXT("Not in the middle of a race or a tournament.");
+	if (!Why.IsEmpty()) { Menu = EMenu::None; ShowToast(Why); return; }
+	StopTroll(true);
+	X = Ds[I].X; Z = Ds[I].Z;
+	AKeysTraffic::FindClearSpot(X, Z, Spec());
+	Speed = Thr = DVX = DVZ = 0;
+	bCamInit = false;
+	if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
+	Menu = EMenu::None;
+	ShowToast(FString::Printf(TEXT("Run to %s."), *Ds[I].Name));
+}
+
 void AKeysBoatPawn::PrepareToLeaveHelm()
 {
 	if (bCharging || IsLineOut()) ReelIn(FString());
@@ -1159,6 +1214,12 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 	if (Hit(EKeys::B)) { bBoardOpen = true; BoardTab = 0; bFwd = bBack = bLeft = bRight = bAction = false; bCharging = false; return; }
 
+	// the gear screen: Tab opens and closes it (Esc too), nothing else reacts while it is up
+	if (bRunning && Menu == EMenu::None && !IsDiving())
+	{
+		if (bGearOpen) { if (Hit(EKeys::Tab) || Hit(EKeys::Escape)) bGearOpen = false; bFwd = bBack = bLeft = bRight = bAction = false; return; }
+		if (Hit(EKeys::Tab)) { if (AKeysWalker* Wk = AKeysWalker::Get(this); !Wk || !Wk->bShopOpen) { bGearOpen = true; return; } }
+	}
 	// a slot machine in the Gaff & Gill: it owns the keys while you sit at it
 	if (bRunning && Menu == EMenu::None)
 		if (AKeysSlots* Sl = AKeysSlots::Get(this); Sl && Sl->bOpen)

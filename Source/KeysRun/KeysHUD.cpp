@@ -259,8 +259,10 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 
 	TArray<AKeysBoatPawn::FMenuItem> Items;
 	P->GetMenuItems(Items);
-	const float RowH = 74 * U, BoxH = 64 * U;
-	float Y = 280 * U;
+	// a long menu (the pause menu with the land office and run-to) packs its rows tighter
+	const float Fit = FMath::Min(1.f, 11.f / FMath::Max(1, Items.Num()) * (Items.Num() > 10 ? .93f : 1.f));
+	const float RowH = 74 * U * Fit, BoxH = 64 * U * Fit;
+	float Y = (Items.Num() > 10 ? 230 : 280) * U;
 	for (int32 i = 0; i < Items.Num(); i++)
 	{
 		const AKeysBoatPawn::FMenuItem& It = Items[i];
@@ -355,33 +357,39 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	static const FRow More[] = {
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
 		{TEXT("O"), TEXT("Sunset: lighthouse beam, neon")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
-		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}, {TEXT("R (lines in)"), TEXT("Marathon race; Esc for a tournament")}};
+		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}, {TEXT("R (lines in)"), TEXT("Marathon race; Esc for a tournament")},
+		{TEXT(", (comma)"), TEXT("Land office: buy and build on a lot")}, {TEXT("Tab"), TEXT("Gear: owned, carried, what it adds up to")},
+		{TEXT("; (semicolon)"), TEXT("Underwater and cockpit lights")}, {TEXT("Esc > Run to"), TEXT("Run to a marina, a reef, a hump, a rig")}};
 	static const FRow Ashore[] = {
 		{TEXT("Q"), TEXT("Tie up and go ashore / back aboard")}, {TEXT("W A S D + mouse, 1"), TEXT("Walk (Shift runs), first / third person")},
-		{TEXT("F, then 1-9 / Enter"), TEXT("Use a counter, buy, read a sign")}};
+		{TEXT("F, then 1-9 / Enter"), TEXT("Use a counter, buy, read a sign")}, {TEXT("Casino counter"), TEXT("A slot machine: Space spins, Left / Right bets")}};
+	static const FRow Gun[] = {
+		{TEXT("9"), TEXT("Draw / holster the boat pistol")}, {TEXT("Click / Space"), TEXT("Fire (fish near the surface, seabirds)")},
+		{TEXT("Mouse / arrows"), TEXT("Aim")}, {TEXT("R / Z"), TEXT("Reload / fire a parachute flare")}};
 	static const FRow Dive[] = {
 		{TEXT("J"), TEXT("Jump in / climb back aboard")}, {TEXT("W A S D + mouse"), TEXT("Swim where you look")},
 		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
 		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("R"), TEXT("Haul the bands back to reload")},
-		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}};
-	const float ColW = W * .5f, Row = 28 * U;
+		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}, {TEXT("F"), TEXT("Prise open a wreck's box (treasure)")}};
+	const float ColW = W * .5f, Row = 24.5f * U;
 	auto Block = [&](const TCHAR* Head, const FRow* Rows, int32 N, float BX, float BY)
 	{
-		Text(Head, BX, BY, 1.2f, Teal);
-		BY += 40 * U;
+		Text(Head, BX, BY, 1.1f, Teal);
+		BY += 34 * U;
 		for (int32 i = 0; i < N; i++, BY += Row)
 		{
-			Text(Rows[i].K, BX, BY, .98f, Gold);
-			Text(Rows[i].A, BX + 220 * U, BY, .98f, FLinearColor::White);
+			Text(Rows[i].K, BX, BY, .88f, Gold);
+			Text(Rows[i].A, BX + 200 * U, BY, .88f, FLinearColor::White);
 		}
 		return BY;
 	};
 	Block(TEXT("Driving"), Drive, UE_ARRAY_COUNT(Drive), X, Y);
 	const float Y2 = Block(TEXT("Fishing"), Fish, UE_ARRAY_COUNT(Fish), X + ColW, Y);
-	const float Y3 = FMath::Max(Y + 40 * U + Row * UE_ARRAY_COUNT(Drive), Y2) + 24 * U;
+	const float Y3 = FMath::Max(Y + 34 * U + Row * UE_ARRAY_COUNT(Drive), Y2) + 16 * U;
 	const float Y4 = Block(TEXT("Everything else"), More, UE_ARRAY_COUNT(More), X, Y3);
-	Block(TEXT("Diving and spearfishing"), Dive, UE_ARRAY_COUNT(Dive), X + ColW, Y3);
-	Block(TEXT("Ashore in Boot Key Harbor City"), Ashore, UE_ARRAY_COUNT(Ashore), X, Y4 + 20 * U);
+	const float Y5 = Block(TEXT("Diving and spearfishing"), Dive, UE_ARRAY_COUNT(Dive), X + ColW, Y3);
+	Block(TEXT("Ashore in Boot Key Harbor City"), Ashore, UE_ARRAY_COUNT(Ashore), X, Y4 + 14 * U);
+	Block(TEXT("The boat pistol"), Gun, UE_ARRAY_COUNT(Gun), X + ColW, Y5 + 14 * U);
 }
 
 // ================================================================ online
