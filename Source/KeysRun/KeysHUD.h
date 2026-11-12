@@ -37,6 +37,7 @@ private:
 	void DrawGauges(AKeysBoatPawn* P);
 	void DrawChart(AKeysBoatPawn* P);
 	void DrawFishing(AKeysBoatPawn* P);
+	void DrawEvents(AKeysBoatPawn* P);
 	void DrawCard(AKeysBoatPawn* P);
 	void DrawDiving(AKeysBoatPawn* P, class AKeysDiver* D);
 	void DrawExtras(AKeysBoatPawn* P);

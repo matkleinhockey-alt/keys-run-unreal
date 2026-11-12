@@ -40,6 +40,9 @@ public:
 	UPROPERTY() int64 Cash = 0;
 	UPROPERTY() TArray<FString> Owned;
 	UPROPERTY() TArray<FString> Estates;
+	// tournaments won (the trophy case) and the best Marathon race time, seconds (0 = none)
+	UPROPERTY() int32 TourneyWins = 0;
+	UPROPERTY() double RaceBest = 0;
 
 	static constexpr int32 MaxTop = 12;
 

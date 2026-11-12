@@ -11,6 +11,7 @@
 #include "KeysWalker.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
+#include "KeysEvents.h"
 #include "ProceduralMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -206,7 +207,13 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		Add(TEXT("quit"), TEXT("Quit"));
 		break;
 	case EMenu::Pause:
+	{
 		Add(TEXT("resume"), TEXT("Resume"));
+		const AKeysEvents* Ev = AKeysEvents::Get(this);
+		const bool bTour = Ev && Ev->InTourney() && Ev->TourneyPhase() != AKeysEvents::ETourney::Over;
+		const bool bRace = Ev && (Ev->RacePhase() == AKeysEvents::ERace::Countdown || Ev->RacePhase() == AKeysEvents::ERace::Racing);
+		Add(TEXT("tourney"), TEXT("Fishing tournament"), bTour ? FString(TEXT("quit it")) : FString(TEXT("15 min, five species")));
+		Add(TEXT("race"), TEXT("Marathon race"), bRace ? FString(TEXT("abandon it")) : FString(TEXT("2 laps, R at the helm")));
 		Add(TEXT("online"), OnlineLabel, OnlineValue);
 		Add(TEXT("board"), TEXT("Leaderboard"));
 		Add(TEXT("settings"), TEXT("Settings"));
@@ -214,6 +221,7 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		Add(TEXT("mainmenu"), TEXT("Main menu"), TEXT("change boats"));
 		Add(TEXT("quit"), TEXT("Quit"));
 		break;
+	}
 	case EMenu::Settings:
 	{
 		const AKeysAudio* A = AKeysAudio::Get(this);
@@ -258,6 +266,15 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 		if (View == 2 && !KeysMesh::TowerEye(Spec(), Eye)) View = 1;   // this boat has no tower
 	}
 	else if (Id == TEXT("online")) ToggleOnline();
+	else if (Id == TEXT("tourney") || Id == TEXT("race"))
+	{
+		if (AKeysEvents* Ev = AKeysEvents::Get(this))
+		{
+			Menu = EMenu::None;
+			if (Id == TEXT("race")) { StopTroll(true); Ev->ToggleRace(); }
+			else Ev->ToggleTourney();
+		}
+	}
 	else if (Id == TEXT("board")) { bBoardOpen = true; BoardTab = 0; }
 	else if (Id == TEXT("settings")) { MenuBack = Menu; Menu = EMenu::Settings; MenuSel = 0; }
 	else if (Id == TEXT("controls")) { MenuBack = Menu; Menu = EMenu::Controls; MenuSel = 0; }
@@ -567,6 +584,9 @@ void AKeysBoatPawn::RunTestScript(double T)
 			const FString K = Cmd.Mid(5);
 			if (KeysBuffs::Seconds(K) > 0) { Buffs.Add(K, GetWorld()->GetTimeSeconds() + KeysBuffs::Seconds(K)); ShowToast(KeysBuffs::StartText(K)); }
 		}
+		else if (Cmd == TEXT("keep")) KeepFish();
+		else if (Cmd == TEXT("harbour")) { X = AKeysEvents::HarbourX(); Z = AKeysEvents::HarbourZ(); Speed = Thr = 0; bCamInit = false; }
+		else if (Cmd.StartsWith(TEXT("ev:"))) { if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->DebugCmd(Cmd.Mid(3)); }
 		else if (Cmd == TEXT("ownall")) { for (const FBoatSpec& B : Boats()) Owned.Add(TEXT("boat.") + B.Id); }
 		else if (Cmd.StartsWith(TEXT("boat=")))
 		{
@@ -583,13 +603,14 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd.StartsWith(TEXT("steer="))) ScriptSteer = FCString::Atod(*Cmd.Mid(6));   // steer=0.3 (left positive)
 		else if (Cmd.StartsWith(TEXT("catch=")))
 		{
-			// land a mid-size fish of that species and show the catch card
+			// land a fish of that species (a fifth of the way up its size range) and show the catch card; catch=tourney: the tournament's first
 			if (FState != EKeysFish::Idle) ReelIn(FString());
 			Key = Cmd.Mid(6);
+			if (Key == TEXT("tourney")) if (const AKeysEvents* Ev = AKeysEvents::Get(this)) Key = Ev->FirstSpecies();   // the first of the tournament's five
 			Sp = Species(Key);
 			if (Sp)
 			{
-				Weight = FMath::RoundToDouble((Sp->Min + Sp->Max) * .5 * 10) / 10;
+				Weight = FMath::RoundToDouble((Sp->Min + (Sp->Max - Sp->Min) * .2) * 10) / 10;
 				FX = X + FMath::Cos(H) * 8; FZ = Z - FMath::Sin(H) * 8;
 				BuildHookedMesh();
 				Land();
@@ -1062,6 +1083,8 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		ShowToast(Msg, 5);
 	}
 	if (Hit(EKeys::R) && (FState == EKeysFish::Waiting || FState == EKeysFish::Casting || FState == EKeysFish::Nibble)) ReelIn(TEXT("Line reeled in."));
+	else if (Hit(EKeys::R) && FState == EKeysFish::Idle && !bCharging)
+		if (AKeysEvents* Ev = AKeysEvents::Get(this)) { StopTroll(true); Ev->ToggleRace(); }   // the Marathon race (web game/race)
 	if (Hit(EKeys::T))
 	{
 		if (FState == EKeysFish::Fight)
@@ -1743,6 +1766,7 @@ void AKeysBoatPawn::KeepFish()
 {
 	if (FState != EKeysFish::Caught || !bCanKeep) return;
 	Cooler.Add({Sp->Name, Weight, int32(LastPts), Key});
+	if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->OnKeep(Key, Weight);   // a tournament counts what you bring in
 	ShowToast(FString::Printf(TEXT("%s is on ice. %d fish in the cooler."), *Sp->Name, Cooler.Num()));
 	FinishCatch();
 }

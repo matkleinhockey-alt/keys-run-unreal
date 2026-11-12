@@ -86,6 +86,18 @@ so there are no hand-made assets. The editor script creates the materials and th
   come up behind the bait (`troll-raise.ts`), it eats, the bait goes under, and it is the rod's own fight from the transom (the
   boat drops out of gear; jumpers come out of the water), the same catch card, cooler and score. After a fish the lines are cleared
   for a few seconds before the boat goes back on the troll. = again brings the lines in.
+- **The Marathon race (R):** with the lines in, R starts the web game's race (`sim/race.ts`, `game/race/**`): two laps of nine
+  marks (Start / Finish, Hawk 1, Hawk 2, East Turn, Reef East, Sombrero, Reef West, West Turn, Inshore), about 6.4 km a lap, against
+  Reel Deal (an MTI), Sand Bar (a Midnight Express) and Conch Runner (a Freeman), who run their own lines round the course, back off
+  through the turns and throw wakes. Orange race marks with a numbered flag (the start mark is yellow), a green pennant and a ring of
+  floats over the mark you need next, the course and the field on the chart, and a board with your place, lap, clock, the next mark
+  and its distance, and the running order. Marks within 55 m count as rounded. R again abandons it; your best time is saved.
+  (This port's islands are the ellipses, so a mark that would sit on land is walked offshore until it floats.)
+- **Fishing tournament (Esc menu):** the web game's tournament (`sim/tournament.ts`, `game/tournament/**`): five species drawn
+  for the day from the ones that are common somewhere and legal to keep, a 15-second countdown, fifteen minutes to keep one of
+  each, then run them in to Boot Key Harbor and slow down inside it. The three AI boats' days are planned from the tournament's
+  seed (their catches come in on the toasts) and the first boat home wins; if nobody makes it, the horn ends it. A board shows
+  the five with ticks, the time left, the distance home once you have all five, and the standings; wins go in your trophy case.
 - **Fishing:** charge-and-release casting, nibbles and strikes, the fight (tension, drag, stamina, runs, jumps, tail-walks, sounding),
   auto-chase, all 40 species with the same zone tables, offshore size scaling, both grand slams, the catch card, the cooler and capacity,
   catch-and-release rules, and marina weigh-ins.
@@ -161,6 +173,8 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | R | reel in |
 | K | keep the fish |
 | = | trolling: outriggers and lines out, hold trolling speed / lines in |
+| R (lines in) | Marathon race: start / abandon |
+| Esc, Fishing tournament | start / quit a fishing tournament |
 | E | weigh in at a marina dock |
 | F | auto-chase on/off |
 | H | sea state |
@@ -202,6 +216,8 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysGeo.*` | islands, depth, zones, waves, wakes, bridge pilings (ported from the JS) |
 | `KeysData.*` | species, zone tables, boats |
 | `KeysMesh.*` | procedural boat hulls and their fit-out, the outriggers, fish and tubes |
+| `KeysEvents.*` | the Marathon race (course, AI field, marks, standings) and the fishing tournament (species draw, AI plans, delivery) |
+| `KeysBuffs.cpp` | timed food and drink buffs and what they do to your hands |
 | `KeysTroll.cpp` | trolling: the speed window and strike clock, the raise and the hookup, the spread of lines, lures and teasers |
 | `KeysWorld.*` | terrain, water surface, bridges, scenery, marinas, sky and sun |
 | `KeysBoatPawn.*` | boat physics, camera, input, fishing loop |
@@ -272,4 +288,6 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   `troll` / `trollin`, `trollraise` (a fish comes up on the spread now), `trollstrike` (skip the raise: a fish on now),
   `throttle=0.4`, `steer=0.3`, `reel=1` / `reel=0` (hold S).
   `buff=<key>` (diner.coffee, bar.beer, ...) as if bought at the counter.
+  Events: `race` / `tourney` (as the pause-menu items), `ev:tourneylive` (skip the countdown), `ev:tourneyall` (tick off all
+  five), `catch=tourney` (land the first of the five), `keep`, `harbour` (put the boat at the tournament finish).
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.

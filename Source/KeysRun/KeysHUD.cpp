@@ -1,6 +1,7 @@
 #include "KeysHUD.h"
 #include "KeysDiver.h"
 #include "KeysBoatPawn.h"
+#include "KeysEvents.h"
 #include "KeysGeo.h"
 #include "KeysData.h"
 #include "KeysSave.h"
@@ -192,6 +193,7 @@ void AKeysHUD::DrawHUD()
 		DrawFishing(P);
 	}
 	else if (P->bBigMap) DrawChart(P);
+	if (!bDive && !bAshore) DrawEvents(P);
 	if (P->FState == EKeysFish::Caught) DrawCard(P);
 	else if (P->bElectronics && !P->bBigMap) DrawElectronics(P);
 
@@ -339,7 +341,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	static const FRow More[] = {
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
 		{TEXT("O"), TEXT("Sunset")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
-		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}};
+		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}, {TEXT("R (lines in)"), TEXT("Marathon race; Esc for a tournament")}};
 	static const FRow Ashore[] = {
 		{TEXT("Q"), TEXT("Tie up and go ashore / back aboard")}, {TEXT("W A S D + mouse, 1"), TEXT("Walk (Shift runs), first / third person")},
 		{TEXT("F, then 1-9 / Enter"), TEXT("Use a counter, buy, read a sign")}};
@@ -531,6 +533,36 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 		for (const FVector2D& G : Tr) { const FVector2D A = ChartXY(G.X, G.Y, X, Y, Size); DrawRect(FLinearColor(.016f, .03f, .05f), A.X - 2 * U, A.Y - 2 * U, 4 * U, 4 * U); }
 		for (const FVector2D& G : Rc) { const FVector2D A = ChartXY(G.X, G.Y, X, Y, Size); DrawRect(FLinearColor(.8f, .14f, .29f), A.X - 3.5f * U, A.Y - 3.5f * U, 7 * U, 7 * U); }
 	}
+	// the race marks (next one green), the AI field, and the tournament's finish
+	if (const AKeysEvents* Ev = AKeysEvents::Get(this))
+	{
+		if (Ev->IsRacing())
+		{
+			const AKeysEvents::FRacer* Me = Ev->Me();
+			const TArray<AKeysEvents::FMark>& Mk = Ev->Marks();
+			for (int32 i = 0; i < Mk.Num(); i++)
+			{
+				const FVector2D A = ChartXY(Mk[i].X, Mk[i].Z, X, Y, Size), Bn = ChartXY(Mk[(i + 1) % Mk.Num()].X, Mk[(i + 1) % Mk.Num()].Z, X, Y, Size);
+				DrawLine(A.X, A.Y, Bn.X, Bn.Y, FLinearColor(1.f, .45f, .1f, .5f), 1.5f * U);
+			}
+			for (int32 i = 0; i < Mk.Num(); i++)
+			{
+				const FVector2D A = ChartXY(Mk[i].X, Mk[i].Z, X, Y, Size);
+				const bool bNext = Me && Me->Next == i && Me->FinishT < 0;
+				const float R = (bNext ? 6.f : 4.f) * U;
+				DrawRect(bNext ? FLinearColor(.1f, 1.f, .35f) : FLinearColor(1.f, .45f, .05f), A.X - R, A.Y - R, 2 * R, 2 * R);
+			}
+			TArray<FVector2D> Op;
+			Ev->OpponentDots(Op);
+			for (const FVector2D& G : Op) { const FVector2D A = ChartXY(G.X, G.Y, X, Y, Size); DrawRect(FLinearColor(.95f, .85f, .2f), A.X - 3.5f * U, A.Y - 3.5f * U, 7 * U, 7 * U); }
+		}
+		if (Ev->InTourney() && Ev->TourneyPhase() == AKeysEvents::ETourney::Live)
+		{
+			const FVector2D A = ChartXY(AKeysEvents::HarbourX(), AKeysEvents::HarbourZ(), X, Y, Size);
+			const float R = (Ev->MyMask() == 31 ? 7.f : 4.5f) * U;
+			DrawRect(FLinearColor(1.f, .82f, .2f), A.X - R, A.Y - R, 2 * R, 2 * R);
+		}
+	}
 	// your crew: bright green
 	if (const AKeysOnline* O = AKeysOnline::Get(this))
 	{
@@ -545,6 +577,95 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 	DrawRect(FLinearColor(.95f, .1f, .1f), B.X - 4 * U, B.Y - 4 * U, 8 * U, 8 * U);
 	Text(TEXT("N"), X + Size * .5f, Y + 4 * U, .7f, FLinearColor(.1f, .15f, .25f), nullptr, true);
 	if (!P->bBigMap) Text(TEXT("M - chart"), X + Size - 76 * U, Y + Size + 6 * U, .7f, Dim);
+}
+
+// the race and tournament boards (web game/race/index.ts renderHud, game/tournament/index.ts)
+void AKeysHUD::DrawEvents(AKeysBoatPawn* P)
+{
+	const AKeysEvents* Ev = AKeysEvents::Get(this);
+	if (!Ev) return;
+	const float W = 340 * U, X = Canvas->SizeX - W - 20 * U;
+	float Y = 300 * U;
+	auto Fmt = [](double S) { return FString::Printf(TEXT("%d:%04.1f"), FMath::FloorToInt(S / 60), FMath::Fmod(S, 60.0)); };
+	if (Ev->IsRacing())
+	{
+		TArray<const AKeysEvents::FRacer*> Ord;
+		Ev->Standings(Ord);
+		const AKeysEvents::FRacer* Me = Ev->Me();
+		const float H = Ev->RacePhase() == AKeysEvents::ERace::Countdown ? 120 * U : 100 * U + Ord.Num() * 26 * U;
+		Panel(X, Y, W, H, .6f);
+		DrawRect(FLinearColor(1.f, .45f, .05f), X, Y, 5 * U, H);
+		if (Ev->RacePhase() == AKeysEvents::ERace::Countdown)
+		{
+			Text(FString::Printf(TEXT("%d"), FMath::Max(1, FMath::CeilToInt(Ev->RaceClock()))), X + W * .5f, Y + 6 * U, 2.6f, Gold, GEngine->GetLargeFont(), true);
+			Text(FString::Printf(TEXT("%d marks  -  %d laps  -  %.1f km"), Ev->Marks().Num(), AKeysEvents::RaceLaps, Ev->CourseKm()), X + W * .5f, Y + 84 * U, .85f, Dim, nullptr, true);
+			return;
+		}
+		const int32 Place = Ord.IndexOfByKey(Me) + 1;
+		Text(FString::Printf(TEXT("P%d/%d"), Place, Ord.Num()), X + 20 * U, Y + 10 * U, 1.5f, Gold);
+		Text(FString::Printf(TEXT("Lap %d/%d"), FMath::Min(AKeysEvents::RaceLaps, Me ? Me->Lap + 1 : 1), AKeysEvents::RaceLaps), X + 130 * U, Y + 16 * U, 1.0f, FLinearColor::White);
+		Text(Fmt(Ev->RaceClock()), X + W - 100 * U, Y + 16 * U, 1.0f, FLinearColor::White);
+		if (Me && Me->FinishT < 0)
+		{
+			const AKeysEvents::FMark& N = Ev->Marks()[Me->Next];
+			const double D = FMath::Sqrt(FMath::Square(N.X - P->BoatX()) + FMath::Square(N.Z - P->BoatZ()));
+			Text(FString::Printf(TEXT("Next: %s  -  %s"), *N.Name, D > 1000 ? *FString::Printf(TEXT("%.1f km"), D / 1000) : *FString::Printf(TEXT("%d m"), FMath::RoundToInt(D))), X + 20 * U, Y + 56 * U, .9f, FLinearColor(.4f, 1.f, .55f));
+		}
+		else Text(TEXT("Finished - R to race again"), X + 20 * U, Y + 56 * U, .9f, Gold);
+		float RY = Y + 92 * U;
+		for (int32 i = 0; i < Ord.Num(); i++, RY += 26 * U)
+		{
+			const bool bMe = Ord[i] == Me;
+			Text(FString::Printf(TEXT("%d  %s"), i + 1, *Ord[i]->Name), X + 20 * U, RY, .85f, bMe ? Gold : FLinearColor::White);
+			Text(Ord[i]->FinishT >= 0 ? Fmt(Ord[i]->FinishT) : FString::Printf(TEXT("L%d"), Ord[i]->Lap + 1), X + W - 90 * U, RY, .85f, Dim);
+		}
+		return;
+	}
+	if (!Ev->InTourney()) return;
+	const AKeysEvents::ETourney Ph = Ev->TourneyPhase();
+	TArray<AKeysEvents::FEntry> St;
+	Ev->TourneyStandings(St);
+	const TArray<FString>& Sp = Ev->TourneySpecies();
+	const float H = 104 * U + Sp.Num() * 25 * U + 12 * U + St.Num() * 25 * U;
+	Panel(X, Y, W, H, .6f);
+	DrawRect(Gold, X, Y, 5 * U, H);
+	FString Top, Sub;
+	if (Ph == AKeysEvents::ETourney::Countdown) { Top = FString::Printf(TEXT("Tournament - lines in %d"), FMath::CeilToInt(Ev->CountdownLeft())); Sub = TEXT("Keep one of each, first boat in wins"); }
+	else if (Ph == AKeysEvents::ETourney::Live)
+	{
+		Top = FString::Printf(TEXT("Tournament  %d:%02d left"), FMath::FloorToInt(Ev->TimeLeft()) / 60, FMath::FloorToInt(Ev->TimeLeft()) % 60);
+		if (Ev->MyMask() == (1 << Sp.Num()) - 1)
+		{
+			const double D = FMath::Sqrt(FMath::Square(AKeysEvents::HarbourX() - P->BoatX()) + FMath::Square(AKeysEvents::HarbourZ() - P->BoatZ()));
+			Sub = FString::Printf(TEXT("All five! Run in: Boot Key Harbor %s%s"), D > 1000 ? *FString::Printf(TEXT("%.1f km"), D / 1000) : *FString::Printf(TEXT("%d m"), FMath::RoundToInt(D)),
+				D < AKeysEvents::HarbourR ? TEXT(" - slow to tie up") : TEXT(""));
+		}
+		else
+		{
+			int32 N = 0;
+			for (int32 k = 0; k < Sp.Num(); k++) N += (Ev->MyMask() >> k) & 1;
+			Sub = FString::Printf(TEXT("%d/5 - keep one of each"), N);
+		}
+	}
+	else if (Ph == AKeysEvents::ETourney::Ceremony) { Top = Ev->bWinnerMe ? FString(TEXT("You win!")) : Ev->WinnerName() + TEXT(" wins"); Sub = TEXT("The trophy on the pier"); }
+	else { Top = Ev->WinnerName().IsEmpty() ? FString(TEXT("Horn - nobody brought all five in")) : (Ev->bWinnerMe ? FString(TEXT("You won")) : Ev->WinnerName() + TEXT(" won")); Sub = TEXT("Esc menu - Fishing tournament to fish another"); }
+	Text(Top, X + 20 * U, Y + 10 * U, 1.15f, Gold);
+	Text(Sub, X + 20 * U, Y + 50 * U, .8f, Ph == AKeysEvents::ETourney::Live && Ev->MyMask() == (1 << Sp.Num()) - 1 ? FLinearColor(.4f, 1.f, .55f) : Dim);
+	float RY = Y + 86 * U;
+	for (int32 k = 0; k < Sp.Num(); k++, RY += 25 * U)
+	{
+		const bool bGot = (Ev->MyMask() >> k) & 1;
+		const KeysData::FSpecies* S = KeysData::Species(Sp[k]);
+		DrawRect(bGot ? FLinearColor(.3f, .95f, .5f) : FLinearColor(.4f, .45f, .5f), X + 22 * U, RY + 6 * U, 10 * U, 10 * U);
+		Text(S ? S->Name : Sp[k], X + 42 * U, RY, .85f, bGot ? FLinearColor(.6f, 1.f, .7f) : FLinearColor::White);
+	}
+	RY += 12 * U;
+	for (const AKeysEvents::FEntry& E : St)
+	{
+		Text(E.Name, X + 22 * U, RY, .85f, E.bMe ? Gold : FLinearColor::White);
+		Text(E.bWon ? FString(TEXT("TROPHY")) : E.bHome ? FString(TEXT("in")) : FString::Printf(TEXT("%d/5"), E.Caught), X + W - 90 * U, RY, .85f, E.bWon ? Gold : Dim);
+		RY += 25 * U;
+	}
 }
 
 void AKeysHUD::DrawFishing(AKeysBoatPawn* P)
