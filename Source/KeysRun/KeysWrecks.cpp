@@ -105,14 +105,102 @@ namespace
 		for (int32 Ix : Part.T) Out.T.Add(Base + Ix);
 	}
 
-	// barnacle growth, sponge and sea-fan lumps scattered over a part's upper surfaces
+	// what grows on a wreck, scattered over a part's upper surfaces: barnacle and coral crusts, barrel and tube sponges
+	// standing up in clumps, purple sea fans across the current, brain-coral domes and soft-coral tufts
 	void Growth(FKeysMesh& M, int32 Seed, double L, double B, double Top, int32 N)
 	{
-		static const uint32 Cols[] = {0x5d6b3a, 0x7a5a3a, 0x8a5a6a, 0x4f5f4a, 0x9a8a5a};
+		static const uint32 Crust[] = {0x5d6b3a, 0x7a5a3a, 0x8a5a6a, 0x4f5f4a, 0x9a8a5a};
+		static const uint32 Sponge[] = {0xc8642a, 0x7a3a8a, 0xd8a03a, 0x8a2a3a};
+		auto H = [Seed](int32 i, int32 k) { return KeysSea::HashCell(7177, Seed, i, k); };
 		for (int32 i = 0; i < N; i++)
 		{
-			const double U = KeysSea::HashCell(7177, Seed, i, 1) - .5, V = KeysSea::HashCell(7177, Seed, i, 2) - .5, Sz = .3 + KeysSea::HashCell(7177, Seed, i, 3) * .8;
-			M.AddBox(FVector(U * L * .9, V * B * .8, Top + Sz * .3), FVector(Sz * 1.4, Sz, Sz * .7), Hx(Cols[i % 5]), FQuat(FVector::ZAxisVector, U * 9));
+			const double U = H(i, 1) - .5, V = H(i, 2) - .5, Sz = .3 + H(i, 3) * .8;
+			const FVector At(U * L * .9, V * B * .8, Top);
+			const int32 Kind = int32(H(i, 4) * 6);
+			const FLinearColor C = Hx(Crust[i % 5]);
+			if (Kind <= 1)
+				M.AddRoundBox(At + FVector(0, 0, Sz * .2), FVector(Sz * 1.4, Sz, Sz * .5), Sz * .2, C, FQuat(FVector::ZAxisVector, U * 9), 1);
+			else if (Kind == 2)
+			{
+				// a clump of tube sponges
+				const FLinearColor Sc = Hx(Sponge[i % 4]);
+				for (int32 k = 0; k < 4; k++)
+				{
+					const FVector B0 = At + FVector((H(i, 10 + k) - .5) * .5, (H(i, 20 + k) - .5) * .5, 0);
+					M.AddTube(B0, B0 + FVector((H(i, 30 + k) - .5) * .2, (H(i, 40 + k) - .5) * .2, .4 + H(i, 50 + k) * .7), .09, .12, 7, Sc);
+				}
+			}
+			else if (Kind == 3)
+			{
+				// a sea fan: a flat, lacy disc standing across the current on a short stalk
+				const double R = .4 + Sz * .5;
+				M.AddTube(At, At + FVector(0, 0, .25), .04, .03, 5, Hx(0x5a2a5a));
+				M.AddRoundBox(At + FVector(0, 0, .25 + R * .8), FVector(.03, R * 1.8, R * 1.5), .015, Hx(0x8a3a8a), FQuat(FVector::ZAxisVector, H(i, 5) * 2), 1);
+			}
+			else if (Kind == 4)
+			{
+				// a barrel sponge
+				M.AddTube(At, At + FVector(0, 0, .5 + Sz * .6), .22 + Sz * .1, .32 + Sz * .15, 9, Hx(Sponge[(i + 1) % 4]) * .85f);
+			}
+			else
+			{
+				// a brain-coral dome
+				M.AddRoundBox(At, FVector(Sz * 1.1, Sz * 1.1, Sz * .8), Sz * .4, Hx(0xb0a070), FQuat::Identity, 2);
+			}
+		}
+	}
+
+	// debris strewn on the sand round a wreck: hull plates, barrels, a coil of chain, timbers (wreck frame, bed at Z0)
+	void Debris(FKeysMesh& M, int32 Seed, double L, double B, double Z0, int32 N)
+	{
+		auto H = [Seed](int32 i, int32 k) { return KeysSea::HashCell(9133, Seed, i, k); };
+		const FLinearColor Rust = Hx(0x6b3a26), Dark = Hx(0x2c2a28), Wood = Hx(0x5a4a3a);
+		for (int32 i = 0; i < N; i++)
+		{
+			const double A = H(i, 1) * 2 * PI, R = .6 + H(i, 2) * .9;
+			const FVector At(FMath::Cos(A) * L * .5 * R, FMath::Sin(A) * (B * .5 + 3) * R, Z0);
+			const FQuat Q = FQuat(FVector::ZAxisVector, H(i, 3) * 6) * FQuat(FVector::XAxisVector, (H(i, 4) - .5) * .5);
+			switch (i % 4)
+			{
+			case 0: M.AddBox(At + FVector(0, 0, .05), FVector(1.5 + H(i, 5) * 2, 1 + H(i, 6), .06), Rust * .85f, Q); break;
+			case 1: M.AddTube(At + FVector(0, 0, .3), At + Q.RotateVector(FVector(.85, 0, 0)) + FVector(0, 0, .3), .3, .3, 10, Rust * .7f); break;
+			case 2:
+				for (int32 k = 0; k < 10; k++)
+				{
+					const double Aa = k * .9, Rr = .35 + k * .02;
+					M.AddTube(At + FVector(FMath::Cos(Aa) * Rr, FMath::Sin(Aa) * Rr, .08), At + FVector(FMath::Cos(Aa + .9) * Rr, FMath::Sin(Aa + .9) * Rr, .08), .06, .06, 5, Dark);
+				}
+				break;
+			default: M.AddBox(At + FVector(0, 0, .12), FVector(2.5 + H(i, 5) * 2, .25, .22), Wood, Q); break;
+			}
+		}
+	}
+
+	// portholes in a row along both sides of a hull, a broken rail along the deck edge
+	void Portholes(FKeysMesh& M, double X0, double X1, double HalfB, double Z, int32 N)
+	{
+		for (int32 k = 0; k < N; k++)
+			for (int32 sd = -1; sd <= 1; sd += 2)
+			{
+				const double X = FMath::Lerp(X0, X1, (k + .5) / N);
+				M.AddTube(FVector(X, sd * (HalfB + .02), Z), FVector(X, sd * (HalfB + .08), Z), .22, .22, 10, Hx(0x4a3a2a));
+				M.AddTube(FVector(X, sd * (HalfB + .07), Z), FVector(X, sd * (HalfB + .09), Z), .15, .15, 10, Hx(0x0c1012));
+			}
+	}
+	void Rail(FKeysMesh& M, double X0, double X1, double HalfB, double Z, int32 Seed)
+	{
+		for (int32 sd = -1; sd <= 1; sd += 2)
+		{
+			const int32 N = FMath::Max(2, int32((X1 - X0) / 2.2));
+			for (int32 k = 0; k <= N; k++)
+			{
+				if (KeysSea::HashCell(4411, Seed, k, sd + 2) < .3) continue;   // stanchions rusted away
+				const double X = FMath::Lerp(X0, X1, double(k) / N);
+				const double Lean = (KeysSea::HashCell(4411, Seed, k, 7) - .5) * .5;
+				M.AddTube(FVector(X, sd * HalfB, Z), FVector(X + Lean * .3, sd * (HalfB + Lean * .2), Z + 1.0), .05, .05, 5, Hx(0x5a3222));
+				if (k < N && KeysSea::HashCell(4411, Seed, k, sd + 5) > .4)
+					M.AddTube(FVector(X + Lean * .3, sd * (HalfB + Lean * .2), Z + 1.0), FVector(FMath::Lerp(X0, X1, double(k + 1) / N), sd * HalfB, Z + .95), .04, .04, 5, Hx(0x5a3222));
+			}
 		}
 	}
 
@@ -219,8 +307,16 @@ namespace KeysWrecks
 				}
 				Front.AddTube(FVector(W.bBroken ? L * .2 : L * .02, 0, Deck), FVector(W.bBroken ? L * .2 : L * .02, 0, Deck + H * .55), .3, .22, 6, Rust);
 				Front.AddTube(FVector(W.bBroken ? L * .34 : L * .28, -B * .2, Deck + .3), FVector(W.bBroken ? L * .1 : L * .05, B * .55, Deck + 1.2), .25, .2, 6, Rust);
-				Growth(Front, Wi * 3, L * .45, B, Deck, 26);
-				Growth(Back, Wi * 3 + 1, L * .45, B, Deck, 18);
+				Portholes(Back, HX - L * .05, HX + L * .05, B * .39, Deck + H * .12, 4);
+				Portholes(Fore, W.bBroken ? L * .05 : -L * .2, W.bBroken ? L * .4 : L * .35, B * .47, Deck - 1.2, 8);
+				Rail(Front, W.bBroken ? 0 : -L * .3, W.bBroken ? L * .42 : L * .42, B * .46, Deck, Wi);
+				Rail(Back, W.bBroken ? -L * .48 : -L * .48, W.bBroken ? -L * .02 : -L * .3, B * .46, Deck, Wi + 7);
+				// the anchor chain run out of the hawse, a capstan and bitts on the foredeck
+				Front.AddTube(FVector(W.bBroken ? L * .4 : L * .42, 0, Deck + .3), FVector(W.bBroken ? L * .4 : L * .42, 0, Deck + .9), .45, .4, 10, Rust * .8f);
+				for (int32 sd = -1; sd <= 1; sd += 2) Front.AddTube(FVector(W.bBroken ? L * .36 : L * .38, sd * B * .3, Deck), FVector(W.bBroken ? L * .36 : L * .38, sd * B * .3, Deck + .6), .2, .2, 8, Dark);
+				Growth(Front, Wi * 3, L * .45, B, Deck, 40);
+				Growth(Back, Wi * 3 + 1, L * .45, B, Deck, 28);
+				Debris(Front, Wi, L, B, -.4, 14);
 				break;
 			}
 			case EKind::Tug:
@@ -238,7 +334,14 @@ namespace KeysWrecks
 				for (int32 k = 0; k < 6; k++)
 					for (int32 sd = -1; sd <= 1; sd += 2)
 						Fore.AddTube(FVector(-L * .35 + k * L * .13, sd * (B * .5 + .1), Deck - .6), FVector(-L * .35 + k * L * .13 + .3, sd * (B * .5 + .1), Deck - .6), .35, .35, 8, Dark);
-				Growth(Fore, Wi * 3, L * .8, B * .8, Deck, 18);
+				Portholes(Fore, -L * .1, L * .2, B * .31, Deck + 1.4, 3);
+				Rail(Fore, -L * .48, L * .3, B * .47, Deck, Wi);
+				// the mast with its radar bar and a towing bitt aft
+				Fore.AddTube(FVector(L * .1, 0, Deck + 4), FVector(L * .1, 0, Deck + 7.5), .12, .08, 6, Rust);
+				Fore.AddBox(FVector(L * .1, 0, Deck + 6.6), FVector(.3, 1.8, .15), Rust * .8f, FQuat(FVector::XAxisVector, .3));
+				Fore.AddTube(FVector(-L * .38, 0, Deck), FVector(-L * .38, 0, Deck + .9), .3, .3, 10, Dark);
+				Growth(Fore, Wi * 3, L * .8, B * .8, Deck, 30);
+				Debris(Fore, Wi, L, B, -.4, 9);
 				break;
 			}
 			case EKind::Barge:
@@ -249,7 +352,12 @@ namespace KeysWrecks
 				for (int32 sd = -1; sd <= 1; sd += 2) Fore.AddBox(FVector(0, sd * (B * .5 - .2), H - .2), FVector(L, .4, .5), Rust * .7f);
 				for (int32 e = -1; e <= 1; e += 2) Fore.AddBox(FVector(e * (L * .5 - .2), 0, H - .2), FVector(.4, B, .5), Rust * .7f);
 				for (int32 k = 0; k < 5; k++) Fore.AddBox(FVector(-L * .35 + k * L * .17, 0, H - .1), FVector(L * .12, B * .6, .5 + .3 * (k % 2)), Pale * 1.05f, FQuat(FVector::ZAxisVector, k * .3));
-				Growth(Fore, Wi * 3, L, B, H - .3, 22);
+				// bollards along the rims and the ribs showing where the plating has gone
+				for (int32 k = 0; k < 4; k++)
+					for (int32 sd = -1; sd <= 1; sd += 2) Fore.AddTube(FVector(-L * .4 + k * L * .27, sd * (B * .5 - .3), H), FVector(-L * .4 + k * L * .27, sd * (B * .5 - .3), H + .5), .18, .18, 8, Dark);
+				for (int32 k = 0; k < 7; k++) Fore.AddBox(FVector(-L * .3 + k * L * .1, B * .5 + .05, H * .5 - .4), FVector(.25, .12, H * .9), Rust * .6f);
+				Growth(Fore, Wi * 3, L, B, H - .3, 32);
+				Debris(Fore, Wi, L, B, -.4, 8);
 				break;
 			}
 			case EKind::Plane:
@@ -270,7 +378,18 @@ namespace KeysWrecks
 				Aft.AddTube(FVector(-L * .5, 0, Y0 - .2), FVector(-L * .05, 0, Y0), .55, R, 12, Alu);
 				Aft.AddBox(FVector(-L * .45, 0, Y0 + 1.6), FVector(2.6, .25, 3.0), Alu * .95f, FQuat(FVector::YAxisVector, -.3));
 				Aft.AddBox(FVector(-L * .45, 0, Y0 + .1), FVector(2.2, 8, .25), Alu * .95f);
-				Growth(Fore, Wi * 3, L * .5, B * .6, Y0 - .4, 14);
+				// three-blade propellers on the engines, the cabin door, the cockpit frame
+				for (int32 sd = -1; sd <= 1; sd += 2)
+					for (int32 k = 0; k < 3; k++)
+					{
+						const double Ab = k * 2 * PI / 3 + sd * .4;
+						const FVector Hc(L * .14 + 3.05, sd * 5.4, Y0 - .6);
+						Fore.AddBox(Hc + FVector(0, FMath::Cos(Ab), FMath::Sin(Ab)) * .75, FVector(.06, .3, 1.5), Dark, FQuat(FVector::XAxisVector, Ab - PI * .5) * FQuat(FVector::ZAxisVector, .3));
+					}
+				Fore.AddBox(FVector(-L * .02, -R * .98, Y0), FVector(1.1, .06, 1.7), Dark);
+				for (int32 k = -1; k <= 1; k++) Fore.AddBox(FVector(L * .44, k * .45, Y0 + .66), FVector(.7, .06, .08), Alu * .7f);
+				Growth(Fore, Wi * 3, L * .5, B * .6, Y0 - .4, 20);
+				Debris(Fore, Wi, L, B * .4, -.4, 6);
 				break;
 			}
 			}
