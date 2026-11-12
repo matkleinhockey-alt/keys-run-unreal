@@ -411,6 +411,8 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> HelmScreens;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatLights;
 	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> UwLights;
+	// a soft key light on the camera's side of a caught fish held up for its hero shot, so the wet scales catch it
+	UPROPERTY() TObjectPtr<class UPointLightComponent> CatchLight;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> ScreenMID;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> LightMID;
 	double HelmT = 0;

@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "Components/PointLightComponent.h"
 #include "KeysGeo.h"
 #include "KeysMesh.h"
 #include "KeysWorld.h"
@@ -1889,8 +1890,27 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		const double ToCam = FMath::Atan2(CamPos.Z - ShowPos.Z, CamPos.X - ShowPos.X);
 		FishMesh->SetWorldLocationAndRotation(ToUE(ShowPos.X, ShowPos.Y + FMath::Sin(Age * 2.1) * .03, ShowPos.Z),
 			FRotator(80, FMath::RadiansToDegrees(ToCam + Kick) - 90, FMath::RadiansToDegrees(Kick * .6)));
+		if (!CatchLight)
+		{
+			CatchLight = NewObject<UPointLightComponent>(this);
+			CatchLight->SetupAttachment(GetRootComponent());
+			CatchLight->SetUsingAbsoluteLocation(true);
+			CatchLight->SetIntensityUnits(ELightUnits::Lumens);
+			CatchLight->SetCastShadows(false);
+			CatchLight->SetSourceRadius(40.f);
+			CatchLight->SetSoftSourceRadius(60.f);
+			CatchLight->SetLightColor(FLinearColor(1.f, .95f, .88f));
+			CatchLight->RegisterComponent();
+		}
+		// up and to one side of the lens, so the scales and the eye carry a highlight even with the sun behind the fish
+		const FVector Fish(ShowPos.X, ShowPos.Y, ShowPos.Z), ToLens = (CamPos - Fish).GetSafeNormal2D();
+		CatchLight->SetWorldLocation(ToUE(Fish.X + ToLens.X * 1.6 - ToLens.Z * .8, Fish.Y + 1.2, Fish.Z + ToLens.Z * 1.6 + ToLens.X * .8));
+		CatchLight->SetIntensity(float(500 + FishLen * 500));
+		CatchLight->SetAttenuationRadius(float((4 + FishLen * 2) * 100));
+		CatchLight->SetVisibility(true);
 	}
-	else
+	else if (CatchLight && CatchLight->IsVisible()) CatchLight->SetVisibility(false);
+	if (FState != EKeysFish::Caught)
 	{
 		const double Dist = (S.Len * 1.5 + 11) * CamZoom, Ht = (S.Len * .32 + 4.2) * CamZoom * (1 + CamPitchOff);
 		if (!bDragging && FMath::Abs(Speed) > 5) CamYaw *= 1 - FMath::Min(1.0, Dt * 1.2);
@@ -2113,6 +2133,13 @@ void AKeysBoatPawn::UpdateJump(double Dt)
 	// a tail-walk throws spray the whole way
 	if (bJumpLow && PY < .7 && FMath::FRand() < Dt * 14)
 		if (AKeysLife* L = AKeysLife::Get(this)) L->Splash(PX, PZ, 5, .7);
+	// water streams off the body through the leap, thinning as it dries, so the arc reads from far off
+	if (AKeysLife* L = AKeysLife::Get(this))
+	{
+		const FVector JV(JDX * JRun / JDur, 4 * JH * (1 - 2 * P) / JDur, JDZ * JRun / JDur);
+		const int32 NShed = FMath::RoundToInt(Dt * (90 + FishLen * 30) * (1.1 - P) + FMath::FRand());
+		L->Shed(FVector(PX - JDX * FishLen * .3, PY, PZ - JDZ * FishLen * .3), JV, NShed, .07 + FishLen * .025);
+	}
 	// nose up on the way out, nose down on the way back in, with a head-shake wobble
 	const double Yaw = FMath::Atan2(JDZ, JDX);
 	const FRotator R(FMath::RadiansToDegrees((1 - 2 * P) * (bJumpLow ? .5 : 1.1)), FMath::RadiansToDegrees(Yaw + FMath::Sin(P * 9) * .25), FMath::RadiansToDegrees(FMath::Sin(P * 22) * .55 + JSpin * P * 1.4));

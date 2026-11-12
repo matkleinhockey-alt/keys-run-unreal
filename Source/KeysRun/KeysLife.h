@@ -195,6 +195,8 @@ public:
 	static bool BuildCreatureMesh(const FString& Key, FKeysMesh& Out, double Scale = 1.35);
 	// a burst of spray at a point on the water
 	void Splash(double X, double Z, int32 N, double Power);
+	// water streaming off a leaping fish: N drops at P (game meters, Y up) flung with the fish's velocity V
+	void Shed(const FVector& P, const FVector& V, int32 N, double Size);
 
 	// ---- diving (web game entities/fish: the diver as a threat, the near-field schools around a diver, spear targets)
 	// the diver is in the water at (X, Z), moving RelSpeed m/s through it; schools near it fill in and stand off

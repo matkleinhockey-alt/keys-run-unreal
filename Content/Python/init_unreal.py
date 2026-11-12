@@ -286,12 +286,15 @@ if (kind < 0.5) {
   col = lerp(col, col * float3(1.12, 1.12, 0.8), fres * 0.6);
 } else if (kind < 14.5) {          // glass
   rough = 0.03; spec = 1.0; col *= 0.55;
-} else if (kind < 15.5) {          // fish: scales and a rainbow sheen
-  float2 c = frac(q * 120.0) - 0.5;
-  g = (qa * c.x + qb * c.y) * 0.16 * closeF + F.nd(p * 9.0).yzw * 0.02;
+} else if (kind < 15.5) {          // fish: overlapping scales in offset rows, a wet slime sheen and a rainbow at the edges
+  float2 sq = q * 90.0;
+  sq.y += 0.5 * floor(sq.x);
+  float2 c = frac(sq) - 0.5;
+  float rim = smoothstep(0.25, 0.5, length(c));
+  g = (qa * c.x + qb * c.y) * 0.22 * closeF + F.nd(p * 9.0).yzw * 0.025 + F.nd(p * 600.0).yzw * 0.01 * closeF;
   float3 ir = 0.5 + 0.5 * cos(6.2831853 * (ndv * 1.4 + float3(0.0, 0.33, 0.67)));
-  col = col * (1.0 + 0.35 * ir * (1.0 - ndv)) + 0.02 * ir;
-  rough = 0.18; spec = 0.75;
+  col = col * lerp(1.0, 0.86, rim * closeF) * (1.0 + 0.45 * ir * (1.0 - ndv)) + 0.03 * ir;
+  rough = 0.07 + 0.08 * rim * closeF; spec = 0.95;
 } else if (kind < 16.5) {          // bark / palm trunk: rings and fibres
   float4 w = F.nd(p * 3.0);
   float ph = p.z * 6.2831853 * 4.5 + w.x * 2.0;
@@ -318,7 +321,7 @@ if (kind < 0.5) {
   float4 r = F.nd(p * float3(160.0, 160.0, 12.0));
   df = lerp(0.88, 1.08, r.x);
   g = r.yzw * 0.04 * closeF;
-  rough = 0.3; spec = 0.6;
+  rough = 0.16; spec = 0.75;
   col += fres * 0.1 * VC.rgb;
 } else if (kind < 21.5) {          // eyes, lenses, wet things
   rough = 0.04; spec = 0.9;

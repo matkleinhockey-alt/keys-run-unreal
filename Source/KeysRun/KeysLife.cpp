@@ -1472,9 +1472,17 @@ void AKeysLife::Splash(double X, double Z, int32 N, double Power)
 {
 	if (LHyp(X - CamX, Z - CamZ) > 500) return;
 	const double Surf = WaveH(X, Z, NowT, AmpAt(X, Z), false);
-	N = FMath::Min(N, 70);
+	N = FMath::Min(N, Power >= 1.5 ? 130 : 70);
 	// a crown of spray: big splashes throw bigger, higher drops
 	const double SizeK = FMath::Pow(FMath::Max(Power, .3), .7);
+	// a big one (a leaping fish going in or coming out) also throws a tall column of white water straight up
+	if (Power >= 1.5)
+		for (int32 i = 0; i < N / 3; i++)
+		{
+			const double A = FMath::FRand() * PI * 2, S = LRand(0, .6) * Power;
+			SpawnDrop(FVector(X + FMath::Cos(A) * .15 * Power, Surf + .1, Z + FMath::Sin(A) * .15 * Power),
+				FVector(FMath::Cos(A) * S, LRand(4.5, 8) * FMath::Sqrt(Power), FMath::Sin(A) * S), LRand(1, 1.6), LRand(.8, 1.4) * .24 * SizeK, true);
+		}
 	for (int32 i = 0; i < N; i++)
 	{
 		const double A = FMath::FRand() * PI * 2, S = LRand(.5, 1.2) * Power;
@@ -1492,6 +1500,13 @@ void AKeysLife::Splash(double X, double Z, int32 N, double Power)
 	}
 }
 
+void AKeysLife::Shed(const FVector& P, const FVector& V, int32 N, double Size)
+{
+	if (LHyp(P.X - CamX, P.Z - CamZ) > 500) return;
+	for (int32 i = 0; i < N; i++)
+		SpawnDrop(P + FVector(LRand(-.15, .15), LRand(-.1, .1), LRand(-.15, .15)), V * LRand(.3, .8) + FVector(LRand(-1.2, 1.2), LRand(-.5, 1.5), LRand(-1.2, 1.2)), LRand(.6, 1.1), Size * LRand(.6, 1.2), true);
+}
+
 void AKeysLife::UpdateDrops(double Dt, double T)
 {
 	for (int32 i = Drops.Num() - 1; i >= 0; i--)
@@ -1506,8 +1521,9 @@ void AKeysLife::UpdateDrops(double Dt, double T)
 	const FVector Up(0, 1, 0);
 	for (const FKeysDrop& D : Drops)
 	{
-		const double S = D.Size * (1 - .5 * D.Age / D.Life);
 		const FVector P = D.P;
+		// spray keeps a few pixels' size however far off it is, so a leaping fish's splash reads across the water
+		const double S = FMath::Max(D.Size * (1 - .5 * D.Age / D.Life), D.bGrav ? .0022 * FMath::Sqrt(FMath::Square(P.X - CamX) + FMath::Square(P.Y - CamY) + FMath::Square(P.Z - CamZ)) : 0.0);
 		const FLinearColor& Col = D.bGrav ? Spray : Foam;
 		if (D.bGrav)
 		{
