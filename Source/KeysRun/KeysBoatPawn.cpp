@@ -590,6 +590,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (P.Num() >= 3) CamZoom = FCString::Atod(*P[2]);
 		}
 		else if (Cmd == TEXT("dive")) { if (!IsDiving()) ToggleDive(); }
+		else if (Cmd == TEXT("jkey")) ToggleDive();   // J, as pressed (in the water: back aboard from anywhere)
 		else if (Cmd == TEXT("tie"))
 		{
 			// bring the boat alongside the town marina's main pier, stopped, and step ashore
@@ -832,10 +833,14 @@ void AKeysBoatPawn::ToggleDive()
 		if (HasGear(TEXT("dive.tank")) && !bTankLive) ShowToast(TEXT("The pony bottle is empty - an air fill at Scuba Steve's makes it live again."), 4);
 		D->AirMul = (bTankLive ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1) * (BuffOn(TEXT("diner.mahi")) ? 1.05 : 1);
 		D->EnterWater(X, Z, H);
-		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to climb back aboard."), 6);
+		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
 	}
-	else if (!D->RequestReboard()) ShowToast(TEXT("Too far from the boat to climb aboard."));
-	else { SyncChaseCam(); bCamInit = false; }
+	else if (D->RequestReboard()) { SyncChaseCam(); bCamInit = false; }
+	else if (ReboardT < 0 && !D->IsBlackedOut())
+	{
+		// out of reach of the ladder: a short fade to black and you're back aboard, wherever you were (Tick finishes it)
+		ReboardT = 0;
+	}
 }
 
 void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
@@ -2672,6 +2677,25 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 		// log back in automatically if you were online last time
 		if (!bOnlineTried) { bOnlineTried = true; if (Save && Save->bOnlineAuto && !Save->OnlineName.IsEmpty()) O->Connect(Save->OnlineName, Save->OnlineCrew); }
 		if (O->Toasts.Num() && T > ToastUntil - 1) { ShowToast(O->Toasts[0], 4); O->Toasts.RemoveAt(0); }
+	}
+	if (ReboardT >= 0)
+	{
+		// J from far off while diving: fade out, end the dive at the black, fade back in on deck
+		const double Was = ReboardT;
+		ReboardT += Dt;
+		if (Was < .4 && ReboardT >= .4)
+		{
+			AKeysDiver* D = AKeysDiver::Get(this);
+			if (D && D->IsDiving())
+			{
+				const bool bLost = D->HasFishOnLine();
+				D->ExitToBoat();
+				SyncChaseCam();
+				bCamInit = false;
+				ShowToast(bLost ? TEXT("Lost the fish - back aboard") : TEXT("Back aboard"), 3);
+			}
+		}
+		if (ReboardT >= .8) ReboardT = -1;
 	}
 	if (bRunning && OffshoreF(X, Z) > .5 && !bDeepTip) { bDeepTip = true; ShowToast(TEXT("Deep blue water - the farther out you run, the bigger the fish.")); }
 	if (IsAshore()) { Thr = 0; Speed = 0; DVX = DVZ = 0; Steer = 0; }

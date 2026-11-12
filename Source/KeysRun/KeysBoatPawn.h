@@ -236,6 +236,8 @@ public:
 	struct FSvcCard { FString Kind, Title; TArray<FString> Lines; TArray<FString> Cells; int32 Prize = 0; double Age = 0, Life = 9; bool bOn = false; };
 	FSvcCard SvcCard;
 	double SleepT = -1;                // the motel's fade, seconds since it started (-1: none)
+	double ReboardT = -1;              // J from far off while diving: the fade back aboard, seconds since it started (-1: none)
+	double ReboardAlpha() const { return ReboardT < 0 ? 0 : ReboardT < .4 ? ReboardT / .4 : FMath::Max(0.0, 1 - (ReboardT - .4) / .4); }
 	bool bSleepBlack = false;
 	double SleepAlpha() const;
 	bool SleepCard() const;

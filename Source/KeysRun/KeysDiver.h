@@ -44,6 +44,8 @@ public:
 	bool CanReboard() const { return bCanReboard; }
 	// J underwater: climbs aboard if close enough; false (and a toast) otherwise
 	bool RequestReboard();
+	bool IsBlackedOut() const { return bDiving && S.bBlackedOut; }
+	bool HasFishOnLine() const { return Speared.bOn || FishMode != 0; }
 	void ExitToBoat();
 	void SetButtons(const FKeysDiverButtons& B);
 	FString CycleView();

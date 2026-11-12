@@ -61,7 +61,7 @@ so there are no hand-made assets. The editor script creates the materials and th
 - **Diving and spearfishing (J):** jump over the side and free-dive. Breath-hold air that burns faster with depth and effort,
   buoyancy that lifts you toward the surface, fin kicks in pulses, drag along and across the body, the current pushing you around,
   narcosis below 25 m, blackout and shallow-water blackout (you wake up on the boat), and an ascent warning that gets louder as the air
-  runs out. Dive-mask and chase views (1). Under water there is per-channel light extinction, depth-banded visibility, Snell's window
+  runs out. J climbs the ladder beside the boat, or from anywhere else fades to black and puts you back aboard (a speared fish is lost). Dive-mask and chase views (1). Under water there is per-channel light extinction, depth-banded visibility, Snell's window
   overhead, caustics, marine snow, your own bubbles and seep bubbles on the bottom, and the lens wetting when you cross the surface.
   The speargun has a hauled reload (R), a drag-limited shaft with aim assist that leads moving fish, and a float-line fight (hold S to
   haul, ease off before the shaft tears free); a landed fish goes on the same catch card, cooler and score as a rod catch.
@@ -301,7 +301,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | N | sound on / off |
 | Y | buddy boat |
 | Z | shower |
-| J | jump in to dive / climb back aboard |
+| J | jump in to dive / back aboard (from anywhere) |
 | Q | tie up at a dock and go ashore / back aboard (twice when far: a cab back to the dock) |
 | **Ashore:** W A S D + mouse | walk where you look (Shift runs, arrow keys turn) |
 | F | use a counter, a slot machine, a sign or a plaque |

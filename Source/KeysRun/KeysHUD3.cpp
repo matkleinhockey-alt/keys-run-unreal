@@ -18,6 +18,8 @@ void AKeysHUD::DrawServices(AKeysBoatPawn* P)
 	const float W = Canvas->SizeX, H = Canvas->SizeY, Cx = W * .5f;
 	const double Now = GetWorld()->GetTimeSeconds();
 	UFont* Big = GEngine->GetLargeFont();
+	// J from far off while diving: the fade back aboard
+	if (P->ReboardAlpha() > 0) DrawRect(FLinearColor(0, 0, 0, float(P->ReboardAlpha())), 0, 0, W, H);
 	// the motel: fade out, the room card on black, fade back in to a sunset already in place
 	if (P->SleepAlpha() > 0)
 	{
