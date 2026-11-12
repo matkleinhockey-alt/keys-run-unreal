@@ -444,6 +444,13 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   `fin:lot=N` (log the Nth plat parcel with scenery on it), `fin:fills=N`, `fin:wrecksreset`.
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.
 
+## Graphics
+
+Settings has **Graphics quality** (Low / Medium / High / Epic), **Resolution scale** (Auto or 50-100%) and **Display**
+(full screen / window), saved in GameUserSettings.ini. The game draws at a Retina panel's own pixels and TSR upscales from a
+render resolution that follows the preset (Auto aims for about 800 / 1000 / 1250 lines on Low / Medium / High, native on
+Epic). The first launch goes full screen at the display's size and picks High on Pro / Max / Ultra chips, Medium otherwise.
+
 ## The Freeman's fighting chair
 
 The Freeman carries a teak big-game fighting chair in the cockpit. A fish hooked on the troll is fought from it: the angler
