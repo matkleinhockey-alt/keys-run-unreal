@@ -9,6 +9,7 @@
 #include "KeysDiver.h"
 #include "KeysWalker.h"
 #include "KeysFinal.h"
+#include "KeysPlatData.h"
 #include "KeysExtras.h"
 #include "KeysHandgun.h"
 #include "KeysAudio.h"
@@ -443,6 +444,15 @@ void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 		double CR;
 		if (AKeysExtras* Ex = AKeysExtras::Get(this); Ex && Ex->CaelenHitbox(CA, CB, CR))
 			if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->DebugFireAt((CA + CB) * .5 + FVector(0, FCString::Atod(*A), 0), C == TEXT("caelen"));
+	}
+	else if (C == TEXT("lot"))
+	{
+		// lot=N: the Nth plat parcel with island houses or palms on it (sorted by plat order); logs its id for estbuy / estgo
+		TArray<int32> L;
+		if (AKeysWorld* W = World()) W->SceneryParcels(L);
+		L.Sort();
+		const int32 N = FCString::Atoi(*A);
+		if (L.IsValidIndex(N)) UE_LOG(LogTemp, Log, TEXT("KRScript lot %d of %d: %s"), N, L.Num(), KeysPlat::Parcels[L[N]].Id);
 	}
 	else if (C == TEXT("wrecksreset")) WrecksFound.Reset();
 	else if (C == TEXT("fills")) AddCount(TEXT("dive.fill"), FCString::Atoi(*A));

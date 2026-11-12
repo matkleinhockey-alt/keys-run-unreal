@@ -142,6 +142,29 @@ int64 AKeysEstates::PriceOf(const FParcel& P) const
 
 const AKeysEstates::FParcel* AKeysEstates::ById(const FString& Id) const { const int32* I = Index.Find(Id); return I ? &All[*I] : nullptr; }
 
+int32 AKeysEstates::PlatParcelAt(double X, double Z)
+{
+	struct FBox2 { double X0, X1, Z0, Z1; };
+	static TArray<FBox2> Boxes;
+	static TArray<TArray<FVector2D>> Polys;
+	if (!Boxes.Num())
+		for (const KeysPlat::FRaw& R : KeysPlat::Parcels)
+		{
+			FBox2 B{1e18, -1e18, 1e18, -1e18};
+			TArray<FVector2D>& Pl = Polys.AddDefaulted_GetRef();
+			for (int32 k = 0; k < R.PN; k++)
+			{
+				const FVector2D Q(KeysPlat::Pts[R.P0 + k][0], KeysPlat::Pts[R.P0 + k][1]);
+				Pl.Add(Q);
+				B.X0 = FMath::Min(B.X0, Q.X); B.X1 = FMath::Max(B.X1, Q.X); B.Z0 = FMath::Min(B.Z0, Q.Y); B.Z1 = FMath::Max(B.Z1, Q.Y);
+			}
+			Boxes.Add(B);
+		}
+	for (int32 i = 0; i < Boxes.Num(); i++)
+		if (X >= Boxes[i].X0 && X <= Boxes[i].X1 && Z >= Boxes[i].Z0 && Z <= Boxes[i].Z1 && InPoly(Polys[i], X, Z)) return i;
+	return -1;
+}
+
 const AKeysEstates::FParcel* AKeysEstates::ParcelAt(double X, double Z) const
 {
 	for (const FParcel& P : All) if (X >= P.X0 && X <= P.X1 && Z >= P.Z0 && Z <= P.Z1 && InPoly(P.Poly, X, Z)) return &P;
@@ -568,10 +591,14 @@ void AKeysEstates::Tick(float DeltaSeconds)
 	for (UTextRenderComponent* T : LotSigns) if (T) T->DestroyComponent();
 	LotMeshes.Reset(); LotSigns.Reset();
 	KeysTown::ExtraDocks().Reset();
+	KeysTown::ExtraSolids().Reset();
+	TSet<int32> Cleared;
 	for (const FString& Id : Held)
 	{
 		const FParcel* Pc = ById(Id);
 		if (!Pc) continue;
+		// the island's scattered houses and palms on the lot make way for the build (islands.ts clearScenery)
+		if (const int32* Ix = Index.Find(Id)) Cleared.Add(*Ix);
 		const FBuild B = BuildOf(Id);
 		FKeysMesh M;
 		TArray<TPair<FVector, FString>> Signs;
@@ -601,7 +628,21 @@ void AKeysEstates::Tick(float DeltaSeconds)
 		// your dock is somewhere to tie up and walk ashore (estates.ts estateDockBerth / estateGround)
 		const FLayout L = Layout(*Pc, B);
 		if (L.bDock) KeysTown::ExtraDocks().Add({L.DX0, L.DZ0, L.SX, L.SZ, L.DLen, L.DW / 2, L.THead, FMath::Max(.3, LandH(L.DX0, L.DZ0)), Pc->Name + TEXT(" - your dock")});
+		// the residence is solid to a person on foot (the web game's estate colliders): its walls in the lot's frame,
+		// local x along the shore, z to the sea; the stilt house stands on pilings you can walk between
+		{
+			const double Ch = FMath::Cos(L.Heading), Sh = FMath::Sin(L.Heading);
+			auto Solid = [&](double LX, double LZ, double HW, double HD) { KeysTown::ExtraSolids().Add({L.HX + LX * Ch + LZ * Sh, L.HZ - LX * Sh + LZ * Ch, Ch, -Sh, HW, HD}); };
+			if (B.Res == TEXT("garden")) Solid(0, -L.HD * .35, L.HW / 2 + .6, L.HD / 2 + .6);
+			else if (B.Res == TEXT("stilt"))
+			{
+				for (double PX : {-L.HW / 2 + .4, 0.0, L.HW / 2 - .4}) for (double PZ : {-L.HD / 2 + .4, 0.0, L.HD / 2 - .4}) Solid(PX, PZ, .3, .3);
+			}
+			else Solid(0, 0, L.HW / 2 + .4, L.HD / 2 + .4);
+		}
 	}
+	KeysTown::SetObstacleGroupsOff(Cleared);
+	if (AKeysWorld* Wd = AKeysWorld::Get(this)) Wd->SetClearedParcels(Cleared);
 }
 
 // ================================================================ the panel

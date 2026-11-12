@@ -27,7 +27,10 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 	void ToggleSunset();
-	void SnapSunset();   // straight to sunset, no glide (the motel's night, behind a black screen)
+	void SnapSunset();
+	// hide the scattered houses and palms standing on these plat parcels (built-on Keys Run Estates lots)
+	void SetClearedParcels(const TSet<int32>& Parcels);
+	void SceneryParcels(TArray<int32>& Out) const { ParcelScenery.GetKeys(Out); }   // straight to sunset, no glide (the motel's night, behind a black screen)
 	bool IsSunset() const { return SunsetTarget > .5; }
 	// 0 by day, 1 at full sunset: what lights the lighthouse beam, the lamps' halos and the neon (web lightMats)
 	double DuskK() const;
@@ -84,4 +87,6 @@ private:
 	TArray<KeysGeo::FLiveTrail> LiveTrails;
 
 	double SunK = 0, SunsetTarget = 0;
+	UPROPERTY() TMap<int32, TObjectPtr<class UProceduralMeshComponent>> ParcelScenery;
+	TSet<int32> ClearedParcels;
 };

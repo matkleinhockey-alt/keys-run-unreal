@@ -56,6 +56,8 @@ public:
 	FString Buy(const FString& Id);
 	void SetBuild(const FString& Id, const FBuild& B);
 	void Refresh();   // rebuild what stands on every held lot
+	// which plat parcel (its index in the plat) a point stands on, or -1; usable before BeginPlay (the scenery asks)
+	static int32 PlatParcelAt(double X, double Z);
 
 	// ---- the panel (HUD draws it, the pawn drives it): regions, the selected lot, the build sheet's row
 	bool bOpen = false;

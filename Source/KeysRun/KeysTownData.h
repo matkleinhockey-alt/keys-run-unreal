@@ -111,9 +111,15 @@ namespace KeysTown
 	// Solid scenery out on the keys, for a person on foot: the conch houses and palms (KeysWorld) and the waterfront
 	// estates' houses (KeysLandmarks). A box is centered at (CX, CZ) with half-length HA along the unit axis (AX, AZ)
 	// and HB across it; a round one is a trunk.
-	void AddObstacleBox(double CX, double CZ, double AX, double AZ, double HA, double HB);
-	void AddObstacleRound(double X, double Z, double R);
+	void AddObstacleBox(double CX, double CZ, double AX, double AZ, double HA, double HB, int32 Group = -1);
+	void AddObstacleRound(double X, double Z, double R, int32 Group = -1);
 	bool ObstacleAt(double X, double Z, double R);
+	// a group of obstacles that can be taken away: the scattered houses and palms standing on a Keys Run Estates
+	// parcel (the group is the parcel's index), cleared when the lot is built on
+	void SetObstacleGroupsOff(const TSet<int32>& Off);
+	// what stands on your built lots (AKeysEstates): the residences, solid to a person on foot
+	struct FExtraSolid { double CX, CZ, AX, AZ, HA, HB; };
+	TArray<FExtraSolid>& ExtraSolids();
 	// near a waterfront estate's grounds (the keys' scattered houses and palms keep off them)
 	bool NearEstate(double X, double Z, double R);
 	// the town pad grown by Margin (for keeping the island's scattered palms and houses out of the streets)

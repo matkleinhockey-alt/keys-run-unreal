@@ -701,8 +701,9 @@ namespace KeysTown
 
 	namespace
 	{
-		struct FObstacle { double X, Z, AX, AZ, HA, HB; bool bRound; };
+		struct FObstacle { double X, Z, AX, AZ, HA, HB; bool bRound; int32 Group; };
 		TArray<FObstacle> GObs;
+		TSet<int32> GOffGroups;
 		TMap<int64, TArray<int32>> GObsGrid;
 		constexpr double ObsCell = 16;
 		int64 ObsKey(int32 CX, int32 CZ) { return (int64(CX) << 32) ^ int64(uint32(CZ)); }
@@ -715,16 +716,24 @@ namespace KeysTown
 		}
 	}
 
-	void AddObstacleBox(double CX, double CZ, double AX, double AZ, double HA, double HB) { AddObs({CX, CZ, AX, AZ, HA, HB, false}, FMath::Sqrt(HA * HA + HB * HB)); }
-	void AddObstacleRound(double X, double Z, double R) { AddObs({X, Z, 1, 0, R, R, true}, R); }
+	void AddObstacleBox(double CX, double CZ, double AX, double AZ, double HA, double HB, int32 Group) { AddObs({CX, CZ, AX, AZ, HA, HB, false, Group}, FMath::Sqrt(HA * HA + HB * HB)); }
+	void AddObstacleRound(double X, double Z, double R, int32 Group) { AddObs({X, Z, 1, 0, R, R, true, Group}, R); }
+	void SetObstacleGroupsOff(const TSet<int32>& Off) { GOffGroups = Off; }
+	TArray<FExtraSolid>& ExtraSolids() { static TArray<FExtraSolid> A; return A; }
 
 	bool ObstacleAt(double X, double Z, double R)
 	{
+		for (const FExtraSolid& E : ExtraSolids())
+		{
+			const double DX = X - E.CX, DZ = Z - E.CZ, A = DX * E.AX + DZ * E.AZ, B = -DX * E.AZ + DZ * E.AX;
+			if (FMath::Abs(A) < E.HA + R && FMath::Abs(B) < E.HB + R) return true;
+		}
 		const TArray<int32>* L = GObsGrid.Find(ObsKey(FMath::FloorToInt(X / ObsCell), FMath::FloorToInt(Z / ObsCell)));
 		if (!L) return false;
 		for (int32 Idx : *L)
 		{
 			const FObstacle& O = GObs[Idx];
+			if (O.Group >= 0 && GOffGroups.Contains(O.Group)) continue;
 			const double DX = X - O.X, DZ = Z - O.Z;
 			if (O.bRound) { if (DX * DX + DZ * DZ < FMath::Square(O.HA + R)) return true; continue; }
 			const double A = DX * O.AX + DZ * O.AZ, B = -DX * O.AZ + DZ * O.AX;

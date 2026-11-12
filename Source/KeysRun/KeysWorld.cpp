@@ -1,4 +1,5 @@
 #include "KeysWorld.h"
+#include "KeysEstates.h"
 #include "KeysGeo.h"
 #include "KeysTownData.h"
 #include "KeysTown.h"
@@ -247,6 +248,7 @@ void AKeysWorld::BuildScenery()
 
 	// palms and conch houses go into vertex-coloured meshes in 1.2 km chunks (so the far ones cull)
 	TMap<int64, FTownBatch> HouseChunks;
+	TMap<int32, FTownBatch> ParcelBatches;   // what stands on an estates parcel, so building the lot can clear it
 	auto ChunkOf = [](double X, double Z) { return (int64(FMath::FloorToInt(X / 1200)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 1200))); };
 	static const uint32 FrondC[] = {0x3f8a35, 0x4f9a3c, 0x58a443, 0x467f30};
 	UInstancedStaticMeshComponent* Mangroves = MakeISM(TEXT("Mangroves"), Sph, Srgb(.14, .29, .13), .95);
@@ -274,11 +276,12 @@ void AKeysWorld::BuildScenery()
 				continue;
 			}
 			if (H < .7 || KeysTown::NearEstate(JX, JZ, 26)) continue;
-			KeysTown::AddObstacleRound(JX, JZ, .32);
+			const int32 PalmLot = AKeysEstates::PlatParcelAt(JX, JZ);
+			KeysTown::AddObstacleRound(JX, JZ, .32, PalmLot);
 			// a palm (town props.ts, lighter): a leaning, curving trunk and a crown of fronds that rise and droop
 			const double Tall = 6 + Hash2(JZ, JX * 2) * 5;
 			const double Lean = (Hash2(JX * 3, JZ) - .5) * .5, LeanA = Hash2(JX, JZ * 3) * 2 * PI;
-			FTownBatch& PB = HouseChunks.FindOrAdd(ChunkOf(JX, JZ));
+			FTownBatch& PB = PalmLot >= 0 ? ParcelBatches.FindOrAdd(PalmLot) : HouseChunks.FindOrAdd(ChunkOf(JX, JZ));
 			auto TrunkAt = [&](double F) { return FVector(JX + FMath::Cos(LeanA) * Lean * Tall * .35 * F * F, H + Tall * F, JZ + FMath::Sin(LeanA) * Lean * Tall * .35 * F * F); };
 			for (int32 k = 0; k < 4; k++) PB.Tube3(TrunkAt(k / 4.0), TrunkAt((k + 1) / 4.0), .26 - .04 * k, .22 - .04 * k, 5, k % 2 ? 0x8c7758 : 0x7a6648);
 			const FVector Top = TrunkAt(1);
@@ -321,11 +324,14 @@ void AKeysWorld::BuildScenery()
 			// three.js yaw: the island's street grid, sometimes turned a quarter
 			const double Ry = -S.Isl->Th + (Hash2(JZ, JX * 5) < .5 ? 0 : PI / 2);
 			const int64 Key = (int64(FMath::FloorToInt(JX / 1200)) << 32) ^ int64(uint32(FMath::FloorToInt(JZ / 1200)));
-			FTownBatch& B = HouseChunks.FindOrAdd(Key);
+			// a house on (or overlapping) an estates parcel goes in that parcel's own batch
+			int32 Lot = AKeysEstates::PlatParcelAt(JX, JZ);
+			for (int32 k = 0; k < 4 && Lot < 0; k++) Lot = AKeysEstates::PlatParcelAt(JX + (k % 2 ? 1 : -1) * W * .5, JZ + (k / 2 ? 1 : -1) * D * .5);
+			FTownBatch& B = Lot >= 0 ? ParcelBatches.FindOrAdd(Lot) : HouseChunks.FindOrAdd(Key);
 			const uint32 Wall = Pastel[int32(FMath::Abs(JX * 31 + JZ)) % 8], Trim = Shutter[int32(FMath::Abs(JZ * 17 + JX)) % 5];
 			const double Cs = FMath::Cos(Ry), Sn = FMath::Sin(Ry);
 			auto At = [&](double LX, double LZ) { return FVector2D(JX + LX * Cs + LZ * Sn, JZ - LX * Sn + LZ * Cs); };
-			KeysTown::AddObstacleBox(JX, JZ, Cs, -Sn, W / 2, D / 2);
+			KeysTown::AddObstacleBox(JX, JZ, Cs, -Sn, W / 2, D / 2, Lot);
 			if (bPiers)
 			{
 				B.Box(JX, H + Lift / 2 - .3, JZ, W - .4, Lift + .6, D - .4, 0x8e8b82, 0, Ry);
@@ -356,6 +362,17 @@ void AKeysWorld::BuildScenery()
 			const FVector2D Bk = At(-W * .2, -D / 2 - .03);
 			B.Box(Bk.X, Base + 1.7, Bk.Y, 1.1, 1.2, .06, 0x27414f, 0, Ry);
 		}
+	for (TPair<int32, FTownBatch>& C : ParcelBatches)
+	{
+		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
+		PM->SetupAttachment(Root);
+		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PM->RegisterComponent();
+		C.Value.M.Commit(PM, 0, VertexColorMaterial());
+		PM->SetCachedMaxDrawDistance(260000.f);
+		PM->SetVisibility(!ClearedParcels.Contains(C.Key));
+		ParcelScenery.Add(C.Key, PM);
+	}
 	for (TPair<int64, FTownBatch>& C : HouseChunks)
 	{
 		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
@@ -547,6 +564,12 @@ void AKeysWorld::ApplySun(double K)
 }
 
 void AKeysWorld::ToggleSunset() { SunsetTarget = SunsetTarget > .5 ? 0 : 1; }
+void AKeysWorld::SetClearedParcels(const TSet<int32>& Parcels)
+{
+	ClearedParcels = Parcels;
+	for (TPair<int32, TObjectPtr<UProceduralMeshComponent>>& P : ParcelScenery) if (P.Value) P.Value->SetVisibility(!Parcels.Contains(P.Key));
+}
+
 void AKeysWorld::SnapSunset() { SunsetTarget = 1; SunK = 1; ApplySun(SStep(0, 1, SunK)); }
 
 double AKeysWorld::DuskK() const { return SStep(0, 1, SunK); }
