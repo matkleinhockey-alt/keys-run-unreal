@@ -4,6 +4,7 @@
 #include "KeysGeo.h"
 #include "KeysLocals.h"
 #include "KeysHandgun.h"
+#include "KeysTreasure.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
@@ -95,6 +96,16 @@ void AKeysHUD::DrawChartMore(AKeysBoatPawn* P, float X, float Y, float Size)
 
 void AKeysHUD::DrawMore(AKeysBoatPawn* P)
 {
+	// the wreck treasure prompt under water (wreck-treasure.ts): "F  Prise open the strongbox", or what is in sight and how far
+	if (const AKeysTreasure* Tr = AKeysTreasure::Get(this); Tr && !Tr->Prompt.IsEmpty())
+	{
+		float TW = 0, TH = 0;
+		GetTextSize(Tr->Prompt, TW, TH, GEngine->GetMediumFont(), 1.1f * U);
+		const float X = Canvas->SizeX * .5f - TW * .5f, Y = Canvas->SizeY * .62f;
+		Panel(X - 16 * U, Y - 8 * U, TW + 32 * U, TH + 16 * U, .6f);
+		if (Tr->bPromptKey) DrawRect(Gold, X - 16 * U, Y - 8 * U, 4 * U, TH + 16 * U);
+		Text(Tr->Prompt, Canvas->SizeX * .5f, Y, 1.1f, Tr->bPromptKey ? Gold : FLinearColor::White, nullptr, true);
+	}
 	// the boat pistol (web entities/handgun/hud.ts): crosshair opening with the spread, the magazine, the tally
 	if (const AKeysHandgun* G = AKeysHandgun::Get(this); G && G->IsOut())
 	{

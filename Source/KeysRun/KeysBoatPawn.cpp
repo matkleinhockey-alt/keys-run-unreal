@@ -12,6 +12,7 @@
 #include "KeysVisitors.h"
 #include "KeysLocals.h"
 #include "KeysHandgun.h"
+#include "KeysTreasure.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -615,6 +616,19 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (!Cmd.Mid(5).Split(TEXT(","), &K, &N)) { K = Cmd.Mid(5); N.Empty(); }
 			if (N.IsEmpty()) Owned.Add(K); else AddCount(*K, FCString::Atoi(*N));
 		}
+		else if (Cmd == TEXT("treasure"))
+		{
+			// the boat beside the first unopened box on the wrecks, ready to dive on it
+			double TX, TZ, TY;
+			if (AKeysTreasure* Tr = AKeysTreasure::Get(this); Tr && Tr->DebugNearest(TX, TZ, TY)) { X = TX + 6; Z = TZ + 2; Speed = Thr = 0; bCamInit = false; UE_LOG(LogTemp, Log, TEXT("KRScript treasure at %.0f, %.0f floor %.1f"), TX, TZ, TY); }
+		}
+		else if (Cmd == TEXT("treasuredive"))
+		{
+			double TX, TZ, TY;
+			if (AKeysTreasure* Tr = AKeysTreasure::Get(this); Tr && Tr->DebugNearest(TX, TZ, TY))
+				if (AKeysDiver* Dv = AKeysDiver::Get(this)) { Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%f,%f"), TX + 2.2, TZ + .8)); Dv->DebugCmd(TEXT("depth"), TEXT("200")); }
+		}
+		else if (Cmd == TEXT("open")) { if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen(); }
 		else if (Cmd == TEXT("flare")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->DebugFlare(); }
 		else if (Cmd == TEXT("gun")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle(); }
 		else if (Cmd.StartsWith(TEXT("gunlook=")) || Cmd.StartsWith(TEXT("fire=")))
@@ -719,6 +733,7 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 	B.LookPitch = -MY * .004;
 	D->SetButtons(B);
 	if (Hit(EKeys::J)) ToggleDive();
+	if (Hit(EKeys::F)) if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen();   // prise open a wreck's box (sim/treasure.ts)
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) ShowToast(D->CycleView() + TEXT(" - press 1 to switch"));
 	// a speared catch: K keeps it, Space releases it (once the card has been up a moment)
 	if (FState == EKeysFish::Caught)

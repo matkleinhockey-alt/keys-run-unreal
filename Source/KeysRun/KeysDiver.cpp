@@ -1024,6 +1024,12 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 		S.Y = FMath::Max(-FCString::Atod(*Arg), Fl + .6);
 		S.VX = S.VY = S.VZ = 0;
 	}
+	else if (Cmd == TEXT("at"))
+	{
+		TArray<FString> P;
+		Arg.ParseIntoArray(P, TEXT(","));
+		if (P.Num() >= 2) { S.X = FCString::Atod(*P[0]); S.Z = FCString::Atod(*P[1]); S.VX = S.VY = S.VZ = 0; }
+	}
 	else if (Cmd == TEXT("look"))
 	{
 		TArray<FString> P;
