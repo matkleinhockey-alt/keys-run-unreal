@@ -177,6 +177,56 @@ void AKeysExtras::BuildLayout()
 		}
 	}
 
+	// fight spots: when a fish is on, the guests clear the cockpit for the angler (and the chair) and go forward: a row
+	// across the open deck ahead of the console (or its seat) and short of the bow's lounge pads or casting deck, then
+	// up on the casting deck itself, then beside the console. Every one inside the gunwales.
+	{
+		FightSpots.Reset();
+		const double ConA = Deck.MidX - Deck.ConL * .5, ConF = Deck.MidX + Deck.ConL * .5 + Deck.ConFwd;
+		LaneX0 = FMath::Min(ConA, SeatX0) - .35;
+		LaneX1 = ConF + (bMidL ? 1.0 : .6) + .3;
+		auto Row = [this](double Xr, double Lift)
+		{
+			const double Hw = FMath::Max(0.0, Deck.InnerHB(Xr) - .4);
+			const int32 N = FMath::Max(1, FMath::FloorToInt32(Hw * 2 / .72) + 1);
+			for (int32 i = 0; i < N; i++) FightSpots.Add(FVector(Xr, N == 1 ? 0 : -Hw + 2 * Hw * i / (N - 1), Lift));
+		};
+		// what is forward of the open deck: the Freeman's lounge pads, a go-fast's sun pad, else the casting deck
+		// (KeysMesh::BuildBoat's boxes)
+		const double CastX0 = L * .27;
+		Raised.Reset();
+		if (!bMidL) Raised.Add(FVector(L * .27, L * .39, KeysMesh::SoleAt(S, L * .33) + .36));
+		if (S.Id == TEXT("freeman")) Raised.Add(FVector(L * .15, L * .25, KeysMesh::SoleAt(S, L * .2) + .49));
+		else if (S.bSunpad && !bMidL) Raised.Add(FVector(L * .145, L * .295, KeysMesh::SoleAt(S, L * .22) + .42));
+		const double OpenEnd = S.Id == TEXT("freeman") ? L * .15 : (S.bSunpad && !bMidL) ? L * .145 : CastX0;
+		for (double Xr = LaneX1; Xr <= OpenEnd - .25; Xr += .65) Row(Xr, 0);
+		if (FightSpots.Num())
+		{
+			// keep the open-deck rows that ClampToDeck leaves where they are (the console's keep-out can eat one)
+			for (int32 i = FightSpots.Num() - 1; i >= 0; i--)
+			{
+				double Xc = FightSpots[i].X, Yc = FightSpots[i].Y;
+				ClampToDeck(Xc, Yc, .3);
+				if (FMath::Abs(Xc - FightSpots[i].X) > .05 || FMath::Abs(Yc - FightSpots[i].Y) > .05) FightSpots.RemoveAt(i);
+			}
+		}
+		// up on the bow casting deck (all but the Midnight, whose bow is one long lounge)
+		if (!bMidL)
+		{
+			const double CastX = L * .33, CastTop = KeysMesh::SoleAt(S, CastX) + .36;
+			Row(CastX - .15, CastTop - Deck.SoleAt(CastX - .15));
+		}
+		// beside the console, where there is room between it and the gunwale
+		const double Xb = (ConA + ConF) * .5, Hb = Deck.InnerHB(Xb) - .35;
+		if (Hb > Deck.ConW * .5 + .45) { FightSpots.Add(FVector(Xb, Hb, 0)); FightSpots.Add(FVector(Xb, -Hb, 0)); }
+		if (!FightSpots.Num())
+		{
+			double Xc = LaneX1, Yc = 0;
+			ClampToDeck(Xc, Yc, .32);
+			FightSpots.Add(FVector(Xc, Yc, 0));
+		}
+	}
+
 	// Freeman: a pull-down shower at the back of the hardtop
 	bHasShower = S.Id == TEXT("freeman");
 	if (bHasShower)
@@ -259,7 +309,8 @@ void AKeysExtras::UpdateShower(double Dt, double T)
 		bShowerOn = !bShowerOn && bCalm;
 		ShowerT = bShowerOn ? XRand(10, 16) : XRand(25, 45);
 	}
-	const bool bOn = (ShowerForced >= 0 ? ShowerForced == 1 : bShowerOn) && bCalm;
+	const AKeysBoatPawn* SP = PawnRef.Get();
+	const bool bOn = (ShowerForced >= 0 ? ShowerForced == 1 : bShowerOn) && bCalm && !(SP && SP->IsInFight());
 	FKeysHuman& H = ShowerH;
 	H.bVisible = bOn;
 	if (!bOn) return;
@@ -333,22 +384,38 @@ void AKeysExtras::UpdateParty(double Dt, double T)
 
 	static const int32 Moves[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 6, 4, 8};   // sway hands step roll groove twirl hipcircle shimmy wave
 	const bool bModels = PartyModelsReady();
+	const AKeysBoatPawn* FP = PawnRef.Get();
+	const bool bFight = FP && FP->IsInFight();
+	int32 Idx = 0;
 	for (FKeysPartyGoer& G : Party)
 	{
 		FKeysHuman& H = G.H;
+		const int32 Me = Idx++;
 		G.ModeT -= Dt;
 		if (G.ModeT <= 0) { G.bWalk = !G.bWalk; G.ModeT = XRand(7, 14); }
 		if (bModels) G.bWalk = false;   // the web game's crew keep their spots on deck and dance there
-		const int32 Mode = bFast ? 2 : G.bWalk ? 0 : 1;
+		// a fish on: nobody laps the cockpit; she walks forward to her fight spot and dances there, and back after
+		const bool bAway = bFight || (G.bSpot && (FMath::Abs(G.SpotX - G.HomeX) > .05 || FMath::Abs(G.SpotY - G.HomeY) > .05));
+		const int32 Mode = bFast ? 2 : (G.bWalk && !bAway) ? 0 : 1;
 		double X = H.Pos.X, Y = H.Pos.Y, Bounce = 0;
 		H.bHoldHead = false;
+		bool bTransit = false;
+		FVector2D MoveDir(0, 0);
 		// dancing or hanging on, she stays on one spot: the moves sway her about it, they don't walk her off the boat
 		if (Mode != 0)
 		{
 			if (!G.bHome) { G.HomeX = X; G.HomeY = Y; ClampToDeck(G.HomeX, G.HomeY, .32); G.bHome = true; }
-			X = G.HomeX; Y = G.HomeY;
+			if (!G.bSpot) { G.SpotX = G.HomeX; G.SpotY = G.HomeY; G.bSpot = true; }
+			const FVector Fs = bFight && FightSpots.Num() ? FightSpots[Me % FightSpots.Num()] + FVector(0, Me >= FightSpots.Num() ? .25 : 0, 0) : FVector(G.HomeX, G.HomeY, 0);
+			const FVector2D Want(Fs.X, Fs.Y);
+			const FVector2D Was(G.SpotX, G.SpotY);
+			bTransit = StepSpot(G, Want, Dt);
+			// a step up onto the casting deck as she reaches it (and down as she leaves)
+			G.SpotLift = FMath::FInterpConstantTo(G.SpotLift, RaisedAt(G.SpotX), Dt, 2.0);
+			MoveDir = FVector2D(G.SpotX, G.SpotY) - Was;
+			X = G.SpotX; Y = G.SpotY;
 		}
-		else G.bHome = false;
+		else { G.bHome = false; G.bSpot = false; }
 		if (Mode == 0)
 		{
 			G.S += Dt * .85;
@@ -381,8 +448,8 @@ void AKeysExtras::UpdateParty(double Dt, double T)
 				G.Move0 = G.Ph;
 			}
 			const double Beat = FMath::Sin(G.Ph), Half = FMath::Sin(G.Ph * .5), Down = FMath::Abs(Beat);
-			const double Face = FMath::Atan2(Ctr.Y - Y, Ctr.X - X) + FMath::Sin(T * .3 + G.S) * .5;
-			double Ry = XAngLerp(H.Yaw, Face, Dt * 1.2);
+			const double Face = MoveDir.SizeSquared() > 1e-8 ? FMath::Atan2(MoveDir.Y, MoveDir.X) : FMath::Atan2(Ctr.Y - Y, Ctr.X - X) + FMath::Sin(T * .3 + G.S) * .5;
+			double Ry = XAngLerp(H.Yaw, Face, Dt * (MoveDir.SizeSquared() > 1e-8 ? 5.0 : 1.2));
 			double Sway = 0, Lean = 0, Nod = Down * .12, Pitch = -.04;
 			const double HY = H.HipY;
 			FVector AL, AR, FL = XJ(-.13, .085, .02), FR = XJ(.13, .085, -.02);
@@ -476,14 +543,54 @@ void AKeysExtras::UpdateParty(double Dt, double T)
 				: XJ(.22, H.HipY + 1.0, .14);
 			H.Pose(XJ(-.2, H.HipY + 1.0, .14), R);
 		}
-		ClampToDeck(X, Y, .26);
-		H.Pos = FVector(X, Y, Deck.SoleAt(X) + Bounce);
+		// up on the casting deck she is forward of the open deck's limit: keep her inside the gunwales only
+		if (G.SpotLift > .01) { const double Hw = FMath::Max(0.0, Deck.InnerHB(X) - .3); Y = FMath::Clamp(Y, -Hw, Hw); }
+		else ClampToDeck(X, Y, .26, !bTransit);
+		H.Pos = FVector(X, Y, Deck.SoleAt(X) + Bounce + G.SpotLift);
 		H.bVisible = !bModels;
 	}
 	UpdatePartyModels();
 }
 
-void AKeysExtras::ClampToDeck(double& X, double& Y, double Margin) const
+double AKeysExtras::RaisedAt(double X) const
+{
+	double Top = 0;
+	for (const FVector& R : Raised)
+		if (X > R.X - .12 && X < R.Y + .12) Top = FMath::Max(Top, R.Z - Deck.SoleAt(X));
+	return Top;
+}
+
+bool AKeysExtras::StepSpot(FKeysPartyGoer& G, const FVector2D& Want, double Dt) const
+{
+	FVector2D P(G.SpotX, G.SpotY);
+	if (FVector2D::Distance(P, Want) < .02) { G.SpotX = Want.X; G.SpotY = Want.Y; return false; }
+	// a stroll, not a teleport: about 0.8 m/s. Past the console and the helm seats she goes out to the gunwale on her
+	// side, along it, and back in, so she never walks through the furniture (and never off the deck: ClampToDeck)
+	const double Step = .8 * Dt;
+	const bool bCross = FMath::Min(P.X, Want.X) < LaneX1 && FMath::Max(P.X, Want.X) > LaneX0
+		&& !(P.X >= LaneX1 && Want.X >= LaneX1) && !(P.X <= LaneX0 && Want.X <= LaneX0);
+	FVector2D Goal = Want;
+	bool bTransit = false;
+	if (bCross)
+	{
+		const double Sd = FMath::Abs(Want.Y) > .2 ? FMath::Sign(Want.Y) : P.Y >= 0 ? 1 : -1;
+		const double LaneY = Sd * FMath::Max(.35, Deck.InnerHB(P.X) - .3);
+		const bool bInBand = P.X > LaneX0 - .05 && P.X < LaneX1 + .05;
+		if (FMath::Abs(P.Y - LaneY) > .1 && !(bInBand && FMath::Abs(P.Y) > FMath::Abs(LaneY) - .1)) Goal = FVector2D(P.X, LaneY);
+		else Goal = FVector2D(Want.X > P.X ? LaneX1 + .1 : LaneX0 - .1, LaneY);
+		bTransit = true;
+	}
+	const FVector2D D = Goal - P;
+	const double L = D.Size();
+	P += L > Step ? D / L * Step : D;
+	double X = P.X, Y = P.Y;
+	if (Want.X > Deck.L * .26) { const double Hw = FMath::Max(0.0, Deck.InnerHB(X) - .3); Y = FMath::Clamp(Y, -Hw, Hw); }   // out to the casting deck
+	else ClampToDeck(X, Y, .26, !bTransit);
+	G.SpotX = X; G.SpotY = Y;
+	return bTransit;
+}
+
+void AKeysExtras::ClampToDeck(double& X, double& Y, double Margin, bool bKeepOut) const
 {
 	if (!Deck.Spec) return;
 	const KeysData::FBoatSpec& S = *Deck.Spec;
@@ -495,7 +602,7 @@ void AKeysExtras::ClampToDeck(double& X, double& Y, double Margin) const
 		const double Hw = FMath::Max(0.0, Deck.InnerHB(X) - Margin);
 		Y = FMath::Clamp(Y, -Hw, Hw);
 		bool bMoved = false;
-		for (const FBox2D& B : KeepOut)
+		if (bKeepOut) for (const FBox2D& B : KeepOut)
 		{
 			const double Mg = Margin * .6;
 			const double Ax = B.Min.X - Mg, Bx = B.Max.X + Mg, Ay = B.Min.Y - Mg, By = B.Max.Y + Mg;
@@ -543,7 +650,7 @@ void AKeysExtras::UpdatePartyModels()
 		F.SetVisible(bOn);
 		if (!bOn) continue;
 		const FKeysHuman& H = Party[i].H;
-		F.Place(FVector(H.Pos.X, H.Pos.Y, Deck.SoleAt(H.Pos.X)), H.Yaw, Heights[i % 5], Dt);
+		F.Place(FVector(H.Pos.X, H.Pos.Y, Deck.SoleAt(H.Pos.X) + Party[i].SpotLift), H.Yaw, Heights[i % 5], Dt);
 	}
 }
 

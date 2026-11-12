@@ -50,6 +50,9 @@ struct FKeysPartyGoer
 	// the spot on deck she dances on (her sway is added to it each frame, never accumulated)
 	double HomeX = 0, HomeY = 0;
 	bool bHome = false;
+	// where she actually is now: eased from her spot to her fight spot forward and back again (bSpot: set)
+	double SpotX = 0, SpotY = 0, SpotLift = 0;   // SpotLift: standing up on the bow's casting deck
+	bool bSpot = false;
 };
 
 // The side features from the JS game: the buddy boat (Y), Luigi mode (trim all the way up on plane),
@@ -158,7 +161,16 @@ private:
 	// where nobody stands on this boat's deck: the console, seats, the tuna chair, benches (boat frame, meters)
 	TArray<FBox2D> KeepOut;
 	// puts a point back on the open deck: inside the gunwales, off the bow and stern furniture and out of KeepOut
-	void ClampToDeck(double& X, double& Y, double Margin = .3) const;
+	// bKeepOut false: only the gunwales and the bow and stern furniture (for a guest walking past the seats)
+	void ClampToDeck(double& X, double& Y, double Margin = .3, bool bKeepOut = true) const;
+	// during a fight the guests clear the cockpit for the angler: spots forward of the console (or beside it)
+	TArray<FVector> FightSpots;   // X, Y (Z unused)
+	// the raised furniture forward a guest may walk over or stand on: X from, X to, the top's height (boat frame)
+	TArray<FVector> Raised;
+	double RaisedAt(double X) const;
+	double LaneX0 = 0, LaneX1 = 0;   // the fore-and-aft span of the console and the helm seats, walked round at the gunwale
+	// eases a guest's spot toward Want, round the console and seats along the gunwale; true while she is walking
+	bool StepSpot(FKeysPartyGoer& G, const FVector2D& Want, double Dt) const;
 	TArray<double> PathCum;
 	double PathTotal = 1;
 	bool bHasShower = false, bShowerOn = false;
