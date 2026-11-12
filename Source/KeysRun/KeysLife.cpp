@@ -1,4 +1,5 @@
 #include "KeysLife.h"
+#include "KeysFeed.h"
 #include "KeysWrecks.h"
 #include "KeysSea.h"
 #include "KeysBoatPawn.h"
@@ -1951,6 +1952,7 @@ FString AKeysLife::PickSpecies(const FKeysFishSpot& S, double BobX, double BobZ)
 		const double B = Big(R.Key);
 		V *= B > 0 ? 1 + 4 * Of * B : 1 - .45 * Of;
 		if (Hump && (R.Key == TEXT("amberjack") || R.Key == TEXT("blackfin") || R.Key == TEXT("kingfish"))) V *= 4;
+		V *= KeysFeed::Mul(R.Key, KeysFeed::HourNow(this));   // the ones feeding now take the bait more often
 		Tot += V;
 		W.Add(V);
 	}

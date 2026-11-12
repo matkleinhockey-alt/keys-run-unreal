@@ -7,6 +7,7 @@
 // uses, so the fight, the jumps, the catch card, the cooler and the score are the existing machinery.
 
 #include "KeysBoatPawn.h"
+#include "KeysFeed.h"
 #include "KeysGeo.h"
 #include "KeysMesh.h"
 #include "KeysWorld.h"
@@ -116,7 +117,8 @@ FString AKeysBoatPawn::TrollSpecies(double Q) const
 	const double Sharpen = .6 + FMath::Clamp(Q, 0.0, 1.0);
 	TArray<double> W;
 	double Tot = 0;
-	for (const FZoneRow& R : Tbl) { const double V = FMath::Pow(TrollWeight(R.Key), Sharpen); W.Add(V); Tot += V; }
+	const double Hr = KeysFeed::HourNow(this);
+	for (const FZoneRow& R : Tbl) { const double V = FMath::Pow(TrollWeight(R.Key), Sharpen) * KeysFeed::Mul(R.Key, Hr); W.Add(V); Tot += V; }
 	double Rr = FMath::FRand() * Tot;
 	for (int32 i = 0; i < Tbl.Num(); i++) { Rr -= W[i]; if (Rr <= 0) return Tbl[i].Key; }
 	return Tbl.Last().Key;
@@ -258,11 +260,15 @@ void AKeysBoatPawn::UpdateTroll(double Dt, double T)
 	if (Q <= 0) return;
 	const AKeysLife* Life = AKeysLife::Get(this);
 	const double Rich = Life && Life->SpotAt(X, Z).bHot ? 2.4 : 1;   // a weedline, a bird pile or a rig fishes faster
-	TUntil -= Q * FMath::Max(.1, Rich) * Dt;
+	TUntil -= Q * FMath::Max(.1, Rich) * Dt * FeedArea;   // fish feeding now come up on the spread sooner
 	if (TUntil > 0 || TSince < TrollMinGap) { TUntil = FMath::Max(0.0, TUntil); return; }
 	TUntil = TrollBaseGap * (.55 + FMath::FRand() * .9);
 	TSince = 0;
-	if (FState == EKeysFish::Idle) TrollRaise(Q);
+	if (FState == EKeysFish::Idle)
+	{
+		TrollRaise(Q);
+		if (bScriptLog) UE_LOG(LogTemp, Log, TEXT("KRDBG troll raise %d at hour %.2f, feed x%.2f"), ++DbgBites, KeysFeed::HourNow(this), FeedArea);
+	}
 }
 
 // ---------------------------------------------------------------- the spread (troll-spread.ts)

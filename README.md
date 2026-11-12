@@ -343,6 +343,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysVisitors.*` | the pirates' sloop and their visits, the banner plane |
 | `KeysEvents.*` | the Marathon race (course, AI field, marks, standings) and the fishing tournament (species draw, AI plans, delivery) |
 | `KeysBuffs.cpp` | timed food and drink buffs and what they do to your hands |
+| `KeysFeed.*` | when the fish eat: each species' feeding windows by the hour, the bite multiplier and the HUD's bite line |
 | `KeysTroll.cpp` | trolling: the speed window and strike clock, the raise and the hookup, the spread of lines, lures and teasers |
 | `KeysWorld.*` | terrain, water surface, bridges, scenery, marinas, sky and sun |
 | `KeysBoatPawn.*` | boat physics, camera, input, fishing loop |
@@ -419,7 +420,8 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   The second pass adds `lc:larry`, `lc:sandbar`, `lc:fleetN`, `lc:partyN` (the boat beside them), `gun`, `fire=yaw,pitch`,
   `gunlook=yaw,pitch`, `flare`, `give=key[,n]`, `wear=cosmetic.x.y`, `treasure` / `treasuredive` / `open`, `estates`,
   `estsel=id`, `estbuy=id`, `estbuild=id|res=stilt;dock=yacht`, `estgo=id`, `lights`, `view=N`, `slots`, `spin`, `gear`,
-  `runto=N`, `pirates`, `tourney` (then `ev:tourneyall` and `harbour` for the ceremony).
+  `runto=N`, `pirates`, `tourney` (then `ev:tourneyall` and `harbour` for the ceremony), `clock=HH:MM` (the hour the fish
+  feed by; `clock=off` for the real clock), `trollstrike=<species>` (that species takes the spread).
   For looking around: `tp=X,Z[,heading]`, `goto=flats|bay|hawk|reef|wall|offshore`, `cam=yaw,pitch,zoom`. For diving: `dive`, then
   `dv:hold=5` (stay at 5 m), `dv:depth=N`, `dv:look=yaw,pitch`, `dv:aimfish`, `dv:fishahead`, `dv:spear`, `dv:reload`, `dv:haul=1`,
   `dv:swim=1`, `dv:air=0.2`, `dv:chase` / `dv:mask`. `-KRScat=r,g,b` / `-KRAbs=r,g,b` override the water's scattering / absorption,
@@ -461,6 +463,18 @@ boat's side and above it, behind the angler's shoulder, framing the angler, the 
 the angler's own view). While a fish is on, the guests walk forward out of the cockpit to the bow and dance there, and walk
 back after. Auto-chase holds the stern on the fish and, for one of 150 lb or more that is taking line, backs down on it
 slowly in short bursts. After the catch card the boat goes back on the troll.
+
+## When the fish eat
+
+Fish feed by your computer's real local clock, Keys-style (KeysFeed.cpp). Outside a feeding window every species bites at
+the game's ordinary rate; a window only ever raises it, to about 1.4 - 1.6x at the peak, both how soon a bait gets hit (or
+the spread gets a fish up) and which species it is. The blue-water fish (tuna, wahoo, sailfish, marlin, kingfish) are best
+at first light and again toward dusk, mahi early but still eating through the day; tarpon and snook roll at dawn and dusk
+and on into the night; swordfish come up to feed at night; sharks and mangrove snapper at dusk and after dark; the reef and
+the flats bite steadily all day with a morning bump; amberjack and cobia like the middle of the day too. The sunset (O)
+counts as dusk whatever the clock says. While fishing, the HUD and the chartplotter (G) show "Bite: Normal - feeding picks
+up around 6:15 pm" or "Bite: Feeding! (until 8:40 am)"; a toast says when a window opens, the catch card gives the species'
+best times and the species list (B) a word for each. Spearfishing isn't affected (it has no bite roll).
 
 ## Credits
 

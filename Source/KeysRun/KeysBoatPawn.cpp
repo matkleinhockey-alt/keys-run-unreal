@@ -6,6 +6,7 @@
 #include "KeysSave.h"
 #include "KeysTraffic.h"
 #include "KeysExtras.h"
+#include "KeysFeed.h"
 #include "KeysAudio.h"
 #include "KeysOnline.h"
 #include "KeysDiver.h"
@@ -762,6 +763,14 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("slots")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(!Sl->bOpen); }
 		else if (Cmd == TEXT("spin")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Spin(); }
 		else if (Cmd.StartsWith(TEXT("view="))) View = FCString::Atoi(*Cmd.Mid(5));
+		else if (Cmd.StartsWith(TEXT("clock=")))
+		{
+			// clock=HH:MM fakes the hour the fish feed by; clock=off goes back to the real clock
+			FString Hh, Mm;
+			if (Cmd.Mid(6).Split(TEXT(":"), &Hh, &Mm)) KeysFeed::SetClockOverride(FCString::Atoi(*Hh) + FCString::Atoi(*Mm) / 60.0);
+			else KeysFeed::SetClockOverride(-1);
+			FeedT = 0;
+		}
 		else if (Cmd == TEXT("gun")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle(); }
 		else if (Cmd.StartsWith(TEXT("gunlook=")) || Cmd.StartsWith(TEXT("fire=")))
 		{
@@ -2117,6 +2126,7 @@ FString AKeysBoatPawn::PickSpecies() const
 		const double B = Big(R.Key);
 		V *= B > 0 ? 1 + 4 * Of * B : 1 - .45 * Of;
 		if (Hump && (R.Key == TEXT("amberjack") || R.Key == TEXT("blackfin") || R.Key == TEXT("kingfish"))) V *= 4;
+		V *= KeysFeed::Mul(R.Key, KeysFeed::HourNow(this));   // the ones feeding now take the bait more often
 		Tot += V;
 		W.Add(V);
 	}
@@ -2308,7 +2318,7 @@ void AKeysBoatPawn::Land()
 	CardWeight = Weight;
 	CardPts = Pts;
 	CardInches = FMath::RoundToInt(FishLen * 1.1 * 39.37);
-	CardFact = S.Fact;
+	CardFact = S.Fact + TEXT("  ") + KeysFeed::BestTimes(Key);
 	CardBonus = Bonus;
 	CardZone = ZoneDesc(Zone) + TEXT(" - ") + NearestName(FX, FZ);
 	LastPts = Pts;
@@ -2406,8 +2416,26 @@ void AKeysBoatPawn::OnAction()
 
 void AKeysBoatPawn::ShowFishMesh(bool bShow) { FishMesh->SetVisibility(bShow); }
 
+void AKeysBoatPawn::UpdateFeeding(double Dt)
+{
+	FeedT -= Dt;
+	if (FeedT > 0) return;
+	FeedT = 1;
+	// where you're fishing: the bait's zone with a line out, else the water under the boat
+	const FString Zn = IsLineOut() && !Zone.IsEmpty() ? Zone : ZoneAt(X, Z);
+	const TArray<FZoneRow>& Tbl = ZoneTable(Zn);
+	const double Hr = KeysFeed::HourNow(this);
+	FeedArea = KeysFeed::AreaMul(Tbl, Hr);
+	BiteLineText = KeysFeed::BiteLine(Tbl, Hr);
+	const int32 Now = FeedArea >= 1.2 ? 1 : 0;
+	if (FeedState == 0 && Now == 1 && bRunning && !IsDiving() && !IsAshore() && Menu == EMenu::None)
+		ShowToast(FString(TEXT("The fish are feeding - the bite's on! ")) + BiteLineText.Mid(BiteLineText.Find(TEXT("("))), 4);
+	FeedState = Now;
+}
+
 void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 {
+	UpdateFeeding(Dt);
 	if (bCharging) { ChargeT += Dt; Charge = FMath::Min(1.0, ChargeT / 1.3); }
 	if (AKeysLife* L = AKeysLife::Get(this))
 	{
@@ -2468,9 +2496,15 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 		double Dip = FMath::Sin(T * 2) * .05;
 		if (FState == EKeysFish::Waiting)
 		{
-			BiteT -= Dt * (bReel ? .6 : 1);
+			BiteT -= Dt * (bReel ? .6 : 1) * FeedArea;   // a feeding window shortens the wait (never lengthens it)
+			DbgWait += Dt;
 			if (!Sp && BiteT < 3.2) ChooseFish();
-			if (BiteT <= 0) { FState = EKeysFish::Nibble; Nibs = 1 + FMath::RandRange(0, 2); NibT = .05; }
+			if (BiteT <= 0)
+			{
+				FState = EKeysFish::Nibble; Nibs = 1 + FMath::RandRange(0, 2); NibT = .05;
+				if (bScriptLog) UE_LOG(LogTemp, Log, TEXT("KRDBG bite %d at hour %.2f, feed x%.2f, waited %.2f s"), ++DbgBites, KeysFeed::HourNow(this), FeedArea, DbgWait);
+				DbgWait = 0;
+			}
 		}
 		else if (FState == EKeysFish::Nibble)
 		{

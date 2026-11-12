@@ -1,4 +1,5 @@
 #include "KeysHUD.h"
+#include "KeysFeed.h"
 #include "KeysGfx.h"
 #include "Engine/GameViewportClient.h"
 #include "UnrealClient.h"
@@ -748,6 +749,14 @@ void AKeysHUD::DrawFishing(AKeysBoatPawn* P)
 	}
 	if (P->bStrikeShown && P->FState == EKeysFish::Bite)
 		Text(TEXT("STRIKE!"), Cx, H * .36f, 3.0f, Gold, GEngine->GetLargeFont(), true);
+	// when the fish eat (KeysFeed): the bite now and when it next turns on, under whatever panel is up
+	if (P->ShowBiteLine() && !P->BiteLineText.IsEmpty())
+	{
+		const bool bFeed = P->BiteLineText.Contains(TEXT("Feeding!"));
+		const float BW = 470 * U;
+		Panel(Cx - BW * .5f, H - 80 * U, BW, 30 * U, .55f);
+		Text(P->BiteLineText, Cx, H - 76 * U, .9f, bFeed ? Gold : FLinearColor::White, nullptr, true);
+	}
 	if (P->FState == EKeysFish::Fight)
 	{
 		const float W = 460 * U, X = Cx - W * .5f, Y = H - 250 * U;
@@ -1059,6 +1068,12 @@ void AKeysHUD::DrawElectronics(AKeysBoatPawn* P)
 	DrawSonar(P, X + 452 * U, Y, 188 * U, H);
 	DrawRect(HudHex(0x0a141e, .82f), X + 452 * U, Y, 188 * U, 18 * U);
 	Text(TEXT("SONAR  200 kHz"), X + 458 * U, Y + 1 * U, .6f, FLinearColor::White);
+	// the fishing app's feeding forecast, on a strip over the display
+	if (!P->BiteLineText.IsEmpty())
+	{
+		DrawRect(HudHex(0x0a141e, .82f), X - 5 * U, Y - 27 * U, W + 10 * U, 22 * U);
+		Text(P->BiteLineText, X + 6 * U, Y - 25 * U, .62f, P->BiteLineText.Contains(TEXT("Feeding!")) ? Gold : FLinearColor::White);
+	}
 }
 
 void AKeysHUD::DrawGps(AKeysBoatPawn* P, float X, float Y, float W, float H)
@@ -1238,6 +1253,7 @@ void AKeysHUD::DrawBoard(AKeysBoatPawn* P)
 			const FLinearColor Col = Best ? Gold : Dim;
 			Text(SpName(Keys[i]), CX, CY, .8f, Col);
 			Text(Best ? FString::Printf(TEXT("%.1f lb"), *Best) : FString(TEXT("-")), CX + 300 * U, CY, .8f, Col);
+			Text(KeysFeed::ShortBest(Keys[i]), CX + 376 * U, CY + 3 * U, .6f, Dim);   // when it feeds best
 		}
 	}
 	Text(TEXT("Saved on this computer.   Tab or A / D switch tabs  -  B closes"), X + W * .5f, Y + H - 40 * U, .8f, Dim, nullptr, true);

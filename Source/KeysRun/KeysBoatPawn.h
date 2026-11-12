@@ -88,7 +88,14 @@ public:
 	bool bBackBurst = false, bBackMsg = false;
 	double AcLogT = 0;
 	bool bScriptLog = false;
-	FString DbgTrollKey;       // -KRScript trollstrike=<species>   // -KRScript runs log the auto-chase once a second
+	FString DbgTrollKey;       // -KRScript trollstrike=<species>
+	// when the fish eat (KeysFeed): the bite multiplier where you're fishing, refreshed each second, and the HUD line
+	double FeedArea = 1, FeedT = 0;
+	int32 FeedState = -1;      // -1 not yet looked, 0 normal, 1 a feeding window
+	int32 DbgBites = 0;        // -KRScript runs: bites counted (logged), and the wait before each
+	double DbgWait = 0;
+	FString BiteLineText;
+	bool ShowBiteLine() const { return (IsLineOut() || bTrolling || bCharging) && FState != EKeysFish::Fight && !IsDiving() && !IsAshore(); }   // -KRScript runs log the auto-chase once a second
 	FString AutoMode;
 	bool bBigMap = false;
 	FString Toast;
@@ -408,6 +415,7 @@ private:
 	// (0 leap, 1 greyhounding billfish, 2 skyrocket, 3 head-shake, 4 spinner)
 	struct FJumpHabit { double StrikeP; int32 NMin, NMax; double RunP; int32 Style; };
 	static FJumpHabit JumpHabit(const FString& K, bool bJumper);
+	void UpdateFeeding(double Dt);
 	int32 JumpStyle = 0;
 	double JumpWait = 0;
 	bool bFirstJump = false;
