@@ -147,6 +147,7 @@ void AKeysBoatPawn::TrollRaise(double Q)
 	RaiseCamT = RaiseS + 1.3;
 	// the climbing fish is the hooked fish's own mesh, so what you watch come up is what you hook
 	Key = K; Sp = S; Weight = PendWeight;
+	PickRecapture();
 	BuildHookedMesh();
 	Key.Reset(); Sp = nullptr;
 	FVector L;

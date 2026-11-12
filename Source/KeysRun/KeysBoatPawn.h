@@ -4,6 +4,7 @@
 #include "GameFramework/Pawn.h"
 #include "KeysData.h"
 #include "KeysLife.h"
+#include "KeysSave.h"
 #include "KeysBoatPawn.generated.h"
 
 class UProceduralMeshComponent;
@@ -206,6 +207,31 @@ public:
 	double Sway() const;        // 0..1 how tipsy: a shorter strike window, the view wobbles, no diving past 0.6
 	bool OwnsBoat(const FString& Id) const;   // the five original boats are always yours (Price 0); the new three are bought
 
+	// ---- the last pass (KeysTags.cpp)
+	// tag-and-release (web shared/sim/tagging.ts, game/catch/tags.ts, catch-flow.ts): T on the card tags an untagged rod
+	// catch and lets it go; a fish you hook may be one somebody tagged, at its grown weight, with its history on the card
+	TArray<FKeysTagged> Tags;
+	int32 CurTag = -1;                 // the tagged fish on the card, or -1
+	bool bCardSpeared = false;         // the card is a speared fish (it can't be tagged)
+	FString CardTagHead;
+	TArray<FString> CardTagLines;
+	void TagAndRelease();
+	// the run's biggest fish (catch-flow.ts session.biggest), strung up on the dock when you step ashore
+	struct FRunBest { FString Key; double Weight = 0; int32 Id = -1; bool bReleased = false; FString Boat; };
+	FRunBest RunBest;
+	// the town's services (web shared/sim/services.ts, game/services): the cabaret's doorstep, the motel's night,
+	// the scratch-off, the wash and the lost-and-found socks
+	TMap<FString, int64> Svc;
+	int64 SvcOf(const TCHAR* K) const { const int64* V = Svc.Find(K); return V ? *V : 0; }
+	struct FSvcCard { FString Kind, Title; TArray<FString> Lines; TArray<FString> Cells; int32 Prize = 0; double Age = 0, Life = 9; bool bOn = false; };
+	FSvcCard SvcCard;
+	double SleepT = -1;                // the motel's fade, seconds since it started (-1: none)
+	bool bSleepBlack = false;
+	double SleepAlpha() const;
+	bool SleepCard() const;
+	TArray<FString> WrecksFound;       // wreck ids passed over within 260 m (the chart's memory)
+	void DebugFinal(const FString& Cmd);
+
 private:
 	void Rebuild();
 	void PlaceAtSpawn();
@@ -238,6 +264,14 @@ private:
 	void KeepFish();
 	void ReleaseFish();
 	void FinishCatch();
+	void PickRecapture();
+	void SetCardTag();
+	void ReportTag(bool bKept);
+	bool ServiceRefuse(const FString& Eff, FString& Why) const;
+	bool ServiceResolve(const FString& Eff, FString& Msg);
+	void UpdateFinal(double Dt, double T);
+	bool bForceRecap = false;
+	bool bTankLive = false, bFillCharged = false;
 	void WeighIn();
 	void UpdateFishing(double Dt, double T);
 	void DrawLineAndRod(double T);

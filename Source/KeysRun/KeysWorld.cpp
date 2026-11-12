@@ -547,6 +547,7 @@ void AKeysWorld::ApplySun(double K)
 }
 
 void AKeysWorld::ToggleSunset() { SunsetTarget = SunsetTarget > .5 ? 0 : 1; }
+void AKeysWorld::SnapSunset() { SunsetTarget = 1; SunK = 1; ApplySun(SStep(0, 1, SunK)); }
 
 double AKeysWorld::DuskK() const { return SStep(0, 1, SunK); }
 

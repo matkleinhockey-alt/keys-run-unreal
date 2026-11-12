@@ -27,6 +27,7 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 	void ToggleSunset();
+	void SnapSunset();   // straight to sunset, no glide (the motel's night, behind a black screen)
 	bool IsSunset() const { return SunsetTarget > .5; }
 	// 0 by day, 1 at full sunset: what lights the lighthouse beam, the lamps' halos and the neon (web lightMats)
 	double DuskK() const;

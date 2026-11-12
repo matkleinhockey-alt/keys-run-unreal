@@ -400,8 +400,10 @@ void AKeysHUD::DrawGear(AKeysBoatPawn* P)
 	Row(FString::Printf(TEXT("Line: %s"), *Rung), true);
 	Row(FString::Printf(TEXT("Line holds %d%% of the stock outfit's strain"), FMath::RoundToInt(P->LineBreakNow() / 1.06 * 100)), P->LineBreakNow() > 1.07);
 	Row(P->HasGear(TEXT("reel.lever")) ? TEXT("Retrieve 30% faster (lever-drag reel)") : TEXT("Retrieve: the stock reel"), P->HasGear(TEXT("reel.lever")));
-	const double Air = (P->HasGear(TEXT("dive.tank")) ? 2.2 : 1) * (P->HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (P->HasGear(TEXT("dive.fins")) ? 1.1 : 1);
+	const bool bTank = P->HasGear(TEXT("dive.tank")) && P->CountOf(TEXT("dive.fill")) > 0;
+	const double Air = (bTank ? 2.2 : 1) * (P->HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (P->HasGear(TEXT("dive.fins")) ? 1.1 : 1);
 	Row(FString::Printf(TEXT("Bottom time %d s -> %d s"), 90, FMath::RoundToInt(90 * Air)), Air > 1.01);
+	if (P->HasGear(TEXT("dive.tank"))) Row(FString::Printf(TEXT("Air fills: %d (one per dive past 2 m)"), P->CountOf(TEXT("dive.fill"))), bTank);
 	Row(P->HasGear(TEXT("spear.long")) ? TEXT("Speargun reach 18 m -> 24 m") : TEXT("Speargun reach 18 m"), P->HasGear(TEXT("spear.long")));
 	Row(FString::Printf(TEXT("Pistol magazine %d rounds%s"), P->HasGear(TEXT("handgun.extmag")) ? 18 : 12, P->HasGear(TEXT("handgun.dot")) ? TEXT(", red dot: a 45% tighter group") : TEXT("")), P->HasGear(TEXT("handgun.extmag")) || P->HasGear(TEXT("handgun.dot")));
 	Row(FString::Printf(TEXT("Lots held: %d of 3"), P->Estates.Num()), P->Estates.Num() > 0);

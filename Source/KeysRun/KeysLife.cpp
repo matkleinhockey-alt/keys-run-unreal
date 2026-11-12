@@ -4,6 +4,7 @@
 #include "KeysBoatPawn.h"
 #include "KeysMesh.h"
 #include "KeysWorld.h"
+#include "KeysFinal.h"
 #include "ProceduralMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
@@ -17,7 +18,7 @@ using KeysData::FZoneRow;
 // ---------------------------------------------------------------- species looks (JS VIS / SHAPE tables)
 enum class EKeysKind : uint8 { Fish, Tuna, Shark, Ray, Turtle, Manatee, Dolphin };
 enum class EKeysPat : uint8 { None, Bars, Dots, Gspots, Lbars, Line, Mottle, Spot, Spots, Wbars, Yline, Ystripe };
-enum class EKeysAct : uint8 { None, Tail, Roll, Breathe, Porpoise, Bust, Glide };
+enum class EKeysAct : uint8 { None, Tail, Roll, Breathe, Porpoise, Bust, Glide, Blow };
 enum class EKeysTail : uint8 { Fork, Lunate, Truncate, Round, Lyre, Hetero, Flukes };
 enum class EKeysFin : uint8 { Tri, Sickle, Long, Sail, Spiny, Round, Filament, Trail };
 
@@ -145,6 +146,11 @@ namespace
 	{ FKeysVis& V = Add(TEXT("turtle")); V.Kind = EKeysKind::Turtle; V.Len = 1; V.Back = LHex(0x7b5a34); V.Belly = LHex(0xd8c08a); V.Fin = LHex(0x7b5a34); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 1; V.Speed = 0.7; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 2; V.DMax = 80; V.Act = EKeysAct::Breathe; }
 	{ FKeysVis& V = Add(TEXT("manatee")); V.Kind = EKeysKind::Manatee; V.Len = 3; V.Back = LHex(0x7d8384); V.Belly = LHex(0x9aa0a0); V.Fin = LHex(0x7d8384); V.Finlet = V.Fin; V.Level = 1; V.Speed = 0.35; V.SMin = 1; V.SMax = 2; V.Spread = 4; V.DMin = 1; V.DMax = 6; V.Act = EKeysAct::Breathe; }
 	{ FKeysVis& V = Add(TEXT("dolphin")); V.Kind = EKeysKind::Dolphin; V.Len = 2.4; V.Back = LHex(0x646d78); V.Belly = LHex(0xd9dde2); V.Fin = LHex(0x646d78); V.Finlet = V.Fin; V.Level = 0; V.Speed = 3; V.SMin = 3; V.SMax = 6; V.Spread = 4.5; V.DMin = 3; V.DMax = 100000; V.Act = EKeysAct::Porpoise; }
+	// the whales (web content/creatures.ts): pilot whales round the humps and offshore, the odd humpback; they blow at the surface
+	{ FKeysVis& V = Add(TEXT("pilotwhale")); V.Kind = EKeysKind::Dolphin; V.Len = 6; V.H = 1.05; V.W = .95; V.Back = LHex(0x2a2a2c); V.Belly = LHex(0x3a3a3c); V.Fin = V.Back; V.Finlet = V.Fin; V.Level = 0; V.Speed = 2.4; V.SMin = 5; V.SMax = 14; V.Spread = 6; V.DMin = 12; V.DMax = 100000; V.Act = EKeysAct::Blow; }
+	{ FKeysVis& V = Add(TEXT("humpback")); V.Kind = EKeysKind::Dolphin; V.Len = 15; V.H = 2.6; V.W = 2.1; V.Back = LHex(0x1c2430); V.Belly = LHex(0x8f97a0); V.Fin = V.Back; V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 0; V.Speed = 1.8; V.SMin = 1; V.SMax = 2; V.Spread = 10; V.DMin = 25; V.DMax = 100000; V.Act = EKeysAct::Blow; }
+	// the gold bluefin (entities/fish/legend-path.ts): never caught, placed by the wall clock (AKeysFinal)
+	{ FKeysVis& V = Add(TEXT("goldbluefin")); V.Kind = EKeysKind::Tuna; V.Len = 3.1; V.H = .84; V.W = .66; V.Back = LHex(0x8a6a1c); V.Belly = LHex(0xf6e7a8); V.Fin = LHex(0xb8902c); V.Finlet = LHex(0xffd84a); V.Sickle = .46; V.Pattern = EKeysPat::Spots; V.Level = 0; V.Speed = 3.4; V.SMin = 3; V.SMax = 3; V.Spread = 5; V.DMin = 6; V.DMax = 100000; V.Act = EKeysAct::Bust; }
 		return M;
 	}
 
@@ -201,6 +207,9 @@ namespace
 	{ FKeysShape& S = Add(TEXT("lemonshark")); S.Peak = 0.38; S.Nose = 1; S.Ped = 0.12; S.Tail = EKeysTail::Hetero; S.TL = 0.26; S.TH = 1; S.Pec = 0.5; S.Dor.Add({0.36, 0.47, 0.6, EKeysFin::Sickle}); S.Dor.Add({0.6, 0.7, 0.55, EKeysFin::Sickle}); S.Anal.Add({0.68, 0.74, 0.25, EKeysFin::Tri}); S.bShark = true; }
 	{ FKeysShape& S = Add(TEXT("hammerhead")); S.Peak = 0.38; S.Nose = 1.2; S.Ped = 0.1; S.Tail = EKeysTail::Hetero; S.TL = 0.3; S.TH = 1.1; S.Pec = 0.4; S.Dor.Add({0.3, 0.42, 1.5, EKeysFin::Sickle}); S.Dor.Add({0.72, 0.76, 0.3, EKeysFin::Tri}); S.Anal.Add({0.72, 0.77, 0.3, EKeysFin::Tri}); S.bShark = true; }
 	{ FKeysShape& S = Add(TEXT("dolphin")); S.Peak = 0.38; S.Nose = 0.7; S.Ped = 0.14; S.Tail = EKeysTail::Flukes; S.TL = 0.2; S.TH = 1; S.Pec = 0.2; S.Dor.Add({0.42, 0.55, 0.7, EKeysFin::Sickle}); S.Hump = 0.18; }
+	{ FKeysShape& S = Add(TEXT("pilotwhale")); S.Peak = .3; S.Nose = .5; S.Ped = .16; S.Tail = EKeysTail::Flukes; S.TL = .22; S.TH = 1.1; S.Pec = .16; S.Dor.Add({.28, .4, .4, EKeysFin::Sickle}); S.Hump = .5; }
+	{ FKeysShape& S = Add(TEXT("humpback")); S.Peak = .3; S.Nose = .6; S.Ped = .2; S.Tail = EKeysTail::Flukes; S.TL = .26; S.TH = 1.15; S.Pec = .34; S.Dor.Add({.56, .63, .15, EKeysFin::Round}); S.bWings = true; S.Hump = .18; }
+	{ FKeysShape& S = Add(TEXT("goldbluefin")); S.Peak = .43; S.Nose = .88; S.Ped = .06; S.Tail = EKeysTail::Lunate; S.TL = .23; S.TH = 1.1; S.Pec = .15; S.Dor.Add({.3, .4, .42, EKeysFin::Tri}); S.bFinlets = true; }
 		}
 		const FKeysShape* S = M.Find(K);
 		return S ? *S : M[TEXT("mangrove")];
@@ -237,7 +246,7 @@ namespace
 		Z(TEXT("Bridge"), {{TEXT("tarpon"), 5}, {TEXT("snook"), 2}, {TEXT("mangrove"), 3}, {TEXT("eagleray"), 1}, {TEXT("sheepshead"), 3}, {TEXT("goliath"), 0.6}, {TEXT("jackcrevalle"), 1.5}});
 		Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("eagleray"), 2}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("nurse"), 1.5}, {TEXT("mutton"), 2}, {TEXT("dolphin"), 1}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("graytrigger"), 1.2}});
 		Z(TEXT("Reef"), {{TEXT("yellowtail"), 5}, {TEXT("parrotfish"), 3}, {TEXT("angelfish"), 2}, {TEXT("hogfish"), 2}, {TEXT("grouper"), 2}, {TEXT("gag"), 1.2}, {TEXT("redgrouper"), 1.2}, {TEXT("nurse"), 1}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 1.5}, {TEXT("mutton"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("cero"), 2}, {TEXT("goliath"), 0.4}});
-		Z(TEXT("Offshore"), {{TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}});
+		Z(TEXT("Offshore"), {{TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), .12}, {TEXT("humpback"), .02}});
 		}
 		const TArray<FZoneRow>* R = T.Find(Zone);
 		return R ? *R : T[TEXT("Hawk Channel")];
@@ -285,11 +294,11 @@ namespace
 
 	double LifeActDur(EKeysAct A)
 	{
-		switch (A) { case EKeysAct::Tail: return 2.6; case EKeysAct::Roll: return 1.4; case EKeysAct::Breathe: return 3.5; case EKeysAct::Porpoise: return 1.2; case EKeysAct::Bust: return .7; default: return 1; }
+		switch (A) { case EKeysAct::Tail: return 2.6; case EKeysAct::Roll: return 1.4; case EKeysAct::Breathe: return 3.5; case EKeysAct::Porpoise: return 1.2; case EKeysAct::Bust: return .7; case EKeysAct::Blow: return 4.5; default: return 1; }
 	}
 	double LifeActCooldown(EKeysAct A)
 	{
-		switch (A) { case EKeysAct::Tail: return LRand(3, 9); case EKeysAct::Roll: return LRand(4, 12); case EKeysAct::Breathe: return LRand(8, 20); case EKeysAct::Porpoise: return LRand(1.5, 4); case EKeysAct::Bust: return LRand(2, 8); default: return 5; }
+		switch (A) { case EKeysAct::Tail: return LRand(3, 9); case EKeysAct::Roll: return LRand(4, 12); case EKeysAct::Breathe: return LRand(8, 20); case EKeysAct::Porpoise: return LRand(1.5, 4); case EKeysAct::Bust: return LRand(2, 8); case EKeysAct::Blow: return LRand(24, 65); default: return 5; }
 	}
 
 	// ---------------------------------------------------------------- model templates, in the JS frame (game meters)
@@ -462,7 +471,7 @@ namespace
 		const double L = V.Len, Hh = V.H > 0 ? V.H : L * .17, W = V.W > 0 ? V.W : L * .16, NE = 2.3;
 		const int32 NS = 16, NR = 10;
 		const FLinearColor Fin = V.Fin, Back = V.Back;
-		const bool bDolphin = V.Key == TEXT("dolphin");
+		const bool bDolphin = V.Key == TEXT("dolphin"), bCet = V.Kind == EKeysKind::Dolphin;
 		auto Prof = [&S](double t) { return t < S.Peak ? FMath::Pow(FMath::Sin(PI / 2 * t / S.Peak), S.Nose) : LLerp(1, S.Ped, FMath::Pow((t - S.Peak) / (1 - S.Peak), 1.25)); };
 		auto HumpF = [&S](double t) { return 1 + S.Hump * FMath::Max(0.0, 1 - t / .35); };
 		auto TopY = [&](double t) { return Hh / 2 * Prof(t) * HumpF(t); };
@@ -567,7 +576,7 @@ namespace
 		{
 			const FLifeR3 R1 = FLifeR3::RZ(Sx * (S.bShark ? -.35 : -.15)) * FLifeR3::RY(FMath::Atan2(-.88, Sx * .48));
 			PFin(Pl, Pl * (S.bWings ? .55 : .38), R1, FVector(Sx * W / 2 * Prof(TP) * .82, -Hh * .12, -L / 2 + TP * L), S.bShark ? Back : Fin);
-			if (!S.bShark && !bDolphin)
+			if (!S.bShark && !bCet)
 				PFin(Pl * .55, Pl * .25, FLifeR3::RY(FMath::Atan2(-.95, Sx * .3)), FVector(Sx * W * .12, BotY(.36) + .01, -L / 2 + .36 * L), Fin);
 		}
 
@@ -575,8 +584,8 @@ namespace
 		const double Te = .09, Ke = Prof(Te), Ex = W / 2 * Ke * .86, Ey = Hh * .1 * Ke + Hh * .04, Ez = -L / 2 + Te * L, Er = FMath::Max(.008, FMath::Min(Hh, W) * .085);
 		for (int32 Sx = -1; Sx <= 1; Sx += 2)
 		{
-			M.Octa(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), (S.bShark || bDolphin) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
-			if (!S.bShark && !bDolphin) M.Octa(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), LHex(0x0a0a0c));
+			M.Octa(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
+			if (!S.bShark && !bCet) M.Octa(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), LHex(0x0a0a0c));
 		}
 		if (V.Bill > 0) M.Tube(FVector(0, Hh * .02, -L / 2 + .04), FVector(0, Hh * .02, -L / 2 - L * V.Bill + .04), .03, 0, 6, Back);
 		if (bDolphin) M.Tube(FVector(0, -Hh * .12, -L / 2 + L * .01), FVector(0, -Hh * .12, -L / 2 - L * .11), .045, 0, 8, Back);
@@ -1543,6 +1552,8 @@ void AKeysLife::TrySpawn(double RMin)
 		Z = BoatZ + FMath::Sin(A) * R;
 		if (X < WBX0 || X > WBX1 || Z < WBZ0 || Z > WBZ1) return;
 		Type = LifeWeighted(LifeZoneLife(ZoneAt(X, Z)));
+		// the web game's Humps life table: pilot whales hang round the offshore humps
+		if (const FHump* Hm = NearHump(X, Z); Hm && !Hm->bPatch && FMath::FRand() < .09) Type = TEXT("pilotwhale");
 	}
 	SpawnGroupAt(Type, X, Z);
 }
@@ -1726,7 +1737,8 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			const double Mx = G.CX + Rx * Ox + Fx * Oz, Mz = G.CZ + Rz * Ox + Fz * Oz;
 			const double Surf = WaveH(Mx, Mz, T, Amp, false);
 			double Y;
-			if (V->Level == 0) Y = Surf - .5 - (M.OY + 1) * .15;
+			if (V->Act == EKeysAct::Blow) Y = Surf - 3.4 - (M.OY + 1) * .6;   // whales cruise at a real depth and come up to blow
+			else if (V->Level == 0) Y = Surf - .5 - (M.OY + 1) * .15;
 			else if (V->Level == 2) Y = Floor + .25 + (M.OY + 1) * .05;
 			else Y = LClamp(LLerp(Floor + .35, Surf - .45, .55 + M.OY * .2), Floor + .2, Surf - .35);
 			if (G.Dv > 0 && V->Level != 2) Y = LLerp(Y, FMath::Max(Floor + .5, Surf - FMath::Min(14.0, (Surf - Floor) * .85)), G.Dv);
@@ -1750,6 +1762,12 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 					case EKeysAct::Bust: Y = Surf - .5 + K * .75; Pitch = FMath::Cos(P * PI) * .6; if (P > .4 && !M.bSpl) { M.bSpl = true; Splash(Mx, Mz, 9, .8); } break;
 					case EKeysAct::Breathe: Y = LLerp(Y, Surf - .1, K); Pitch = .22 * K; break;
 					case EKeysAct::Porpoise: Y = Surf - .6 + K * 1.35; Pitch = FMath::Cos(P * PI) * .8; if (P > .85 && !M.bSpl) { M.bSpl = true; Splash(Mx, Mz, 6, .6); } break;
+					case EKeysAct::Blow:
+						// school.ts: a nose-up rise with the blow near the peak, then the flukes break the surface as it sounds
+						Y = LLerp(Y, Surf - .25 + .35, K); Pitch = FMath::Cos(P * PI) * .5;
+						if (P > .35 && P < .6 && !M.bSpl) { M.bSpl = true; if (AKeysFinal* Fn = AKeysFinal::Get(this)) Fn->Spout(Mx, Surf, Mz); }
+						if (P > .82 && M.AP - Dt / LifeActDur(A) <= .82) Splash(Mx, Mz, 9, .7);
+						break;
 					default: break;
 					}
 					if (M.AP >= 1) { M.Act = 0; M.ActT = LifeActCooldown(V->Act); }

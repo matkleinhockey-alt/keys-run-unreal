@@ -865,7 +865,8 @@ namespace KeysTown
 				{{TEXT("mask-wide"), TEXT("Wide-view mask"), TEXT("A little more peripheral vision down there."), 250, TEXT("dive.mask")},
 				 {TEXT("fins-long"), TEXT("Long-blade freediving fins"), TEXT("Faster swim, and less air burned per metre."), 600, TEXT("dive.fins")},
 				 {TEXT("wetsuit"), TEXT("3 mm shorty wetsuit"), TEXT("Warmth is air. Shivering burns it faster than swimming does."), 750, TEXT("dive.wetsuit")},
-				 {TEXT("tank-pony"), TEXT("Slung pony bottle and reg"), TEXT("The big one: more than twice as long on the bottom."), 4500, TEXT("dive.tank")}}});
+				 {TEXT("tank-pony"), TEXT("Slung pony bottle and reg"), TEXT("The big one: more than twice as long on the bottom."), 4500, TEXT("dive.tank")},
+				 {TEXT("fill"), TEXT("Air fill"), TEXT("Tops the bottle back up. Steve will do it while you wait."), 12, TEXT("dive.fill")}}});
 			A.Add({TEXT("liquor"), TEXT("Cheap Beer & Lotto"), TEXT("Wine - Spirits - Scratch-offs"),
 				{TEXT("ID. Yes, you. Fine, go on."), TEXT("Scratch-offs are by the register. Hope is extra.")},
 				{{TEXT("sixer"), TEXT("Six-pack for the cooler"), TEXT("The deck party notices."), 9, TEXT("liquor.sixer")},
@@ -900,7 +901,8 @@ namespace KeysTown
 				{{TEXT("night"), TEXT("One night, room 7"), TEXT("Skips to sunset."), 79, TEXT("motel.night")}}});
 			A.Add({TEXT("convenience"), TEXT("Stop-N-Go"), TEXT("Gas - Snacks - Live bait (maybe)"),
 				{TEXT("Pump three's out. Pumps one, two and four are also out.")},
-				{{TEXT("snacks"), TEXT("Chips and a soda"), TEXT("Morale."), 4, TEXT("conv.snacks")}}});
+				{{TEXT("fuel"), TEXT("Jerry can of fuel"), TEXT("For the boat. Allegedly."), 30, TEXT("boat.fuel")},
+				 {TEXT("snacks"), TEXT("Chips and a soda"), TEXT("Morale."), 4, TEXT("conv.snacks")}}});
 		}
 		for (const FVenue& V : A) if (Id == V.Id) return &V;
 		return nullptr;

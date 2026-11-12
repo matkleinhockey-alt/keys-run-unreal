@@ -1,4 +1,7 @@
 #include "KeysHUD.h"
+#include "KeysFinal.h"
+#include "KeysWrecks.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "KeysDiver.h"
 #include "KeysBoatPawn.h"
 #include "KeysEvents.h"
@@ -222,6 +225,7 @@ void AKeysHUD::DrawHUD()
 	if (P->bBoardOpen) DrawBoard(P);
 	if (P->bLoginOpen) DrawLogin(P);
 	DrawPanels(P);
+	DrawServices(P);
 	Contacts.Reset();
 }
 
@@ -546,11 +550,15 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 				const FVector2D Fw(-FMath::Sin(K.Ang), -FMath::Cos(K.Ang));
 				const double HL = FMath::Max(K.Len * .5, 40.0);
 				const FVector2D A0 = ChartXY(K.X - Fw.X * HL, K.Z - Fw.Y * HL, X, Y, Size), A1 = ChartXY(K.X + Fw.X * HL, K.Z + Fw.Y * HL, X, Y, Size);
-				const FLinearColor WC(.12f, .1f, .18f);
-				DrawLine(A0.X, A0.Y, A1.X, A1.Y, WC, 2.f * U);
+				// found ones (passed over within 260 m, entities/life/wreck-chart.ts) are inked in red with their name
+				const KeysWrecks::FWreck* Wk = KeysWrecks::Near(K.X, K.Z, 1);
+				const bool bFound = Wk && P->WrecksFound.Contains(Wk->Id);
+				const FLinearColor WC = bFound ? FLinearColor(.75f, .08f, .1f) : FLinearColor(.12f, .1f, .18f);
+				if (bFound) DrawRect(FLinearColor(1.f, .95f, .8f, .7f), A.X - 6 * U, A.Y - 6 * U, 12 * U, 12 * U);
+				DrawLine(A0.X, A0.Y, A1.X, A1.Y, WC, (bFound ? 3.f : 2.f) * U);
 				DrawLine(A.X - 4 * U, A.Y - 4 * U, A.X + 4 * U, A.Y + 4 * U, WC, 1.5f * U);
 				DrawLine(A.X - 4 * U, A.Y + 4 * U, A.X + 4 * U, A.Y - 4 * U, WC, 1.5f * U);
-				if (P->bBigMap) Text(TEXT("WK"), A.X + 6 * U, A.Y - 8 * U, .55f, FLinearColor(.1f, .1f, .1f));
+				if (P->bBigMap) Text(bFound && Wk ? FString(Wk->Name) : FString(TEXT("WK")), A.X + 7 * U, A.Y - 8 * U, .55f, bFound ? FLinearColor(.45f, .03f, .05f) : FLinearColor(.1f, .1f, .1f));
 			}
 			else
 			{
@@ -867,8 +875,18 @@ void AKeysHUD::DrawDiving(AKeysBoatPawn* P, AKeysDiver* D)
 
 void AKeysHUD::DrawCard(AKeysBoatPawn* P)
 {
-	const float W = 560 * U, X = Canvas->SizeX - W - 40 * U, Y = Canvas->SizeY * .24f;
-	Panel(X, Y, W, 400 * U, .7f);
+	const bool bTag = !P->CardTagHead.IsEmpty();
+	const float W = 560 * U, PH = (bTag ? 400 + 34 + 26 * P->CardTagLines.Num() : 400) * U, X = Canvas->SizeX - W - 40 * U, Y = Canvas->SizeY * .24f;
+	// a speared catch: the underwater portrait beside the card (game/catch/underwater-trophy.ts)
+	if (const AKeysFinal* Fn = AKeysFinal::Get(this))
+		if (UTextureRenderTarget2D* RT = Fn->Portrait())
+		{
+			const float IW = 480 * U, IH = 360 * U, IX = X - IW - 18 * U, IY = Y;
+			DrawRect(FLinearColor(0, 0, 0, .7f), IX - 4 * U, IY - 4 * U, IW + 8 * U, IH + 8 * U);
+			DrawTexture(RT, IX, IY, IW, IH, 0, 0, 1, 1, FLinearColor::White, BLEND_Opaque);
+			Text(TEXT("Speared - and held up for the camera, five metres down"), IX + 10 * U, IY + IH - 26 * U, .7f, FLinearColor(.85f, .95f, .97f));
+		}
+	Panel(X, Y, W, PH, .7f);
 	float Yy = Y + 16 * U;
 	Text(P->CardName, X + 24 * U, Yy, 1.6f, Gold, GEngine->GetLargeFont());
 	Yy += 56 * U;
@@ -879,9 +897,21 @@ void AKeysHUD::DrawCard(AKeysBoatPawn* P)
 	Text(P->CardZone, X + 24 * U, Yy, .8f, Dim);
 	Yy += 30 * U;
 	if (!P->CardBonus.IsEmpty()) { Text(P->CardBonus, X + 24 * U, Yy, .95f, Gold); Yy += 30 * U; }
+	if (bTag)
+	{
+		// the recaptured fish's history (game/catch/tags.ts describeTag)
+		DrawRect(FLinearColor(.95f, .76f, .31f, .16f), X + 16 * U, Yy - 4 * U, W - 32 * U, (30 + 26 * P->CardTagLines.Num()) * U);
+		Text(P->CardTagHead, X + 24 * U, Yy, .9f, Gold);
+		Yy += 30 * U;
+		for (const FString& L : P->CardTagLines) { Text(TEXT("- ") + L, X + 30 * U, Yy, .78f, FLinearColor::White); Yy += 26 * U; }
+		Yy += 10 * U;
+	}
 	Yy += Wrapped(P->CardFact, X + 24 * U, Yy, W - 48 * U, .85f) + 10 * U;
 	Yy += Wrapped(P->CardNote, X + 24 * U, Yy, W - 48 * U, .8f, P->bCanKeep ? Dim : Red) + 10 * U;
-	Text(P->bCanKeep ? TEXT("K  keep it on ice      Space  release (+25%)") : TEXT("Space  release (+25%)"), X + 24 * U, Y + 400 * U - 40 * U, .95f, FLinearColor::White);
+	const FString Rel = bTag ? TEXT("Space  release & report tag (+60%)") : TEXT("Space  release (+25%)");
+	const FString TagK = bTag || P->bCardSpeared ? FString() : FString(TEXT("      T  tag & release (+40%)"));
+	Text(P->bCanKeep ? TEXT("K  keep it on ice      ") + Rel : Rel, X + 24 * U, Y + PH - (TagK.IsEmpty() ? 40 : 66) * U, .95f, FLinearColor::White);
+	if (!TagK.IsEmpty()) Text(TagK.TrimStart(), X + 24 * U, Y + PH - 40 * U, .95f, FLinearColor(.55f, 1.f, .75f));
 }
 
 // ================================================================ electronics: chartplotter and fish finder (JS ELEC)

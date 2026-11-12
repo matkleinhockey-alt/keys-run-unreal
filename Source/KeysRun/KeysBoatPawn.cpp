@@ -16,6 +16,7 @@
 #include "KeysEstates.h"
 #include "KeysTourneyShow.h"
 #include "KeysSlots.h"
+#include "KeysFinal.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -131,6 +132,9 @@ void AKeysBoatPawn::BeginPlay()
 		TreasureOpened = Save->TreasureOpened;
 		EstateBuilds = Save->EstateBuilds;
 		Spins = Save->Spins;
+		Tags = Save->Tags;
+		Svc = Save->Services;
+		WrecksFound = Save->WrecksFound;
 		// every boat in the Keys has a pistol in the console: the starter kit is two magazines' worth and three shafts (sim/shop.ts)
 		if (!Save->bStarterKit) { Counts.FindOrAdd(TEXT("handgun.ammo")) += 24; Counts.FindOrAdd(TEXT("spear.shafts")) += 3; Save->bStarterKit = true; }
 	}
@@ -736,10 +740,13 @@ void AKeysBoatPawn::RunTestScript(double T)
 			{
 				Weight = FMath::RoundToDouble((Sp->Min + (Sp->Max - Sp->Min) * .2) * 10) / 10;
 				FX = X + FMath::Cos(H) * 8; FZ = Z - FMath::Sin(H) * 8;
+				Bob = FVector(FX, 0, FZ);
+				PickRecapture();
 				BuildHookedMesh();
 				Land();
 			}
 		}
+		else if (Cmd.StartsWith(TEXT("fin:"))) DebugFinal(Cmd.Mid(4));
 		else if (Cmd == TEXT("quit")) { if (APlayerController* PC = Cast<APlayerController>(GetController())) PC->ConsoleCommand(TEXT("quit")); }
 		else MenuActivate(FName(*Cmd));
 	}
@@ -767,7 +774,11 @@ void AKeysBoatPawn::ToggleDive()
 		bTrimMode = false;
 		D->SetDefaultChase(bDiveChase);
 		D->UnderwaterHaze = UnderwaterHaze;
-		D->AirMul = (HasGear(TEXT("dive.tank")) ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1) * (BuffOn(TEXT("diner.mahi")) ? 1.05 : 1);
+		// sim/dive-gear.ts: the pony bottle is live only with an air fill in hand, and one fill is spent per dive at 2 m
+		bTankLive = HasGear(TEXT("dive.tank")) && CountOf(TEXT("dive.fill")) > 0;
+		bFillCharged = false;
+		if (HasGear(TEXT("dive.tank")) && !bTankLive) ShowToast(TEXT("The pony bottle is empty - an air fill at Scuba Steve's makes it live again."), 4);
+		D->AirMul = (bTankLive ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1) * (BuffOn(TEXT("diner.mahi")) ? 1.05 : 1);
 		D->EnterWater(X, Z, H);
 		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to climb back aboard."), 6);
 	}
@@ -830,9 +841,12 @@ void AKeysBoatPawn::LandSpeared(const FString& InKey, double InWeight, double In
 	Zone = ZoneAt(FX, FZ);
 	Spot = FKeysFishSpot();
 	Spot.Zone = Zone;
+	CurTag = -1;
 	BuildHookedMesh();
 	Land();
 	CardBonus = CardBonus.IsEmpty() ? FString(TEXT("Speared underwater")) : TEXT("Speared underwater - ") + CardBonus;
+	bCardSpeared = true;
+	if (bCanKeep) CardNote = TEXT("Release it for a 25% conservation bonus, or keep it and weigh in at a marina dock. (A speared fish can't be tagged.)");
 	ShowFishMesh(true);
 }
 
@@ -860,11 +874,14 @@ void AKeysBoatPawn::ToggleAshore()
 		ApplyOutfit();
 		Thr = Speed = 0;
 		ShowToast(FString::Printf(TEXT("Tied up at %s. WASD and the mouse to walk, Shift to run, F at a counter or a door, 1 for the view, Q back aboard."), *Why), 6);
+		// the run's trophy goes up on the dock; at your own estate the fish already hangs there (dock-celebration.ts)
+		if (AKeysFinal* Fn = AKeysFinal::Get(this); Fn && !Why.Contains(TEXT("your dock")))
+			Fn->OnAshore(RunBest.Key, RunBest.Weight, RunBest.Id, RunBest.bReleased, RunBest.Boat, W->Pos().X, W->Pos().Z, X, Z);
 		return;
 	}
 	switch (W->RequestBoard())
 	{
-		case AKeysWalker::EBoard::Boarded: SyncChaseCam(); bCamInit = false; ShowToast(TEXT("Back aboard. Cast off!")); break;
+		case AKeysWalker::EBoard::Boarded: if (AKeysFinal* Fn = AKeysFinal::Get(this)) Fn->OnLeaveShore(); SyncChaseCam(); bCamInit = false; ShowToast(TEXT("Back aboard. Cast off!")); break;
 		case AKeysWalker::EBoard::Far: ShowToast(FString::Printf(TEXT("The boat is %d m %s of you. Press Q again for a cab back to the dock."), FMath::RoundToInt(W->BoardDistance()), *W->BoatBearing()), 4); break;
 		case AKeysWalker::EBoard::Cab: ShowToast(TEXT("The cab drops you back on the dock. The driver says your boat's still there.")); break;
 	}
@@ -962,7 +979,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	if (!V || !V->Sells.IsValidIndex(Index)) return;
 	const KeysTown::FShelfItem& It = V->Sells[Index];
 	const FString Eff = It.Effect;
-	const bool bGear = Eff.StartsWith(TEXT("rod.")) || Eff.StartsWith(TEXT("reel.")) || Eff.StartsWith(TEXT("dive.")) || Eff.StartsWith(TEXT("spear.long")) || Eff.StartsWith(TEXT("spear.reel"))
+	const bool bGear = Eff.StartsWith(TEXT("rod.")) || Eff.StartsWith(TEXT("reel.")) || (Eff.StartsWith(TEXT("dive.")) && Eff != TEXT("dive.fill")) || Eff.StartsWith(TEXT("spear.long")) || Eff.StartsWith(TEXT("spear.reel"))
 		|| Eff.StartsWith(TEXT("cosmetic.")) || Eff == TEXT("handgun.extmag") || Eff == TEXT("handgun.dot") || Eff.StartsWith(TEXT("tackle."));
 	if (Eff.StartsWith(TEXT("cosmetic.")) && Owned.Contains(Eff))
 	{
@@ -977,6 +994,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	if (Eff == TEXT("casino.slot")) { ShopClose(); if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(true); return; }   // the machines settle on their own screen (game/casino)
 	if (bGear && Owned.Contains(Eff)) { ShowToast(FString::Printf(TEXT("You already own the %s."), It.Name)); return; }
 	if (Eff.StartsWith(TEXT("tackle.")) && Eff == TEXT("tackle.braid80") && Owned.Contains(TEXT("tackle.braid130"))) { ShowToast(TEXT("You already fish 130 lb. The 80 lb rig would be a step down.")); return; }
+	{ FString Why; if (ServiceRefuse(Eff, Why)) { ShowToast(Why, 7); return; } }   // refused before charging (sim/services.ts canBuy)
 	if (Cash < It.Price) { ShowToast(FString::Printf(TEXT("%s is $%s and you have $%s. Sell fillets at a weigh-in (E at a marina dock)."), It.Name, *Commas(It.Price), *Commas(Cash)), 4); return; }
 	Cash -= It.Price;
 	const double T = GetWorld()->GetTimeSeconds();
@@ -994,13 +1012,11 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	else if (Eff == TEXT("handgun.ammo")) { AddCount(*Eff, 50); Msg += FString::Printf(TEXT(" %d rounds for the console pistol (9)."), CountOf(*Eff)); }
 	else if (Eff == TEXT("safety.flare")) { AddCount(*Eff, 3); Msg += FString::Printf(TEXT(" %d flares: Z with the pistol out."), CountOf(*Eff)); }
 	else if (Eff == TEXT("spear.shafts")) { AddCount(*Eff, 3); }
+	else if (Eff == TEXT("dive.fill")) { AddCount(*Eff, 1); Msg += FString::Printf(TEXT(" %d fill%s: the pony bottle is live for that many dives."), CountOf(*Eff), CountOf(*Eff) == 1 ? TEXT("") : TEXT("s")); }
+	else if (Eff == TEXT("dive.tank")) { AddCount(TEXT("dive.fill"), 1); Msg += TEXT(" Steve throws in the first fill. Each dive past 2 m spends one."); }
 	else if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
 	else if (Eff == TEXT("bait.ballyhoo")) { BaitCasts += 6; Msg += TEXT(" Quicker bites on your next 6 casts."); }
-	else if (Eff == TEXT("motel.night"))
-	{
-		if (AKeysWorld* Wd = World()) Wd->ToggleSunset();
-		Msg = TEXT("You sleep it off in room 7. The light has changed when you come out.");
-	}
+	else if (ServiceResolve(Eff, Msg)) {}   // the motel, the cabaret, the scratch-off, the wash, the socks (KeysTags.cpp)
 	else if (Eff == TEXT("casino.slot"))
 	{
 		// three reels of fish: two of a kind pays 2x, three pays 10x (sim/slots.ts, simplified)
@@ -1009,12 +1025,6 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 		const int32 Payout = (A == B && B == C) ? It.Price * 10 : (A == B || B == C || A == C) ? It.Price * 2 : 0;
 		Cash += Payout;
 		Msg = FString::Printf(TEXT("%s | %s | %s  -  %s  ($%s)"), Reel[A], Reel[B], Reel[C], Payout ? *FString::Printf(TEXT("you win $%d!"), Payout) : TEXT("nothing"), *Commas(Cash));
-	}
-	else if (Eff == TEXT("liquor.scratch"))
-	{
-		const int32 Payout = FMath::FRand() < .02 ? 500 : FMath::FRand() < .15 ? 10 : 0;
-		Cash += Payout;
-		Msg = Payout ? FString::Printf(TEXT("Scratch-off: $%d winner!"), Payout) : TEXT("Scratch-off: not a winner. The clerk saw that coming.");
 	}
 	else if (Eff.StartsWith(TEXT("cosmetic."))) { Wearing.Add(Eff.Mid(9).Left(Eff.Mid(9).Find(TEXT("."))), Eff); ApplyOutfit(); Msg += Eff.StartsWith(TEXT("cosmetic.flag.")) ? TEXT(" It flies from your stern.") : TEXT(" You're wearing it."); }
 	SaveEconomy();
@@ -1116,6 +1126,9 @@ void AKeysBoatPawn::SaveEconomy()
 	Save->TreasureOpened = TreasureOpened;
 	Save->EstateBuilds = EstateBuilds;
 	Save->Spins = Spins;
+	Save->Tags = Tags;
+	Save->Services = Svc;
+	Save->WrecksFound = WrecksFound;
 	Save->Write();
 }
 
@@ -1345,7 +1358,8 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::R) && (FState == EKeysFish::Waiting || FState == EKeysFish::Casting || FState == EKeysFish::Nibble)) ReelIn(TEXT("Line reeled in."));
 	else if (Hit(EKeys::R) && FState == EKeysFish::Idle && !bCharging)
 		if (AKeysEvents* Ev = AKeysEvents::Get(this)) { StopTroll(true); Ev->ToggleRace(); }   // the Marathon race (web game/race)
-	if (Hit(EKeys::T))
+	if (Hit(EKeys::T) && FState == EKeysFish::Caught) { if (T - CaughtT > .7) TagAndRelease(); }
+	else if (Hit(EKeys::T))
 	{
 		if (FState == EKeysFish::Fight)
 		{
@@ -1839,6 +1853,7 @@ void AKeysBoatPawn::CastLine(double Power)
 
 void AKeysBoatPawn::ReelIn(const FString& Msg)
 {
+	CurTag = -1;
 	ShowFishMesh(false);
 	FState = EKeysFish::Idle;
 	Key.Reset();
@@ -1892,6 +1907,7 @@ void AKeysBoatPawn::ChooseFish()
 	FZ = Bob.Z + FMath::Sin(A) * 11;
 	OFX = FMath::Cos(A) * 1.3;
 	OFZ = FMath::Sin(A) * 1.3;
+	PickRecapture();   // a tagged fish in range may be this one, at its own grown weight (fishing/update.ts)
 	BuildHookedMesh();
 }
 
@@ -2030,8 +2046,11 @@ void AKeysBoatPawn::Land()
 	const FString CR = ReleaseOnlyReason(Key);
 	bCanKeep = CR.IsEmpty() && Weight <= Left;
 	CardNote = !CR.IsEmpty() ? CR : Weight > Left ? FString::Printf(TEXT("Too big for your cooler - %d lb of space left. Weigh in at a marina to empty it."), FMath::Max(0, FMath::RoundToInt32(Left)))
-		: FString(TEXT("Release for a 25% conservation bonus, or keep it and weigh in at a marina dock."));
+		: FString(TEXT("Release for a 25% conservation bonus, tag it for 40%, or keep it and weigh in at a marina dock."));
 	CaughtT = GetWorld()->GetTimeSeconds();
+	bCardSpeared = false;
+	SetCardTag();
+	if (Weight > RunBest.Weight) RunBest = {Key, Weight, Count, false, Spec().Brand + TEXT(" ") + Spec().Name};
 
 	// hold it up over the gunwale for the photo
 	const double Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
@@ -2048,15 +2067,19 @@ void AKeysBoatPawn::KeepFish()
 	Cooler.Add({Sp->Name, Weight, int32(LastPts), Key});
 	if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->OnKeep(Key, Weight);   // a tournament counts what you bring in
 	ShowToast(FString::Printf(TEXT("%s is on ice. %d fish in the cooler."), *Sp->Name, Cooler.Num()));
+	if (CurTag >= 0) ReportTag(true);
 	FinishCatch();
 }
 
 void AKeysBoatPawn::ReleaseFish()
 {
 	if (FState != EKeysFish::Caught) return;
-	const int32 Bonus = FMath::RoundToInt(LastPts * .25);
+	const bool bTagged = CurTag >= 0;
+	const int32 Bonus = FMath::RoundToInt(LastPts * (bTagged ? .6 : .25));
 	Score += Bonus;
-	ShowToast(FString::Printf(TEXT("Released! +%d conservation bonus."), Bonus));
+	if (RunBest.Id == Count) RunBest.bReleased = true;
+	if (bTagged) { const FString Code = Tags[CurTag].Code; ReportTag(false); ShowToast(FString::Printf(TEXT("Released %s again! +%d tag-report bonus. Recapture logged - %d landings on record."), *Code, Bonus, Tags.IsValidIndex(CurTag) ? Tags[CurTag].Events.Num() : 0), 5); }
+	else ShowToast(FString::Printf(TEXT("Released! +%d conservation bonus."), Bonus));
 	if (Save) Save->RecordScore(Score);
 	if (AKeysOnline* O = AKeysOnline::Get(this)) O->ReportScore(Score);
 	FinishCatch();
@@ -2064,6 +2087,10 @@ void AKeysBoatPawn::ReleaseFish()
 
 void AKeysBoatPawn::FinishCatch()
 {
+	CurTag = -1;
+	CardTagHead.Reset();
+	CardTagLines.Reset();
+	bCardSpeared = false;
 	ShowFishMesh(false);
 	FState = EKeysFish::Idle;
 	Key.Reset();
@@ -2443,7 +2470,7 @@ FString AKeysBoatPawn::Hint() const
 	const FMarina* Mar = NearMarina(X, Z);
 	if (FState == EKeysFish::Idle && !bCharging && Mar && Kn < 5)
 		return Cooler.Num() ? FString::Printf(TEXT("Press E to weigh in your cooler at %s"), *Mar->Name) : FString::Printf(TEXT("Tied up at %s - nothing on ice yet"), *Mar->Name);
-	if (FState == EKeysFish::Caught) return TEXT("K keeps it in the cooler - Space releases it");
+	if (FState == EKeysFish::Caught) return bCardSpeared || CurTag >= 0 ? TEXT("K keeps it in the cooler - Space releases it") : TEXT("K keeps it in the cooler - Space releases it - T tags it and lets it go");
 	if (bTrimMode && FState == EKeysFish::Idle && !bCharging) return TEXT("Trim mode: Up trims up, Down trims down - W/S throttle - T to exit");
 	if (bCharging) return TEXT("Release to cast - hold longer to throw farther");
 	if (bTrolling && FState == EKeysFish::Idle)
@@ -2495,6 +2522,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	if (IsAshore()) { X = PinX; Z = PinZ; H = PinH; Speed = 0; }
 	if (bRunning) UpdateFishing(Dt, T);
 	if (bRunning) UpdateBuffs(T);
+	UpdateFinal(Dt, T);
 	UpdateTroll(Dt, T);
 	if (AKeysAudio* A = AKeysAudio::Get(this))
 	{

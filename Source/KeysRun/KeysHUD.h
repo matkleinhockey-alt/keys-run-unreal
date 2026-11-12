@@ -60,6 +60,8 @@ private:
 	void DrawMore(AKeysBoatPawn* P);
 	// true when one of the new full-screen panels is up (it owns the screen and the HUD skips the rest)
 	bool DrawPanels(AKeysBoatPawn* P);
+	// the last pass (KeysHUD3.cpp): the town's service cards (the cabaret's doorstep, the scratch-off) and the motel's fade
+	void DrawServices(AKeysBoatPawn* P);
 
 	void Panel(float X, float Y, float W, float H, float Alpha = .5f);
 	float Text(const FString& S, float X, float Y, float Scale, const FLinearColor& C = FLinearColor::White, UFont* Font = nullptr, bool bCenter = false);
