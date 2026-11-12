@@ -385,6 +385,44 @@ void AKeysBoatPawn::UpdateFinal(double Dt, double T)
 	}
 }
 
+// ================================================================ fishing from the planks (game/fishing/shore.ts)
+bool AKeysBoatPawn::ShoreFishable() const
+{
+	const AKeysWalker* W = AKeysWalker::Get(this);
+	if (!W || !W->IsAshore() || W->bShopOpen) return false;
+	const FVector P = W->Pos();
+	double G;
+	if (!KeysTown::GroundAt(P.X, P.Z, G, false) || KeysTown::InsideLot(P.X, P.Z)) return false;   // planks, not the street
+	// open water within a few metres, on the side you face
+	const double Fx = -FMath::Sin(W->BodyYaw()), Fz = -FMath::Cos(W->BodyYaw());
+	for (int32 k = -2; k <= 2; k++)
+	{
+		const double A = k * .45, C = FMath::Cos(A), S = FMath::Sin(A);
+		const double DX = Fx * C - Fz * S, DZ = Fx * S + Fz * C;
+		for (double R : {2.5, 4.5, 7.0})
+			if (DepthAt(P.X + DX * R, P.Z + DZ * R) > .5 && !KeysTown::GroundAt(P.X + DX * R, P.Z + DZ * R, G, false)) return true;
+	}
+	return false;
+}
+
+bool AKeysBoatPawn::BeginShoreSwap()
+{
+	if (bShoreSwap || !IsAshore() || !(bCharging || FState != EKeysFish::Idle)) return false;
+	const AKeysWalker* W = AKeysWalker::Get(this);
+	if (!W) return false;
+	SwX = X; SwZ = Z; SwH = H; SwY = Y;
+	X = W->Pos().X; Z = W->Pos().Z; H = W->BodyYaw(); Y = W->Pos().Y;
+	bShoreSwap = true;
+	return true;
+}
+
+void AKeysBoatPawn::EndShoreSwap()
+{
+	if (!bShoreSwap) return;
+	X = SwX; Z = SwZ; H = SwH; Y = SwY;
+	bShoreSwap = false;
+}
+
 // ================================================================ test hooks: fin:<cmd>
 void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 {
@@ -455,5 +493,11 @@ void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 		if (L.IsValidIndex(N)) UE_LOG(LogTemp, Log, TEXT("KRScript lot %d of %d: %s"), N, L.Num(), KeysPlat::Parcels[L[N]].Id);
 	}
 	else if (C == TEXT("wrecksreset")) WrecksFound.Reset();
+	else if (C == TEXT("shorecast"))
+	{
+		// shorecast=0.6: cast from where the walker stands, with that much power
+		if (ShoreFishable()) { bFpOn = false; StartCharge(); bCharging = false; BeginShoreSwap(); bCharging = true; CastLine(FCString::Atod(*A)); bCharging = false; EndShoreSwap(); }
+		else UE_LOG(LogTemp, Warning, TEXT("KRScript shorecast: nowhere to fish from here"));
+	}
 	else if (C == TEXT("fills")) AddCount(TEXT("dive.fill"), FCString::Atoi(*A));
 }

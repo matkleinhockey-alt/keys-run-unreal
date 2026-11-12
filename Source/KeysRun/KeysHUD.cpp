@@ -1314,7 +1314,8 @@ void AKeysHUD::DrawAshore(AKeysBoatPawn* P, AKeysWalker* W)
 	}
 	if (!W->bShopOpen)
 	{
-		Text(TEXT("WASD + mouse walk - Shift run - F use - 1 view - M chart - Q back aboard"), SW * .5f, SH - 44 * U, .95f, Dim, nullptr, true);
+		if (P->IsFishingActive() || P->FState == EKeysFish::Caught) { DrawFishing(P); return; }
+		Text(P->bShoreCanFish ? TEXT("WASD + mouse walk - Space cast from here - F use - 1 view - M chart - Q back aboard") : TEXT("WASD + mouse walk - Shift run - F use - 1 view - M chart - Q back aboard"), SW * .5f, SH - 44 * U, .95f, Dim, nullptr, true);
 		return;
 	}
 	// the counter: name, greeting, the shelf, what you can afford

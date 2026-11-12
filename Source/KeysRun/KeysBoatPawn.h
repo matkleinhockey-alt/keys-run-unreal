@@ -231,6 +231,10 @@ public:
 	bool SleepCard() const;
 	TArray<FString> WrecksFound;       // wreck ids passed over within 260 m (the chart's memory)
 	void DebugFinal(const FString& Cmd);
+	// fishing from a pier, a dock or a marina's planks (web game/fishing/shore.ts): the rod's state machine runs with the
+	// angler standing in for the boat (shoreBoat), so every rule downstream works unchanged
+	bool bShoreCanFish = false;        // the walker stands somewhere fishable
+	bool ShoreFishable() const;
 
 private:
 	void Rebuild();
@@ -272,6 +276,10 @@ private:
 	void UpdateFinal(double Dt, double T);
 	bool bForceRecap = false;
 	bool bTankLive = false, bFillCharged = false;
+	bool bShoreSwap = false;
+	double SwX = 0, SwZ = 0, SwH = 0, SwY = 0;
+	bool BeginShoreSwap();
+	void EndShoreSwap();
 	void WeighIn();
 	void UpdateFishing(double Dt, double T);
 	void DrawLineAndRod(double T);

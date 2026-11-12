@@ -892,9 +892,36 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 	auto Down = [PC](const FKey& K) { return PC->IsInputKeyDown(K); };
 	auto Hit = [PC](const FKey& K) { return PC->WasInputKeyJustPressed(K); };
 	AKeysWalker* W = AKeysWalker::Get(this);
-	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
-	bCharging = false;
+	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = false;
 	if (!W) return;
+	// a rod out from the planks (shore.ts shoreHoldsStill): the angler stands still from the charge to the card,
+	// S (or holding Space in a fight) reels, R reels in, K / Space / T deal with the catch; the mouse still looks round
+	if (!W->bShopOpen && (bCharging || FState != EKeysFish::Idle))
+	{
+		FKeysWalkButtons B;
+		float MX = 0, MY = 0;
+		PC->GetInputMouseDelta(MX, MY);
+		B.LookYaw = MX * .004;
+		B.LookPitch = MY * .004;
+		W->SetButtons(B);
+		bBack = Down(EKeys::S) || Down(EKeys::Down);
+		bAction = Down(EKeys::SpaceBar) && FState == EKeysFish::Fight;
+		if (Hit(EKeys::SpaceBar)) { bAction = true; OnAction(); }
+		if (PC->WasInputKeyJustReleased(EKeys::SpaceBar) && bCharging) { bCharging = false; BeginShoreSwap(); CastLine(Charge); EndShoreSwap(); }
+		if (Hit(EKeys::R) && (FState == EKeysFish::Waiting || FState == EKeysFish::Casting || FState == EKeysFish::Nibble)) ReelIn(TEXT("Line reeled in. Walk on when you like."));
+		if (FState == EKeysFish::Caught)
+		{
+			if (Hit(EKeys::K) && GetWorld()->GetTimeSeconds() - CaughtT > .7) KeepFish();
+			else if (Hit(EKeys::T) && GetWorld()->GetTimeSeconds() - CaughtT > .7) TagAndRelease();
+		}
+		if (Hit(EKeys::T) && FState == EKeysFish::Fight)
+			Drag = FMath::Clamp(Drag + (Down(EKeys::LeftShift) || Down(EKeys::RightShift) ? -1 : 1), 1, 5);
+		if (Hit(EKeys::Q)) ShowToast(TEXT("Reel in first (R) - or land that fish."));
+		if (Hit(EKeys::M)) bBigMap = !bBigMap;
+		return;
+	}
+	bAction = false;
+	bCharging = false;
 	if (W->bShopOpen)
 	{
 		// the counter panel: Up / Down (W / S) pick, Enter or Space buys, 1-9 buy that row, F / Esc / Q walks away
@@ -924,6 +951,12 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 	B.LookYaw = MX * .004;
 	B.LookPitch = MY * .004;
 	W->SetButtons(B);
+	bShoreCanFish = ShoreFishable();
+	if (Hit(EKeys::SpaceBar))
+	{
+		if (bShoreCanFish) { bFpOn = false; StartCharge(); }
+		else ShowToast(TEXT("Walk out onto a pier, a dock or the marina's planks, facing the water, to fish."));
+	}
 	if (Hit(EKeys::Q)) ToggleAshore();
 	if (Hit(EKeys::F)) WalkInteract();
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne) || Hit(EKeys::V)) ShowToast(W->CycleView() + TEXT(" - press 1 to switch"));
@@ -1821,6 +1854,12 @@ void AKeysBoatPawn::StartCharge()
 
 FVector AKeysBoatPawn::RodTip(const FVector& Target) const
 {
+	if (bShoreSwap)
+	{
+		// ashore: the rod in the angler's hands, out toward the water
+		const double DX = Target.X - X, DZ = Target.Z - Z, DL = FMath::Max(1.0, Hyp(DX, DZ));
+		return FVector(X + DX / DL * 1.9, Y + 2.7, Z + DZ / DL * 1.9);
+	}
 	// the rod comes out over whichever gunwale faces the target, a little aft of the console
 	const FBoatSpec& S = Spec();
 	const double Rx = FMath::Cos(H), Rz = -FMath::Sin(H), Fx = -FMath::Sin(H), Fz = -FMath::Cos(H);
@@ -2057,6 +2096,7 @@ void AKeysBoatPawn::Land()
 	const double Sgn = ((FX - X) * Rx + (FZ - Z) * Rz) >= 0 ? 1 : -1;
 	ShowSgn = Sgn;
 	ShowPos = FVector(X + Rx * Sgn * (Spec().Beam * .5 + .35), Y + 1.9, Z + Rz * Sgn * (Spec().Beam * .5 + .35));
+	if (bShoreSwap) ShowPos = FVector(X - FMath::Sin(H) * .9, Y + 1.35, Z - FMath::Cos(H) * .9);   // held up on the planks
 	FishMesh->SetWorldLocationAndRotation(ToUE(ShowPos.X, ShowPos.Y, ShowPos.Z), FRotator(78, FMath::RadiansToDegrees(H), 0));
 	ShowFishMesh(true);
 }
@@ -2433,7 +2473,8 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 		const FVector Tip = RodTip(End);
 		const double Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
 		const double Sgn = ((End.X - X) * Rx + (End.Z - Z) * Rz) >= 0 ? 1 : -1;
-		const FVector Butt(X + Rx * Sgn * (Spec().Beam * .5 - .25) + FMath::Sin(H) * Spec().Len * .15, Y + 1.25, Z + Rz * Sgn * (Spec().Beam * .5 - .25) + FMath::Cos(H) * Spec().Len * .15);
+		FVector Butt(X + Rx * Sgn * (Spec().Beam * .5 - .25) + FMath::Sin(H) * Spec().Len * .15, Y + 1.25, Z + Rz * Sgn * (Spec().Beam * .5 - .25) + FMath::Cos(H) * Spec().Len * .15);
+		if (bShoreSwap) { const FVector D2 = FVector(Tip.X - X, 0, Tip.Z - Z).GetSafeNormal(); Butt = FVector(X + D2.X * .35, Y + .95, Z + D2.Z * .35); }
 		// the rod bends toward the load when a fish is pulling
 		const double Bend = FState == EKeysFish::Fight ? Clamp(Tension, 0, 1) : 0;
 		const FVector Mid = (Butt + Tip) * .5 + (End - Tip).GetSafeNormal() * Bend * .5;
@@ -2530,7 +2571,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	if (IsAshore()) { Thr = 0; Speed = 0; DVX = DVZ = 0; Steer = 0; }
 	UpdateBoat(Dt, T);
 	if (IsAshore()) { X = PinX; Z = PinZ; H = PinH; Speed = 0; }
-	if (bRunning) UpdateFishing(Dt, T);
+	if (bRunning) { BeginShoreSwap(); UpdateFishing(Dt, T); EndShoreSwap(); }
 	if (bRunning) UpdateBuffs(T);
 	UpdateFinal(Dt, T);
 	UpdateTroll(Dt, T);
@@ -2554,6 +2595,8 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	UpdateHelm(Dt, T);
 	UpdateJumpCam(Dt);
 	UpdateViewModel(Dt);
+	BeginShoreSwap();
 	DrawLineAndRod(T);
+	EndShoreSwap();
 	UpdateSpread(Dt, T);
 }
