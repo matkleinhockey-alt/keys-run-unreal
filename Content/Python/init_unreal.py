@@ -1016,10 +1016,55 @@ def _bubble(mat):
     mel.connect_material_property(al, "", unreal.MaterialProperty.MP_OPACITY)
 
 
+# The helm's instruments: gauge faces and the big screens are drawn every frame into a canvas render target
+# (KeysDash.cpp) and shown through this. The picture glows (backlit, steady under any exposure, brighter at dusk);
+# underneath it is dark, glossy glass, so the sky and the sun slide across the dials as the boat moves.
+DASH = """
+return Tex.rgb * Bright / max(Ex, 1e-6);
+"""
+
+
+def _dash(mat):
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    tex = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, -1000, 0)
+    tex.set_editor_property("parameter_name", "Tex")
+    tex.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/DefaultTexture"))
+    ex = mel.create_material_expression(mat, unreal.MaterialExpressionEyeAdaptation, -1000, 300)
+    br = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1000, 400)
+    br.set_editor_property("parameter_name", "Bright")
+    br.set_editor_property("default_value", 1.0)
+    c = _custom(mat, -600, 0, DASH, F3, ["Tex", "Ex", "Bright"], "Dash")
+    _link(tex, "RGB", c, "Tex")
+    _link(ex, "", c, "Ex")
+    _link(br, "", c, "Bright")
+    mel.connect_material_property(c, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    base = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -600, 250)
+    base.set_editor_property("const_b", 0.03)
+    _link(tex, "RGB", base, "A")
+    mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(_const(mat, 0.07, -600, 400), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(_const(mat, 0.6, -600, 500), "", unreal.MaterialProperty.MP_SPECULAR)
+
+
+# The windshields of your own boat, so the helm view looks out through them: tinted (the vertex colour), glossy, lit
+# with reflections, mostly see-through.
+def _glass(mat):
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_SURFACE)
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -800, 0)
+    mel.connect_material_property(vc, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    op = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -800, 250)
+    op.set_editor_property("parameter_name", "Opacity")
+    op.set_editor_property("default_value", 0.22)
+    mel.connect_material_property(op, "", unreal.MaterialProperty.MP_OPACITY)
+    mel.connect_material_property(_const(mat, 0.04, -800, 400), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(_const(mat, 0.9, -800, 500), "", unreal.MaterialProperty.MP_SPECULAR)
+
+
 BUILDERS = {
     "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
     "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
-    "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble,
+    "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble, "M_KR_Dash": _dash, "M_KR_Glass": _glass,
 }
 
 

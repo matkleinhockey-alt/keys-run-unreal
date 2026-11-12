@@ -27,6 +27,9 @@ public:
 	// Other systems (schools, bait, wildlife) can put targets on the fish finder: call every frame for anything under the water.
 	// Game meters; Depth is below the surface; Size about 1 for a mid-size fish (bigger draws redder and taller).
 	void AddSonarContact(double X, double Z, double Depth, double Size) { Contacts.Add({X, Z, Depth, Size}); }
+	// The helm's two big screens (KeysDash.cpp), onto a render target's canvas: the chartplotter in (0, 0, W, H) and
+	// the fish finder beside it in (W, 0, W, H) - the same pages G shows over the view.
+	void DrawHelmScreens(UCanvas* Into, AKeysBoatPawn* P, float W, float H);
 
 private:
 	void BuildChart();

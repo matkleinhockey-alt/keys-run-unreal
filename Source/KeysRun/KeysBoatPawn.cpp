@@ -171,7 +171,14 @@ void AKeysBoatPawn::Rebuild()
 	KeysMesh::GRodLod = 0;   // your own boat's rods are seen up close
 	KeysMesh::BuildBoat(M, Spec(), false);
 	KeysMesh::GRodLod = 1;
+	// the windshields in clear glass, so the helm view looks out through them
+	static TWeakObjectPtr<UMaterialInterface> GlassMat;
+	if (!GlassMat.IsValid()) GlassMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Glass.M_KR_Glass"));
+	FKeysMesh Clear;
+	if (GlassMat.IsValid()) M.SplitClear(Clear);
 	M.Commit(BoatMesh, 0, AKeysWorld::VertexColorMaterial());
+	if (Clear.T.Num()) Clear.Commit(BoatMesh, 1, GlassMat.Get());
+	else BoatMesh->ClearMeshSection(1);
 	RigBuilt = -1;   // the outriggers are their own mesh, so they can swing (KeysTroll.cpp)
 }
 
@@ -1948,13 +1955,16 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	}
 	if (bDriveOn)
 	{
-		// standing at the wheel behind the console; the horizon tilts with the hull
+		// standing at the wheel behind the console, looking down over the instrument panel (KeysDash.cpp lays out
+		// where the driver's eye is); the horizon tilts with the hull
 		const double MidX = .05 * S.Len, DeckZ = KeysMesh::SoleAt(S, MidX - .7);
 		FVector Eye(MidX - .7, 0, DeckZ + 1.66), TowerEye;
-		if (View == 2 && KeysMesh::TowerEye(S, TowerEye)) Eye = TowerEye;   // up at the tuna tower helm
+		double LookDown = -.2;
+		if (DashFor == S.Id) { Eye = DashL.Eye; LookDown = DashL.Pitch; }
+		if (View == 2 && KeysMesh::TowerEye(S, TowerEye)) { Eye = TowerEye; LookDown = -.2; }   // up at the tuna tower helm
 		FVector P = BT.TransformPosition(Eye * 100.0);
 		if (!bDragging) { DYaw *= 1 - FMath::Min(1.0, Dt * 1.2); DPitch *= 1 - FMath::Min(1.0, Dt * 1.2); }
-		const FQuat Look = FRotator(FMath::RadiansToDegrees(DPitch - .2), -FMath::RadiansToDegrees(DYaw), 0).Quaternion();
+		const FQuat Look = FRotator(FMath::RadiansToDegrees(DPitch + LookDown), -FMath::RadiansToDegrees(DYaw), 0).Quaternion();
 		if (Shake > 0) P += FVector(FMath::FRand() - .5, FMath::FRand() - .5, FMath::FRand() - .5) * Shake * 15;
 		Camera->SetWorldLocationAndRotation(P, (BT.GetRotation() * Look).Rotator());
 		return;

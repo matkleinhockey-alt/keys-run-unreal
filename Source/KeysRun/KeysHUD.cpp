@@ -946,7 +946,7 @@ void AKeysHUD::UpdateElectronics(AKeysBoatPawn* P, double Now)
 	// the sounder pings all the time so the history is there when you look at it
 	SonT -= Dt;
 	if (SonT <= 0) { SonT = .08; PushSonarColumn(P); }
-	if (P->bElectronics)
+	if (P->bElectronics || P->bDashChart)
 	{
 		GpsT -= Dt;
 		const double Range = P->ChartRange;
@@ -1074,6 +1074,21 @@ void AKeysHUD::DrawElectronics(AKeysBoatPawn* P)
 		DrawRect(HudHex(0x0a141e, .82f), X - 5 * U, Y - 27 * U, W + 10 * U, 22 * U);
 		Text(P->BiteLineText, X + 6 * U, Y - 25 * U, .62f, P->BiteLineText.Contains(TEXT("Feeding!")) ? Gold : FLinearColor::White);
 	}
+}
+
+void AKeysHUD::DrawHelmScreens(UCanvas* Into, AKeysBoatPawn* P, float W, float H)
+{
+	if (!Into || !P) return;
+	// borrow the HUD's drawing calls: point them at the screen's canvas, scaled so the type reads at arm's length
+	UCanvas* const WasCanvas = Canvas;
+	const float WasU = U;
+	Canvas = Into;
+	U = H / 170.f;
+	DrawGps(P, 0, 0, W, H);
+	DrawSonar(P, W, 0, W, H);
+	Text(TEXT("SONAR  200 kHz"), W + W * .45f, 4 * U, .6f, FLinearColor::White);
+	Canvas = WasCanvas;
+	U = WasU;
 }
 
 void AKeysHUD::DrawGps(AKeysBoatPawn* P, float X, float Y, float W, float H)

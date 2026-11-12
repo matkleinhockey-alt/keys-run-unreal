@@ -78,6 +78,7 @@ public:
 	void StopEngines();
 	void ToggleEngines();                  // I key
 	bool EnginesOn() const { return bEngineOn; }   // the JS ENGINE.on also gates the throttle (line 3899)
+	double EngineRpm() const { return Rpm; }       // your engines' rpm, for the tachometers
 	void ToggleSound();                    // N key
 	bool IsSoundOn() const { return bSoundOn; }
 

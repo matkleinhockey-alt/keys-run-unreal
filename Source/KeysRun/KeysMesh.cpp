@@ -1,5 +1,6 @@
 #include "KeysMesh.h"
 #include "KeysData.h"
+#include "Misc/ScopeExit.h"
 
 int32 FKeysMesh::AddVert(const FVector& PosM, const FVector& Normal, const FLinearColor& Color)
 {
@@ -152,6 +153,25 @@ void FKeysMesh::AddGlowFan(const FVector& A, const FVector& B, const FVector& Cc
 	const int32 I0 = AddVert(A, Nn, CA), I1 = AddVert(B, Nn, CB), I2 = AddVert(Cc, Nn, CB);
 	UV[I0] = FVector2D(2.5, .5); UV[I1] = FVector2D(2.5, .001); UV[I2] = FVector2D(2.5, .999);
 	T.Append({I0, I1, I2});
+}
+
+void FKeysMesh::SplitClear(FKeysMesh& Out)
+{
+	SyncKinds();
+	TArray<int32> Keep;
+	Keep.Reserve(T.Num());
+	for (int32 t = 0; t + 2 < T.Num(); t += 3)
+	{
+		const int32 A = T[t], B = T[t + 1], Cc = T[t + 2];
+		if (K[A].Y < .5f || K[B].Y < .5f || K[Cc].Y < .5f) { Keep.Append({A, B, Cc}); continue; }
+		const int32 Base = Out.V.Num();
+		for (const int32 I : {A, B, Cc})
+		{
+			Out.V.Add(V[I]); Out.N.Add(N[I]); Out.UV.Add(UV[I]); Out.C.Add(C[I]); Out.K.Add(K[I]);
+		}
+		Out.T.Append({Base, Base + 1, Base + 2});
+	}
+	T = MoveTemp(Keep);
 }
 
 void FKeysMesh::Commit(UProceduralMeshComponent* Mesh, int32 Section, UMaterialInterface* Mat) const
@@ -355,6 +375,12 @@ namespace KeysMesh
 			M.Surf = Was;
 		};
 
+		// windshield glass you look through from the helm: UV1.y = 1 (the player's boat draws it in clear glass)
+		auto MarkClear = [&M](int32 From)
+		{
+			M.SyncKinds();
+			for (int32 i = From; i < M.K.Num(); i++) if (M.K[i].X == SurfGlass) M.K[i].Y = 1;
+		};
 		const double DeckZ = Dm.DeckZ, MidX = Dm.MidX;
 		const double ConL = Dm.ConL, ConW = Dm.ConW, ConAft = MidX - ConL * .5, ConFront = MidX + ConL * .5 + Dm.ConFwd;
 		const FLinearColor Champ = HullC;
@@ -376,13 +402,24 @@ namespace KeysMesh
 		{
 			// the long tapered console: a smooth loft from the helm forward, its flat top falling toward the bow seat,
 			// sides drawing in and the nose rounded off
-			const int32 NSt = 14, NA = 14;
+			const int32 NSt = 15, NA = 14;
 			TArray<FVector> G;
 			auto HalfW = [&](double Sv) { return ConW * .5 * (1 - .2 * FMath::Pow(Sv, 1.6)); };
-			auto TopH = [&](double Sv) { return FMath::Lerp(1.28, .95, SStepM(.12, .85, Sv)); };
+			// the helm: the top is cut down into a slope the instrument panel lies in (DashLayout), from the aft face up
+			// to the full height
+			const FDashLayout Dash = DashLayout(S);
+			const double SvSlope = Dash.SlopeRun / (ConFront - ConAft);
+			auto TopH = [&](double Sv)
+			{
+				const double Full = FMath::Lerp(1.28, .95, SStepM(.12, .85, Sv));
+				if (Sv >= SvSlope) return Full;
+				const double X = FMath::Lerp(ConAft, ConFront, Sv);
+				return Dash.TopZ - Dash.SlopeDrop * (1 - Sv / SvSlope) - (SoleAt(S, X) - .02);
+			};
 			for (int32 i = 0; i < NSt; i++)
 			{
-				const double Sv = double(i) / (NSt - 1), X = FMath::Lerp(ConAft, ConFront, Sv);
+				// one station at the aft face, one at the top of the slope, the rest spread forward
+				const double Sv = i == 0 ? 0 : FMath::Lerp(SvSlope, 1.0, double(i - 1) / (NSt - 2)), X = FMath::Lerp(ConAft, ConFront, Sv);
 				// the nose rounds off over the last few stations
 				const double Rn = Sv > .86 ? FMath::Sqrt(FMath::Max(0.0, 1 - FMath::Square((Sv - .86) / .14))) : 1;
 				const double A = HalfW(Sv) * FMath::Max(.08, Rn), Z0 = SoleAt(S, X) - .02, Hh = TopH(Sv);
@@ -402,9 +439,9 @@ namespace KeysMesh
 					auto Q = [&](int32 jj) { const double Th = PI * (1 - double(jj) / NA), C = FMath::Cos(Th), Sn = FMath::Sin(Th); return FVector(ConAft, FMath::Sign(C) * FMath::Pow(FMath::Abs(C), .4) * A, Z0 + Hh * FMath::Pow(Sn, .3)); };
 					M.AddTri(FVector(ConAft, 0, Z0), Q(j), Q(j + 1), Champ, FVector(-1, 0, 0));
 				}
-				RBox(FVector(ConAft - .012, 0, Z0 + .82), FVector(.03, A * 1.8, .44), FrameBlack, .02, SurfGelcoat);
+				RBox(FVector(ConAft - .012, 0, Z0 + .6), FVector(.03, A * 1.8, .5), FrameBlack, .02, SurfGelcoat);
 				FVector Prev;
-				const FVector WC(ConAft - .16, -A * .25, Z0 + .95);
+				const FVector WC(ConAft - .16, -A * .25, Z0 + .86);
 				for (int32 k = 0; k <= 16; k++)
 				{
 					const double An = 2 * PI * k / 16;
@@ -429,9 +466,12 @@ namespace KeysMesh
 				const FVector A0(Xa, s2 * HalfW(.3) * .55, SoleAt(S, Xa) + TopH(.3) + .006), B0(Xb, 0, SoleAt(S, Xb) + TopH(.66) + .006);
 				RBox((A0 + B0) * .5, FVector((B0 - A0).Size2D(), .08, .015), FrameBlack, .006, SurfGelcoat, FQuat(FVector::ZAxisVector, FMath::Atan2(B0.Y - A0.Y, B0.X - A0.X)));
 			}
+			BuildDash(M, Dash, Champ, SurfMetalPaint);
 			// the windshield: tall tinted glass from the console top up toward the hardtop, raked aft
 			{
 				const double Xb = ConAft + .45, Xt = Xb - .45, Zb = SoleAt(S, Xb) + TopH(.15), Zt = Dm.TopZ - .3, Wb = HalfW(.15) + .08, Wt = Wb + .12;
+				const int32 GlassFrom = M.V.Num();
+				ON_SCOPE_EXIT { MarkClear(GlassFrom); };
 				M.Surf = SurfGlass;
 				M.AddQuad(FVector(Xb, -Wb, Zb), FVector(Xb, Wb, Zb), FVector(Xt, Wt, Zt), FVector(Xt, -Wt, Zt), Glass, FVector(1, 0, .6));
 				for (int32 s2 = -1; s2 <= 1; s2 += 2)
@@ -475,21 +515,7 @@ namespace KeysMesh
 				RBox(FVector(CA - .012, 0, Z0 + .45), FVector(.02, A * .9, .5), Liner * .93f, .03, SurfGelcoat);
 				Tube(FVector(CA - .03, A * .3, Z0 + .45), FVector(CA - .03, A * .3, Z0 + .58), .012, .012, 6, Steel, SurfSteel);
 			}
-			// the dash: an angled panel on the top's aft half with two big screens, a row of gauges and a compass
-			{
-				const double Zd = CZ + CTopH(.2) + .02;
-				const FQuat Tilt(FVector::YAxisVector, .35);
-				RBox(FVector(MidX - ConL * .1, 0, Zd + .09), FVector(.36, ConW * .78, .2), Dark, .03, SurfRubber, Tilt);
-				for (int32 s2 = -1; s2 <= 1; s2 += 2)
-				{
-					RBox(FVector(MidX - ConL * .1 - .04, s2 * ConW * .19, Zd + .13), FVector(.02, ConW * .34, .17), Srgb(.05, .07, .09), .01, SurfGlass, Tilt);
-					RBox(FVector(MidX - ConL * .1 - .052, s2 * ConW * .19, Zd + .135), FVector(.006, ConW * .3, .13), s2 < 0 ? Srgb(.12, .32, .5) : Srgb(.1, .38, .3), .004, SurfGlass, Tilt);
-				}
-				for (int32 k = -2; k <= 2; k++)
-					Tube(FVector(MidX - ConL * .1 - .14, k * .09, Zd + .02), FVector(MidX - ConL * .1 - .17, k * .09, Zd + .04), .032, .032, 12, Srgb(.08, .08, .09), SurfRubber);
-				Tube(FVector(MidX + ConL * .05, 0, Zd + .19), FVector(MidX + ConL * .05, 0, Zd + .26), .05, .045, 12, Srgb(.1, .1, .11), SurfRubber);
-			}
-			// the wheel on its tilt hub, and the throttle box with two chrome levers
+			// the wheel on its tilt hub (the throttle binnacle and the instrument panel are KeysDash.cpp's)
 			{
 				const double Z0 = SoleAt(S, CA);
 				const FVector WC(CA - .07, -ConW * .12, Z0 + 1.0);
@@ -508,13 +534,6 @@ namespace KeysMesh
 					Tube(WC, WC + (U * FMath::Cos(An) + V * FMath::Sin(An)) * .18, .01, .01, 6, Srgb(.85, .86, .88), SurfSteel);
 				}
 				Tube(WC, WC + Ax * .14, .03, .035, 10, Dark, SurfRubber);
-				RBox(FVector(CA - .07, ConW * .22, Z0 + 1.0), FVector(.16, .14, .1), Dark, .02, SurfRubber);
-				for (int32 k = 0; k < 2; k++)
-				{
-					const FVector Lb(CA - .08, ConW * .22 + (k - .5) * .05, Z0 + 1.05);
-					Tube(Lb, Lb + FVector(-.08, 0, .14), .01, .01, 6, Steel, SurfSteel);
-					RBox(Lb + FVector(-.08, 0, .15), FVector(.03, .04, .03), Srgb(.12, .12, .13), .012, SurfRubber);
-				}
 			}
 			// stainless grab rails along the console's sides
 			for (int32 s2 = -1; s2 <= 1; s2 += 2)
@@ -526,8 +545,11 @@ namespace KeysMesh
 			if (!bFree)
 			{
 				// the wrap-round windshield: a raked front pane and two side wings, tinted, in a stainless top rail
-				const double Xb = MidX + ConL * .12, Zb = CZ + CTopH(.6) - .02, Hw = CHalfW(.6) + .02, Ht = .42;
+				// (a hand forward of the instrument pod, and tall enough to stand over it)
+				const double Xb = MidX + ConL * .12 + .17, Sw = (Xb - CA) / ConL, Zb = CZ + CTopH(Sw) - .02, Hw = CHalfW(Sw) + .02, Ht = .5;
 				const FVector Fb0(Xb, -Hw * .7, Zb), Fb1(Xb, Hw * .7, Zb), Ft0(Xb - .2, -Hw * .74, Zb + Ht), Ft1(Xb - .2, Hw * .74, Zb + Ht);
+				const int32 GlassFrom = M.V.Num();
+				ON_SCOPE_EXIT { MarkClear(GlassFrom); };
 				M.Surf = SurfGlass;
 				M.AddQuad(Fb0, Fb1, Ft1, Ft0, Glass, FVector(1, 0, .5));
 				for (int32 s2 = -1; s2 <= 1; s2 += 2)
@@ -538,6 +560,8 @@ namespace KeysMesh
 				}
 				Sweep(TArray<FVector>({Ft0, Ft1}), .013, .013, FVector::ZAxisVector, Steel, SurfSteel);
 			}
+			// the instrument panel and the throttle binnacle (KeysDash.cpp)
+			BuildDash(M, DashLayout(S), HullC, SurfGelcoat);
 			// the forward console seat: a cushion and a backrest against the console's front
 			if (!bFree && !S.bSunpad)
 			{
@@ -551,6 +575,8 @@ namespace KeysMesh
 				// the Freeman's tall black-framed windshield, from the console up to the hardtop
 				const double Xb = MidX + ConL * .3, Xt = Dm.TC + Dm.TopL * .5 - .25, Zb = CZ + 1.2, Zt = Dm.TopZ - .02, Wb = ConW * .5 + .03, Wt = ConW * .5 + .12;
 				const FLinearColor Clear = Srgb(.42, .52, .58);
+				const int32 GlassFrom = M.V.Num();
+				ON_SCOPE_EXIT { MarkClear(GlassFrom); };
 				M.Surf = SurfGlass;
 				M.AddQuad(FVector(Xb, -Wb, Zb), FVector(Xb, Wb, Zb), FVector(Xt, Wt, Zt), FVector(Xt, -Wt, Zt), Clear, FVector(1, 0, .5));
 				for (int32 s2 = -1; s2 <= 1; s2 += 2)

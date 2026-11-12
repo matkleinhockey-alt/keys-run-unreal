@@ -290,7 +290,10 @@ void AKeysExtras::UpdateCrew(double Dt, double T)
 	if (bHasShower) ShowerH.IdleUpdate(T, Sp);
 	if (bHasPole) PoleH.IdleUpdate(T, Sp);
 
-	// the captain drives and the crew sits; Luigi mode overrides the right hands with a beer
+	// the captain drives and the crew sits; Luigi mode overrides the right hands with a beer. His right hand rests on
+	// the throttle and goes with it (KeysDash.cpp)
+	FVector Grip;
+	if (const AKeysBoatPawn* P = PawnRef.Get(); P && P->ThrottleGrip(Grip) && Captain.Yaw == 0) HelmR = Grip + FVector(0, 0, .025) - Captain.Pos;
 	Captain.Pose(HelmL, HelmR);
 	Crew.DefaultPose();
 

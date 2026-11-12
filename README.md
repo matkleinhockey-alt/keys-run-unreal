@@ -185,8 +185,15 @@ so there are no hand-made assets. The editor script creates the materials and th
   (an aerial push over the harbour with the five species, a dolly past each boat with its skipper's name, "Lines in"), the AI
   field lined up abreast in the harbour and running out up the exit route, and ten seconds on the promenade for the winner:
   the podium, the cup over their head, the five fish on a rack under the champion's banner, a cheering crowd and confetti.
-- **Glass helm and lights:** two screens on every console, the chartplotter and the fish finder (`entities/boat/electronics.ts`);
-  red and green sidelights and the white all-round light, brighter at dusk; ; switches the teal underwater lights (with their
+- **Glass helm and lights:** every helm has a real instrument panel: two big flush-mounted screens (16" on the centre
+  consoles, 19" on the Freeman, 21" on the Midnight) showing the live chartplotter and fish finder (the pages G shows),
+  a tachometer per engine (idles at 700, needle on the engines' rpm), the speedometer (knots, mph inside), a compass card
+  that turns with the boat, a trim gauge per engine and fuel, water temperature, oil pressure and volts, all in black
+  bezels with chrome rings, backlit amber at dusk; and a throttle binnacle whose chrome levers follow the throttle
+  (upright in neutral, through the detent ahead or astern), with the trim rocker on the grip and the captain's hand on it.
+  The faces are drawn into two canvas render targets (`KeysDash.cpp`, `M_KR_Dash`); the helm view (1) stands at the
+  wheel and looks down over the panel, out through the windshields, which your own boat draws in clear glass (`M_KR_Glass`).
+  Red and green sidelights and the white all-round light, brighter at dusk; ; switches the teal underwater lights (with their
   pools on the water) and the blue cockpit line (`entities/boat/model.ts`). The pirates talk in speech bubbles over the sloop
   and ring a ship's bell as they come and go.
 - **More from the web game's shelves and screens:** the tackle shop's 80 lb and 130 lb line rungs (`content/tackle.ts`; the
@@ -347,6 +354,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysTroll.cpp` | trolling: the speed window and strike clock, the raise and the hookup, the spread of lines, lures and teasers |
 | `KeysWorld.*` | terrain, water surface, bridges, scenery, marinas, sky and sun |
 | `KeysBoatPawn.*` | boat physics, camera, input, fishing loop |
+| `KeysDash.cpp` | the helm's instrument panel: layout, bezels, gauges and screens drawn into render targets, the throttle levers |
 | `KeysHUD.*` | all on-screen UI, including the chartplotter, fish finder and leaderboard |
 | `KeysSave.*` | the local leaderboard save game |
 | `KeysTraffic.*` | AI boat traffic and racers |

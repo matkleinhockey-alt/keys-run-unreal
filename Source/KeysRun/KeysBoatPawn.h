@@ -5,6 +5,7 @@
 #include "KeysData.h"
 #include "KeysLife.h"
 #include "KeysSave.h"
+#include "KeysMesh.h"
 #include "KeysBoatPawn.generated.h"
 
 class UProceduralMeshComponent;
@@ -207,6 +208,10 @@ public:
 	// the glass helm screens and the boat's lights (KeysHelm.cpp); ; switches the underwater and cockpit lights
 	void ToggleLights();
 	bool bUwLights = false;
+	// the helm's instruments (KeysDash.cpp): the throttle handle's grip in the boat frame (the captain's right hand
+	// rests on it), and whether the dash's chart is being drawn (the HUD then keeps its chart texture current)
+	bool ThrottleGrip(FVector& Out) const;
+	bool bDashChart = false;
 	// "Run to" (web ui/runto.ts): the marinas' approaches, Sombrero Reef, the humps and the rigs; the Esc menu picks one
 	struct FRunDest { FString Name, Note; double X, Z; };
 	void RunDests(TArray<FRunDest>& Out) const;
@@ -431,13 +436,21 @@ private:
 	void UpdateJumpCam(double Dt);
 	double FishLen = 1;
 	void UpdateHelm(double Dt, double T);
-	UPROPERTY() TObjectPtr<UProceduralMeshComponent> HelmScreens;
+	// the instrument panel: gauge faces and the two big screens drawn into render targets, the throttle levers
+	void UpdateDash(double Dt, double T);
+	void DrawDashGauges(class FCanvas* C, double T);
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> DashFaces;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> ThrottleMesh;
+	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> GaugeRT;
+	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> ScreenRT;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> GaugeMID;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> DashScreenMID;
+	KeysMesh::FDashLayout DashL;
+	FString DashFor;
+	double GaugeT = 0, DashScrT = 0, LeverA = 0, FuelK = .9, WaterK = .2, TachRpm = 0;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatLights;
 	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> UwLights;
 	// a soft key light on the camera's side of a caught fish held up for its hero shot, so the wet scales catch it
 	UPROPERTY() TObjectPtr<class UPointLightComponent> CatchLight;
-	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> ScreenMID;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> LightMID;
-	double HelmT = 0;
-	TArray<float> SonarHist;
 };

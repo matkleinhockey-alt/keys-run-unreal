@@ -49,6 +49,8 @@ struct FKeysMesh
 	void AddSweep(const TArray<FVector>& Pts, double HalfW, double HalfD, const FVector& Side, const FLinearColor& Color, int32 Sides = 14);
 
 	void Commit(UProceduralMeshComponent* Mesh, int32 Section, UMaterialInterface* Mat) const;
+	// moves the triangles marked as clear glass (UV1.y = 1: the windshields) into Out
+	void SplitClear(FKeysMesh& Out);
 
 	// For AKeysWorld::GlowMaterial: a soft blob seen from any side (three crossed squares), and a soft-edged
 	// triangle whose brightness falls off across its far edge (Across 0 at B, 1 at C) and along it (alpha A0 -> A1)
@@ -128,6 +130,39 @@ namespace KeysMesh
 	// the console runs forward of it, TopX / TopL / TopW / TopZ the hardtop's centre, length, width and underside
 	struct FBoatLayout { double MidX, DeckZ, ConL, ConW, ConFwd, TopX, TopL, TopW, TopZ; };
 	FBoatLayout BoatLayout(const KeysData::FBoatSpec& S);
+	// The helm's instrument panel (KeysDash.cpp): a flat panel in the boat frame carrying two big screens over a row of
+	// big round gauges (speed, a tach per engine, compass) and a row of small ones (a trim gauge per engine, fuel,
+	// water temp, oil pressure, volts); the throttle binnacle beside it and where the driver's eye is. On the centre
+	// consoles the panel is the face of a pod on the console top behind a ledge for the binnacle; on the Midnight the
+	// console's top is cut down into a slope at the helm and the panel lies in it.
+	enum EDashGauge : uint8 { DashTach, DashTrim, DashSpeed, DashCompass, DashFuel, DashTemp, DashOil, DashVolt };
+	struct FDashGauge { uint8 Kind = DashTach; int32 Index = 0; double U = 0, V = 0, R = .04; };   // centre on the panel, face radius
+	struct FDashScreen { int32 Kind = 0; double U = 0, V = 0, W = .35, H = .2; };                   // 0 chart, 1 sonar: centre, glass size
+	struct FDashLayout
+	{
+		FVector O, Ux, Uy, N;       // the panel's bottom centre, across it (to starboard), up it, and out toward the helm
+		double W = 1, H = .45;      // panel size
+		double Bezel = .016;        // the screens' black frame
+		bool bPod = true;           // a pod on the console top (else the Midnight's slope, the console's own loft)
+		double SlopeRun = 0, SlopeDrop = 0;   // the Midnight: how far forward and down the helm slope runs from the console top
+		double TopZ = 0;            // the console top the pod and the binnacle stand on
+		TArray<FDashGauge> Gauges;
+		TArray<FDashScreen> Screens;
+		FVector Pivot;              // the throttle levers' pivot axis (across the boat)
+		int32 Levers = 2;
+		double LeverGap = .055, LeverLen = .16;
+		FVector Eye;                // the helm view: standing at the wheel
+		double Pitch = -.3;         // and looking down this far (radians)
+		FVector P(double U, double V, double Out = 0) const { return O + Ux * U + Uy * V + N * Out; }
+	};
+	FDashLayout DashLayout(const KeysData::FBoatSpec& S);
+	// the fixed parts: the pod, the black panel, the screens' bezels, each gauge's black bezel and chrome ring, and the
+	// binnacle's housing with its detent plate. Moulding: the pod's gelcoat colour.
+	void BuildDash(FKeysMesh& M, const FDashLayout& D, const FLinearColor& Moulding, uint8 MouldingKind);
+	// the throttle levers, in the pivot's own frame (lever upright = neutral; the pawn turns the whole part about Y)
+	void BuildThrottleLevers(FKeysMesh& M, const FDashLayout& D);
+	// the lever angle for a throttle (Thr -0.35 .. 1, Gear 0 drive / 1 neutral / 2 reverse): + forward, radians
+	double ThrottleAngle(double Thr, int32 Gear);
 	// A big outboard (KeysBoatParts.cpp): a tall rounded cowl over its midsection, a dark panel on the aft face and an
 	// accent stripe, the streamlined driveshaft housing, cavitation plate, gearcase torpedo, skeg and a three-blade
 	// propeller. Mount is the clamp on the transom or bracket (its aft face, boat frame); the engine hangs aft of it.
