@@ -357,8 +357,10 @@ namespace
 		TArray<FLinearColor> C;     // linear
 		TArray<float> Wig, WigY, Wph;
 		TArray<int32> T;
+		TArray<uint8> Kd;           // the surface kind per vertex (EKeysSurf): body, fins, eyes
+		uint8 CurK = SurfFish;
 
-		int32 Add(const FVector& Pos, const FLinearColor& Srgb) { P.Add(Pos); C.Add(LLin(Srgb)); return P.Num() - 1; }
+		int32 Add(const FVector& Pos, const FLinearColor& Srgb) { P.Add(Pos); C.Add(LLin(Srgb)); Kd.Add(CurK); return P.Num() - 1; }
 		void Tri(const FVector& A, const FVector& B, const FVector& Cc, const FLinearColor& Col)
 		{
 			const int32 I = Add(A, Col); Add(B, Col); Add(Cc, Col);
@@ -514,11 +516,12 @@ namespace
 	}
 
 	// JS buildFishGeo (2361): a lofted super-ellipse body with shaped fins, at lower resolution
-	void LifeBuildFish(const FKeysVis& V, FLifeTpl& M)
+	// bHigh: the close-up model (the catch card, the photo, the fish on the line): a finer body, round eyes
+	void LifeBuildFish(const FKeysVis& V, FLifeTpl& M, bool bHigh)
 	{
 		const FKeysShape& S = LifeShapeOf(V.Key);
 		const double L = V.Len, Hh = V.H > 0 ? V.H : L * .17, W = V.W > 0 ? V.W : L * .16, NE = 2.3;
-		const int32 NS = 16, NR = 10;
+		const int32 NS = bHigh ? 36 : 16, NR = bHigh ? 22 : 10;
 		const FLinearColor Fin = V.Fin, Back = V.Back;
 		const bool bDolphin = V.Key == TEXT("dolphin"), bCet = V.Kind == EKeysKind::Dolphin;
 		auto Prof = [&S](double t) { return t < S.Peak ? FMath::Pow(FMath::Sin(PI / 2 * t / S.Peak), S.Nose) : LLerp(1, S.Ped, FMath::Pow((t - S.Peak) / (1 - S.Peak), 1.25)); };
@@ -548,9 +551,10 @@ namespace
 			}
 
 		// dorsal and anal fins along the body outline, in the midplane
+		M.CurK = SurfFin;
 		auto MidFin = [&](const FKeysFin& F, bool bTop)
 		{
-			const int32 NSeg = 8;
+			const int32 NSeg = bHigh ? 16 : 8;
 			auto Pt = [&](double U, bool bEdge)
 			{
 				const double t = LLerp(F.T0, F.T1, U), z = -L / 2 + t * L, yb = bTop ? TopY(t) - .004 : BotY(t) + .004;
@@ -631,11 +635,19 @@ namespace
 
 		// eyes, bill, beak, hammer
 		const double Te = .09, Ke = Prof(Te), Ex = W / 2 * Ke * .86, Ey = Hh * .1 * Ke + Hh * .04, Ez = -L / 2 + Te * L, Er = FMath::Max(.008, FMath::Min(Hh, W) * .085);
+		M.CurK = SurfEye;
 		for (int32 Sx = -1; Sx <= 1; Sx += 2)
 		{
+			if (bHigh)
+			{
+				M.Blob(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), 10, 6, (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
+				if (!S.bShark && !bCet) M.Blob(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), 8, 5, LHex(0x0a0a0c));
+				continue;
+			}
 			M.Octa(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
 			if (!S.bShark && !bCet) M.Octa(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), LHex(0x0a0a0c));
 		}
+		M.CurK = SurfFish;
 		if (V.Bill > 0) M.Tube(FVector(0, Hh * .02, -L / 2 + .04), FVector(0, Hh * .02, -L / 2 - L * V.Bill + .04), .03, 0, 6, Back);
 		if (bDolphin) M.Tube(FVector(0, -Hh * .12, -L / 2 + L * .01), FVector(0, -Hh * .12, -L / 2 - L * .11), .045, 0, 8, Back);
 		if (V.Key == TEXT("hammerhead")) M.Box(FVector(0, 0, -L * .47), FVector(L * .3, Hh * .16, L * .07), FLifeR3::Ident(), Back);
@@ -674,15 +686,15 @@ namespace
 		}
 	}
 
-	const FLifeTpl& LifeCreatureTpl(const FKeysVis* V)
+	const FLifeTpl& LifeCreatureTpl(const FKeysVis* V, bool bHigh = false)
 	{
-		static TMap<const FKeysVis*, TUniquePtr<FLifeTpl>> Cache;
-		TUniquePtr<FLifeTpl>& Slot = Cache.FindOrAdd(V);
+		static TMap<const FKeysVis*, TUniquePtr<FLifeTpl>> Cache, CacheHi;
+		TUniquePtr<FLifeTpl>& Slot = (bHigh ? CacheHi : Cache).FindOrAdd(V);
 		if (!Slot)
 		{
 			Slot = MakeUnique<FLifeTpl>();
 			if (V->Kind == EKeysKind::Ray || V->Kind == EKeysKind::Turtle || V->Kind == EKeysKind::Manatee) LifeBuildOld(*V, *Slot);
-			else LifeBuildFish(*V, *Slot);
+			else LifeBuildFish(*V, *Slot, bHigh);
 			Slot->Finish(V);
 		}
 		return *Slot;
@@ -2011,7 +2023,8 @@ bool AKeysLife::BuildCreatureMesh(const FString& Key, FKeysMesh& Out, double Sca
 {
 	const FKeysVis* V = LifeVis(Key);
 	if (!V) return false;
-	const FLifeTpl& Tp = LifeCreatureTpl(V);
+	const FLifeTpl& Tp = LifeCreatureTpl(V, true);
+	Out.SyncKinds();
 	const int32 I0 = Out.V.Num();
 	// JS frame (nose toward -z) -> FKeysMesh frame (nose along +X, Z up), centimeters like FKeysMesh::AddVert
 	for (int32 i = 0; i < Tp.P.Num(); i++)
@@ -2021,6 +2034,7 @@ bool AKeysLife::BuildCreatureMesh(const FString& Key, FKeysMesh& Out, double Sca
 		Out.N.Add(FVector(-N.Z, N.X, N.Y));
 		Out.UV.Add(FVector2D(P.X, P.Y));
 		Out.C.Add(Tp.C[i]);
+		Out.K.Add(FVector2D(Tp.Kd.IsValidIndex(i) ? Tp.Kd[i] : SurfFish, 0));
 	}
 	for (const int32 Ix : Tp.T) Out.T.Add(I0 + Ix);
 	return true;

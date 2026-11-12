@@ -38,10 +38,6 @@ def _make_material(name, build):
     return True
 
 
-def _vertex_color(mat):
-    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -500, 0)
-    mel.connect_material_property(vc, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    mel.connect_material_property(_const(mat, 0.75, -500, 220), "", unreal.MaterialProperty.MP_ROUGHNESS)
 
 
 def _water(mat):
@@ -127,6 +123,253 @@ def _custom(mat, x, y, code, out_type, names, desc):
         ins.append(ci)
     c.set_editor_property("inputs", ins)
     return c
+
+
+# The everyday surface: vertex color for the paint, UV1.x for what kind of surface it is (KeysMesh.h EKeysSurf).
+# Each kind gets its own roughness / metalness and a procedural detail normal from 3D noise in the mesh's own space,
+# so nothing needs textures or UVs and moving things (boats, people) carry their detail with them: weave on cloth,
+# pores on skin, strands in hair, orange-peel gelcoat, non-skid diamonds, brushed steel, wood grain, stucco, corrugated
+# tin, lap siding, shingles, asphalt speckle, sand ripples, bark rings, fish scales with a rainbow sheen. Fine detail
+# fades out with distance so it never shimmers.
+SURFACE_FN = """
+struct KRF {
+  float hash(float3 p) { p = frac(p * 0.3183099 + 0.1); p *= 17.0; return frac(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float4 nd(float3 x) {
+    float3 i = floor(x); float3 f = frac(x);
+    float3 u = f * f * (3.0 - 2.0 * f); float3 du = 6.0 * f * (1.0 - f);
+    float a = hash(i), b = hash(i + float3(1, 0, 0)), c = hash(i + float3(0, 1, 0)), d = hash(i + float3(1, 1, 0));
+    float e = hash(i + float3(0, 0, 1)), f1 = hash(i + float3(1, 0, 1)), g = hash(i + float3(0, 1, 1)), h = hash(i + float3(1, 1, 1));
+    float k1 = b - a, k2 = c - a, k3 = e - a, k4 = a - b - c + d, k5 = a - c - e + g, k6 = a - b - e + f1, k7 = -a + b + c - d + e - f1 - g + h;
+    float v = a + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y + k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z;
+    float3 dv = du * float3(k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z, k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x, k3 + k6 * u.x + k5 * u.y + k7 * u.x * u.y);
+    return float4(v, dv);
+  }
+  float4 fbm(float3 x, int oct) {
+    float4 s = 0; float a = 0.5; float fr = 1.0;
+    for (int i = 0; i < oct; i++) { float4 n = nd(x * fr + i * 7.31); s += float4(n.x * a, n.yzw * a * fr); fr *= 2.03; a *= 0.5; }
+    return s;
+  }
+};
+KRF F;
+float kind = floor(K.x + 0.5);
+float3 p = LP / 100.0;
+p = p - floor(p / 256.0) * 256.0;
+float3 ax = normalize(AX), ay = normalize(AY), az = normalize(AZ);
+float3 N0 = normalize(VN) * TS;
+float3 ln = normalize(float3(dot(N0, ax), dot(N0, ay), dot(N0, az)));
+float dist = D / 100.0;
+float nearF = 1.0 - saturate((dist - 6.0) / 30.0);
+float closeF = 1.0 - saturate((dist - 1.5) / 5.0);
+float midF = 1.0 - saturate((dist - 30.0) / 170.0);
+float ndv = saturate(dot(N0, normalize(CV)));
+float fres = pow(1.0 - ndv, 3.0);
+float3 col = VC.rgb;
+float df = 1.0;
+float rough = 0.7; float metal = 0.0; float spec = 0.5;
+float3 g = 0;
+float3 aa = abs(ln);
+// the two axes across the face's dominant direction (a cheap planar projection for woven / tiled patterns)
+float2 q = (aa.z >= aa.x && aa.z >= aa.y) ? p.xy : (aa.x >= aa.y ? p.yz : p.xz);
+float3 qa = (aa.z >= aa.x && aa.z >= aa.y) ? float3(1, 0, 0) : (aa.x >= aa.y ? float3(0, 1, 0) : float3(1, 0, 0));
+float3 qb = (aa.z >= aa.x && aa.z >= aa.y) ? float3(0, 1, 0) : float3(0, 0, 1);
+if (kind < 0.5) {
+  float4 m = F.nd(p * 1.3);
+  float4 b = F.fbm(p * 7.0, 2);
+  df = lerp(0.94, 1.05, m.x) * lerp(0.97, 1.02, b.x);
+  g = b.yzw * 0.035 * nearF;
+  rough = 0.64 + 0.12 * m.x;
+} else if (kind < 1.5) {           // skin
+  float4 m = F.nd(p * 22.0);
+  float4 pr = F.nd(p * 240.0);
+  df = lerp(0.95, 1.04, m.x);
+  g = pr.yzw * 0.015 * closeF + m.yzw * 0.012 * nearF;
+  rough = 0.46 - 0.08 * m.x + 0.06 * pr.x; spec = 0.4;
+  col += fres * 0.18 * float3(1.0, 0.5, 0.4) * VC.rgb;
+} else if (kind < 2.5) {           // cloth: a fine weave and soft folds, with a velvety rim
+  float wv = 6.2831853 * 140.0;
+  float s1 = sin(q.x * wv), s2 = sin(q.y * wv);
+  float4 fo = F.fbm(p * 5.0, 2);
+  df = lerp(1.0, 0.95 + 0.05 * (0.5 + 0.5 * s1 * s2), closeF) * lerp(0.93, 1.04, fo.x);
+  g = (qa * cos(q.x * wv) * s2 + qb * s1 * cos(q.y * wv)) * 0.04 * closeF + fo.yzw * 0.06 * nearF;
+  rough = 0.86; spec = 0.3;
+  col += fres * 0.14 * VC.rgb;
+} else if (kind < 3.5) {           // hair: strands running down
+  float4 st = F.nd(p * float3(260.0, 260.0, 7.0));
+  float4 cl = F.nd(p * float3(40.0, 40.0, 3.0));
+  df = lerp(1.0, lerp(0.72, 1.18, st.x), nearF) * lerp(0.9, 1.08, cl.x);
+  g = (st.yzw * float3(1.0, 1.0, 0.03)) * 0.12 * nearF + cl.yzw * 0.05;
+  rough = 0.36 + 0.1 * cl.x; spec = 0.45;
+} else if (kind < 4.5) {           // gelcoat: glossy, a faint orange peel
+  float4 op = F.nd(p * 55.0);
+  g = op.yzw * 0.006 * nearF;
+  rough = 0.07 + 0.03 * F.nd(p * 2.0).x; spec = 0.6;
+} else if (kind < 5.5) {           // non-skid: raised diamonds
+  float2 c = frac(q * 38.0) - 0.5;
+  float h = abs(c.x) + abs(c.y);
+  float2 sg = sign(c) * (h < 0.36 ? 1.0 : 0.0);
+  g = (qa * sg.x + qb * sg.y) * 0.22 * closeF;
+  float4 dirt = F.nd(p * 3.0);
+  df = lerp(1.0, lerp(0.9, 1.0, step(0.36, h)), closeF) * lerp(0.93, 1.02, dirt.x);
+  rough = 0.78; spec = 0.4;
+} else if (kind < 6.5) {           // stainless: brushed, bright
+  float4 br = F.nd(p * float3(4.0, 4.0, 90.0));
+  metal = 1.0; rough = 0.14 + 0.1 * br.x;
+  g = br.yzw * 0.01 * nearF;
+  col = lerp(col, float3(0.78, 0.8, 0.82), 0.5);
+} else if (kind < 7.5) {           // marine vinyl
+  float4 gr = F.nd(p * 160.0);
+  float4 pu = F.nd(p * 6.0);
+  df = lerp(0.97, 1.03, pu.x);
+  g = gr.yzw * 0.035 * closeF + pu.yzw * 0.03;
+  rough = 0.4 + 0.08 * gr.x; spec = 0.45;
+  col += fres * 0.06;
+} else if (kind < 8.5) {           // wood: grain along the plank, darker late-wood rings, weathered
+  float4 n = F.fbm(p * float3(1.2, 14.0, 14.0), 3);
+  float ring = frac(n.x * 7.0);
+  float4 wx = F.nd(p * 2.5);
+  df = lerp(0.74, 1.08, smoothstep(0.0, 0.85, ring)) * lerp(0.86, 1.06, wx.x);
+  df = lerp(0.92, df, midF);
+  g = n.yzw * float3(0.02, 0.2, 0.2) * nearF + F.nd(p * float3(8.0, 90.0, 90.0)).yzw * 0.01 * closeF;
+  rough = 0.8; spec = 0.35;
+} else if (kind < 9.5) {           // stucco
+  float4 b = F.fbm(p * 34.0, 3);
+  float4 lo = F.nd(p * 0.9);
+  df = lerp(0.92, 1.04, b.x) * lerp(0.93, 1.03, lo.x);
+  g = b.yzw * 0.13 * nearF + F.nd(p * 5.0).yzw * 0.02;
+  rough = 0.92; spec = 0.35;
+} else if (kind < 10.5) {          // corrugated tin
+  float3 t = cross(ln, float3(0, 0, 1));
+  t = dot(t, t) < 0.01 ? float3(1, 0, 0) : normalize(t);
+  float ph = dot(p, t) * 6.2831853 * 11.0;
+  g = t * cos(ph) * 0.5 * midF;
+  float4 r = F.nd(p * 2.6);
+  df = lerp(1.0, 0.9 + 0.1 * (0.5 + 0.5 * sin(ph)), midF);
+  col = lerp(col, col * float3(0.78, 0.58, 0.45), smoothstep(0.62, 0.92, r.x) * 0.6);
+  metal = 0.55; rough = 0.34 + 0.25 * r.x; spec = 0.5;
+} else if (kind < 11.5) {          // asphalt
+  float4 n1 = F.nd(p * 85.0);
+  float4 n2 = F.nd(p * 2.0);
+  float4 n3 = F.nd(p * 0.35);
+  df = lerp(1.0, lerp(0.8, 1.15, n1.x), nearF) * lerp(0.9, 1.06, n2.x) * lerp(0.92, 1.06, n3.x);
+  g = n1.yzw * 0.08 * nearF;
+  rough = 0.86 + 0.08 * n2.x; spec = 0.4;
+} else if (kind < 12.5) {          // sand: wind ripples and grain
+  float2 dir = float2(0.8, 0.6);
+  float4 w = F.nd(p * 0.6);
+  float ph = dot(p.xy, dir) * 6.2831853 * 2.6 + w.x * 7.0;
+  float4 gr = F.nd(p * 110.0);
+  df = lerp(1.0, lerp(0.92, 1.06, gr.x), nearF) * lerp(0.96, 1.03, 0.5 + 0.5 * sin(ph));
+  g = float3(dir * cos(ph) * 0.1, 0) * midF + gr.yzw * 0.03 * nearF;
+  rough = 0.94; spec = 0.35;
+} else if (kind < 13.5) {          // leaves: waxy, veined
+  float4 v = F.nd(p * 26.0);
+  float4 lo = F.nd(p * 2.0);
+  df = lerp(0.86, 1.1, v.x) * lerp(0.9, 1.08, lo.x);
+  g = v.yzw * 0.05 * nearF;
+  rough = 0.5; spec = 0.38;
+  col = lerp(col, col * float3(1.12, 1.12, 0.8), fres * 0.6);
+} else if (kind < 14.5) {          // glass
+  rough = 0.03; spec = 1.0; col *= 0.55;
+} else if (kind < 15.5) {          // fish: scales and a rainbow sheen
+  float2 c = frac(q * 120.0) - 0.5;
+  g = (qa * c.x + qb * c.y) * 0.16 * closeF + F.nd(p * 9.0).yzw * 0.02;
+  float3 ir = 0.5 + 0.5 * cos(6.2831853 * (ndv * 1.4 + float3(0.0, 0.33, 0.67)));
+  col = lerp(col, col * (0.6 + ir), 0.35 * (1.0 - ndv)) + 0.03 * ir;
+  rough = 0.18; spec = 0.75;
+} else if (kind < 16.5) {          // bark / palm trunk: rings and fibres
+  float4 w = F.nd(p * 3.0);
+  float ph = p.z * 6.2831853 * 4.5 + w.x * 2.0;
+  float4 fb = F.nd(p * float3(36.0, 36.0, 2.5));
+  df = lerp(0.8, 1.06, 0.5 + 0.5 * sin(ph)) * lerp(0.84, 1.06, fb.x);
+  g = float3(0, 0, cos(ph)) * 0.35 * midF + fb.yzw * float3(0.12, 0.12, 0.01) * nearF;
+  rough = 0.9; spec = 0.3;
+} else if (kind < 17.5) {          // rubber, dark plastic
+  float4 n = F.nd(p * 70.0);
+  g = n.yzw * 0.02 * nearF;
+  rough = 0.55; spec = 0.35;
+} else if (kind < 18.5) {          // lap siding
+  float s = frac(p.z / 0.19);
+  float vert = 1.0 - saturate((aa.z - 0.5) * 4.0);
+  df = lerp(1.0, lerp(0.76, 1.0, smoothstep(0.0, 0.14, s)), vert * midF);
+  g = float3(0, 0, lerp(0.7, -0.06, smoothstep(0.0, 0.1, s))) * vert * midF + F.nd(p * float3(2, 2, 40)).yzw * 0.02 * nearF;
+  rough = 0.72; spec = 0.45;
+} else if (kind < 19.5) {          // concrete
+  float4 n = F.fbm(p * 11.0, 3);
+  df = lerp(0.88, 1.06, n.x) * lerp(0.94, 1.03, F.nd(p * 0.7).x);
+  g = n.yzw * 0.06 * nearF;
+  rough = 0.86; spec = 0.4;
+} else if (kind < 20.5) {          // fins: thin, glossy, with rays
+  float4 r = F.nd(p * float3(160.0, 160.0, 12.0));
+  df = lerp(0.88, 1.08, r.x);
+  g = r.yzw * 0.04 * closeF;
+  rough = 0.3; spec = 0.6;
+  col += fres * 0.1 * VC.rgb;
+} else if (kind < 21.5) {          // eyes, lenses, wet things
+  rough = 0.04; spec = 0.9;
+} else if (kind < 22.5) {          // asphalt shingles
+  float row = p.z * 8.0;
+  float s = frac(row);
+  float3 t = cross(ln, float3(0, 0, 1));
+  t = dot(t, t) < 0.01 ? float3(1, 0, 0) : normalize(t);
+  float tab = floor(dot(p, t) * 3.0 + floor(row) * 0.5);
+  float hv = F.hash(float3(tab, floor(row), 3.0));
+  df = lerp(1.0, lerp(0.72, 1.0, smoothstep(0.0, 0.2, s)) * lerp(0.86, 1.08, hv), midF) * lerp(0.92, 1.04, F.nd(p * 60.0).x);
+  g = float3(0, 0, lerp(0.6, -0.1, smoothstep(0.0, 0.15, s))) * midF;
+  rough = 0.85; spec = 0.35;
+} else {                           // grass, ground cover
+  float4 n = F.fbm(p * 22.0, 2);
+  float4 lo = F.nd(p * 0.45);
+  df = lerp(1.0, lerp(0.8, 1.12, n.x), nearF) * lerp(0.86, 1.1, lo.x);
+  g = n.yzw * 0.08 * nearF;
+  rough = 0.88; spec = 0.35;
+}
+col *= df;
+float3 gw = g.x * ax + g.y * ay + g.z * az;
+gw -= dot(gw, N0) * N0;
+Nrm = normalize(N0 - gw);
+Rough = saturate(rough);
+Metal = metal;
+Spec = spec;
+return saturate(col);
+"""
+
+
+def _vertex_color(mat):
+    mat.set_editor_property("tangent_space_normal", False)
+    F1 = unreal.CustomMaterialOutputType.CMOT_FLOAT1
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -1400, 0)
+    uv1 = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1400, 120)
+    uv1.set_editor_property("coordinate_index", 1)
+    lp = mel.create_material_expression(mat, unreal.MaterialExpressionLocalPosition, -1400, 240)
+    vn = mel.create_material_expression(mat, unreal.MaterialExpressionVertexNormalWS, -1400, 360)
+    cv = mel.create_material_expression(mat, unreal.MaterialExpressionCameraVectorWS, -1400, 480)
+    dp = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -1400, 600)
+    ts = mel.create_material_expression(mat, unreal.MaterialExpressionTwoSidedSign, -1400, 1100)
+    axes = []
+    for i, v in enumerate(((1, 0, 0), (0, 1, 0), (0, 0, 1))):
+        c = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -1400, 720 + i * 120)
+        c.set_editor_property("constant", unreal.LinearColor(v[0], v[1], v[2], 1.0))
+        t = mel.create_material_expression(mat, unreal.MaterialExpressionTransform, -1150, 720 + i * 120)
+        t.set_editor_property("transform_source_type", unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL)
+        t.set_editor_property("transform_type", unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+        _link(c, "", t, "")
+        axes.append(t)
+    s = _custom(mat, -700, 0, SURFACE_FN, F3, ["VC", "K", "LP", "VN", "CV", "D", "AX", "AY", "AZ", "TS"], "Surface")
+    outs = []
+    for name, ty in (("Rough", F1), ("Metal", F1), ("Spec", F1), ("Nrm", F3)):
+        o = unreal.CustomOutput()
+        o.set_editor_property("output_name", name)
+        o.set_editor_property("output_type", ty)
+        outs.append(o)
+    s.set_editor_property("additional_outputs", outs)
+    for src, pin in ((vc, "VC"), (uv1, "K"), (lp, "LP"), (vn, "VN"), (cv, "CV"), (dp, "D"), (axes[0], "AX"), (axes[1], "AY"), (axes[2], "AZ"), (ts, "TS")):
+        _link(src, "", s, pin)
+    mel.connect_material_property(s, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(s, "Rough", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(s, "Metal", unreal.MaterialProperty.MP_METALLIC)
+    mel.connect_material_property(s, "Spec", unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(s, "Nrm", unreal.MaterialProperty.MP_NORMAL)
 
 
 OCEAN_SCATTER = """

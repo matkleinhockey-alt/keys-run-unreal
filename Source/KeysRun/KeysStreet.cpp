@@ -492,7 +492,8 @@ void AKeysStreet::Draw(double T, double Dt, const FVector& CamGame)
 			Hm.Pos = Feet;
 			for (FVector& V : K.V) V = Feet * 100 + V * P.Scale;
 			const int32 Base = M.V.Num();
-			M.V.Append(K.V); M.N.Append(K.N); M.UV.Append(K.UV); M.C.Append(K.C);
+			M.SyncKinds(); K.SyncKinds();
+			M.V.Append(K.V); M.N.Append(K.N); M.UV.Append(K.UV); M.C.Append(K.C); M.K.Append(K.K);
 			for (int32 Ix : K.T) M.T.Add(Base + Ix);
 		}
 		else Hm.Build(M);

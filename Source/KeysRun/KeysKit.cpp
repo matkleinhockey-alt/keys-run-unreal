@@ -41,6 +41,7 @@ namespace KeysKit
 			Dst.N.Add(Xf.TransformVectorNoScale(F->N[i]));
 			Dst.UV.Add(FVector2D::ZeroVector);
 			Dst.C.Add(F->C.IsValidIndex(i) ? F->C[i] : FLinearColor::White);
+			if (Dst.K.Num() == Dst.V.Num() - 1) Dst.K.Add(F->K.IsValidIndex(i) ? F->K[i] : FVector2D::ZeroVector);
 		}
 		for (int32 Ix : F->T) Dst.T.Add(Base + Ix);
 		return true;

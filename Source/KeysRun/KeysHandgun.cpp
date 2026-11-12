@@ -76,6 +76,7 @@ namespace
 			Dst.N.Add(XfCm.TransformVectorNoScale(Src.N[i]));
 			Dst.UV.Add(Src.UV.IsValidIndex(i) ? Src.UV[i] : FVector2D::ZeroVector);
 			Dst.C.Add(Src.C.IsValidIndex(i) ? Src.C[i] : FLinearColor::White);
+			if (Dst.K.Num() == Dst.V.Num() - 1) Dst.K.Add(Src.K.IsValidIndex(i) ? Src.K[i] : FVector2D::ZeroVector);
 		}
 		for (int32 Ix : Src.T) Dst.T.Add(Base + Ix);
 	}

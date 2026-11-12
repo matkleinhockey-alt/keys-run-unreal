@@ -5,6 +5,16 @@
 
 namespace KeysData { struct FBoatSpec; }
 
+// What M_KR_VertexColor shades a vertex as (UV1.x): roughness, metalness and a procedural detail normal per kind.
+// Default is a matte painted surface with a little grain; nothing needs tagging to look right.
+enum EKeysSurf : uint8
+{
+	SurfDefault = 0, SurfSkin = 1, SurfCloth = 2, SurfHair = 3, SurfGelcoat = 4, SurfNonSkid = 5, SurfSteel = 6,
+	SurfVinyl = 7, SurfWood = 8, SurfStucco = 9, SurfTin = 10, SurfAsphalt = 11, SurfSand = 12, SurfLeaf = 13,
+	SurfGlass = 14, SurfFish = 15, SurfBark = 16, SurfRubber = 17, SurfSiding = 18, SurfConcrete = 19, SurfFin = 20,
+	SurfEye = 21, SurfShingle = 22, SurfGrass = 23
+};
+
 // Vertex-colored geometry for the procedural meshes. Authored in meters; Add* calls convert to centimeters.
 struct FKeysMesh
 {
@@ -13,14 +23,23 @@ struct FKeysMesh
 	TArray<FVector> N;
 	TArray<FVector2D> UV;
 	TArray<FLinearColor> C;
+	// UV1: x = the surface kind M_KR_VertexColor shades it as (EKeysSurf), stamped by AddVert from Surf
+	TArray<FVector2D> K;
+	uint8 Surf = 0;
 
-	void Reset() { V.Reset(); T.Reset(); N.Reset(); UV.Reset(); C.Reset(); }
+	void Reset() { V.Reset(); T.Reset(); N.Reset(); UV.Reset(); C.Reset(); K.Reset(); Surf = 0; }
+	// pads K to V (for code that appends to V / N / UV / C directly)
+	void SyncKinds() { if (K.Num() < V.Num()) { const int32 Old = K.Num(); K.SetNum(V.Num()); for (int32 i = Old; i < K.Num(); i++) K[i] = FVector2D::ZeroVector; } else if (K.Num() > V.Num()) K.SetNum(V.Num()); }
+	// re-stamp the surface kind of the vertices from index From on
+	void SetSurfFrom(int32 From, uint8 Kind) { SyncKinds(); for (int32 i = FMath::Max(0, From); i < K.Num(); i++) K[i].X = Kind; }
 	int32 AddVert(const FVector& PosM, const FVector& Normal, const FLinearColor& Color);
 	// one flat-shaded quad, a-b-c-d around the edge; Out is a hint for which way the face should point
 	void AddQuad(const FVector& A, const FVector& B, const FVector& C, const FVector& D, const FLinearColor& Color, const FVector& Out);
 	void AddTri(const FVector& A, const FVector& B, const FVector& C, const FLinearColor& Color, const FVector& Out);
 	// box centered at Center with full Size, rotated by Rot (meters)
 	void AddBox(const FVector& Center, const FVector& Size, const FLinearColor& Color, const FQuat& Rot = FQuat::Identity);
+	// a box with rounded edges and corners of radius R (meters), smooth-shaded; Seg segments per quarter round
+	void AddRoundBox(const FVector& Center, const FVector& Size, double R, const FLinearColor& Color, const FQuat& Rot = FQuat::Identity, int32 Seg = 2);
 	// tapered tube between two points
 	void AddTube(const FVector& A, const FVector& B, double RA, double RB, int32 Sides, const FLinearColor& Color);
 
@@ -34,6 +53,8 @@ struct FKeysMesh
 	// Smooth shading: vertices at the same spot share an averaged normal, unless their faces meet at more than
 	// MaxAngleDeg (so fins and hard chines keep their edge).
 	void SmoothNormals(double MaxAngleDeg = 55);
+	// the same, only for the vertices from index From on (one part of a mesh)
+	void SmoothNormalsFrom(int32 From, double MaxAngleDeg);
 };
 
 namespace KeysMesh
