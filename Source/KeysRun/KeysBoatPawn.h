@@ -170,7 +170,7 @@ public:
 	void LiveBuffs(TArray<FBuffShow>& Out) const;
 	double SteadyMul() const;   // >1 steadier hands: a longer strike window
 	double Sway() const;        // 0..1 how tipsy: a shorter strike window, the view wobbles, no diving past 0.6
-	bool OwnsBoat(const FString& Id) const { return Id == KeysData::StarterBoat() || Owned.Contains(TEXT("boat.") + Id); }
+	bool OwnsBoat(const FString& Id) const;   // the five original boats are always yours (Price 0); the new three are bought
 
 private:
 	void Rebuild();

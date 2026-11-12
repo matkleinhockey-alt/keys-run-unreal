@@ -317,6 +317,13 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 }
 
 // the boat broker (web sim/economy.ts stepBuy): buying also selects the hull
+bool AKeysBoatPawn::OwnsBoat(const FString& Id) const
+{
+	if (Id == KeysData::StarterBoat() || Owned.Contains(TEXT("boat.") + Id)) return true;
+	for (const FBoatSpec& B : KeysData::Boats()) if (B.Id == Id) return B.Price <= 0;
+	return false;
+}
+
 void AKeysBoatPawn::BuyBoat()
 {
 	const FBoatSpec& S = Spec();

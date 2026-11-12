@@ -294,7 +294,7 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 		Wrapped(S.Desc, CX + 26 * U, Yy, CW - 52 * U, 1.1f);
 		// the boat broker: what it costs, and what you have
 		const bool bOwn = P->OwnsBoat(S.Id);
-		const FString Own = bOwn ? (S.Price == 0 ? FString(TEXT("Yours - the boat you started with")) : FString(TEXT("Yours")))
+		const FString Own = bOwn ? (S.Price == 0 ? FString(TEXT("Yours - one of the original fleet")) : FString(TEXT("Yours - bought from the broker")))
 			: FString::Printf(TEXT("$%s  -  you have $%s  -  %s"), *FText::AsNumber(S.Price).ToString(), *FText::AsNumber(P->Cash).ToString(), P->Cash >= S.Price ? TEXT("Enter to buy") : TEXT("sell fillets at a weigh-in"));
 		Text(Own, CX + 26 * U, CY + 270 * U - 38 * U, .85f, bOwn ? Teal : Gold);
 		Text(FString::Printf(TEXT("Boat %d of %d"), P->PickIndex + 1, KeysData::Boats().Num()), CX + CW - 26 * U - 120 * U, CY + 270 * U - 38 * U, .85f, Dim);

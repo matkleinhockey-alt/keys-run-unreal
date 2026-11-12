@@ -126,11 +126,11 @@ namespace KeysData
 		// fit-out per hull, from HULLS[id].style (content/boats.ts) and BOAT_PRICE (sim/economy.ts)
 		struct FFit { const TCHAR* Id; uint32 EngAcc, EngLow, Cove, Uph; bool bTTop, bRadar, bRodRack, bBowRail, bRiggerPoles, bSunpad, bLeaning, bBracket; int32 Steps; double Entry; int64 Price; };
 		static const FFit Fits[] = {
-			{TEXT("robalo"),    0x6fa8c9, 0x2a2d31, 0,        0x6fa8c9, false, false, false, true,  false, false, true,  false, 0, .42, 9000},
+			{TEXT("robalo"),    0x6fa8c9, 0x2a2d31, 0,        0x6fa8c9, false, false, false, true,  false, false, true,  false, 0, .42, 0},
 			{TEXT("grady"),     0x23466e, 0x2a2d31, 0x23466e, 0xe8e4d8, true,  true,  false, true,  true,  false, true,  false, 0, .40, 0},
-			{TEXT("freeman"),   0x1f2a33, 0x1f2126, 0,        0x9aa0a6, false, true,  true,  false, false, false, false, true,  1, .50, 42000},
-			{TEXT("midnight"),  0xc8a24a, 0x17191d, 0xc8a24a, 0xf3efe6, false, false, false, false, false, true,  false, true,  2, .46, 56000},
-			{TEXT("mti"),       0xf4f4f4, 0x15171a, 0xf4f4f4, 0x1d1f23, false, false, false, false, false, true,  false, true,  2, .48, 70000},
+			{TEXT("freeman"),   0x1f2a33, 0x1f2126, 0,        0x9aa0a6, false, true,  true,  false, false, false, false, true,  1, .50, 0},
+			{TEXT("midnight"),  0xc8a24a, 0x17191d, 0xc8a24a, 0xf3efe6, false, false, false, false, false, true,  false, true,  2, .46, 0},
+			{TEXT("mti"),       0xf4f4f4, 0x15171a, 0xf4f4f4, 0x1d1f23, false, false, false, false, false, true,  false, true,  2, .48, 0},
 			{TEXT("yellowfin"), 0x1f3b57, 0x2a2d31, 0x1f3b57, 0x1f3b57, true,  true,  true,  true,  true,  false, true,  true,  0, .56, 30000},
 			{TEXT("contender"), 0x2f7a52, 0x2a2d31, 0x2f7a52, 0x2f7a52, true,  false, true,  true,  true,  false, true,  false, 0, .46, 20000},
 			{TEXT("nortech"),   0xff7a18, 0x0b0c0e, 0xff7a18, 0xff7a18, false, false, false, false, false, true,  false, true,  2, .50, 85000},

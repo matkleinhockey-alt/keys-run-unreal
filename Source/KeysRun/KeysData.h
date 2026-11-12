@@ -37,7 +37,7 @@ namespace KeysData
 		bool bBracket = false;     // engines on a bracket set back off the transom
 		int32 Steps = 0;           // steps in the running bottom
 		double Entry = .45;        // how fine the bow is (HULLS.entry)
-		int64 Price = 0;           // dollars at the boat broker (sim/economy.ts BOAT_PRICE); 0 = the starter
+		int64 Price = 0;           // dollars at the boat broker (sim/economy.ts BOAT_PRICE); 0 = always yours (the five original boats are grandfathered)
 	};
 
 	struct FZoneRow
