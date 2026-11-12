@@ -62,7 +62,10 @@ public:
 	void GearShift();                                        // the clunk in shiftGear()
 	void Gull(double X, double Z);
 	// sounds from AKeysExtras: AirHorn, CrowdRoar, MusicDuck, CaelenSquawk (others are ignored)
-	void PlayExtra(FName Id, const FVector& GamePos, float Power);                           // AUD.gull(x,z): a seabird over a school
+	void PlayExtra(FName Id, const FVector& GamePos, float Power);
+	// the second port pass's sounds (KeysAudioMore.cpp): Bark, PartyBeat, Bell, Gunshot, DryClick, Reload, Flare, Ricochet,
+	// Thud, Plink, SlotSpin, SlotStop, SlotWin, Cheer, Coins, Chest, Squawk; false if Id is none of them
+	bool PlayMore(FName Id, const FVector& GamePos, float Power);                           // AUD.gull(x,z): a seabird over a school
 	// a raw audBurst(); with GamePos it is placed in 3D with the given reference distance
 	void Burst(const FKeysBurst& B, const FVector* GamePos = nullptr, float RefDist = 6.f);
 

@@ -141,6 +141,10 @@ public:
 	bool IsFirstPerson() const { return bFpOn || bDriveOn; }
 	bool FpEyeLocal(FVector& Out) const { Out = FpEyeL; return bFpOn; }   // where you stand to fish, boat-local meters
 	void NudgeBoat(double DX, double DZ, double SpeedMul) { X += DX; Z += DZ; Speed *= SpeedMul; }
+	// test hook: put the boat there, stopped (game meters, web heading)
+	void DebugPlace(double InX, double InZ, double InH) { X = InX; Z = InZ; H = InH; Speed = Thr = DVX = DVZ = 0; bCamInit = false; }
+	// the chase camera's yaw offset, pitch and zoom (tests)
+	void DebugCam(double Yaw, double PitchOff, double Zoom) { CamYaw = Yaw; CamPitchOff = PitchOff; CamZoom = Zoom; }
 
 	// ---- diving (J): the diver actor drives the camera and reports toasts and speared catches back here
 	bool IsDiving() const;

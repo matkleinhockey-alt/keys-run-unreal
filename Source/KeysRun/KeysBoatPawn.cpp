@@ -10,6 +10,7 @@
 #include "KeysDiver.h"
 #include "KeysWalker.h"
 #include "KeysVisitors.h"
+#include "KeysLocals.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -597,6 +598,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd.StartsWith(TEXT("ev:"))) { if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->DebugCmd(Cmd.Mid(3)); }
 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
+		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *Lc->DebugCmd(Cmd.Mid(3))); }
 		else if (Cmd == TEXT("banner")) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->StartBanner(); }
 		else if (Cmd.StartsWith(TEXT("indoorev="))) AKeysWalker::IndoorEV = FCString::Atod(*Cmd.Mid(9));
 		else if (Cmd == TEXT("ownall")) { for (const FBoatSpec& B : Boats()) Owned.Add(TEXT("boat.") + B.Id); }

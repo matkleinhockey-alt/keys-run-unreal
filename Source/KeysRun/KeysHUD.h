@@ -53,6 +53,13 @@ private:
 	void DrawCrewBoard(float X, float Y, float W);
 	void DrawLogin(AKeysBoatPawn* P);
 	void DrawFriends(AKeysBoatPawn* P);
+	// the second port pass (KeysHUD2.cpp): world tags and speech bubbles, the chart's extra marks, and the overlays of the
+	// new systems (the pistol, treasure, estates, the slots, the tournament titles), drawn over the scene
+	void DrawTags();
+	void DrawChartMore(AKeysBoatPawn* P, float X, float Y, float Size);
+	void DrawMore(AKeysBoatPawn* P);
+	// true when one of the new full-screen panels is up (it owns the screen and the HUD skips the rest)
+	bool DrawPanels(AKeysBoatPawn* P);
 
 	void Panel(float X, float Y, float W, float H, float Alpha = .5f);
 	float Text(const FString& S, float X, float Y, float Scale, const FLinearColor& C = FLinearColor::White, UFont* Font = nullptr, bool bCenter = false);

@@ -515,6 +515,7 @@ void AKeysAudio::PlayExtra(FName Id, const FVector& GamePos, float Power)
 	{
 		if (bSoundOn && bMusicOn && Music) { Music->SetOutGain(.35f, .2f); DuckUntil = GetWorld()->GetTimeSeconds() + 3.6; }
 	}
+	else if (PlayMore(Id, GamePos, Power)) {}
 	else if (Id == TEXT("CaelenSquawk"))
 	{
 		const float Starts[3] = { 0.f, .28f, .5f };

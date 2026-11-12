@@ -5,6 +5,8 @@
 #include "KeysData.h"
 #include "KeysWorld.h"
 #include "KeysBoatPawn.h"
+#include "KeysAudio.h"
+#include "KeysKit.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -259,6 +261,7 @@ bool AKeysVisitors::BeginPirates(int64 Bucket, double Dist)
 	Beats.Add({30.5, false, Asides[I2]});
 	Beats.Add({37, true, Line(TEXT("farewell"), U(6), L)});
 	P->ShowMsg(TEXT("A ship's bell, somewhere out on the water..."), 4.2);
+	BellT = 0; BubbleT = 0;
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: pirates from %.0f, %.0f (%s), %.0f m out"), PX, PZ, bGulf ? TEXT("gulf") : TEXT("channel"), FMath::Sqrt(FMath::Square(PX - P->BoatX()) + FMath::Square(PZ - P->BoatZ())));
 	Ship->SetVisibility(true);
 	return true;
@@ -318,6 +321,7 @@ void AKeysVisitors::TickPirates(double Dt, double T)
 			{
 				const FBeat& Bt = Beats[NextBeat++];
 				P->ShowMsg(FString::Printf(TEXT("%s: %s"), Bt.bCaptain ? Captain : Mate, *Bt.Text), 4.8);
+				BubbleT = 5.5; BubbleWho = Bt.bCaptain ? Captain : Mate; BubbleText = Bt.Text;
 			}
 			if (NextBeat >= Beats.Num() && PhaseT > Beats.Last().At + 5) { Phase = 3; PhaseT = 0; EscapeT = 0; }
 		}
@@ -348,6 +352,16 @@ void AKeysVisitors::TickPirates(double Dt, double T)
 	Ship->SetWorldLocationAndRotation(ToUE(PX, (Hb + Hs) / 2 - .2, PZ),
 		FRotator(FMath::RadiansToDegrees(FMath::Atan2(Hb - Hs, 13.0)), YawOf(PH), FMath::RadiansToDegrees(FMath::Atan2(Hst - Hp, 4.0) * .7 + Heel)));
 	if (PSpeed > 1) EmitWake(PX, PZ, PSpeed, 13, T, Dt);
+	// the bell rings them in (and out), and whoever is talking has a bubble over the deck
+	BellT -= Dt;
+	if (BellT <= 0 && Phase != 0 && D < 1300)
+	{
+		BellT = Phase == 3 ? 14 : 9;
+		if (AKeysAudio* Au = AKeysAudio::Get(this)) Au->PlayExtra(TEXT("Bell"), FVector(PX, 3, PZ), 1);
+	}
+	if (BubbleT > 0) BubbleT -= Dt;
+	if (D < 300)
+		KeysTags::Add(FVector(PX, (Hb + Hs) / 2 + 5.2, PZ), BubbleT > 0 ? FString::Printf(TEXT("%s: \"%s\""), *BubbleWho, *BubbleText) : FString(Captain), 300, BubbleT > 0);
 }
 
 // ================================================================ banner plane

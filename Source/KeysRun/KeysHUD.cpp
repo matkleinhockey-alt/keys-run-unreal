@@ -12,6 +12,7 @@
 #include "KeysOnline.h"
 #include "KeysWalker.h"
 #include "KeysTownData.h"
+#include "KeysKit.h"
 #include "EngineUtils.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -145,6 +146,7 @@ void AKeysHUD::DrawHUD()
 		if (P->bBoardOpen) DrawBoard(P);
 		if (P->bLoginOpen) DrawLogin(P);
 		Contacts.Reset();
+		KeysTags::Live().Reset();
 		return;
 	}
 	// paused: just the menu (and whatever it opened) over the scene
@@ -154,6 +156,7 @@ void AKeysHUD::DrawHUD()
 		if (P->bBoardOpen) DrawBoard(P);
 		if (P->bLoginOpen) DrawLogin(P);
 		Contacts.Reset();
+		KeysTags::Live().Reset();
 		return;
 	}
 	UpdateElectronics(P, Now);
@@ -196,6 +199,8 @@ void AKeysHUD::DrawHUD()
 	if (!bDive && !bAshore) DrawEvents(P);
 	if (P->FState == EKeysFish::Caught) DrawCard(P);
 	else if (P->bElectronics && !P->bBigMap) DrawElectronics(P);
+	DrawTags();
+	DrawMore(P);
 
 	if (Now < P->ToastUntil && !P->Toast.IsEmpty())
 	{
@@ -209,6 +214,7 @@ void AKeysHUD::DrawHUD()
 	if (!Hint.IsEmpty()) Text(Hint, Canvas->SizeX * .5f, Canvas->SizeY - 44 * U, .95f, Dim, nullptr, true);
 	if (P->bBoardOpen) DrawBoard(P);
 	if (P->bLoginOpen) DrawLogin(P);
+	DrawPanels(P);
 	Contacts.Reset();
 }
 
@@ -576,6 +582,7 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 			DrawRect(FLinearColor(1.f, .82f, .2f), A.X - R, A.Y - R, 2 * R, 2 * R);
 		}
 	}
+	DrawChartMore(P, X, Y, Size);
 	// your crew: bright green
 	if (const AKeysOnline* O = AKeysOnline::Get(this))
 	{

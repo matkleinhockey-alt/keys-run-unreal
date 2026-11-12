@@ -47,6 +47,9 @@ private:
 	int32 NextBeat = 0;
 	struct FBeat { double At; bool bCaptain; FString Text; };
 	TArray<FBeat> Beats;
+	// the speech bubble over the sloop (the web game's tag) and the ship's bell, the real herald, heard from ~800 m
+	double BubbleT = 0, BellT = 0;
+	FString BubbleWho, BubbleText;
 
 	// banner plane
 	bool bPass = false;
