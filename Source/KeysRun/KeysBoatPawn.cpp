@@ -1566,13 +1566,13 @@ bool AKeysBoatPawn::AutoChase(double TopMs, bool bCanDrive, double& OutThr, doub
 	const double Want = FMath::Atan2(-DX, -DZ);
 	const double Diff = WrapPi(Want - H), DiffStern = WrapPi(Want - (H + PI));
 	double T = 0, St = 0;
-	// sportfish style: keep the stern pointed at the fish and back down on it; only spin around and run forward for a fish far out ahead
+	// keep the stern swung toward the fish without ever backing down on it (the player asked for no reversing while reeling);
+	// only run forward, bow first, for a fish far out ahead
 	if (!(FMath::Abs(Diff) < .9 && Dist > 90))
 	{
 		St = Clamp(-DiffStern * 2.2, -1, 1);
-		const double V = Clamp((Dist - 14) * .22 + (bRunningFish ? 2.5 : 0), 0, 6) * (FMath::Abs(DiffStern) > .8 ? .35 : 1);
-		T = -FMath::Min(.5, V / TopMs);
-		AutoMode = T < 0 ? TEXT("Backing down on the fish") : TEXT("Holding the stern on the fish");
+		T = 0;
+		AutoMode = TEXT("Holding the stern on the fish");
 	}
 	else
 	{
