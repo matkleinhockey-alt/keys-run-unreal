@@ -43,6 +43,7 @@ private:
 	TArray<int64> CacheOrder;
 	int32 LastCX = INT32_MIN, LastCZ = INT32_MIN;
 	int32 Drawn = 0;
+	TArray<double> GeoH;   // each pool's model height (m), to keep tips under the surface
 	bool bPending = false;
 	double PendX = 0, PendZ = 0;
 };

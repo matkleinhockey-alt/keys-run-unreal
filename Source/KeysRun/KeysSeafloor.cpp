@@ -306,9 +306,14 @@ void AKeysSeafloor::Tick(float DeltaSeconds)
 		Scan(CamX, CamZ);
 	}
 	ProcessQueue();
-	static double LogT = 0;
-	LogT += DeltaSeconds;
-	if (LogT > 3) { LogT = 0; UE_LOG(LogTemp, Log, TEXT("KRSeafloor cam %.0f,%.0f,%.1f resident %d queue %d sub %d"), CamX, CamZ, CamY, Resident.Num(), Queue.Num(), bProfileSub ? 1 : 0); }
+	static double LogT = 0, FrameSum = 0;
+	static int32 Frames = 0;
+	LogT += DeltaSeconds; FrameSum += DeltaSeconds; Frames++;
+	if (LogT > 3)
+	{
+		UE_LOG(LogTemp, Log, TEXT("KRSeafloor cam %.0f,%.0f,%.1f resident %d queue %d sub %d frame %.1f ms"), CamX, CamZ, CamY, Resident.Num(), Queue.Num(), bProfileSub ? 1 : 0, Frames ? FrameSum / Frames * 1000 : 0.0);
+		LogT = 0; FrameSum = 0; Frames = 0;
+	}
 	Skirt->SetMeshSectionVisible(0, !bSubmerged);
 	if (!bSubmerged && FVector2D(CamX - LastSkirtX, CamZ - LastSkirtZ).Size() > FarSkirtResample)
 	{

@@ -60,6 +60,7 @@ private:
 
 	UPROPERTY() TObjectPtr<UTexture2D> Chart;
 	UPROPERTY() TObjectPtr<UTexture2D> GpsTex;
+	UPROPERTY() TObjectPtr<UTexture2D> VignetteTex;
 	TArray<FColor> GpsPx;
 	double GpsCX = 0, GpsCZ = 0, GpsRange = -1, GpsT = 0;   // where the GPS texture was last drawn
 	TArray<FKeysSonarCol> SonarCols;

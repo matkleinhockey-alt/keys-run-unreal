@@ -449,6 +449,14 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (P.Num() >= 3) CamZoom = FCString::Atod(*P[2]);
 		}
 		else if (Cmd == TEXT("dive")) { if (!IsDiving()) ToggleDive(); }
+		else if (Cmd == TEXT("perf:old") || Cmd == TEXT("perf:new"))
+		{
+			// frame-time comparison: perf:old puts back the opaque chart-colored sea and hides the floor and the reef
+			const bool bOld = Cmd == TEXT("perf:old");
+			if (AKeysWorld* W = World()) W->DebugOldWater(bOld);
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+				if (It->GetClass()->GetName() == TEXT("KeysSeafloor") || It->GetClass()->GetName() == TEXT("KeysReef")) It->SetActorHiddenInGame(bOld);
+		}
 		else if (Cmd.StartsWith(TEXT("dv:")))
 		{
 			// dv:depth=6, dv:look=1.2,-0.3, dv:aimfish, dv:spear, dv:reload, dv:air=0.2, dv:swim=1, dv:haul=1, dv:chase, dv:mask
@@ -569,11 +577,20 @@ void AKeysBoatPawn::ApplyDiveCamera(const FVector& PosUE, const FRotator& Rot, f
 {
 	Camera->SetWorldLocationAndRotation(PosUE, Rot);
 	Camera->SetFieldOfView(FovH);
-	// a speared catch is held up in front of the mask for the photo
+	// a speared catch is held up in front of the mask for the photo (in the chase view, in front of the diver)
 	if (FState == EKeysFish::Caught)
 	{
 		const double Age = GetWorld()->GetTimeSeconds() - CaughtT;
 		const FQuat Q = Rot.Quaternion();
+		const AKeysDiver* Dv = AKeysDiver::Get(this);
+		if (Dv && Dv->IsChaseView())
+		{
+			const KeysDive::FState& DS = Dv->State();
+			const FVector Fw(-FMath::Sin(DS.Yaw), -FMath::Cos(DS.Yaw), 0);
+			const FVector P = ToUE(DS.X, DS.Y + .1, DS.Z) + Fw * (60 + FishLen * 50);
+			FishMesh->SetWorldLocationAndRotation(P, FRotator(10, FMath::RadiansToDegrees(FMath::Atan2(Fw.Y, Fw.X)) + 90, 0));
+			return;
+		}
 		// centimeters in the camera's frame: far enough out that the whole fish fits, a little left and low of center
 		const double Back = (1.1 + FishLen * 1.2) * 100;
 		const FVector P = PosUE + Q.RotateVector(FVector(Back, -FishLen * 30, -FishLen * 25 + FMath::Sin(Age * 2.1) * 3));

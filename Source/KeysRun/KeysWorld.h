@@ -32,6 +32,8 @@ public:
 	static AKeysWorld* Get(const UObject* WorldContext);
 	// the camera is under the surface: draw the sea's underside (Snell's window) and keep it in step with the waves
 	void SetUnderside(bool bOn);
+	// test hook: the old opaque chart-colored sea (for frame-time comparisons)
+	void DebugOldWater(bool bOld);
 
 	static UMaterialInterface* VertexColorMaterial();
 	static UMaterialInterface* WaterMaterial();

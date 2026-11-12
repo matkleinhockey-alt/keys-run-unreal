@@ -51,10 +51,10 @@ def _water(mat):
     mel.connect_material_property(_const(mat, 0.5, -500, 320), "", unreal.MaterialProperty.MP_SPECULAR)
 
 
-# The detailed sea. The C++ water mesh supplies the big swells and wakes, the depth color in vertex RGB,
-# the foam amount in vertex alpha, and in UV0: x = crest height (for light glowing through thin crests), y = aerated prop wash.
-# This material adds what the mesh is too coarse for: wind ripples that catch the sun, foam broken into
-# real-looking patches, and turquoise light scattering through the wave tops.
+# The detailed sea. The C++ water mesh supplies the big swells and wakes, the foam amount in vertex alpha, and in UV0:
+# x = crest height (for light glowing through thin crests), y = aerated prop wash. This material adds what the mesh is
+# too coarse for: wind ripples that catch the sun, foam broken into real-looking patches, and (as Single Layer Water)
+# the see-through water itself, with the light scattering brighter through the wave tops.
 OCEAN_FOAM = """
 float2 p = WP.xy / 100.0;
 float cover = saturate(A);
@@ -109,29 +109,11 @@ float s = Strength * (1.0 - 0.75 * saturate(F)) * (1.0 - 0.5 * saturate(Aer));
 return normalize(VN + float3(-g.x, -g.y, 0.0) * s);
 """
 
-OCEAN_BASE = """
-// the chart colors are bright display colors; real water is dark and gets most of its brightness from
-// reflecting the sky, so deepen and saturate them (pale sand flats stay bright, deep water turns cobalt)
-float3 water = pow(saturate(VC), 1.55) * 0.82;
-// the prop wash: churned water full of bubbles turns a pale milky turquoise
-water = lerp(water, float3(0.2, 0.52, 0.5), saturate(Aer) * 0.55);
-float3 foam = float3(0.84, 0.9, 0.93);
-return lerp(water, foam, saturate(F));
-"""
-
 OCEAN_ROUGH = """
 // glassy up close, a little rougher far out (the ripples there are too small to draw but still blur the reflection)
 float r = lerp(0.035, 0.14, saturate(D / 120000.0));
 return lerp(r, 0.6, saturate(F));
 """
-
-OCEAN_SSS = """
-// light glows through the thin tops of swells and wakes
-// only near the very top of a wave, where the water is thin enough for sunlight to pass through.
-// (In the Subsurface shading model, Opacity 1 means no light gets through, so return 1 minus the glow.)
-return 1.0 - saturate((UV.x - 0.4) * 1.6) * 0.55 * (1.0 - saturate(F));
-"""
-
 
 def _custom(mat, x, y, code, out_type, names, desc):
     c = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, x, y)

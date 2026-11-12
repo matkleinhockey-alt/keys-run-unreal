@@ -6,6 +6,7 @@
 #include "KeysLife.h"
 #include "KeysWorld.h"
 #include "KeysData.h"
+#include "KeysAudio.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/PostProcessComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -678,7 +679,9 @@ void AKeysDiver::UpdateGun(double Dt)
 	const FVector PosUE = CamPosUE + CamQ.RotateVector((Off + SwayV) * 100);
 	const FQuat Q = CamQ * FRotator(FMath::RadiansToDegrees(PitchR), FMath::RadiansToDegrees(-YawR), FMath::RadiansToDegrees(-RollR)).Quaternion();
 	GunBase->SetWorldLocationAndRotation(PosUE, Q);
-	const bool bShow = CamMode == 0 && !S.bBlackedOut;
+	// the gun is put away while a speared catch is held up for its photo
+	const AKeysBoatPawn* Pw = Pawn();
+	const bool bShow = CamMode == 0 && !S.bBlackedOut && !(Pw && Pw->FState == EKeysFish::Caught);
 	GunBase->SetVisibility(bShow, false);
 	GunBandL->SetVisibility(bShow);
 	GunBandR->SetVisibility(bShow);
@@ -793,6 +796,8 @@ void AKeysDiver::UpdateUnderwaterLook(double Dt)
 		PostMID->SetScalarParameterValue(TEXT("Haze"), float(UnderwaterHaze));
 	}
 	Post->bEnabled = UnderAmt > 0 || Wet > 0;
+	if (AKeysAudio* A = AKeysAudio::Get(this))
+		A->SetUnderwater(bUnder, FMath::Max(0.0, -Y), bDiving ? AirFrac() : 1, bDiving && !S.bBlackedOut && S.Depth() > KeysDive::SurfaceEps, Dt);
 	if (AKeysWorld* W = AKeysWorld::Get(this)) W->SetUnderside(bUnder || UnderAmt > .01);
 }
 

@@ -527,3 +527,59 @@ void AKeysAudio::PlayExtra(FName Id, const FVector& GamePos, float Power)
 		}
 	}
 }
+
+void AKeysAudio::SetUnderwater(bool bUnder, double Depth, double AirFrac, bool bHolding, double Dt)
+{
+	UwDepth = FMath::Lerp(UwDepth, bUnder ? FMath::Max(0.0, Depth) : 0.0, FMath::Min(1.0, Dt * 3));
+	UwLevel = FMath::Lerp(UwLevel, bUnder ? 1.0 : 0.0, FMath::Min(1.0, Dt * 4));
+	// the muffle: 900 Hz just under the surface, closing toward 150 Hz by ~14 m and below
+	const bool bWant = UwLevel > .01;
+	const float Hz = bUnder ? float(FMath::Max(150.0, 900 * FMath::Exp(-UwDepth / 14))) : 20000.f;
+	for (USynthComponent* C : {(USynthComponent*)Sfx.Get(), (USynthComponent*)Music.Get()})
+	{
+		if (!C) continue;
+		if (bWant != bLpfOn) C->SetLowPassFilterEnabled(bWant);
+		if (bWant) C->SetLowPassFilterFrequency(FMath::Lerp(20000.f, Hz, float(UwLevel)));
+	}
+	bLpfOn = bWant;
+	if (UwLevel < .01 || !bReady) return;
+	// bubbles off the mask
+	BubbleT -= Dt;
+	if (BubbleT <= 0)
+	{
+		BubbleT = bHolding ? Rand(.4, 1.4) : Rand(1.5, 4);
+		FKeysBurst B;
+		B.Filter = KeysDSP::EFilter::Bandpass; B.Freq = float(Rand(900, 2600)); B.Q = 3;
+		B.Gain = float(Rand(.04, .09) * UwLevel); B.Att = .004f; B.Dur = .09f;
+		Burst(B);
+	}
+	// the reef crackling (snapping shrimp)
+	if (FMath::FRand() < Dt * 2.2)
+	{
+		FKeysBurst B;
+		B.Filter = KeysDSP::EFilter::Bandpass; B.Freq = float(Rand(3200, 6500)); B.Q = float(Rand(4, 9));
+		B.Gain = float(Rand(.01, .03) * UwLevel); B.Att = .002f; B.Dur = .05f;
+		Burst(B);
+	}
+	// heartbeat: 62 bpm at full air racing to 150 near blackout
+	const double Air = FMath::Clamp(AirFrac, 0.0, 1.0);
+	if (bHolding && Air < .97)
+	{
+		HeartT -= Dt * (FMath::Lerp(150.0, 62.0, Air) / 60);
+		if (HeartT <= 0)
+		{
+			HeartT = 1;
+			const double Str = UwLevel * FMath::Lerp(1.6, .7, Air);
+			const float Beats[2][4] = {{0, 56, .16f, .22f}, {.14f, 46, .2f, .16f}};
+			for (const auto& Bt : Beats)
+			{
+				FKeysBurst B;
+				B.bTone = true; B.Wave = KeysDSP::EWave::Sine;
+				B.Tone = Bt[1]; B.ToneTo = Bt[1] * .7f;
+				B.Gain = float(Bt[3] * Str); B.Att = .015f; B.Dur = Bt[2]; B.Delay = Bt[0];
+				Burst(B);
+			}
+		}
+	}
+	else HeartT = FMath::Min(HeartT, 1.0);
+}

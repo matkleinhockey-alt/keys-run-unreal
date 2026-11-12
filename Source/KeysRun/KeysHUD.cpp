@@ -276,6 +276,8 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 		else if (Sel == TEXT("radio")) Help = TEXT("Three stations: Beno Bonanza, Margaritaville and Hip-hop, with DJ breaks.");
 		else if (Sel == TEXT("view")) Help = TEXT("Chase camera behind the boat, or first person from the helm.");
 		else if (Sel == TEXT("fpview")) Help = TEXT("First person puts you at the rod with your own hands on the reel whenever the line is out.");
+		else if (Sel == TEXT("diveview")) Help = TEXT("How a dive starts (J): looking out through your dive mask with the speargun in hand, or the chase view behind your fins. 1 switches while you swim.");
+		else if (Sel == TEXT("haze")) Help = TEXT("How much the water hazes the distance on a dive. Visibility still shrinks with depth, from about 30 m near the surface to 10 m past 20 m.");
 		else if (Sel == TEXT("autochase")) Help = TEXT("When a big fish runs, the boat follows it so you don't get spooled.");
 		if (!Help.IsEmpty())
 		{
@@ -542,15 +544,39 @@ void AKeysHUD::DrawDiving(AKeysBoatPawn* P, AKeysDiver* D)
 	const float Tun = float(D->TunnelAmount());
 	if (Tun > .01f)
 	{
-		for (int32 k = 0; k < 10; k++)
+		if (!VignetteTex)
 		{
-			const float F = (k + 1) / 10.f;
-			const float Ins = (1 - F) * FMath::Min(SW, SH) * .5f * (1.2f - Tun * .7f);
-			const float A = FMath::Clamp(Tun * .22f * F, 0.f, 1.f);
-			DrawRect(FLinearColor(0, 0, 0, A), 0, 0, SW, Ins);
-			DrawRect(FLinearColor(0, 0, 0, A), 0, SH - Ins, SW, Ins);
-			DrawRect(FLinearColor(0, 0, 0, A), 0, Ins, Ins, SH - 2 * Ins);
-			DrawRect(FLinearColor(0, 0, 0, A), SW - Ins, Ins, Ins, SH - 2 * Ins);
+			// a radial falloff: clear in the middle, black toward the edges
+			constexpr int32 N = 128;
+			VignetteTex = UTexture2D::CreateTransient(N, N, PF_B8G8R8A8);
+			if (VignetteTex)
+			{
+				VignetteTex->SRGB = false;
+				VignetteTex->Filter = TF_Bilinear;
+				VignetteTex->AddressX = VignetteTex->AddressY = TA_Clamp;
+				TArray<FColor> Px;
+				Px.SetNumUninitialized(N * N);
+				for (int32 j = 0; j < N; j++)
+					for (int32 i = 0; i < N; i++)
+					{
+						const float R = FVector2D((i + .5f) / N - .5f, (j + .5f) / N - .5f).Size() * 2;
+						const float A = FMath::SmoothStep(.35f, 1.15f, R);
+						Px[j * N + i] = FColor(0, 0, 0, uint8(A * 255));
+					}
+				FTexture2DMipMap& Mip = VignetteTex->GetPlatformData()->Mips[0];
+				FMemory::Memcpy(Mip.BulkData.Lock(LOCK_READ_WRITE), Px.GetData(), Px.Num() * sizeof(FColor));
+				Mip.BulkData.Unlock();
+				VignetteTex->UpdateResource();
+			}
+		}
+		if (VignetteTex)
+		{
+			// closing in: scale the clear middle down as it gets worse
+			const float Grow = 1.f + (1 - Tun) * .8f;
+			const float W = SW * Grow, Hh = SH * Grow;
+			DrawTexture(VignetteTex, (SW - W) * .5f, (SH - Hh) * .5f, W, Hh, 0, 0, 1, 1, FLinearColor(1, 1, 1, FMath::Min(1.f, Tun * 1.15f)));
+			// whatever the stretched texture leaves uncovered at the edges stays dark too
+			if (Grow > 1.f) {}
 		}
 		if (S.bBlackedOut) DrawRect(FLinearColor(0, 0, 0, FMath::Min(1.f, Tun)), 0, 0, SW, SH);
 	}

@@ -66,6 +66,12 @@ Not ported: the tuna-tower view (no ported hull has a tower), the 3D screens on 
 spray particles (splashes are simple shapes), text-to-speech (the DJ and Luigi callouts are on-screen text),
 engine sounds for other boats, and playing your own music files on the radio.
 
+Diving differs from the web game in a few places: there is no shop here, so every dive uses the no-gear loadout (no tank,
+fins or wide mask) and the speargun is the stock gun with unlimited shafts; the god rays (the web game's high/ultra quality
+setting), the breathing loop in the underwater sound and the wreck treasure are not ported; the near-field reef schools are
+ported on top of this port's existing fish population (the web game's resident and roaming layers are not); the diver
+dives with J, so the shower moved to Z; and the underwater fog is a post-process rather than a per-material fog.
+
 ## Setup (Mac)
 
 1. Install **Xcode** from the App Store, open it once, and accept the license.

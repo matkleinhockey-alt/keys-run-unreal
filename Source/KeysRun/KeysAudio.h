@@ -67,6 +67,10 @@ public:
 	void Burst(const FKeysBurst& B, const FVector* GamePos = nullptr, float RefDist = 6.f);
 
 	// ---- motors and master
+	// under water (web audio/underwater.ts): everything muffles with depth, plus bubble pops, reef crackle and a
+	// heartbeat that races as the air runs out. Call every frame; bUnder false fades it all back out.
+	void SetUnderwater(bool bUnder, double Depth, double AirFrac, bool bHolding, double Dt);
+
 	void StartEngines();
 	void StopEngines();
 	void ToggleEngines();                  // I key
@@ -130,4 +134,6 @@ private:
 	FString DJText;
 
 	TArray<FString> Toasts;
+	double UwLevel = 0, UwDepth = 0, BubbleT = .5, HeartT = 0;
+	bool bLpfOn = false;
 };

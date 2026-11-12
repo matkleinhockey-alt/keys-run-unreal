@@ -534,7 +534,11 @@ void AKeysReef::BeginPlay()
 		for (int32 Lod = 0; Lod < 3; Lod++)
 		{
 			FKeysMesh M;
-			ToMesh(GeoFor(S, Lod), M);
+			const FGeo G = GeoFor(S, Lod);
+			double Top = .1;
+			for (const FVector& V : G.P) Top = FMath::Max(Top, V.Y);
+			GeoH.Add(Top);
+			ToMesh(G, M);
 			const bool bCard = IsCard(S, Lod);
 			UMaterialInterface* Mat = bCard ? (CardMID ? (UMaterialInterface*)CardMID : Solid) : Solid;
 			UStaticMesh* SM = MakeMesh(M, Mat, *FString::Printf(TEXT("Reef_%d_%d"), S, Lod));
@@ -597,7 +601,11 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
 				FMatrix FM = FMatrix::Identity;
 				for (int32 r = 0; r < 3; r++) for (int32 c = 0; c < 3; c++) FM.M[c][r] = R3[Map[r]][Map[c]];
 				const FQuat Q(FM);
-				FTransform T(Q, ToUE(I.X, I.Y, I.Z), FVector(I.SX, I.SZ, I.SY));
+				// nothing pokes out of the water: in skinny water a blade or a branch is cut down to stay 20 cm under
+				double SY = I.SY;
+				const double Room = -I.Y - .2;
+				if (GeoH.IsValidIndex(P) && GeoH[P] * SY > Room) SY = FMath::Max(.05, Room / GeoH[P]);
+				FTransform T(Q, ToUE(I.X, I.Y, I.Z), FVector(I.SX, I.SZ, SY));
 				Xf[P].Add(T);
 				const FLinearColor C = FMath::Lerp(Lo[I.Species], Hi[I.Species], float(I.ColorT));
 				Data[P].Append({C.R, C.G, C.B, CardKind(I.Species), float(Lod == 2 && (I.Species == Elkhorn || I.Species == Staghorn) ? 0 : Sp[I.Species].Flex)});

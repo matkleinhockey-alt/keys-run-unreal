@@ -52,6 +52,14 @@ void AKeysWorld::SetUnderside(bool bOn)
 	Water->SetMeshSectionVisible(2, bOn);
 }
 
+void AKeysWorld::DebugOldWater(bool bOld)
+{
+	UMaterialInterface* M = bOld ? LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Water.M_KR_Water")) : (WaterMID ? (UMaterialInterface*)WaterMID : WaterMaterial());
+	if (!M) return;
+	Water->SetMaterial(0, M);
+	Water->SetMaterial(1, M);
+}
+
 UMaterialInterface* AKeysWorld::VertexColorMaterial() { static TWeakObjectPtr<UMaterialInterface> M; if (!M.IsValid()) M = LoadMat(TEXT("/Game/KeysRun/Materials/M_KR_VertexColor.M_KR_VertexColor")); return M.Get(); }
 UMaterialInterface* AKeysWorld::WaterMaterial()
 {
