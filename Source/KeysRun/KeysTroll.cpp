@@ -187,8 +187,9 @@ void AKeysBoatPawn::TrollCommit()
 	SetHook();
 	ShowToast(FString::Printf(TEXT("LINE OUT! %s - %d lb on the %s."), *S->Name, FMath::RoundToInt(Weight), *TrollSideName(Stn).ToLower()), 5);
 	FightSub = TEXT("Off the troll and out of gear - hold S (or Space) to reel, ease off when the bar runs red.");
-	// a trolled fish comes up: guarantee the jump roll for the fish that actually jump (a tuna goes down instead)
-	if (Sp->bJump || Key == TEXT("kingfish")) JumpQ = FMath::Max(JumpQ, IsBillfish(Key) ? 3 : Sp->bJump ? 2 : 1);
+	// a trolled fish comes up: SetHook has rolled its jumps on the strike already (JumpHabit); a billfish or a tarpon
+	// on the spread always shows itself
+	if ((IsBillfish(Key) || Key == TEXT("tarpon")) && JumpQ == 0) { JumpQ = IsBillfish(Key) ? 3 : 2; JumpWait = .3; }
 }
 
 void AKeysBoatPawn::UpdateTroll(double Dt, double T)

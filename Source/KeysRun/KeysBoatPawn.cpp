@@ -1995,7 +1995,19 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 			WantPos = FVector(X + FMath::Sin(O) * Dist * 1.3, Y + Ht * 1.2, Z + FMath::Cos(O) * Dist * 1.3);
 		}
 		double LX = X - FMath::Sin(H) * 4, LZ = Z - FMath::Cos(H) * 4;
-		if (FState == EKeysFish::Fight) { LX = Lerp(X, FX, .35); LZ = Lerp(Z, FZ, .35); }
+		if (FState == EKeysFish::Fight)
+		{
+			LX = Lerp(X, FX, .35); LZ = Lerp(Z, FZ, .35);
+			// a fish in the air: swing out to the side of the line, so the boat (its tower, its top) isn't between the
+			// lens and the jump, keeping to whichever side the camera is already on
+			if (bJumping && bRunning && !bDragging)
+			{
+				const double B = FMath::Atan2(FZ - Z, FX - X), Cur = FMath::Atan2(CamPos.Z - Z, CamPos.X - X);
+				const double A1 = B + PI + .8, A2 = B + PI - .8;
+				const double Ab = FMath::Abs(FMath::UnwindRadians(A1 - Cur)) < FMath::Abs(FMath::UnwindRadians(A2 - Cur)) ? A1 : A2;
+				WantPos = FVector(X + FMath::Cos(Ab) * Dist, Y + Ht, Z + FMath::Sin(Ab) * Dist);
+			}
+		}
 		else if (FState != EKeysFish::Idle) { LX = Lerp(X, Bob.X, .35); LZ = Lerp(Z, Bob.Z, .35); }
 		WantLook = FVector(LX, Y + 1.8, LZ);
 		if (RaiseCamT > 0 && bRunning && !bDragging)
@@ -2167,9 +2179,32 @@ void AKeysBoatPawn::SetHook()
 	FightSub = TEXT("It's running! Hold S (or Space) to reel, ease off when the bar runs red.");
 	Shake = FMath::Max(Shake, .3);
 	ShowFishMesh(true);
-	if (Sp->bJump && FMath::FRand() < .85) JumpQ = IsBillfish(Key) ? 2 + FMath::RandRange(0, 2) : 1;
-	else if (Key == TEXT("kingfish") && FMath::FRand() < .6) JumpQ = 1;
+	// the hit itself: the jumpers go airborne straight away (a tarpon always, a billfish nearly always, greyhounding)
+	const FJumpHabit Jh = JumpHabit(Key, Sp->bJump);
+	JumpStyle = Jh.Style;
+	bFirstJump = true;
+	if (Jh.StrikeP > 0 && FMath::FRand() < Jh.StrikeP) { JumpQ = FMath::RandRange(Jh.NMin, Jh.NMax); JumpWait = Rand(.2, .5); }
 	else if (IsSounder(Key)) DeepT = Rand(3, 7);
+}
+
+// How each species comes out of the water: on the strike (chance, how many in a row), on a later run, and the shape of
+// it. Tarpon always jump when they hit, gill-rattling, and keep jumping; billfish greyhound; kingfish and wahoo
+// skyrocket on the strike; a snook shakes its head on the surface; a blacktip spins; a swordfish only now and then.
+// Tuna, grouper, snapper, permit, bonefish, amberjack and cobia stay down.
+AKeysBoatPawn::FJumpHabit AKeysBoatPawn::JumpHabit(const FString& K, bool bJumper)
+{
+	if (K == TEXT("tarpon")) return {1.0, 2, 3, .8, 0};
+	if (IsBillfish(K)) return {.93, 3, 5, .55, 1};
+	if (K == TEXT("mahi")) return {.78, 1, 2, .45, 0};
+	if (K == TEXT("ladyfish")) return {.8, 1, 3, .5, 0};
+	if (K == TEXT("barracuda")) return {.72, 1, 1, .3, 0};
+	if (K == TEXT("blacktip")) return {.72, 1, 2, .3, 4};
+	if (K == TEXT("kingfish")) return {.6, 1, 1, .1, 2};
+	if (K == TEXT("wahoo")) return {.3, 1, 1, .05, 2};
+	if (K == TEXT("snook")) return {.5, 1, 1, .25, 3};
+	if (K == TEXT("swordfish")) return {.15, 1, 1, .05, 0};
+	if (bJumper) return {.8, 1, 1, .4, 0};
+	return {0, 0, 0, 0, 0};
 }
 
 void AKeysBoatPawn::StartJump(bool bLow)
@@ -2181,6 +2216,15 @@ void AKeysBoatPawn::StartJump(bool bLow)
 	JRun = bLow ? Lf * 1.6 : 3 + Lf;
 	JH = bLow ? .5 + Lf * .22 : 1.6 + Lf * .9;
 	JSpin = Rand(-1, 1);
+	if (!bLow && JumpStyle == 2)
+	{
+		// a skyrocket: straight up out of the water, well clear of it, and back down nearly where it left
+		JRun = Lf * .5; JH = 2.6 + Lf * 1.3; JDur = 1.2 + Lf * .2;
+	}
+	if (JumpStyle == 4) JSpin = (FMath::FRand() < .5 ? -1 : 1) * Rand(3.5, 5.0);   // a spinner: two or three turns in the air
+	// the first jump on the hit is the big one: a tarpon rattling its gills high over the water
+	if (bFirstJump && !bLow && Key == TEXT("tarpon")) { JH *= 1.3; JDur *= 1.12; }
+	bFirstJump = false;
 	if (AKeysAudio* A = AKeysAudio::Get(this)) A->Splash(FX, FZ, bLow ? 16 : 34, bLow ? 1.1 : 1.7);
 	// white water where it explodes out
 	if (AKeysLife* L = AKeysLife::Get(this)) L->Splash(FX, FZ, bLow ? 26 : 48 + FMath::RoundToInt(FishLen * 10), bLow ? 1.1 : 1.6 + FishLen * .2);
@@ -2468,7 +2512,8 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 	else if (FState == EKeysFish::Fight)
 	{
 		const double S = Str;
-		const bool bJumper = Sp->bJump, bBill = IsBillfish(Key), bSounder = IsSounder(Key);
+		const bool bSounder = IsSounder(Key);
+		const FJumpHabit Jh = JumpHabit(Key, Sp->bJump);
 		RunT -= Dt;
 		if (bRunningFish && RunT <= 0) { bRunningFish = false; RunT = Rand(1.4, 3.2) * (1.3 - Stamina * .4); }
 		else if (!bRunningFish && RunT <= 0)
@@ -2478,14 +2523,24 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 			RunT = Rand(.9, 2.4) * (.5 + Stamina * .8);
 			RunAng = Rand(-1.1, 1.1);
 			Pull = S * Rand(.7, 1.1) * (.45 + .55 * Stamina);
-			if (bJumper && FMath::FRand() < .4 + .4 * Stamina) JumpQ = bBill ? 2 + FMath::RandRange(0, 2) : 1 + (FMath::FRand() < .3 ? 1 : 0);
+			if (Jh.RunP > 0 && FMath::FRand() < Jh.RunP * (.5 + .5 * Stamina) + (Key == TEXT("tarpon") ? .15 : 0))
+			{
+				JumpQ = Jh.Style == 1 ? 2 + FMath::RandRange(0, 2) : Key == TEXT("tarpon") ? 1 + FMath::RandRange(0, 1) : Jh.NMax > 1 && FMath::FRand() < .3 ? 2 : 1;
+				JumpWait = Rand(.1, .4);
+			}
 			else if (bSounder && FMath::FRand() < .6)
 			{
 				DeepT = Rand(4, 9);
 				if (T - SoundMsgT > 8) { SoundMsgT = T; ShowToast(TEXT("It's sounding - diving for the bottom!")); }
 			}
 		}
-		if (JumpQ > 0 && !bJumping) { StartJump(bBill && JumpQ > 1); JumpQ--; }
+		// one after another until the queue is spent; a greyhounding billfish skips along low between the big ones
+		if (JumpQ > 0 && !bJumping && (JumpWait -= Dt) <= 0)
+		{
+			StartJump(JumpStyle == 3 || (JumpStyle == 1 && JumpQ > 1));
+			JumpQ--;
+			JumpWait = JumpStyle == 1 ? .05 : Rand(.15, .6);
+		}
 		ShakeT -= Dt;
 		if (ShakeT <= 0)
 		{

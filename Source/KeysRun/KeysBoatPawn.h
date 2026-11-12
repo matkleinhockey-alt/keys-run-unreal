@@ -404,6 +404,13 @@ private:
 	bool bRunningFish = false;
 	double RunT = 0, RunAng = 0, Pull = 0, SlackT = 0, OverT = 0, MaxLine = 200;
 	int32 JumpQ = 0;
+	// how a species jumps (JumpHabit): chance on the strike, how many in a row, chance on a later run, and the style
+	// (0 leap, 1 greyhounding billfish, 2 skyrocket, 3 head-shake, 4 spinner)
+	struct FJumpHabit { double StrikeP; int32 NMin, NMax; double RunP; int32 Style; };
+	static FJumpHabit JumpHabit(const FString& K, bool bJumper);
+	int32 JumpStyle = 0;
+	double JumpWait = 0;
+	bool bFirstJump = false;
 	double Deep = 0, DeepT = 0, ShakeT = 0, SoundMsgT = -99, CaughtT = -99, LastPts = 0;
 	bool bSlam1 = false, bSlam2 = false, bDeepTip = false;
 
