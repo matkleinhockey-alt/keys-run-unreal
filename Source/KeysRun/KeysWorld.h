@@ -46,7 +46,6 @@ private:
 	void BuildTerrain();
 	void BuildBridges();
 	void BuildScenery();
-	void BuildMarinas();
 	void UpdateWater();
 	void ApplySun(double K);
 	UInstancedStaticMeshComponent* MakeISM(const TCHAR* Name, UStaticMesh* Mesh, const FLinearColor& Color, double Roughness = .8);

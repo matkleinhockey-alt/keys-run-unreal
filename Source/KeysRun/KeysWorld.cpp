@@ -1,5 +1,7 @@
 #include "KeysWorld.h"
 #include "KeysGeo.h"
+#include "KeysTownData.h"
+#include "KeysTown.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/DirectionalLightComponent.h"
@@ -127,7 +129,6 @@ void AKeysWorld::BeginPlay()
 	BuildTerrain();
 	BuildBridges();
 	BuildScenery();
-	BuildMarinas();
 	UpdateWater();
 }
 
@@ -289,11 +290,6 @@ void AKeysWorld::BuildScenery()
 	UInstancedStaticMeshComponent* Trunks = MakeISM(TEXT("PalmTrunks"), Cyl, Srgb(.52, .43, .32), .95);
 	UInstancedStaticMeshComponent* Fronds = MakeISM(TEXT("PalmFronds"), Cone ? Cone : Sph, Srgb(.24, .45, .2), .85);
 	UInstancedStaticMeshComponent* Mangroves = MakeISM(TEXT("Mangroves"), Sph, Srgb(.14, .29, .13), .95);
-	TArray<UInstancedStaticMeshComponent*> Houses = {
-		MakeISM(TEXT("HousePink"), Cube, Srgb(.95, .72, .72), .8), MakeISM(TEXT("HouseMint"), Cube, Srgb(.68, .9, .8), .8),
-		MakeISM(TEXT("HouseYellow"), Cube, Srgb(.97, .9, .62), .8), MakeISM(TEXT("HouseWhite"), Cube, Srgb(.95, .95, .93), .8),
-		MakeISM(TEXT("HouseBlue"), Cube, Srgb(.62, .8, .93), .8)};
-	UInstancedStaticMeshComponent* Roofs = MakeISM(TEXT("Roofs"), Cube, Srgb(.85, .86, .88), .6);
 	UInstancedStaticMeshComponent* Glass = MakeISM(TEXT("Towers"), Cube, Srgb(.42, .55, .66), .15);
 	UInstancedStaticMeshComponent* Concrete = MakeISM(TEXT("TowersWhite"), Cube, Srgb(.88, .88, .86), .5);
 
@@ -308,7 +304,7 @@ void AKeysWorld::BuildScenery()
 			const double R = Hash2(JX * 1.3, JZ * .7);
 			const FShore S = ShoreInfo(JX, JZ);
 			const double Density = S.Isl->bMainland ? .05 : S.Isl->bMiami ? .2 : .4;
-			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8) continue;
+			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6)) continue;
 			if (H < .9 && S.E > .93 && !S.Isl->bMiami)
 			{
 				// mangrove fringe at the water's edge
@@ -326,7 +322,12 @@ void AKeysWorld::BuildScenery()
 			Fronds->AddInstance(FTransform(FRotator(0, Rot.Yaw, 0), Base + Up * Tall * 100 + FVector(0, 0, 30), FVector(5.5, 5.5, 1.2)));
 		}
 
-	// conch houses on the keys, aligned to each island's streets
+	// Conch houses (web world/islands.ts): each with its own footprint, wall height and roof pitch, a hip roof of silver tin,
+	// a porch across the front, windows with shutters and a door, and a third of them up on piers. Built as vertex-coloured
+	// meshes in 1.2 km chunks so the far ones cull.
+	TMap<int64, FTownBatch> HouseChunks;
+	static const uint32 Pastel[] = {0xf7c6d0, 0xfde2a7, 0xa8e0d8, 0xb9d4f5, 0xf9f3e3, 0xd8c6f0, 0xffffff, 0xc9e8c2};
+	static const uint32 Shutter[] = {0x2bb3a8, 0x1f4f8c, 0xffffff, 0x3f8a5a, 0xe4572e};
 	const double HS = 34;
 	for (double Z = WorldZ0; Z < WorldZ0 + WorldSize; Z += HS)
 		for (double X = WorldX0; X < WorldX0 + WorldSize; X += HS)
@@ -335,14 +336,64 @@ void AKeysWorld::BuildScenery()
 			const double H = LandH(JX, JZ);
 			if (H < 1.15) continue;
 			const FShore S = ShoreInfo(JX, JZ);
-			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15) continue;
+			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || KeysTown::InFootprint(JX, JZ, 14)) continue;
+			bool bNearMarina = false;
+			for (const FMarina& Mr : Marinas()) bNearMarina |= FMath::Abs(JX - Mr.SX) < 30 && FMath::Abs(JZ - Mr.SZ) < 30;
+			if (bNearMarina) continue;
 			const double R = Hash2(JX * 2.1, JZ * 1.7);
 			if (R > (S.Isl->bMainland ? .12 : .5)) continue;
-			const double W = 8 + R * 8, D = 9 + Hash2(JZ, JX) * 7, Ht = 3.6 + (R > .35 ? 3 : 0);
-			const FRotator Rot(0, FMath::RadiansToDegrees(S.Isl->Th), 0);
-			Houses[int32(Hash2(JX, JZ * 5) * Houses.Num()) % Houses.Num()]->AddInstance(FTransform(Rot, ToUE(JX, H + Ht * .5, JZ), FVector(W, D, Ht)));
-			Roofs->AddInstance(FTransform(Rot, ToUE(JX, H + Ht + .2, JZ), FVector(W + .8, D + .8, .4)));
+			// the house's own dice
+			const double R1 = Hash2(JX * 3.3, JZ), R2 = Hash2(JZ * 1.9, JX), R3 = Hash2(JX + 79.19, JZ), R4 = Hash2(JX, JZ + 79.19);
+			const double SX = FMath::Lerp(.82, 1.3, R1), SZ = FMath::Lerp(.86, 1.26, R2), SY = FMath::Lerp(.88, 1.38, R3);
+			const bool bPiers = R4 < .34;
+			const double Lift = bPiers ? 1.15 : 0, WallH = 3.4 * SY, Base = H + Lift;
+			const double W = 6 * SX * 1.4, D = 7 * SZ * 1.3;
+			// three.js yaw: the island's street grid, sometimes turned a quarter
+			const double Ry = -S.Isl->Th + (Hash2(JZ, JX * 5) < .5 ? 0 : PI / 2);
+			const int64 Key = (int64(FMath::FloorToInt(JX / 1200)) << 32) ^ int64(uint32(FMath::FloorToInt(JZ / 1200)));
+			FTownBatch& B = HouseChunks.FindOrAdd(Key);
+			const uint32 Wall = Pastel[int32(FMath::Abs(JX * 31 + JZ)) % 8], Trim = Shutter[int32(FMath::Abs(JZ * 17 + JX)) % 5];
+			const double Cs = FMath::Cos(Ry), Sn = FMath::Sin(Ry);
+			auto At = [&](double LX, double LZ) { return FVector2D(JX + LX * Cs + LZ * Sn, JZ - LX * Sn + LZ * Cs); };
+			if (bPiers)
+			{
+				B.Box(JX, H + Lift / 2 - .3, JZ, W - .4, Lift + .6, D - .4, 0x8e8b82, 0, Ry);
+				for (int32 sx = -1; sx <= 1; sx += 2) for (int32 sz = -1; sz <= 1; sz += 2) { const FVector2D Q = At(sx * (W / 2 - .3), sz * (D / 2 - .3)); B.Box(Q.X, H + Lift / 2 - .2, Q.Y, .35, Lift + .4, .35, 0xe8e4d8, 0, Ry); }
+			}
+			else B.Box(JX, H - .3 + .25, JZ, W + .3, .5 + .6, D + .3, 0xd8d0be, 0, Ry);
+			B.Box(JX, Base + WallH / 2, JZ, W, WallH, D, Wall, 0, Ry);
+			// the hip roof, silver tin, with a little overhang and its own pitch
+			const double Pitch = FMath::Lerp(.82, 1.35, R2) * 1.2, Over = FMath::Lerp(1.0, 1.12, R1);
+			B.HipRoof(JX, Base + WallH, JZ, W * Over + .6, D * Over + .6, Pitch * FMath::Min(W, D) * .25, KeysTownPaint::Hex(R3 < .7 ? 0xb8bcc2 : 0xc0603a), Ry);
+			// the porch across the front, a porch roof on posts, the door and windows with shutters
+			const FVector2D PC = At(0, D / 2 + 1.15);
+			B.Box(PC.X, Base + .1, PC.Y, W, .22, 2.3, 0xf4f2ec, 0, Ry);
+			for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q = At(k * (W / 2 - .2), D / 2 + 2.1); B.Box(Q.X, Base + 1.3, Q.Y, .14, 2.4, .14, 0xffffff, 0, Ry); }
+			const FVector2D PR = At(0, D / 2 + 1.2);
+			B.Box(PR.X, Base + 2.55, PR.Y, W + .2, .1, 2.6, 0xb8bcc2, -.12, Ry);
+			const FVector2D Dr = At(W * .18, D / 2 + .04);
+			B.Box(Dr.X, Base + 1.1, Dr.Y, 1.0, 2.1, .08, Trim, 0, Ry);
+			for (double WX : {-W * .25, W * .4})
+			{
+				if (FMath::Abs(WX - W * .18) < 1.0) continue;
+				const FVector2D Q = At(WX, D / 2 + .04);
+				B.Box(Q.X, Base + 1.7, Q.Y, 1.1, 1.3, .06, 0x27414f, 0, Ry);
+				for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q2 = At(WX + k * .8, D / 2 + .05); B.Box(Q2.X, Base + 1.7, Q2.Y, .4, 1.4, .06, Trim, 0, Ry); }
+			}
+			for (int32 sd = -1; sd <= 1; sd += 2)
+				for (double WZ : {-D * .22, D * .22}) { const FVector2D Q = At(sd * (W / 2 + .03), WZ); B.Box(Q.X, Base + 1.7, Q.Y, .06, 1.2, 1.0, 0x27414f, 0, Ry); }
+			const FVector2D Bk = At(-W * .2, -D / 2 - .03);
+			B.Box(Bk.X, Base + 1.7, Bk.Y, 1.1, 1.2, .06, 0x27414f, 0, Ry);
 		}
+	for (TPair<int64, FTownBatch>& C : HouseChunks)
+	{
+		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
+		PM->SetupAttachment(Root);
+		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PM->RegisterComponent();
+		C.Value.M.Commit(PM, 0, VertexColorMaterial());
+		PM->SetCachedMaxDrawDistance(260000.f);
+	}
 
 	// Miami skyline: Brickell and downtown towers on the mainland
 	const double TS = 60;
@@ -359,29 +410,6 @@ void AKeysWorld::BuildScenery()
 			const double W = 22 + Hash2(JX, JZ) * 18;
 			(R > .3 ? Glass : Concrete)->AddInstance(FTransform(FRotator::ZeroRotator, ToUE(JX, H + Ht * .5, JZ), FVector(W, W * (.7 + R), Ht)));
 		}
-}
-
-// ---------------------------------------------------------------- marinas
-void AKeysWorld::BuildMarinas()
-{
-	using namespace KeysGeo;
-	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
-	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (!Cube || !Cyl) return;
-	UInstancedStaticMeshComponent* Planks = MakeISM(TEXT("DockPlanks"), Cube, Srgb(.6, .5, .38), .95);
-	UInstancedStaticMeshComponent* Posts = MakeISM(TEXT("DockPosts"), Cyl, Srgb(.4, .33, .25), .95);
-	UInstancedStaticMeshComponent* Sheds = MakeISM(TEXT("DockSheds"), Cube, Srgb(.95, .93, .88), .7);
-	for (const FMarina& M : Marinas())
-	{
-		const double Z0 = M.SZ - M.Dir * 6, Z1 = M.EZ, ZC = (Z0 + Z1) * .5, Len = FMath::Abs(Z1 - Z0);
-		Planks->AddInstance(FTransform(FRotator::ZeroRotator, ToUE(M.SX, 1.1, ZC), FVector(3.2, Len, .25)));
-		// T-head at the end
-		Planks->AddInstance(FTransform(FRotator::ZeroRotator, ToUE(M.SX, 1.1, Z1), FVector(18, 3.2, .25)));
-		for (double Z = FMath::Min(Z0, Z1); Z <= FMath::Max(Z0, Z1); Z += 6)
-			for (int32 s = -1; s <= 1; s += 2)
-				Posts->AddInstance(FTransform(FRotator::ZeroRotator, ToUE(M.SX + s * 1.7, -.6, Z), FVector(.28, .28, 4)));
-		Sheds->AddInstance(FTransform(FRotator::ZeroRotator, ToUE(M.SX + 6, 3, M.SZ - M.Dir * 12), FVector(8, 6, 4)));
-	}
 }
 
 // ---------------------------------------------------------------- water

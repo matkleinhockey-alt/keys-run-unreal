@@ -287,11 +287,22 @@ namespace KeysGeo
 	}
 
 	// ground height: beaches slope into the water, creeks carve through, golf courses and the runway are graded flat
+	// the town is built on fill (web depth.ts TOWN_FILL, in the frame of MARINAS[0]): the ground under the pad is raised to
+	// at least 1.6 m and kept under the pad's 2.35 m top so it never pokes through the streets
+	static bool InTownFill(double X, double Z)
+	{
+		if (!GMarinas.Num()) return false;
+		const FMarina& M = GMarinas[0];
+		const double U = M.Dir * (X - M.SX), V = M.Dir * (M.SZ - Z);
+		return U >= -112 && U <= 112 && V >= 14 && V <= 180;
+	}
+
 	double LandH(double X, double Z)
 	{
 		const FShore S = ShoreInfo(X, Z);
 		const double E = S.E;
-		if (E > 1.08) return -2;
+		const bool bFill = InTownFill(X, Z);
+		if (E > 1.08) return bFill ? 1.6 : -2;
 		double H = -1.2 + 2.85 * SS(1.07, .9, E);
 		if (E < .92) H += .25 * (FMath::Sin(X * .021) * FMath::Cos(Z * .017) + FMath::Sin(X * .0063 + Z * .0081)) * SS(.92, .72, E);
 		double LX, LZ;
@@ -299,6 +310,7 @@ namespace KeysGeo
 		if (OnCourse(S.Isl, LX, LZ)) H = FMath::Min(H, 1.85);
 		const double CD = CreekDist(X, Z);
 		if (CD < 10) H = FMath::Min(H, Lerp(-1.6, H, SS(-2, 10, CD)));
+		if (bFill) H = FMath::Clamp(H, 1.6, 2.2);
 		return H;
 	}
 
