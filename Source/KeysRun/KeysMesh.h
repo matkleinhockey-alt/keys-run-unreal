@@ -12,7 +12,7 @@ enum EKeysSurf : uint8
 	SurfDefault = 0, SurfSkin = 1, SurfCloth = 2, SurfHair = 3, SurfGelcoat = 4, SurfNonSkid = 5, SurfSteel = 6,
 	SurfVinyl = 7, SurfWood = 8, SurfStucco = 9, SurfTin = 10, SurfAsphalt = 11, SurfSand = 12, SurfLeaf = 13,
 	SurfGlass = 14, SurfFish = 15, SurfBark = 16, SurfRubber = 17, SurfSiding = 18, SurfConcrete = 19, SurfFin = 20,
-	SurfEye = 21, SurfShingle = 22, SurfGrass = 23
+	SurfEye = 21, SurfShingle = 22, SurfGrass = 23, SurfQuilt = 24, SurfHexQuilt = 25, SurfMetalPaint = 26, SurfTeakDeck = 27
 };
 
 // Vertex-colored geometry for the procedural meshes. Authored in meters; Add* calls convert to centimeters.

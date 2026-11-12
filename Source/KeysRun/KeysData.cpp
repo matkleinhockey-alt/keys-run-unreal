@@ -124,8 +124,8 @@ namespace KeysData
 		Add(TEXT("freeman"), TEXT("Freeman"), TEXT("42LR"), TEXT("Quad Mercury Racing 450R"), 12.8, 3.58, 4, 69, .44, .72, TEXT("2' 0\""), .82, true, true,
 			0x74bfe6, 0x1f2a33, 0xf2f2f0, 0xf2f2ee, 0x17191c, 0xe6e2d8, 800, .3,
 			TEXT("A long-range catamaran built for tournament fishing. Twin hulls ride flat and soft offshore, and it drafts shallow for its size."));
-		Add(TEXT("midnight"), TEXT("Midnight Express"), TEXT("43 Open"), TEXT("Quad Mercury Racing 450R"), 13.1, 3.81, 4, 70, .42, .66, TEXT("2' 0\""), .9, false, true,
-			0x17191d, 0xc8a24a, 0x2a2d31, 0xf2f2ee, 0x1c1f24, 0xe7e5df, 400, .35,
+		Add(TEXT("midnight"), TEXT("Midnight Express"), TEXT("43 Open"), TEXT("Six Mercury Racing 450R"), 13.1, 3.81, 6, 70, .42, .66, TEXT("2' 0\""), .9, false, true,
+			0x8f8270, 0x2a2620, 0x5a544b, 0x9c8f7c, 0x8f8270, 0xb8875a, 400, .35,
 			TEXT("A twin-step deep-V luxury rocket with a very wide beam. Fast, stable, and dry, but keep it in real water."));
 		Add(TEXT("mti"), TEXT("MTI"), TEXT("V42"), TEXT("Quad Mercury Racing 450R"), 12.8, 3.5, 4, 76, .46, .62, TEXT("3' 0\""), 1.15, false, true,
 			0xc8102e, 0xf4f4f4, 0x15171a, 0x15171a, 0x15171a, 0x2a2d31, 300, .3,
@@ -145,8 +145,8 @@ namespace KeysData
 		static const FFit Fits[] = {
 			{TEXT("robalo"),    0x6fa8c9, 0x2a2d31, 0,        0x6fa8c9, false, false, false, true,  false, false, true,  false, 0, .42, 0},
 			{TEXT("grady"),     0x23466e, 0x2a2d31, 0x23466e, 0xe8e4d8, true,  true,  false, true,  true,  false, true,  false, 0, .40, 0},
-			{TEXT("freeman"),   0x1f2a33, 0x1f2126, 0,        0x9aa0a6, false, true,  true,  false, false, false, false, true,  1, .50, 0},
-			{TEXT("midnight"),  0xc8a24a, 0x17191d, 0xc8a24a, 0xf3efe6, false, false, false, false, false, true,  false, true,  2, .46, 0},
+			{TEXT("freeman"),   0x1f2a33, 0x1f2126, 0,        0xe6e6e2, false, true,  true,  false, false, false, false, true,  1, .50, 0},
+			{TEXT("midnight"),  0x111214, 0x17191d, 0x2a2620, 0x9a6a3e, false, false, false, false, false, true,  false, true,  2, .46, 0},
 			{TEXT("mti"),       0xf4f4f4, 0x15171a, 0xf4f4f4, 0x1d1f23, false, false, false, false, false, true,  false, true,  2, .48, 0},
 			{TEXT("yellowfin"), 0x1f3b57, 0x2a2d31, 0x1f3b57, 0x1f3b57, true,  true,  true,  true,  true,  false, true,  true,  0, .56, 30000},
 			{TEXT("contender"), 0x2f7a52, 0x2a2d31, 0x2f7a52, 0x2f7a52, true,  false, true,  true,  true,  false, true,  false, 0, .46, 20000},

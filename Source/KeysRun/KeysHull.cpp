@@ -164,8 +164,8 @@ namespace KeysMesh
 		static const FRow Rows[] = {
 			{TEXT("robalo"),    1.05, .38, .45, 20, 48, .9,  .42, 0,   0,   0xf4f4f2, 0x6fa8c9, 0xffffff, -1,       0x8e949a, 0xffffff, 0xf1f1ee, 0xdcddd8, false},
 			{TEXT("grady"),     1.3,  .52, .55, 20, 50, 1.3, .40, 0,   0,   0xf8f7f2, 0x23466e, 0xfbfaf6, 0x23466e, 0xd0d4d8, 0xfbfaf6, 0xf3f2ec, 0xe0ded6, false},
-			{TEXT("freeman"),   1.45, .3,  .55, 22, 50, 1.1, .50, .36, 0,   0xf2f2f0, 0x74bfe6, 0xf4f6f7, -1,       0x2a2d31, 0xf7f7f5, 0xf3f2ee, 0xe6e2d8, true},
-			{TEXT("midnight"),  1.4,  .35, .62, 22, 54, 2.1, .46, .3,  .44, 0x2a2d31, 0xc8a24a, 0x17191d, 0xc8a24a, 0x0d0e10, 0xf4f4f2, 0xf4f4f2, 0xe7e5df, false},
+			{TEXT("freeman"),   1.45, .45, .55, 22, 50, .35, .50, .36, 0,   0xcfd3d6, 0x1f2a44, 0xd5d9dc, 0x1f2a44, 0x1f2a44, 0xf4f5f5, 0xf3f2ee, 0xdedcd6, true},
+			{TEXT("midnight"),  1.4,  .45, .62, 22, 54, 2.1, .46, .3,  .44, 0x5a544b, 0x2a2620, 0x8f8270, 0x2a2620, 0x101112, 0x9c8f7c, 0x9c8f7c, 0xb8875a, false},
 			{TEXT("mti"),       1.35, .3,  .6,  24, 55, 2.3, .48, .28, .42, 0x15171a, 0xf4f4f4, 0xc8102e, 0xf4f4f4, 0x0d0e10, 0xf4f4f4, 0xf4f4f4, 0x2a2d31, false},
 			{TEXT("yellowfin"), 1.32, .46, .56, 21, 51, 1.5, .56, 0,   0,   0xf2efe2, 0x1f3b57, 0xe9d98a, 0x1f3b57, 0x8e949a, 0xf6f4ea, 0xf3f1e6, 0xe2decd, false},
 			{TEXT("contender"), 1.18, .44, .5,  20, 49, 1.2, .46, 0,   0,   0xf4f6f5, 0x2f7a52, 0xf2f4f5, 0x2f7a52, 0xb9bec4, 0xf7f8f8, 0xf2f2ee, 0xdedfd9, false},

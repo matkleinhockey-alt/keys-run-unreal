@@ -162,12 +162,13 @@ namespace KeysMesh
 		// ---- the reel: on top of the seat, its spool across the rod
 		if (P.bReel)
 		{
-			const double Sc = 1.0;
-			const FVector RC = At(.415) + Up * .085 * Sc;   // the spool's axis centre
-			const double HalfW = .052 * Sc, PlateR = .062 * Sc, PlateT = .016 * Sc;
+			// a big two-speed reel: the frame about four grips across, a wide spool of blue line
+			const double Sc = 1.45;
+			const FVector RC = At(.415) + Up * .088 * Sc;   // the spool's axis centre
+			const double HalfW = .06 * Sc, PlateR = .062 * Sc, PlateT = .014 * Sc;
 			// the foot and the seat clamp it bolts to
 			M.Surf = SurfSteel;
-			M.AddRoundBox(At(.415) + Up * .03, FVector(.13, .03, .036) * Sc, .006, Alu, FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), bNear ? 2 : 1);
+			M.AddRoundBox(At(.415) + Up * .045, FVector(.13, .03, .05) * Sc, .006, Alu, FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), bNear ? 2 : 1);
 			// side plates, machined: a thick disc with a raised hub
 			for (int32 s = -1; s <= 1; s += 2)
 			{
@@ -196,16 +197,17 @@ namespace KeysMesh
 			}
 			// the lever drag: an arched arm over the right plate with a knurled knob
 			const FVector RP = RC + Side * (HalfW + PlateT);
+			const double LS = Sc;
 			M.Surf = SurfSteel;
-			M.AddRoundBox(RP + Up * PlateR * .55 + D * .01 + Side * .006, FVector(.075, .012, .014), .005, Alu, FRotationMatrix::MakeFromXZ(D, Side).ToQuat() * FQuat(FVector::YAxisVector, -.5), 1);
-			Puck(M, RP + Up * PlateR * .95 + D * .03 + Side * .006, Up, D, .011, .022, .003, bNear ? 16 : 8, Silver, SurfSteel);
+			M.AddRoundBox(RP + Up * PlateR * .55 + D * .01 + Side * .008, FVector(.075, .012, .014) * LS, .005, Alu, FRotationMatrix::MakeFromXZ(D, Side).ToQuat() * FQuat(FVector::YAxisVector, -.5), 1);
+			Puck(M, RP + Up * PlateR * 1.05 + D * .03 + Side * .008, Up, D, .011 * LS, .022 * LS, .003, bNear ? 16 : 8, Silver, SurfSteel);
 			// the crank: an arm from the hub out and up, and its big black oval knob
 			const FVector Hub = RP + Side * .012;
 			Puck(M, Hub, Side, D, .016, .018, .004, bNear ? 16 : 8, Alu, SurfSteel);
-			const FVector ArmEnd = Hub + Side * .012 + (Up * .7 - D * .7).GetSafeNormal() * .085;
+			const FVector ArmEnd = Hub + Side * .012 + (Up * .7 - D * .7).GetSafeNormal() * .085 * LS;
 			M.AddRoundBox((Hub + ArmEnd) * .5 + Side * .006, FVector((ArmEnd - Hub).Size() + .02, .012, .02), .005, Alu, FRotationMatrix::MakeFromXZ((ArmEnd - Hub).GetSafeNormal(), Side).ToQuat(), 1);
 			M.Surf = SurfRubber;
-			KeysShapes::AddBlob(M, ArmEnd + Side * .045, FVector(.022, .05, .021), FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), Black, bNear ? 12 : 6, bNear ? 6 : 3);
+			KeysShapes::AddBlob(M, ArmEnd + Side * .05, FVector(.024, .055, .023), FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), Black, bNear ? 12 : 6, bNear ? 6 : 3);
 			Tube(M, ArmEnd + Side * .005, ArmEnd + Side * .02, .008, .008, 8, Alu, SurfSteel);
 			// the gear shift knob on the left plate and the bail of line feeding out the top
 			Puck(M, RC - Side * (HalfW + PlateT * 1.6), Side, D, .012, .014, .004, 12, Silver, SurfSteel);

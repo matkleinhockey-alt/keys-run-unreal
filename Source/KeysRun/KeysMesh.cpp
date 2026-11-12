@@ -267,6 +267,12 @@ namespace KeysMesh
 		const FLinearColor Liner = H.Liner, Dark = Srgb(.12, .13, .15), Glass = Srgb(.16, .22, .27);
 		const FLinearColor Steel = Srgb(.85, .86, .88), Uph = S.Uph, HullC = H.Hull, DeckC = H.Deck;
 		const double Cap = .14 + S.Beam * .02;
+		// the two boats dressed after their owners' photos: the Freeman (light grey, black hardtop legs, teak helm
+		// chairs, quilted bow lounge) and the Midnight Express (champagne metallic, six outboards, tan honeycomb leather,
+		// teak-look decking, black arched hardtop supports)
+		const bool bFree = S.Id == TEXT("freeman"), bMid = S.Id == TEXT("midnight");
+		const uint8 UphK = bMid ? SurfHexQuilt : SurfVinyl;
+		const FLinearColor Teak = Srgb(.42, .22, .1), FrameBlack = Srgb(.025, .026, .03), Tan = Srgb(.78, .66, .48);
 		// the hull itself: the web game's loft (KeysHull.cpp), a cat's sponsons and bridge deck on the Freeman.
 		// Smooth along its length and round the topsides (the chines keep their edge); glossy gelcoat, a non-skid
 		// sole, a rubber rub rail.
@@ -279,7 +285,8 @@ namespace KeysMesh
 		for (int32 i = HullFrom; i < M.V.Num(); i++)
 		{
 			const FLinearColor& Cv = M.C[i];
-			if (Cv.Equals(H.Deck, .002f)) M.K[i].X = SurfNonSkid;
+			if (Cv.Equals(H.Deck, .002f)) M.K[i].X = bMid ? SurfTeakDeck : SurfNonSkid;
+			else if (bMid && (Cv.Equals(H.Hull, .002f) || Cv.Equals(H.Cap, .002f) || Cv.Equals(H.Liner, .002f) || Cv.Equals(H.Bottom, .002f))) M.K[i].X = SurfMetalPaint;
 			else if (Cv.Equals(H.Rub, .002f) && !H.Rub.Equals(H.Hull, .002f)) M.K[i].X = SurfRubber;
 		}
 		// rounded mouldings: R is the edge radius
@@ -301,14 +308,26 @@ namespace KeysMesh
 		const double DeckZ = Dm.DeckZ, MidX = Dm.MidX;
 		// console and windshield
 		const double CZ = SoleAt(S, MidX);
-		RBox(FVector(MidX, 0, CZ + .6), FVector(1.05, FMath::Min(1.15, S.Beam * .42), 1.2), HullC, .11, SurfGelcoat);
+		RBox(FVector(MidX, 0, CZ + .6), FVector(bMid ? 1.6 : 1.05, FMath::Min(1.15, S.Beam * .42), 1.2), HullC, .11, uint8(bMid ? SurfMetalPaint : SurfGelcoat));
+		if (bMid)
+		{
+			// the black arrowhead inlay on the console top, and the black vent slots down its sides
+			for (int32 s2 = -1; s2 <= 1; s2 += 2)
+				RBox(FVector(MidX + .25, s2 * .2, CZ + 1.205), FVector(.9, .07, .02), FrameBlack, .008, SurfGelcoat, FQuat(FVector::ZAxisVector, -s2 * .42));
+			for (int32 s2 = -1; s2 <= 1; s2 += 2)
+				for (int32 k = 0; k < 3; k++)
+					RBox(FVector(MidX - .3 + k * .32, s2 * FMath::Min(1.15, S.Beam * .42) * .5, CZ + .75), FVector(.22, .02, .07), FrameBlack, .008, SurfGelcoat);
+		}
 		RBox(FVector(MidX + .45, 0, CZ + 1.32), FVector(.06, 1.05, .3), Glass, .025, SurfGlass, FQuat(FVector::YAxisVector, -.5));
 		RBox(FVector(MidX - .05, 0, CZ + 1.21), FVector(.5, .7, .04), Dark, .015, SurfRubber);
 		// the windshield's stainless frame
 		{
 			const FQuat Ws(FVector::YAxisVector, -.5);
 			const FVector WC(MidX + .45, 0, CZ + 1.32);
-			Tube(WC + Ws.RotateVector(FVector(0, -.53, .15)), WC + Ws.RotateVector(FVector(0, .53, .15)), .014, .014, 8, Steel, SurfSteel);
+			Tube(WC + Ws.RotateVector(FVector(0, -.53, .15)), WC + Ws.RotateVector(FVector(0, .53, .15)), .014, .014, 8, (bFree || bMid) ? FrameBlack : Steel, uint8((bFree || bMid) ? SurfGelcoat : SurfSteel));
+			if (bFree || bMid)
+				for (int32 s2 = -1; s2 <= 1; s2 += 2)
+					Tube(WC + Ws.RotateVector(FVector(0, s2 * .53, -.15)), WC + Ws.RotateVector(FVector(0, s2 * .53, .15)), .016, .016, 8, FrameBlack, SurfGelcoat);
 		}
 		if (S.bLeaning)
 		{
@@ -335,28 +354,71 @@ namespace KeysMesh
 		else
 		{
 			// helm seats: bucket chairs abreast on pedestals
-			const int32 N = S.bRodRack ? 4 : S.Beam > 3.6 ? 3 : 2;
+			const int32 N = (S.bRodRack || bMid) ? 4 : S.Beam > 3.6 ? 3 : 2;
+			const int32 Rows = bMid ? 2 : 1;
+			for (int32 Rw = 0; Rw < Rows; Rw++)
 			for (int32 i = 0; i < N; i++)
 			{
-				const double Y = (i - (N - 1) * .5) * .64;
-				Tube(FVector(MidX - 1.25, Y, DeckZ), FVector(MidX - 1.25, Y, DeckZ + .46), .06, .05, 12, Steel, SurfSteel);
-				RBox(FVector(MidX - 1.25, Y, DeckZ + .53), FVector(.56, .57, .18), Uph, .07, SurfVinyl);
-				RBox(FVector(MidX - 1.52, Y, DeckZ + .95), FVector(.15, .56, .7), Uph, .06, SurfVinyl, FQuat(FVector::YAxisVector, .13));
-				for (int32 s2 = -1; s2 <= 1; s2 += 2) RBox(FVector(MidX - 1.25, Y + s2 * .27, DeckZ + .69), FVector(.5, .09, .28), Uph, .04, SurfVinyl);
+				const double Y = (i - (N - 1) * .5) * .64, SX = MidX - 1.25 - Rw * 1.15 - (bMid ? .3 : 0);
+				Tube(FVector(SX, Y, DeckZ), FVector(SX, Y, DeckZ + .46), .06, .05, 12, bFree ? Srgb(.95, .95, .94) : Steel, uint8(bFree ? SurfGelcoat : SurfSteel));
+				if (bFree)
+				{
+					// teak-framed helm chairs: a wooden shell under the cushions and wooden armrests
+					RBox(FVector(SX, Y, DeckZ + .47), FVector(.6, .6, .06), Teak, .02, SurfWood);
+					RBox(FVector(SX - .3, Y, DeckZ + .92), FVector(.06, .6, .78), Teak, .02, SurfWood, FQuat(FVector::YAxisVector, .13));
+				}
+				RBox(FVector(SX, Y, DeckZ + .55), FVector(.56, .57, .16), Uph, .07, UphK);
+				RBox(FVector(SX - .27, Y, DeckZ + .95), FVector(.15, .56, .7), Uph, .06, UphK, FQuat(FVector::YAxisVector, .13));
+				for (int32 s2 = -1; s2 <= 1; s2 += 2) RBox(FVector(SX, Y + s2 * .27, DeckZ + .7), FVector(.5, .09, .06), bFree ? Teak : Uph, .025, uint8(bFree ? SurfWood : UphK));
 			}
 		}
 		// bow casting deck (or the go-fast's sun pad) and stern bench, inside the liner where they stand
 		{
 			const double BX = L * .33, BW = InnerHalfBeam(S, BX) * 1.9;
-			RBox(FVector(BX, 0, SoleAt(S, BX) + .18), FVector(L * .12, BW, .36), DeckC, .05, SurfNonSkid);
+			RBox(FVector(BX, 0, SoleAt(S, BX) + .18), FVector(L * .12, BW, .36), DeckC, .05, uint8(bMid ? SurfTeakDeck : SurfNonSkid));
 			if (S.bSunpad)
 			{
 				const double SX = L * .22;
-				RBox(FVector(SX, 0, SoleAt(S, SX) + .3), FVector(L * .15, InnerHalfBeam(S, SX) * 1.9, .24), Uph, .1, SurfVinyl);
+				RBox(FVector(SX, 0, SoleAt(S, SX) + .3), FVector(L * .15, InnerHalfBeam(S, SX) * 1.9, .24), Uph, .1, UphK);
+				if (bMid)
+				{
+					// the forward console lounge: three bucket backs facing the bow
+					const double CX = MidX + .62;
+					for (int32 k = -1; k <= 1; k++)
+					{
+						RBox(FVector(CX + .32, k * .36, SoleAt(S, CX) + .5), FVector(.5, .34, .14), Uph, .06, UphK);
+						RBox(FVector(CX + .1, k * .36, SoleAt(S, CX) + .85), FVector(.12, .34, .55), Uph, .06, UphK, FQuat(FVector::YAxisVector, -.2));
+					}
+				}
+			}
+			if (bFree)
+			{
+				// the bow lounge: a forward console seat and two lounge pads in sand-coloured diamond quilting
+				const double CX = MidX + .62, PX = L * .2;
+				RBox(FVector(CX + .3, 0, SoleAt(S, CX) + .48), FVector(.5, 1.0, .16), Tan, .07, SurfQuilt);
+				RBox(FVector(CX + .08, 0, SoleAt(S, CX) + .85), FVector(.12, 1.0, .55), Tan, .06, SurfQuilt, FQuat(FVector::YAxisVector, -.2));
+				for (int32 s2 = -1; s2 <= 1; s2 += 2)
+					RBox(FVector(PX, s2 * InnerHalfBeam(S, PX) * .45, SoleAt(S, PX) + .42), FVector(L * .1, InnerHalfBeam(S, PX) * .85, .14), Tan, .07, SurfQuilt);
 			}
 			const double AX = -L * .5 + Cap + .3;
-			RBox(FVector(AX, 0, SoleAt(S, AX) + .25), FVector(.5, InnerHalfBeam(S, AX) * 1.95, .5), HullC, .07, SurfGelcoat);
-			RBox(FVector(AX + .02, 0, SoleAt(S, AX) + .53), FVector(.46, InnerHalfBeam(S, AX) * 1.85, .09), Uph, .04, SurfVinyl);
+			RBox(FVector(AX, 0, SoleAt(S, AX) + .25), FVector(.5, InnerHalfBeam(S, AX) * 1.95, .5), HullC, .07, uint8(bMid ? SurfMetalPaint : SurfGelcoat));
+			RBox(FVector(AX + .02, 0, SoleAt(S, AX) + .53), FVector(.46, InnerHalfBeam(S, AX) * 1.85, .09), Uph, .04, UphK);
+			if (bMid)
+			{
+				// the aft bench: five bucket backs and a row of round speakers under its front
+				const double HW = InnerHalfBeam(S, AX) * .9;
+				for (int32 k = 0; k < 5; k++)
+				{
+					const double Y = -HW + HW * 2 * (k + .5) / 5;
+					RBox(FVector(AX - .2, Y, SoleAt(S, AX) + .88), FVector(.13, HW * 2 / 5 - .04, .62), Uph, .06, UphK, FQuat(FVector::YAxisVector, .15));
+				}
+				for (int32 k = 0; k < 6; k++)
+				{
+					const double Y = -HW + HW * 2 * (k + .5) / 6;
+					RBox(FVector(AX + .255, Y, SoleAt(S, AX) + .26), FVector(.02, .17, .17), Srgb(.8, .81, .83), .085, SurfSteel);
+					RBox(FVector(AX + .262, Y, SoleAt(S, AX) + .26), FVector(.02, .12, .12), FrameBlack, .06, SurfRubber);
+				}
+			}
 		}
 		if (S.bBowRail)
 		{
@@ -385,9 +447,32 @@ namespace KeysMesh
 		const double TopZ = Dm.TopZ, TopL = Dm.TopL, TopW = Dm.TopW;
 		for (int32 a = -1; a <= 1; a += 2)
 			for (int32 b = -1; b <= 1; b += 2)
-				Tube(FVector(MidX - .5 + a * TopL * .38, b * TopW * .4, DeckZ), FVector(MidX - .5 + a * TopL * .38, b * TopW * .4, TopZ), .035, .035, 12, Steel, SurfSteel);
-		RBox(FVector(MidX - .5, 0, TopZ + .05), FVector(TopL, TopW, S.bHardtop ? .12 : .06), S.Canvas, S.bHardtop ? .05 : .025, uint8(S.bHardtop ? SurfGelcoat : SurfCloth));
-		if (S.bHardtop) RBox(FVector(MidX - .5, 0, TopZ - .02), FVector(TopL * .9, TopW * .9, .04), Srgb(.9, .9, .9), .015, SurfGelcoat);
+			{
+				const FVector P0(MidX - .5 + a * TopL * .38, b * TopW * .4, DeckZ), P1(MidX - .5 + a * TopL * .38, b * TopW * .4, TopZ);
+				if (bFree || bMid)
+				{
+					// black powder-coated legs, curving out from the deck and back in under the top
+					FVector Prev = P0;
+					for (int32 k = 1; k <= 8; k++)
+					{
+						const double T = k / 8.0;
+						const FVector Q = FMath::Lerp(P0, P1, T) + FVector(bMid ? a * .25 * FMath::Sin(PI * T) : 0, b * .16 * FMath::Sin(PI * T), 0);
+						Tube(Prev, Q, bMid ? .07 : .05, bMid ? .07 : .05, 12, FrameBlack, SurfGelcoat);
+						Prev = Q;
+					}
+				}
+				else Tube(P0, P1, .035, .035, 12, Steel, SurfSteel);
+			}
+		RBox(FVector(MidX - .5, 0, TopZ + .05), FVector(TopL * (bMid ? 1.25 : 1.0), TopW * (bFree ? 1.15 : 1.0), S.bHardtop ? .12 : .06), S.Canvas, S.bHardtop ? (bMid ? .18 : .05) : .025, uint8(bMid ? SurfMetalPaint : S.bHardtop ? SurfGelcoat : SurfCloth));
+		if (S.bHardtop) RBox(FVector(MidX - .5, 0, TopZ - .02), FVector(TopL * .9, TopW * .9, .04), bFree ? Srgb(.62, .8, .84) : Srgb(.9, .9, .9), .015, SurfGelcoat);
+		if (bMid)
+		{
+			// LED bars along the top's front and aft edges, the open-array radar and the horns
+			for (int32 s2 = -1; s2 <= 1; s2 += 2) RBox(FVector(MidX - .5 + s2 * TopL * .62, 0, TopZ + .03), FVector(.03, TopW * .8, .025), Srgb(.95, .97, 1.0), .01, SurfGlass);
+			RBox(FVector(MidX - .5, 0, TopZ + .2), FVector(.12, .12, .18), FrameBlack, .03, SurfGelcoat);
+			RBox(FVector(MidX - .5, 0, TopZ + .32), FVector(.14, 1.6, .09), Srgb(.95, .95, .95), .04, SurfGelcoat);
+			for (int32 s2 = -1; s2 <= 1; s2 += 2) Tube(FVector(MidX - .2, s2 * .25, TopZ + .12), FVector(MidX + .1, s2 * .3, TopZ + .2), .03, .06, 12, Srgb(.85, .86, .88), SurfSteel);
+		}
 		if (S.bTTop)
 			for (int32 b = -1; b <= 1; b += 2)   // the frame rail along each side under the canvas
 				Tube(FVector(MidX - .5 - TopL * .46, b * TopW * .4, TopZ - .02), FVector(MidX - .5 + TopL * .46, b * TopW * .4, TopZ - .02), .03, .03, 10, Steel, SurfSteel);
@@ -512,12 +597,15 @@ namespace KeysMesh
 			RBox(FVector(XT - .33, 0, Free - .55), FVector(.66, BW, .5), HullC, .06, SurfGelcoat);
 			RBox(FVector(XT - .33, 0, Free - .29), FVector(.7, BW + .04, .05), DeckC, .02, SurfNonSkid);
 		}
+		const double ESp = FMath::Min(.74, S.Beam * .86 / FMath::Max(1, S.Engines));
+		const double EW = ESp / .74;
 		for (int32 e = 0; e < S.Engines; e++)
 		{
-			const double Y = (e - (S.Engines - 1) * .5) * .74;
+			const double Y = (e - (S.Engines - 1) * .5) * ESp;
 			// the cowl: a rounded shell over a waisted midsection, the leg tapering to the gearcase and skeg
-			RBox(FVector(X0 - .05, Y, Free - .1), FVector(.66, .52, .7), S.Engine, .2, SurfGelcoat);
-			RBox(FVector(X0 - .02, Y, Free - .48), FVector(.5, .4, .2), S.Engine, .08, SurfGelcoat);
+			RBox(FVector(X0 - .05, Y, Free - .1), FVector(.66, .52 * FMath::Max(.8, EW), .7), S.Engine, .2, uint8(bMid ? SurfMetalPaint : SurfGelcoat));
+			RBox(FVector(X0 - .02, Y, Free - .48), FVector(.5, .4 * FMath::Max(.8, EW), .2), S.Engine, .08, uint8(bMid ? SurfMetalPaint : SurfGelcoat));
+			if (bMid) RBox(FVector(X0 + .25, Y, Free - .02), FVector(.06, .4 * FMath::Max(.8, EW), .4), FrameBlack, .03, SurfGelcoat);   // the black front panel
 			RBox(FVector(X0 + .05, Y, Free * .3 - .25), FVector(.32, .2, Free * .9 + .5), S.EngLow, .08, SurfGelcoat);
 			RBox(FVector(X0 + .05, Y, -Draft - .05), FVector(.46, .13, .15), S.EngLow, .06, SurfGelcoat);
 			RBox(FVector(X0 + .1, Y, -Draft - .2), FVector(.2, .03, .2), S.EngLow, .01, SurfGelcoat);

@@ -216,9 +216,9 @@ if (kind < 0.5) {
   rough = 0.78; spec = 0.4;
 } else if (kind < 6.5) {           // stainless: brushed, bright
   float4 br = F.nd(p * float3(4.0, 4.0, 90.0));
-  metal = 1.0; rough = 0.14 + 0.1 * br.x;
-  g = br.yzw * 0.01 * nearF;
-  col = lerp(col, float3(0.78, 0.8, 0.82), 0.5);
+  metal = 1.0; rough = 0.05 + 0.07 * br.x;
+  g = br.yzw * 0.006 * nearF;
+  col = lerp(col, float3(0.92, 0.93, 0.95), 0.6);
 } else if (kind < 7.5) {           // marine vinyl
   float4 gr = F.nd(p * 160.0);
   float4 pu = F.nd(p * 6.0);
@@ -332,6 +332,44 @@ if (kind < 0.5) {
   df = lerp(1.0, lerp(0.72, 1.0, smoothstep(0.0, 0.2, s)) * lerp(0.86, 1.08, hv), midF) * lerp(0.92, 1.04, F.nd(p * 60.0).x);
   g = float3(0, 0, lerp(0.6, -0.1, smoothstep(0.0, 0.15, s))) * midF;
   rough = 0.85; spec = 0.35;
+} else if (kind > 23.5 && kind < 24.5) {   // diamond-quilted cushion
+  float2 r = float2(q.x + q.y, q.x - q.y) * 0.7071 * 11.0;
+  float2 c = frac(r) - 0.5;
+  float puff = 1.0 - 2.0 * max(abs(c.x), abs(c.y));
+  float seam = 1.0 - smoothstep(0.0, 0.08, puff);
+  float2 sg = sign(c) * step(abs(c.yx), abs(c));
+  float2 gq = float2(sg.x + sg.y, sg.x - sg.y) * 0.7071;
+  g = (qa * gq.x + qb * gq.y) * 0.35 * (1.0 - puff) * nearF + F.nd(p * 150.0).yzw * 0.01 * closeF;
+  df = lerp(1.0, 0.72, seam * nearF) * lerp(0.96, 1.03, puff);
+  rough = 0.48; spec = 0.45;
+} else if (kind > 24.5 && kind < 25.5) {   // honeycomb-quilted leather with dark stitching
+  float2 h = q * 22.0;
+  float2 hr = float2(1.0, 1.7320508);
+  float2 ha = fmod(abs(h), hr) - hr * 0.5;
+  float2 hb = fmod(abs(h - hr * 0.5), hr) - hr * 0.5;
+  float2 hc = dot(ha, ha) < dot(hb, hb) ? ha : hb;
+  float2 ah = abs(hc);
+  float hd = max(dot(ah, normalize(float2(1.0, 1.7320508))), ah.x);   // 0 centre .. 0.5 edge
+  float puff = 1.0 - saturate(hd * 2.0);
+  float seam = 1.0 - smoothstep(0.03, 0.09, 0.5 - hd);
+  float2 gq = hc / max(length(hc), 1e-3) * (1.0 - puff);
+  g = (qa * gq.x + qb * gq.y) * 0.3 * nearF + F.nd(p * 140.0).yzw * 0.012 * closeF;
+  df = lerp(1.0, 0.35, seam * nearF) * lerp(0.95, 1.04, puff);
+  rough = 0.42; spec = 0.5;
+} else if (kind > 25.5 && kind < 26.5) {   // metallic paint with flake, under a glossy clear
+  float4 fl = F.nd(p * 420.0);
+  float4 lo = F.nd(p * 1.5);
+  g = fl.yzw * 0.03 * closeF + lo.yzw * 0.004;
+  metal = 0.7; rough = 0.16 + 0.1 * fl.x * nearF;
+  col *= lerp(0.95, 1.06, fl.x * nearF + 0.5 * (1.0 - nearF));
+  col += fres * 0.08;
+} else if (kind > 26.5 && kind < 27.5) {   // teak-look foam decking with black caulk lines, fore and aft
+  float pl = frac(p.y / 0.07);
+  float caulk = 1.0 - smoothstep(0.0, 0.08, min(pl, 1.0 - pl));
+  float4 gr = F.fbm(p * float3(2.0, 40.0, 40.0), 2);
+  df = lerp(lerp(0.9, 1.06, gr.x), 0.12, caulk * midF);
+  g = float3(0, sign(pl - 0.5) * caulk * 0.4, 0) * nearF + gr.yzw * 0.02 * nearF;
+  rough = 0.8; spec = 0.3;
 } else {                           // grass, ground cover
   float4 n = F.fbm(p * 22.0, 2);
   float4 lo = F.nd(p * 0.45);
