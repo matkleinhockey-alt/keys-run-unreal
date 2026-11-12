@@ -511,6 +511,19 @@ void AKeysBoatPawn::RunTestScript(double T)
 			static int32 Shot = 0;
 			FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / FString::Printf(TEXT("KRScript_%02d.png"), Shot++), true, false);
 		}
+		else if (Cmd == TEXT("shotclean"))
+		{
+			// the same, without the HUD (for comparing a model with photos)
+			static int32 Clean = 50;
+			FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / FString::Printf(TEXT("KRScript_%02d.png"), Clean++), false, false);
+		}
+		else if (Cmd.StartsWith(TEXT("hide=")))
+		{
+			// hide=KeysExtras: hide every actor of that class (the crew, the gull, the buddy boat...)
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+				if (It->GetClass()->GetName() == Cmd.Mid(5)) It->SetActorHiddenInGame(true);
+		}
+		else if (Cmd.StartsWith(TEXT("seastate="))) SetSeaState(FMath::Clamp(FCString::Atoi(*Cmd.Mid(9)), 0, SeaStates().Num() - 1));
 		else if (Cmd == TEXT("esc")) { Menu = EMenu::Pause; MenuSel = 0; }
 		else if (Cmd.StartsWith(TEXT("sel="))) MenuSel = FCString::Atoi(*Cmd.Mid(4));
 		else if (Cmd == TEXT("login")) { bLoginOpen = true; LoginField = 0; LoginName = TEXT("Mat"); LoginCrew = TEXT("keys"); }

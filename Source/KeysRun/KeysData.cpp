@@ -125,7 +125,7 @@ namespace KeysData
 			0x74bfe6, 0x1f2a33, 0xf2f2f0, 0xf2f2ee, 0x17191c, 0xe6e2d8, 800, .3,
 			TEXT("A long-range catamaran built for tournament fishing. Twin hulls ride flat and soft offshore, and it drafts shallow for its size."));
 		Add(TEXT("midnight"), TEXT("Midnight Express"), TEXT("43 Open"), TEXT("Six Mercury Racing 450R"), 13.1, 3.81, 6, 70, .42, .66, TEXT("2' 0\""), .9, false, true,
-			0x8f8270, 0x2a2620, 0x5a544b, 0x9c8f7c, 0x8f8270, 0xb8875a, 400, .35,
+			0x8f8270, 0x2a2620, 0x5a544b, 0x9c8f7c, 0x7d7262, 0xb8875a, 400, .35,
 			TEXT("A twin-step deep-V luxury rocket with a very wide beam. Fast, stable, and dry, but keep it in real water."));
 		Add(TEXT("mti"), TEXT("MTI"), TEXT("V42"), TEXT("Quad Mercury Racing 450R"), 12.8, 3.5, 4, 76, .46, .62, TEXT("3' 0\""), 1.15, false, true,
 			0xc8102e, 0xf4f4f4, 0x15171a, 0x15171a, 0x15171a, 0x2a2d31, 300, .3,

@@ -76,7 +76,7 @@ void AKeysBoatPawn::UpdateHelm(double Dt, double T)
 	HelmScreens->SetVisibility(bShow);
 	BoatLights->SetVisibility(bShow);
 	// ---- the lights: the sidelights and the all-round white always burn (brighter at dusk); the underwater and cockpit lights on ;
-	const double L = S.Len, MidX = .05 * L;
+	const double L = S.Len, MidX = KeysMesh::BoatLayout(S).MidX;
 	FKeysMesh G;
 	{
 		const double BX = L * .3, Half = KeysMesh::InnerHalfBeam(S, BX) + .2, NavY = KeysMesh::SheerAt(S, BX) - .1;
@@ -84,8 +84,9 @@ void AKeysBoatPawn::UpdateHelm(double Dt, double T)
 		G.AddGlowBlob(FVector(BX, -Half, NavY), .08 + .35 * Dusk, FLinearColor(1.f, .16f, .16f, K));
 		G.AddGlowBlob(FVector(BX, Half, NavY), .08 + .35 * Dusk, FLinearColor(.16f, 1.f, .35f, K));
 		FVector Tower;
-		const double TopZ = KeysMesh::TowerEye(S, Tower) ? Tower.Z + 1.2 : KeysMesh::SoleAt(S, MidX) + 2.75;
-		G.AddGlowBlob(FVector(MidX - .6, 0, TopZ), .06 + .3 * Dusk, FLinearColor(1.f, 1.f, .95f, K));
+		const KeysMesh::FBoatLayout Lo = KeysMesh::BoatLayout(S);
+		const double TopZ = KeysMesh::TowerEye(S, Tower) && Tower.Z > Lo.TopZ + 2.5 ? Tower.Z + 1.2 : Lo.TopZ + .45;
+		G.AddGlowBlob(FVector(Lo.TopX - .1, 0, TopZ), .06 + .3 * Dusk, FLinearColor(1.f, 1.f, .95f, K));
 	}
 	const double SternX = KeysMesh::SternX(S);
 	const bool bUw = bUwLights && bShow;
@@ -129,12 +130,15 @@ void AKeysBoatPawn::UpdateHelm(double Dt, double T)
 	HelmT = .2;
 	SonarHist.Add(float(DepthHere()));
 	if (SonarHist.Num() > ScrW) SonarHist.RemoveAt(0);
-	const double CZ = KeysMesh::SoleAt(S, MidX), SW = .34, SH = SW * ScrH / ScrW, Tilt = .45;
+	// on the long-console boats (the Midnight Express) the screens stand in the dash on the console's aft face
+	const KeysMesh::FBoatLayout Lo = KeysMesh::BoatLayout(S);
+	const bool bDash = Lo.ConFwd > 0;
+	const double CZ = KeysMesh::SoleAt(S, MidX), SW = bDash ? .5 : .34, SH = SW * ScrH / ScrW, Tilt = bDash ? .12 : .45;
 	FKeysMesh M;
 	auto Screen = [&](double Y0, TFunctionRef<FLinearColor(int32, int32)> Px)
 	{
 		// a bezel, then the pixels, standing on the dash leaning back toward the helm
-		const FVector C(MidX + .08, Y0, CZ + 1.38);
+		const FVector C = bDash ? FVector(MidX - Lo.ConL * .5 - .035, Y0 * 1.45, CZ + .86) : FVector(MidX + .08, Y0, CZ + 1.38);
 		const FVector Ux(0, 1, 0), Uy(FMath::Sin(Tilt), 0, FMath::Cos(Tilt)), Out(-FMath::Cos(Tilt), 0, FMath::Sin(Tilt));
 		const FVector B0 = C - Ux * (SW / 2 + .015) - Uy * (SH / 2 + .015) + Out * .002;
 		M.AddQuad(B0, B0 + Ux * (SW + .03), B0 + Ux * (SW + .03) + Uy * (SH + .03), B0 + Uy * (SH + .03), FLinearColor(.02f, .02f, .025f, 1.f), Out);

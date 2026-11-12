@@ -42,6 +42,11 @@ struct FKeysMesh
 	void AddRoundBox(const FVector& Center, const FVector& Size, double R, const FLinearColor& Color, const FQuat& Rot = FQuat::Identity, int32 Seg = 2);
 	// tapered tube between two points
 	void AddTube(const FVector& A, const FVector& B, double RA, double RB, int32 Sides, const FLinearColor& Color);
+	// a smooth-shaded surface through a grid of points (NU across, NV along; P[v * NU + u]), sharing vertices so it
+	// shades round; faces point away from Inside. bWrapU closes each row into a ring.
+	void AddGrid(const TArray<FVector>& P, int32 NU, int32 NV, bool bWrapU, const FLinearColor& Color, const FVector& Inside);
+	// a rounded bar swept along a path (Pts), its cross-section a superellipse HalfW across (toward Side) and HalfD deep
+	void AddSweep(const TArray<FVector>& Pts, double HalfW, double HalfD, const FVector& Side, const FLinearColor& Color, int32 Sides = 14);
 
 	void Commit(UProceduralMeshComponent* Mesh, int32 Section, UMaterialInterface* Mat) const;
 
@@ -72,7 +77,11 @@ namespace KeysMesh
 			Liner = FLinearColor(FColor(0xf3, 0xf2, 0xec)), Deck = FLinearColor(FColor(0xe0, 0xde, 0xd6));
 		bool bCove = true;
 		bool bCat = false;     // a catamaran: two asymmetric sponsons under a bridge deck (the Freeman)
-		double Tunnel = .42;   // the cat's tunnel height
+		double Tunnel = .42;   // the cat's tunnel height at the transom
+		double TunnelRise = .5, SponW = .27, StemFoot = .6;   // the tunnel roof's rise to the bow, each sponson's width (of the beam), the stem's foot
+		double MinBow = 0;     // the narrowest the deck gets at the bow (fraction of the half-beam): a cat's blunt twin bow
+		double Tumble = 0;     // tumblehome at the stern: the topsides roll in toward the sheer
+		double Flare = 0;      // extra flare forward: the sheer stands out past the chine sooner
 	};
 	struct FHullSta { double T, Z, Bb, Bs, YK, YC, YS, BF; };
 	FHullSta HullStation(const FHullDef& H, double L, double B, double T);
@@ -103,9 +112,30 @@ namespace KeysMesh
 	bool RiggerTips(const KeysData::FBoatSpec& S, double Rig, FVector OutTip[2], FVector OutBase[2]);
 	bool HasSwingingRiggers(const KeysData::FBoatSpec& S);
 	void BuildRiggers(FKeysMesh& M, const KeysData::FBoatSpec& S, double Rig);
-	// Boats with a tuna tower (the Grady-White and the Freeman): true, and where your eyes are standing at the upper
-	// helm, in the boat's own frame (meters, +X toward the bow, Z up).
+	// Boats with a tuna tower (the Grady-White, and the Freeman when GFreemanTower is on): true, and where your eyes are
+	// standing at the upper helm, in the boat's own frame (meters, +X toward the bow, Z up). The Freeman without its
+	// tower gives the view from on top of its hardtop.
 	bool TowerEye(const KeysData::FBoatSpec& S, FVector& OutEye);
+	// the Freeman's tuna tower is an option (off by default, as in the owner's photos; -KRFreemanTower turns it on)
+	extern bool GFreemanTower;
+	// where the console, the helm and the top stand (boat frame, meters): MidX is the console's aft block, ConFwd how far
+	// the console runs forward of it, TopX / TopL / TopW / TopZ the hardtop's centre, length, width and underside
+	struct FBoatLayout { double MidX, DeckZ, ConL, ConW, ConFwd, TopX, TopL, TopW, TopZ; };
+	FBoatLayout BoatLayout(const KeysData::FBoatSpec& S);
+	// A big outboard (KeysBoatParts.cpp): a tall rounded cowl over its midsection, a dark panel on the aft face and an
+	// accent stripe, the streamlined driveshaft housing, cavitation plate, gearcase torpedo, skeg and a three-blade
+	// propeller. Mount is the clamp on the transom or bracket (its aft face, boat frame); the engine hangs aft of it.
+	struct FOutboard
+	{
+		FVector Mount = FVector::ZeroVector;
+		double W = .7, CavZ = -.1, TopZ = 1.4;
+		FLinearColor Cowl = FLinearColor::White, Panel = FLinearColor::Black, Accent = FLinearColor::Black, Lower = FLinearColor::Black;
+		uint8 CowlKind = SurfGelcoat;
+	};
+	void BuildOutboard(FKeysMesh& M, const FOutboard& O);
+	// a contoured bucket seat facing Fwd (horizontal): a cushion with raised side bolsters, a tall back with wings and a
+	// rounded top, quilted centre panels with dark piping. Base is the cushion's underside centre.
+	void BuildBucketSeat(FKeysMesh& M, const FVector& Base, const FVector& Fwd, double W, const FLinearColor& Uph, uint8 InsertKind, double BackH = .72);
 	// A stand-up tuna rod with a two-speed lever-drag reel (KeysRod.cpp): an aluminium gimbal butt, the reel seat and
 	// its clamp, the reel (machined side plates with bolts, pillars, a spool packed with blue mono, the lever drag with a
 	// knurled knob, the crank with its big rubber knob), a long black foam fore grip, a blue-and-silver cross-wrapped

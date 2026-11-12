@@ -12,6 +12,8 @@
 #include "Components/VolumetricCloudComponent.h"
 #include "Components/PostProcessComponent.h"
 #include "KeysGfx.h"
+#include "KeysBoatPawn.h"
+#include "KeysMesh.h"
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -529,6 +531,45 @@ void AKeysWorld::UpdateWater()
 	GatherWakes(FX, FZ, NearR, T, LiveWakes);
 	GatherTrails(FX, FZ, NearR, T, LiveTrails);
 
+	// Keep the sea out of your own boat: inside the gunwales the surface never rises above the cockpit sole, so a
+	// swell that lifts over a low cockpit (the Freeman's, offshore) doesn't show through the deck. Sampled once per
+	// update along the hull; vertices outside the liner are untouched.
+	bool bHull = false;
+	FTransform HullT;
+	double HullX0 = 0, HullX1 = 0, HullR2 = 0;
+	TArray<double> HullSole, HullHalf;
+	constexpr int32 HullN = 48;
+	if (const AKeysBoatPawn* BP = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0)))
+	{
+		const KeysData::FBoatSpec& BS = BP->Spec();
+		HullT = BP->GetActorTransform();
+		HullX0 = KeysMesh::SternX(BS) + .12;
+		HullX1 = KeysMesh::BowX(BS) - .3;
+		HullR2 = FMath::Square(BS.Len * .6 + 1);
+		HullSole.SetNum(HullN + 1);
+		HullHalf.SetNum(HullN + 1);
+		for (int32 k = 0; k <= HullN; k++)
+		{
+			const double X = FMath::Lerp(HullX0, HullX1, double(k) / HullN);
+			HullSole[k] = KeysMesh::SoleAt(BS, X) - .05;
+			HullHalf[k] = KeysMesh::InnerHalfBeam(BS, X);
+		}
+		bHull = true;
+	}
+	const FVector HullC = HullT.GetLocation() / 100;
+	auto KeepOut = [&](double X, double Z, double H)
+	{
+		if (!bHull || FMath::Square(X - HullC.X) + FMath::Square(Z - HullC.Y) > HullR2) return H;
+		const FVector Lc = HullT.InverseTransformPosition(ToUE(X, H, Z)) / 100;
+		if (Lc.X <= HullX0 || Lc.X >= HullX1) return H;
+		const double F = (Lc.X - HullX0) / (HullX1 - HullX0) * HullN;
+		const int32 K = FMath::Clamp(int32(F), 0, HullN - 1);
+		const double U = F - K;
+		if (FMath::Abs(Lc.Y) >= FMath::Lerp(HullHalf[K], HullHalf[K + 1], U)) return H;
+		const double Floor = HullT.TransformPosition(FVector(Lc.X, Lc.Y, FMath::Lerp(HullSole[K], HullSole[K + 1], U)) * 100).Z / 100;
+		return FMath::Min(H, Floor);
+	};
+
 	ParallelFor(S, [&](int32 j)
 	{
 		const double Z = CZ + WGrid[j];
@@ -542,7 +583,7 @@ void AKeysWorld::UpdateWater()
 			const FVector2D Tr = bNear ? TrailFrom(LiveTrails, X, Z) : FVector2D::ZeroVector;
 			const double Sea = WaveH(X, Z, T, Amp, false);
 			// the prop wash knocks down the chop a little, so the trail reads as a smoother, glassier lane
-			const double H = Sea * (1 - .25 * Tr.Y) + Wk;
+			const double H = KeepOut(X, Z, Sea * (1 - .25 * Tr.Y) + Wk);
 			WH[K] = H;
 			WV[K] = ToUE(X, H, Z);
 			// foam on breaking crests, on the crests of fresh wakes, in the prop wash and along the beach.
