@@ -554,7 +554,7 @@ FString AKeysEvents::DebugCmd(const FString& Cmd)
 	// ev:tourneyall (tick off all five), ev:tourneylive (skip the countdown), ev:raceat=N (put you at mark N)
 	if (Cmd == TEXT("tourneyall")) { Mask = (1 << TSpecies.Num()) - 1; bAnnouncedAll = true; }
 	else if (Cmd == TEXT("tourneylive")) T0 = GetWorld()->GetTimeSeconds();
-	else if (Cmd == TEXT("tourneyfew")) { if (TSpecies.Num() >= 2) Mask = 2; }
+	else if (Cmd == TEXT("tourneyfew")) { if (TSpecies.Num() >= 3) Mask |= 6; }
 	return FString();
 }
 
