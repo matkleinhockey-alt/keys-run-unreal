@@ -71,6 +71,14 @@ private:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Body;
+	// Indoors: the dark rooms (the club, the casino, the bars) hold the exposure near what it is outside, so auto
+	// exposure doesn't lift a dim room into a washed-out grey; the other shops get a gentler clamp.
+	UPROPERTY() TObjectPtr<class UPostProcessComponent> Indoor;
+	double IndoorW = 0;
+	void UpdateIndoor(double Dt);
+public:
+	static double IndoorEV;   // the dark rooms' locked exposure (EV100); test step indoorev=
+private:
 
 	bool bAshore = false;
 	double X = 0, Y = 0, Z = 0, VX = 0, VZ = 0, Yaw = 0, Gait = 0, Speed = 0;

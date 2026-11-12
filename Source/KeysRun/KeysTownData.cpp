@@ -690,6 +690,46 @@ namespace KeysTown
 		return A;
 	}
 
+	namespace
+	{
+		struct FObstacle { double X, Z, AX, AZ, HA, HB; bool bRound; };
+		TArray<FObstacle> GObs;
+		TMap<int64, TArray<int32>> GObsGrid;
+		constexpr double ObsCell = 16;
+		int64 ObsKey(int32 CX, int32 CZ) { return (int64(CX) << 32) ^ int64(uint32(CZ)); }
+		void AddObs(const FObstacle& O, double Reach)
+		{
+			const int32 Idx = GObs.Add(O);
+			for (int32 CX = FMath::FloorToInt((O.X - Reach) / ObsCell); CX <= FMath::FloorToInt((O.X + Reach) / ObsCell); CX++)
+				for (int32 CZ = FMath::FloorToInt((O.Z - Reach) / ObsCell); CZ <= FMath::FloorToInt((O.Z + Reach) / ObsCell); CZ++)
+					GObsGrid.FindOrAdd(ObsKey(CX, CZ)).Add(Idx);
+		}
+	}
+
+	void AddObstacleBox(double CX, double CZ, double AX, double AZ, double HA, double HB) { AddObs({CX, CZ, AX, AZ, HA, HB, false}, FMath::Sqrt(HA * HA + HB * HB)); }
+	void AddObstacleRound(double X, double Z, double R) { AddObs({X, Z, 1, 0, R, R, true}, R); }
+
+	bool ObstacleAt(double X, double Z, double R)
+	{
+		const TArray<int32>* L = GObsGrid.Find(ObsKey(FMath::FloorToInt(X / ObsCell), FMath::FloorToInt(Z / ObsCell)));
+		if (!L) return false;
+		for (int32 Idx : *L)
+		{
+			const FObstacle& O = GObs[Idx];
+			const double DX = X - O.X, DZ = Z - O.Z;
+			if (O.bRound) { if (DX * DX + DZ * DZ < FMath::Square(O.HA + R)) return true; continue; }
+			const double A = DX * O.AX + DZ * O.AZ, B = -DX * O.AZ + DZ * O.AX;
+			if (FMath::Abs(A) < O.HA + R && FMath::Abs(B) < O.HB + R) return true;
+		}
+		return false;
+	}
+
+	bool NearEstate(double X, double Z, double R)
+	{
+		for (const FEstateSite& E : WaterfrontEstates()) if (FMath::Square(E.X - X) + FMath::Square(E.Z - Z) < R * R) return true;
+		return false;
+	}
+
 	void CollidersNear(double X, double Z, double R, TArray<const FRect*>& Out)
 	{
 		Out.Reset();

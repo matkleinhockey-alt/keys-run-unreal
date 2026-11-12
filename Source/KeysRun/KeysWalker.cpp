@@ -5,6 +5,7 @@
 #include "KeysMesh.h"
 #include "KeysWorld.h"
 #include "ProceduralMeshComponent.h"
+#include "Components/PostProcessComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "KeysBoatPawn.h"
@@ -30,6 +31,30 @@ AKeysWalker::AKeysWalker()
 	Body = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Body"));
 	Body->SetupAttachment(Root);
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Indoor = CreateDefaultSubobject<UPostProcessComponent>(TEXT("Indoor"));
+	Indoor->SetupAttachment(Root);
+	Indoor->bUnbound = true;
+	Indoor->Priority = 5;
+	Indoor->BlendWeight = 0;
+}
+
+double AKeysWalker::IndoorEV = 2.0;
+
+void AKeysWalker::UpdateIndoor(double Dt)
+{
+	const KeysTown::FLot* Lot = bAshore ? KeysTown::InsideLot(X, Z) : nullptr;
+	const bool bDark = Lot && (Lot->Style == KeysTown::EStyle::Club || Lot->Style == KeysTown::EStyle::Casino || Lot->Style == KeysTown::EStyle::Bar);
+	const double Want = Lot ? 1 : 0;
+	IndoorW += (Want - IndoorW) * FMath::Min(1.0, Dt * 3);
+	FPostProcessSettings& S = Indoor->Settings;
+	S.bOverride_AutoExposureMinBrightness = S.bOverride_AutoExposureMaxBrightness = true;
+	// EV100: a dark room is held where the street was; a lit shop may brighten a little, never all the way
+	S.AutoExposureMinBrightness = float(bDark ? IndoorEV : IndoorEV - 1.5);
+	S.AutoExposureMaxBrightness = float(bDark ? IndoorEV + .5 : 16);
+	S.bOverride_AutoExposureSpeedUp = S.bOverride_AutoExposureSpeedDown = true;
+	S.AutoExposureSpeedUp = 2.f; S.AutoExposureSpeedDown = 2.f;
+	Indoor->BlendWeight = float(IndoorW);
+	Indoor->bEnabled = IndoorW > .01;
 }
 
 AKeysWalker* AKeysWalker::Get(const UObject* WorldContext)
@@ -76,6 +101,7 @@ bool AKeysWalker::CanStand(double PX, double PZ, double FromY, double& OutY) con
 	const double R = WalkRadius;
 	for (const FRect& C : Colliders())
 		if (PX > C.X0 - R && PX < C.X1 + R && PZ > C.Z0 - R && PZ < C.Z1 + R) return false;
+	if (ObstacleAt(PX, PZ, R)) return false;   // the keys' houses, palms and estate houses
 	OutY = G;
 	return true;
 }
@@ -304,6 +330,7 @@ FString AKeysWalker::PlaceName() const
 void AKeysWalker::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateIndoor(FMath::Min(double(DeltaSeconds), 1.0 / 20));
 	if (!bAshore) return;
 	const double Dt = FMath::Min(double(DeltaSeconds), 1.0 / 20);
 	Clock += Dt;

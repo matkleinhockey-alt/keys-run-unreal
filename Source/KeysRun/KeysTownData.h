@@ -108,6 +108,14 @@ namespace KeysTown
 	// every solid thing a person collides with (walls, furniture, cars, props, sheds), world AABBs
 	const TArray<FRect>& Colliders();
 	void CollidersNear(double X, double Z, double R, TArray<const FRect*>& Out);
+	// Solid scenery out on the keys, for a person on foot: the conch houses and palms (KeysWorld) and the waterfront
+	// estates' houses (KeysLandmarks). A box is centered at (CX, CZ) with half-length HA along the unit axis (AX, AZ)
+	// and HB across it; a round one is a trunk.
+	void AddObstacleBox(double CX, double CZ, double AX, double AZ, double HA, double HB);
+	void AddObstacleRound(double X, double Z, double R);
+	bool ObstacleAt(double X, double Z, double R);
+	// near a waterfront estate's grounds (the keys' scattered houses and palms keep off them)
+	bool NearEstate(double X, double Z, double R);
 	// the town pad grown by Margin (for keeping the island's scattered palms and houses out of the streets)
 	bool InFootprint(double X, double Z, double Margin = 0);
 	// the made ground under the town (depth.ts TOWN_FILL), in the marina's frame

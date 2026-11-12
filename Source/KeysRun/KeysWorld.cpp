@@ -270,9 +270,11 @@ void AKeysWorld::BuildScenery()
 				// mangrove fringe at the water's edge
 				const double Sz = 3 + R * 8;
 				Mangroves->AddInstance(FTransform(FRotator(0, R * 360, 0), ToUE(JX, H + .6, JZ), FVector(Sz, Sz * .9, 2.4)));
+				KeysTown::AddObstacleRound(JX, JZ, Sz * .35);
 				continue;
 			}
-			if (H < .7) continue;
+			if (H < .7 || KeysTown::NearEstate(JX, JZ, 26)) continue;
+			KeysTown::AddObstacleRound(JX, JZ, .32);
 			// a palm (town props.ts, lighter): a leaning, curving trunk and a crown of fronds that rise and droop
 			const double Tall = 6 + Hash2(JZ, JX * 2) * 5;
 			const double Lean = (Hash2(JX * 3, JZ) - .5) * .5, LeanA = Hash2(JX, JZ * 3) * 2 * PI;
@@ -307,7 +309,7 @@ void AKeysWorld::BuildScenery()
 			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || KeysTown::InFootprint(JX, JZ, 14) || FMath::Abs(JZ - ChainZ(JX)) < 16) continue;
 			bool bNearMarina = false;
 			for (const FMarina& Mr : Marinas()) bNearMarina |= FMath::Abs(JX - Mr.SX) < 30 && FMath::Abs(JZ - Mr.SZ) < 30;
-			if (bNearMarina) continue;
+			if (bNearMarina || KeysTown::NearEstate(JX, JZ, 54)) continue;   // web waterfront.ts sites clear the conch houses
 			const double R = Hash2(JX * 2.1, JZ * 1.7);
 			if (R > (S.Isl->bMainland ? .12 : .5)) continue;
 			// the house's own dice
@@ -323,6 +325,7 @@ void AKeysWorld::BuildScenery()
 			const uint32 Wall = Pastel[int32(FMath::Abs(JX * 31 + JZ)) % 8], Trim = Shutter[int32(FMath::Abs(JZ * 17 + JX)) % 5];
 			const double Cs = FMath::Cos(Ry), Sn = FMath::Sin(Ry);
 			auto At = [&](double LX, double LZ) { return FVector2D(JX + LX * Cs + LZ * Sn, JZ - LX * Sn + LZ * Cs); };
+			KeysTown::AddObstacleBox(JX, JZ, Cs, -Sn, W / 2, D / 2);
 			if (bPiers)
 			{
 				B.Box(JX, H + Lift / 2 - .3, JZ, W - .4, Lift + .6, D - .4, 0x8e8b82, 0, Ry);

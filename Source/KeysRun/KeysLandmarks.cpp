@@ -349,6 +349,7 @@ void AKeysLandmarks::BuildEstates(FTownBatch& B)
 		auto At = [&](double A, double C) { return FVector2D(E.X + E.NX * A - E.NZ * C, E.Z + E.NZ * A + E.NX * C); };
 		const double G = KeysGeo::LandH(E.X, E.Z);
 		const double Wd = 14 + E.Style * 4, Dp = 11;
+		KeysTown::AddObstacleBox(E.X, E.Z, E.NX, E.NZ, Dp / 2 + .5, Wd / 2 + .5);
 		// plinth and ground floor, then the style: a villa with a set-back upper floor, a long ranch, or a stilt house
 		B.Box(E.X, G - .6 + .45, E.Z, Wd + 1, 1.5, Dp + 1, 0xd8cdb5, 0, Ry);
 		if (E.Style == 2)
