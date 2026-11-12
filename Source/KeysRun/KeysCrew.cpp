@@ -8,6 +8,7 @@
 #include "ProceduralMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/SkinnedAsset.h"
 #include "Animation/AnimSequence.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -49,12 +50,10 @@ void FKeysDeck::Init(const KeysData::FBoatSpec& S)
 	L = S.Len;
 	HB = S.Beam * .5;
 	Free = KeysMesh::HullOf(S).F;
-	DeckZ = KeysMesh::SoleAt(S, .05 * L - .5);
 	Spec = &S;
-	MidX = .05 * L;
-	TopZ = DeckZ + 2.35;
-	TopL = FMath::Min(2.6, L * .26);
-	TopW = FMath::Min(2.2, S.Beam * .66);
+	const KeysMesh::FBoatLayout Lo = KeysMesh::BoatLayout(S);
+	DeckZ = Lo.DeckZ; MidX = Lo.MidX; TopZ = Lo.TopZ; TopL = Lo.TopL; TopW = Lo.TopW; TopX = Lo.TopX;
+	ConL = Lo.ConL; ConW = Lo.ConW; ConFwd = Lo.ConFwd;
 }
 
 double FKeysDeck::SoleAt(double X) const
@@ -84,7 +83,7 @@ void AKeysExtras::BuildLayout()
 		C.Shirt = XHex(0x9cc8e0); C.Bottom = XHex(0xb9a77c); C.bShortsLong = true; C.Hair = XHex(0x4a3020);
 		C.bCap = true; C.CapColor = XHex(0x1d3557); C.bShoes = true; C.Shoes = XHex(0xf2f2f2); C.bGlasses = true;
 		Captain.Init(C, false);
-		const double X = Deck.MidX - .66;
+		const double X = Deck.MidX - Deck.ConL * .5 - .14;
 		Captain.Pos = FVector(X, .12, Deck.SoleAt(X));
 		Captain.Yaw = 0;
 		HelmL = XJ(-.1, 1.1, .12);
@@ -102,22 +101,41 @@ void AKeysExtras::BuildLayout()
 	// crew on the seat in front of the console
 	{
 		Crew.Init(XWoman(Suit, true), true);
-		const double X = Deck.MidX + .525 + .25;
+		const double X = Deck.MidX + Deck.ConL * .5 + Deck.ConFwd + .25;
 		Crew.Pos = FVector(X, 0, Deck.SoleAt(X));
 		Crew.Yaw = 0;
-		Props.AddBox(FVector(X - .02, 0, Deck.SoleAt(X) + .21), FVector(.42, .62, .42), XHex(0xeeeae0));
+		// the Freeman and the Midnight Express have their own seat on the console's front
+		if (S.Id != TEXT("freeman") && S.Id != TEXT("midnight")) Props.AddBox(FVector(X - .02, 0, Deck.SoleAt(X) + .21), FVector(.42, .62, .42), XHex(0xeeeae0));
+	}
+
+	// where nobody stands: the console and the seat on its front, the helm seats or leaning post, the Midnight's wet
+	// bar, the Freeman's tuna chair (KeysMesh::BuildBoat lays these out from the same KeysMesh::BoatLayout)
+	const bool bMidL = S.Id == TEXT("midnight");
+	double SeatX0, SeatX1, SeatHalf;
+	{
+		KeepOut.Reset();
+		const double ConA = Deck.MidX - Deck.ConL * .5, ConF = Deck.MidX + Deck.ConL * .5 + Deck.ConFwd;
+		KeepOut.Add(FBox2D(FVector2D(ConA - .1, -Deck.ConW * .5 - .1), FVector2D(ConF + (bMidL ? 1.0 : .6), Deck.ConW * .5 + .1)));
+		const int32 NSeat = S.bRodRack ? 4 : S.Beam > 3.6 ? 3 : 2;
+		if (bMidL) { SeatX0 = Deck.MidX - 2.7; SeatX1 = Deck.MidX - .82; SeatHalf = 1.38; }
+		else { SeatX0 = Deck.MidX - 1.62; SeatX1 = Deck.MidX - .9; SeatHalf = S.bLeaning ? .58 : (NSeat - 1) * .32 + .3; }
+		KeepOut.Add(FBox2D(FVector2D(SeatX0, -SeatHalf), FVector2D(SeatX1, SeatHalf)));
+		if (bMidL) KeepOut.Add(FBox2D(FVector2D(Deck.MidX - 3.72, -.78), FVector2D(Deck.MidX - 2.98, .78)));
+		if (KeysMesh::HasFightChair(S))
+		{
+			const FVector CB = KeysMesh::FightChairBase(S);
+			KeepOut.Add(FBox2D(FVector2D(CB.X - .62, -.62), FVector2D(CB.X + .62, .62)));
+		}
 	}
 
 	// party path: a lap around the console (JS makePath)
 	{
 		auto Lane = [this](double X) { return FMath::Max(.35, Deck.InnerHB(X) - .32); };
 		const double Zc = FMath::Min(L * .33, L * .39 - .6);
-		const double XF = FMath::Min(L * .27, Deck.MidX + 1.6);
+		const double XF = FMath::Min(L * .25, FMath::Max(Deck.MidX + 1.6, Deck.MidX + Deck.ConL * .5 + Deck.ConFwd + 1.05));
 		// past the helm seats (or the leaning post) the lane swings out round them, so nobody walks through the chairs:
 		// the seat row's half-width plus a shoulder, as far as the gunwale allows
-		const int32 NSeat = S.bRodRack ? 4 : S.Beam > 3.6 ? 3 : 2;
-		const double SeatHalf = S.bLeaning ? .58 : (NSeat - 1) * .32 + .3;
-		const double SX0 = Deck.MidX - 1.75, SX1 = Deck.MidX - .8;
+		const double SX0 = SeatX0 - .13, SX1 = SeatX1 + .1;
 		auto SeatLane = [&](double X) { return FMath::Max(Lane(X), FMath::Min(SeatHalf + .3, Deck.InnerHB(X) - .16)); };
 		const bool bRound = SX0 > -Zc + .3 && SX1 < L * .1 - .3;
 		PathPts.Reset();
@@ -129,6 +147,8 @@ void AKeysExtras::BuildLayout()
 		if (bRound) { PathPts.Add(FVector2D(SX1, -SeatLane(SX1))); PathPts.Add(FVector2D(SX0, -SeatLane(SX0))); }
 		PathPts.Add(FVector2D(-Zc, -Lane(-Zc)));
 		PathPts.Add(FVector2D(-Zc - .15, 0));
+		// every corner of the lap on open deck
+		for (FVector2D& Pp : PathPts) ClampToDeck(Pp.X, Pp.Y, .32);
 		PathCum.Reset();
 		PathCum.Add(0);
 		for (int32 i = 1; i <= PathPts.Num(); i++)
@@ -163,7 +183,7 @@ void AKeysExtras::BuildLayout()
 	bHasShower = S.Id == TEXT("freeman");
 	if (bHasShower)
 	{
-		ShowerHead = FVector(Deck.MidX - .5 - Deck.TopL * .5 + .14, Deck.TopW * .42, Deck.TopZ - .22);
+		ShowerHead = FVector(Deck.TopX - Deck.TopL * .5 + .14, Deck.TopW * .42, Deck.TopZ - .22);
 		ShowerH.Init(XWoman(0x9fd8ff, false), false);
 		ShowerH.Pos = FVector(ShowerHead.X, ShowerHead.Y, Deck.SoleAt(ShowerHead.X));
 		ShowerH.bVisible = false;
@@ -179,7 +199,8 @@ void AKeysExtras::BuildLayout()
 	bHasPole = S.Id == TEXT("midnight");
 	if (bHasPole)
 	{
-		const double X = ((Deck.MidX - 1.55 - .45) + (-.39 * L + .4)) * .5;
+		// in the open cockpit between the wet bar and the aft bench
+		const double X = ((Deck.MidX - 3.75) + (-.39 * L + .4)) * .5;
 		PoleBase = FVector(X, 0, Deck.SoleAt(X));
 		PoleH.Init(XWoman(0xc8a24a, false), false);
 		PoleAng = 0; PoleSpin = 0; PoleClimbT = XRand(5, 9);
@@ -323,6 +344,13 @@ void AKeysExtras::UpdateParty(double Dt, double T)
 		const int32 Mode = bFast ? 2 : G.bWalk ? 0 : 1;
 		double X = H.Pos.X, Y = H.Pos.Y, Bounce = 0;
 		H.bHoldHead = false;
+		// dancing or hanging on, she stays on one spot: the moves sway her about it, they don't walk her off the boat
+		if (Mode != 0)
+		{
+			if (!G.bHome) { G.HomeX = X; G.HomeY = Y; ClampToDeck(G.HomeX, G.HomeY, .32); G.bHome = true; }
+			X = G.HomeX; Y = G.HomeY;
+		}
+		else G.bHome = false;
 		if (Mode == 0)
 		{
 			G.S += Dt * .85;
@@ -450,10 +478,40 @@ void AKeysExtras::UpdateParty(double Dt, double T)
 				: XJ(.22, H.HipY + 1.0, .14);
 			H.Pose(XJ(-.2, H.HipY + 1.0, .14), R);
 		}
+		ClampToDeck(X, Y, .26);
 		H.Pos = FVector(X, Y, Deck.SoleAt(X) + Bounce);
 		H.bVisible = !bModels;
 	}
 	UpdatePartyModels();
+}
+
+void AKeysExtras::ClampToDeck(double& X, double& Y, double Margin) const
+{
+	if (!Deck.Spec) return;
+	const KeysData::FBoatSpec& S = *Deck.Spec;
+	// aft of the bow's casting deck or lounge, forward of the stern bench, inside the liner
+	const double X0 = KeysMesh::SternX(S) + .14 + S.Beam * .02 + .55 + Margin * .5, X1 = FMath::Max(X0 + .5, Deck.L * .26);
+	for (int32 It = 0; It < 4; It++)
+	{
+		X = FMath::Clamp(X, X0, X1);
+		const double Hw = FMath::Max(0.0, Deck.InnerHB(X) - Margin);
+		Y = FMath::Clamp(Y, -Hw, Hw);
+		bool bMoved = false;
+		for (const FBox2D& B : KeepOut)
+		{
+			const double Mg = Margin * .6;
+			const double Ax = B.Min.X - Mg, Bx = B.Max.X + Mg, Ay = B.Min.Y - Mg, By = B.Max.Y + Mg;
+			if (X <= Ax || X >= Bx || Y <= Ay || Y >= By) continue;
+			// out the nearest way that leaves deck under her: beside it if there's room, else fore or aft
+			const double YOut = Y >= 0 ? By + .01 : Ay - .01;
+			const double DX = FMath::Min(X - Ax, Bx - X), DY = FMath::Abs(YOut - Y);
+			const bool bRoomBeside = FMath::Abs(YOut) <= FMath::Max(0.0, Deck.InnerHB(X) - Margin);
+			if (bRoomBeside && DY <= DX + .4) Y = YOut;
+			else X = (X - Ax < Bx - X && Ax - .01 > X0) || Bx + .01 > X1 ? Ax - .01 : Bx + .01;
+			bMoved = true;
+		}
+		if (!bMoved) break;
+	}
 }
 
 // ---------------------------------------------------------------- the deck crew models (web entities/crew-model)
@@ -530,7 +588,35 @@ void AKeysExtras::UpdatePartyModels()
 		const FKeysHuman& H = Party[i].H;
 		const double Sc = Heights[i % 5] / CrewTemplateH;
 		// the glTF faces +Z in its own frame, which the importer turns into UE -Y: a quarter turn puts her face along +X
-		C->SetRelativeLocationAndRotation(FVector(H.Pos.X, H.Pos.Y, Deck.SoleAt(H.Pos.X)) * 100.0, FRotator(0, FMath::RadiansToDegrees(H.Yaw) + CrewYawOffset(), 0));
+		const FRotator Rot(0, FMath::RadiansToDegrees(H.Yaw) + CrewYawOffset(), 0);
+		FVector Loc = FVector(H.Pos.X, H.Pos.Y, Deck.SoleAt(H.Pos.X)) * 100.0;
+		// The Mixamo dance clip travels: its hips (the root bone of this rig, so nothing locks them) wander across the floor through the loop, which walked the figures
+		// off the deck. Take the hips' slow sideways drift back out each frame so she dances on her own spot.
+		while (HipBone.Num() <= i) HipBone.Add(-2);   // -2: not looked for yet
+		if (HipBone[i] == -2 && C->GetSkinnedAsset())
+		{
+			HipBone[i] = INDEX_NONE;
+			const FReferenceSkeleton& RS = C->GetSkinnedAsset()->GetRefSkeleton();
+			for (int32 b = 0; b < RS.GetNum(); b++)
+				if (RS.GetBoneName(b).ToString().Contains(TEXT("Hips"))) { HipBone[i] = b; break; }
+			if (HipBone[i] != INDEX_NONE)
+			{
+				FTransform Acc = FTransform::Identity;
+				for (int32 b = HipBone[i]; b != INDEX_NONE; b = RS.GetParentIndex(b)) Acc = Acc * RS.GetRefBonePose()[b];
+				HipRest = Acc.GetLocation();
+			}
+		}
+		if (HipBone[i] >= 0)
+		{
+			// only the slow travel: the hips' own sway in the dance stays, their average over a few seconds is held
+			// over her spot
+			while (HipAvg.Num() <= i) HipAvg.Add(FVector2D::ZeroVector);
+			const FVector Hp = C->GetBoneLocation(C->GetBoneName(HipBone[i]), EBoneSpaces::ComponentSpace) - HipRest;
+			const double K = FMath::Clamp(double(GetWorld()->GetDeltaSeconds()) / 2.5, 0.0, 1.0);
+			HipAvg[i] = FMath::Lerp(HipAvg[i], FVector2D(Hp.X, Hp.Y), K);
+			Loc -= Rot.RotateVector(FVector(HipAvg[i].X, HipAvg[i].Y, 0) * Sc);
+		}
+		C->SetRelativeLocationAndRotation(Loc, Rot);
 		C->SetRelativeScale3D(FVector(Sc));
 	}
 }

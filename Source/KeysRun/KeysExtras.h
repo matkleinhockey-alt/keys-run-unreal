@@ -28,6 +28,7 @@ struct FKeysExtrasTag
 struct FKeysDeck
 {
 	double L = 7, HB = 1.3, Free = .9, DeckZ = .5, MidX = .35, TopZ = 2.8, TopL = 1.8, TopW = 1.7;
+	double TopX = -.15, ConL = 1.05, ConW = 1.0, ConFwd = 0;   // the hardtop's centre; the console's length, width and forward run (KeysMesh::BoatLayout)
 	const KeysData::FBoatSpec* Spec = nullptr;   // the boats table never moves, so this stays good
 	void Init(const KeysData::FBoatSpec& S);
 	double SoleAt(double X) const;     // deck height at X
@@ -45,6 +46,9 @@ struct FKeysPartyGoer
 	bool bBlend = false;
 	FVector AL, AR, FL, FR;
 	double Sw = 0, Ln = 0;
+	// the spot on deck she dances on (her sway is added to it each frame, never accumulated)
+	double HomeX = 0, HomeY = 0;
+	bool bHome = false;
 };
 
 // The side features from the JS game: the buddy boat (Y), Luigi mode (trim all the way up on plane),
@@ -150,6 +154,14 @@ private:
 	FVector HelmL, HelmR;
 	TArray<FKeysPartyGoer> Party;
 	TArray<FVector2D> PathPts;
+	// where nobody stands on this boat's deck: the console, seats, the tuna chair, benches (boat frame, meters)
+	TArray<FBox2D> KeepOut;
+	// puts a point back on the open deck: inside the gunwales, off the bow and stern furniture and out of KeepOut
+	void ClampToDeck(double& X, double& Y, double Margin = .3) const;
+	// per party model: the hips' rest spot in the mesh, so the clip's travel can be taken back out (bone -1: not found)
+	TArray<int32> HipBone;
+	TArray<FVector2D> HipAvg;
+	FVector HipRest = FVector::ZeroVector;
 	TArray<double> PathCum;
 	double PathTotal = 1;
 	bool bHasShower = false, bShowerOn = false;
