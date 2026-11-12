@@ -122,6 +122,15 @@ namespace KeysMesh
 	FVector BuildTunaRod(FKeysMesh& M, const FRodPose& P);
 	// the level of detail BuildBoat gives the rods in its holders (0 for the player's boat, 1 for everyone else's)
 	extern int32 GRodLod;
+	// The Freeman's big-game fighting chair, centred in the cockpit aft of the console (KeysRod.cpp). The pedestal and
+	// swivel base are part of the hull (BuildBoat); the chair itself swivels, so it is built each frame by AKeysExtras:
+	// varnished teak seat, back and arms, the gimbal socket between the knees, the footrest bar, rod holders on the arms.
+	// Yaw 0 faces the bow (the chair faces aft at rest, Yaw PI). ChairGimbal is the rod butt's socket, boat frame.
+	bool HasFightChair(const KeysData::FBoatSpec& S);
+	FVector FightChairBase(const KeysData::FBoatSpec& S);   // the top of the swivel, boat-local meters
+	void BuildFightChairPedestal(FKeysMesh& M, const FVector& Base, double Sole);
+	void BuildFightChair(FKeysMesh& M, const FVector& Base, double Yaw);
+	FVector ChairGimbal(const FVector& Base, double Yaw);
 	// a stainless flush-mount rod holder's flange and tube, set into a deck or gunwale top (Axis points out of the hole)
 	void BuildRodHolder(FKeysMesh& M, const FVector& Mouth, const FVector& Axis, const FVector& SurfaceN);
 	// a simple fish body with tail and dorsal fins, nose along +X, about Len meters long

@@ -145,6 +145,8 @@ private:
 	FString LayoutFor;
 	FKeysDeck Deck;
 	FKeysHuman Captain, Crew;
+	FKeysHuman ChairH;   // the angler in the fighting chair (the Freeman's trolling fights)
+	bool bChairInit = false;
 	FVector HelmL, HelmR;
 	TArray<FKeysPartyGoer> Party;
 	TArray<FVector2D> PathPts;

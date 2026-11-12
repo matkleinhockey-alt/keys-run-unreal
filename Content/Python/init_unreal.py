@@ -227,8 +227,11 @@ if (kind < 0.5) {
   rough = 0.4 + 0.08 * gr.x; spec = 0.45;
   col += fres * 0.06;
 } else if (kind < 8.5) {           // wood: grain along the plank, darker late-wood rings, weathered
-  float4 n = F.fbm(p * float3(1.2, 14.0, 14.0), 3);
-  float ring = frac(n.x * 7.0);
+  // grain: long streaks along the plank (the longest local axis of most timber here is x or y), late-wood lines
+  float3 gs = abs(ln.x) > 0.6 ? float3(40.0, 1.5, 40.0) : float3(1.5, 40.0, 40.0);
+  if (abs(ln.z) > 0.6) gs = float3(1.5, 30.0, 30.0);
+  float4 n = F.fbm(p * gs, 3);
+  float ring = frac(n.x * 3.0 + p.z * 0.0);
   float4 wx = F.nd(p * 2.5);
   df = lerp(0.74, 1.08, smoothstep(0.0, 0.85, ring)) * lerp(0.86, 1.06, wx.x);
   df = lerp(0.92, df, midF);

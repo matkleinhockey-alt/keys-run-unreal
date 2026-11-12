@@ -609,6 +609,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("shopclose")) ShopClose();
 		else if (Cmd.StartsWith(TEXT("cash="))) Cash = FCString::Atoi64(*Cmd.Mid(5));
 		else if (Cmd.StartsWith(TEXT("gfx="))) KeysGfx::SetQuality(FCString::Atoi(*Cmd.Mid(4)));
+		else if (Cmd.StartsWith(TEXT("fp="))) bFpPref = FCString::Atoi(*Cmd.Mid(3)) != 0;
 		else if (Cmd == TEXT("rec=start")) UAudioMixerBlueprintLibrary::StartRecordingOutput(this, 30.f);
 		else if (Cmd.StartsWith(TEXT("rec=stop")))
 		{
@@ -1170,6 +1171,11 @@ void AKeysBoatPawn::PrepareToLeaveHelm()
 	ScriptThr = -1;
 }
 
+bool AKeysBoatPawn::InChair() const
+{
+	return KeysMesh::HasFightChair(Spec()) && FState == EKeysFish::Fight && HookedStation >= 0 && !IsDiving() && !IsAshore();
+}
+
 bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const
 {
 	if (bDbgCam && BoatMesh)
@@ -1178,6 +1184,21 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		OutPos = BT.TransformPosition(DbgCamPos * 100.0);
 		OutRot = (BT.GetRotation() * DbgCamRot.Quaternion()).Rotator();
 		OutFov = DbgCamFov;
+		return true;
+	}
+	if (InChair() && BoatMesh && !bJumping)
+	{
+		// the chair fight: over the angler's shoulder from in front of the chair, the fish and the wake beyond; or (the
+		// view key) from the angler's own eyes in the chair
+		const FTransform BT = BoatMesh->GetComponentTransform();
+		const FVector Base = KeysMesh::FightChairBase(Spec());
+		const FQuat Q(FVector::UpVector, ChairYaw);
+		const FVector FishW = ToUE(FX, 0, FZ);
+		FVector LocalCam = bFpPref ? Base + Q.RotateVector(FVector(.05, 0, 1.05)) : Base + Q.RotateVector(FVector(-1.7, 1.4, 2.05));
+		OutPos = BT.TransformPosition(LocalCam * 100.0);
+		const FVector Look = bFpPref ? FishW : FMath::Lerp(BT.TransformPosition((Base + FVector(0, 0, .6)) * 100.0), FishW, .35);
+		OutRot = (Look - OutPos).Rotation();
+		OutFov = bFpPref ? 75.f : 62.f;
 		return true;
 	}
 	if (const AKeysTourneyShow* Sh = AKeysTourneyShow::Get(this); Sh && Sh->CameraFor(OutPos, OutRot, OutFov)) return true;
@@ -2512,10 +2533,28 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 
 	FKeysMesh M;
 	FVector TipU;   // rod tip, Unreal axes, meters
-	if (bFpOn) TipU = BuildViewModel(M);
+	if (bFpOn && !InChair()) TipU = BuildViewModel(M);
 	else
 	{
 		const FVector Tip = RodTip(End);
+		if (InChair() && BoatMesh)
+		{
+			// the butt in the chair's gimbal, the rod up at the fish over the angler's knees
+			const FTransform BT = BoatMesh->GetComponentTransform();
+			const FVector Base = KeysMesh::FightChairBase(Spec());
+			const FVector G = KeysMesh::ChairGimbal(Base, ChairYaw);
+			const FVector Dl = FQuat(FVector::UpVector, ChairYaw).RotateVector(FVector(FMath::Cos(.75), 0, FMath::Sin(.75)));
+			KeysMesh::FRodPose RP;
+			RP.Butt = BT.TransformPosition(G * 100.0) / 100.0;
+			RP.Dir = BT.TransformVector(Dl).GetSafeNormal();
+			RP.Up = BT.TransformVector(FVector(0, 0, 1));
+			RP.Len = 2.1;
+			const double Bend = FState == EKeysFish::Fight ? Clamp(Tension, 0, 1) : 0;
+			RP.Bend = (G2U(End) - (RP.Butt + RP.Dir * RP.Len)).GetSafeNormal() * Bend * .55;
+			TipU = KeysMesh::BuildTunaRod(M, RP);
+		}
+		else
+		{
 		const double Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
 		const double Sgn = ((End.X - X) * Rx + (End.Z - Z) * Rz) >= 0 ? 1 : -1;
 		FVector Butt(X + Rx * Sgn * (Spec().Beam * .5 - .25) + FMath::Sin(H) * Spec().Len * .15, Y + 1.25, Z + Rz * Sgn * (Spec().Beam * .5 - .25) + FMath::Cos(H) * Spec().Len * .15);
@@ -2534,6 +2573,7 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 		RP.Bend = G2U(RodTipBent) - G2U(Tip);
 		RP.Lod = 0;
 		TipU = KeysMesh::BuildTunaRod(M, RP);
+		}
 	}
 	if (bLine)
 	{
@@ -2649,6 +2689,18 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	UpdateJumpCam(Dt);
 	UpdateViewModel(Dt);
 	BeginShoreSwap();
+	{
+		// the chair swivels to follow the fish's bearing, and back to face the wake when it's over
+		double Want = PI;
+		if (InChair() && BoatMesh)
+		{
+			const FVector L = BoatMesh->GetComponentTransform().InverseTransformPosition(ToUE(FX, 0, FZ)) / 100.0;
+			Want = FMath::Atan2(L.Y, L.X);
+			if (FMath::Cos(Want) > -.2) Want = FMath::Atan2(FMath::Sign(L.Y) * .98, -.2);   // it can't face forward through the console
+		}
+		const double D = FMath::UnwindRadians(Want - ChairYaw);
+		ChairYaw = FMath::UnwindRadians(ChairYaw + D * FMath::Min(1.0, Dt * 2.5));
+	}
 	DrawLineAndRod(T);
 	EndShoreSwap();
 	UpdateSpread(Dt, T);

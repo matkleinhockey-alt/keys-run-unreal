@@ -632,6 +632,38 @@ void AKeysExtras::CommitCrew(double T)
 	FKeysMesh M;
 	Captain.Build(M);
 	Crew.Build(M);
+	// the fighting chair, turned toward the fish, and the angler strapped into it while a trolled fish is on
+	if (const AKeysBoatPawn* CP = PawnRef.Get(); CP && Deck.Spec && KeysMesh::HasFightChair(*Deck.Spec))
+	{
+		const FVector Base = KeysMesh::FightChairBase(*Deck.Spec);
+		const double Yaw = CP->GetChairYaw();
+		KeysMesh::BuildFightChair(M, Base, Yaw);
+		if (CP->InChair())
+		{
+			if (!bChairInit)
+			{
+				FKeysHumanLook L;
+				L.Skin = XHex(0xd9a27f); L.Shirt = XHex(0x9cc8e0); L.Bottom = XHex(0xb9a77c); L.bShortsLong = true; L.bCap = true; L.CapColor = XHex(0x1d3557);
+				L.bGlasses = true; L.bShoes = true; L.Shoes = XHex(0xf2f2f2); L.Hair = XHex(0x4a3020);
+				ChairH.Init(L, true);
+				bChairInit = true;
+			}
+			const FQuat Q(FVector::UpVector, Yaw);
+			ChairH.Pos = Base + Q.RotateVector(FVector(-.06, 0, -.2));
+			ChairH.Yaw = Yaw;
+			ChairH.Pitch = -.12 - .1 * FMath::Sin(T * 1.7);   // leaning back on the fish, pumping
+			ChairH.Roll = 0;
+			ChairH.HeadNod = -.1;
+			ChairH.bHoldHead = true;
+			// hands on the fore grip and the crank, in the angler's own frame
+			const FVector G = KeysMesh::ChairGimbal(Base, Yaw);
+			const FVector Dl = Q.RotateVector(FVector(FMath::Cos(.75), 0, FMath::Sin(.75)));
+			const FTransform HX = ChairH.ToBoat();
+			const FVector Grip = HX.InverseTransformPosition((G + Dl * .8) * 100.0) / 100.0, Crank = HX.InverseTransformPosition((G + Dl * .42 + Q.RotateVector(FVector(0, .12, .1))) * 100.0) / 100.0;
+			ChairH.Pose(Grip + FVector(0, -.04, 0), Crank + FVector(0, 0, .03 * FMath::Sin(T * 6)));
+			ChairH.Build(M);
+		}
+	}
 	// in the first-person fishing view, a guest standing where you stand would fill the lens: they step aside
 	FVector Eye;
 	const AKeysBoatPawn* EP = PawnRef.Get();

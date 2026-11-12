@@ -497,6 +497,12 @@ namespace KeysMesh
 			if (bRiggers) BuildRiggers(M, S, 0);
 		}
 
+		// the fighting chair's pedestal and swivel base (the chair turns, so AKeysExtras draws it)
+		if (HasFightChair(S))
+		{
+			const FVector CB = FightChairBase(S);
+			BuildFightChairPedestal(M, CB, SoleAt(S, CB.X));
+		}
 		// outboards: hung off the transom, or set back on a bracket with its own swim platform
 		const double XT = SternX(S);
 		const double X0 = XT - .35 - (S.bBracket ? .55 : 0);

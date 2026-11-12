@@ -142,6 +142,11 @@ public:
 	bool IsBobberInWater() const { return FState == EKeysFish::Waiting || FState == EKeysFish::Nibble || FState == EKeysFish::Bite; }
 	bool IsFirstPerson() const { return bFpOn || bDriveOn; }
 	bool FpEyeLocal(FVector& Out) const { Out = FpEyeL; return bFpOn; }   // where you stand to fish, boat-local meters
+	// the Freeman's fighting chair: a trolled fish is fought from it. ChairYaw turns it toward the fish (boat frame,
+	// 0 = the bow); bInChair while that fight (and its catch card) lasts
+	bool InChair() const;
+	double GetChairYaw() const { return ChairYaw; }
+	double ChairYaw = PI;
 	void NudgeBoat(double DX, double DZ, double SpeedMul) { X += DX; Z += DZ; Speed *= SpeedMul; }
 	// test hook: put the boat there, stopped (game meters, web heading)
 	void DebugPlace(double InX, double InZ, double InH) { X = InX; Z = InZ; H = InH; Speed = Thr = DVX = DVZ = 0; bCamInit = false; }

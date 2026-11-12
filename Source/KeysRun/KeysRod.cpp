@@ -1,6 +1,7 @@
 // The tuna rod and lever-drag reel (KeysMesh.h BuildTunaRod), built from lathes, tubes and rounded boxes.
 #include "KeysMesh.h"
 #include "KeysHuman.h"
+#include "KeysData.h"
 
 namespace
 {
@@ -211,5 +212,79 @@ namespace KeysMesh
 		}
 		M.Surf = Keep;
 		return Tip;
+	}
+}
+
+// ---------------------------------------------------------------- the fighting chair
+namespace KeysMesh
+{
+	bool HasFightChair(const KeysData::FBoatSpec& S) { return S.Id == TEXT("freeman"); }
+
+	FVector FightChairBase(const KeysData::FBoatSpec& S)
+	{
+		// 2.6 m in from the transom, on the centreline: clear of the leaning post, the stern rod holders and the guests'
+		// lap of the cockpit (which crosses the stern behind it)
+		const double X = SternX(S) + 2.75;
+		return FVector(X, 0, SoleAt(S, X) + .38);
+	}
+
+	void BuildFightChairPedestal(FKeysMesh& M, const FVector& Base, double Sole)
+	{
+		const uint8 W = M.Surf;
+		M.Surf = SurfSteel;
+		const double H = Base.Z - Sole;
+		Lathe(M, FVector(Base.X, Base.Y, Sole), FVector::UpVector, FVector::ForwardVector,
+			{{0, 0}, {.26, 0}, {.27, .012}, {.25, .03}, {.1, .05}, {.075, .09}, {.07, H - .07}, {.09, H - .04}, {.15, H - .02}, {.15, H}, {0, H}}, 32, Silver);
+		M.Surf = W;
+	}
+
+	FVector ChairGimbal(const FVector& Base, double Yaw)
+	{
+		return Base + FQuat(FVector::UpVector, Yaw).RotateVector(FVector(.36, 0, .14));
+	}
+
+	void BuildFightChair(FKeysMesh& M, const FVector& Base, double Yaw)
+	{
+		const uint8 Keep = M.Surf;
+		const FQuat Q(FVector::UpVector, Yaw);
+		auto P = [&](double X, double Y, double Z) { return Base + Q.RotateVector(FVector(X, Y, Z)); };
+		const FLinearColor Teak(.36f, .17f, .065f), TeakL(.45f, .22f, .09f);
+		auto Wood = [&](const FVector& C, const FVector& Sz, double R, const FQuat& Rot = FQuat::Identity)
+		{
+			M.Surf = SurfWood;
+			M.AddRoundBox(C, Sz, R, Teak, Q * Rot, 2);
+		};
+		// the swivel head and the frame under the seat
+		Puck(M, Base + FVector(0, 0, .02), FVector::UpVector, FVector::ForwardVector, .16, .04, .008, 24, Silver, SurfSteel);
+		Tube(M, P(0, 0, .04), P(0, 0, .1), .05, .05, 16, Silver, SurfSteel);
+		// the seat: a thick varnished teak pan, a little dished
+		Wood(P(.02, 0, .14), FVector(.56, .58, .08), .035);
+		Wood(P(.02, 0, .19), FVector(.5, .52, .03), .012);
+		// the back: two posts and a broad curved back of three staves
+		for (int32 s = -1; s <= 1; s += 2) Wood(P(-.27, s * .22, .42), FVector(.06, .06, .58), .02, FQuat(FVector::YAxisVector, -.12));
+		for (int32 k = -1; k <= 1; k++)
+		{
+			const double A = k * .32;
+			Wood(P(-.28 + FMath::Abs(k) * .04, k * .155, .5), FVector(.05, .17, .5), .02, FQuat(FVector::ZAxisVector, A) * FQuat(FVector::YAxisVector, -.12));
+		}
+		Wood(P(-.31, 0, .78), FVector(.07, .5, .07), .03, FQuat(FVector::YAxisVector, -.12));
+		// the arms: broad flat teak rests on turned posts, a rod holder at the front of each
+		for (int32 s = -1; s <= 1; s += 2)
+		{
+			Wood(P(.02, s * .32, .44), FVector(.62, .1, .045), .02);
+			Tube(M, P(.22, s * .32, .19), P(.22, s * .32, .42), .02, .02, 12, Silver, SurfSteel);
+			Tube(M, P(-.15, s * .32, .19), P(-.15, s * .32, .42), .02, .02, 12, Silver, SurfSteel);
+			Tube(M, P(.3, s * .34, .4), P(.36, s * .4, .62), .03, .03, 14, Silver, SurfSteel);
+		}
+		// the gimbal socket between the knees, with its cross-pin
+		Tube(M, P(.3, 0, .17), P(.36, 0, .14), .04, .04, 16, Silver, SurfSteel);
+		Puck(M, P(.36, 0, .14), FVector::UpVector, FVector::ForwardVector, .04, .05, .008, 16, Silver, SurfSteel);
+		Tube(M, P(.36, -.05, .14), P(.36, .05, .14), .007, .007, 8, AluDark, SurfSteel);
+		// the footrest: a stainless arm from the pedestal and a teak bar across, set for the angler's legs
+		Tube(M, P(0, 0, -.15), P(.62, 0, -.22), .025, .025, 12, Silver, SurfSteel);
+		Wood(P(.66, 0, -.22), FVector(.1, .62, .05), .02);
+		for (int32 s = -1; s <= 1; s += 2) Tube(M, P(.66, s * .31, -.22), P(.66, s * .36, -.22), .022, .022, 10, Silver, SurfSteel);
+		(void)TeakL;
+		M.Surf = Keep;
 	}
 }
