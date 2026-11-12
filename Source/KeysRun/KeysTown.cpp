@@ -839,6 +839,7 @@ void AKeysTown::BuildEstates()
 			E.Box(SignU, P + 1.5, Zf(L.V0 + 9.6), 2.2, 1.0, .06, 0xc23a3a);
 			continue;
 		}
+		if (bOwned) continue;   // what stands on an owned lot is the build sheet's (AKeysEstates)
 		// a villa (estates/residences.ts villa): ground floor, a set-back first floor, terracotta hips, pool deck in front
 		const double D = 14, Hw = FMath::Min(W - 6, 26.0), Zc = Zf(L.V0 + 9 + 4 + 7 + D / 2);
 		E.Span(CX - Hw / 2, CX + Hw / 2, P, P + 4.3, Zc - D / 2, Zc + D / 2, 0xf3ead8);

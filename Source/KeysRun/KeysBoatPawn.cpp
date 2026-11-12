@@ -13,6 +13,7 @@
 #include "KeysLocals.h"
 #include "KeysHandgun.h"
 #include "KeysTreasure.h"
+#include "KeysEstates.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -226,6 +227,7 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		const bool bRace = Ev && (Ev->RacePhase() == AKeysEvents::ERace::Countdown || Ev->RacePhase() == AKeysEvents::ERace::Racing);
 		Add(TEXT("tourney"), TEXT("Fishing tournament"), bTour ? FString(TEXT("quit it")) : FString(TEXT("15 min, five species")));
 		Add(TEXT("race"), TEXT("Marathon race"), bRace ? FString(TEXT("abandon it")) : FString(TEXT("2 laps, R at the helm")));
+		Add(TEXT("estates"), TEXT("Land office"), TEXT("Keys Run Estates  ( , )"));
 		Add(TEXT("online"), OnlineLabel, OnlineValue);
 		Add(TEXT("board"), TEXT("Leaderboard"));
 		Add(TEXT("settings"), TEXT("Settings"));
@@ -268,6 +270,7 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 			*Spec().Brand, *Spec().Name, *Commas(Spec().Price), *Commas(Cash)), 5);
 	}
 	else if (Id == TEXT("resume")) Menu = EMenu::None;
+	else if (Id == TEXT("estates")) { Menu = EMenu::None; if (AKeysEstates* Es = AKeysEstates::Get(this)) Es->Open(true); }
 	else if (Id == TEXT("boat") && Dir == 0) BuyBoat();
 	else if (Id == TEXT("boat"))
 	{
@@ -615,6 +618,38 @@ void AKeysBoatPawn::RunTestScript(double T)
 			FString K, N;
 			if (!Cmd.Mid(5).Split(TEXT(","), &K, &N)) { K = Cmd.Mid(5); N.Empty(); }
 			if (N.IsEmpty()) Owned.Add(K); else AddCount(*K, FCString::Atoi(*N));
+		}
+		else if (Cmd == TEXT("estates")) { if (AKeysEstates* Es = AKeysEstates::Get(this)) Es->Open(!Es->bOpen); }
+		else if (Cmd.StartsWith(TEXT("estsel=")))
+		{
+			// estsel=<parcel id>: the land office's chart on that lot
+			if (AKeysEstates* Es = AKeysEstates::Get(this))
+				for (int32 r = 0; r < AKeysEstates::RegionNames().Num(); r++)
+				{
+					Es->SetRegion(r);
+					const int32 I = Es->RegionList.IndexOfByPredicate([&](int32 Ix) { return Es->Parcels()[Ix].Id == Cmd.Mid(7); });
+					if (I >= 0 && r > 0) { Es->Sel = I; break; }
+				}
+		}
+		else if (Cmd.StartsWith(TEXT("estbuy="))) { if (AKeysEstates* Es = AKeysEstates::Get(this)) UE_LOG(LogTemp, Log, TEXT("KRScript %s"), *Es->Buy(Cmd.Mid(7))); }
+		else if (Cmd.StartsWith(TEXT("estbuild=")))
+		{
+			// estbuild=<id>|res=stilt;dock=yacht;...
+			FString Id, B;
+			if (AKeysEstates* Es = AKeysEstates::Get(this); Es && Cmd.Mid(9).Split(TEXT("|"), &Id, &B))
+				if (const AKeysEstates::FParcel* Pc = Es->ById(Id)) Es->SetBuild(Id, Es->BuildFromString(*Pc, AKeysEstates::BuildToString(Es->BuildOf(Id)) + TEXT(";") + B));
+		}
+		else if (Cmd.StartsWith(TEXT("estgo=")))
+		{
+			// estgo=<id>: the boat off that lot's shore, looking at it
+			if (AKeysEstates* Es = AKeysEstates::Get(this))
+				if (const AKeysEstates::FParcel* Pc = Es->ById(Cmd.Mid(6)))
+				{
+					const AKeysEstates::FLayout L = Es->Layout(*Pc, Es->BuildOf(Pc->Id));
+					double PX = L.HX + L.SX * 70, PZ = L.HZ + L.SZ * 70;
+					for (int32 k = 0; k < 40 && DepthAt(PX, PZ) < 1.2; k++) { PX += L.SX * 8; PZ += L.SZ * 8; }
+					X = PX; Z = PZ; H = FMath::Atan2(L.SX, L.SZ); Speed = Thr = 0; bCamInit = false;
+				}
 		}
 		else if (Cmd == TEXT("treasure"))
 		{
@@ -1084,6 +1119,19 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 	if (Hit(EKeys::B)) { bBoardOpen = true; BoardTab = 0; bFwd = bBack = bLeft = bRight = bAction = false; bCharging = false; return; }
 
+	// the land office (Keys Run Estates): , opens it from the helm or ashore, and it owns the keys while it is up
+	if (bRunning && Menu == EMenu::None)
+		if (AKeysEstates* Es = AKeysEstates::Get(this))
+		{
+			if (!Es->bOpen && Hit(EKeys::Comma) && !IsDiving()) { Es->Open(true); return; }
+			if (Es->bOpen)
+			{
+				bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+				bCharging = false;
+				Es->HandleInput(PC);
+				return;
+			}
+		}
 	// the boat pistol owns the keys while it is out (web entities/handgun/input.ts): the boat drifts in neutral
 	if (bRunning && Menu == EMenu::None)
 		if (AKeysHandgun* Gun = AKeysHandgun::Get(this); Gun && Gun->IsOut())

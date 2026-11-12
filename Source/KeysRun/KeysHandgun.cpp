@@ -654,19 +654,14 @@ void AKeysHandgun::Render(double T)
 		const FVector P = ToUE(B.P.X, B.P.Y, B.P.Z) / 100.0;
 		S.AddTube(P, P + FVector(.02, .006, .004), .0045, .0045, 5, Hex(0xc9a24a));
 	}
-	static TMap<FString, FKeysMesh> FishCache;
 	for (const FFloater& F : Floaters)
 	{
-		if (!FishCache.Contains(F.Key)) { FKeysMesh FM; AKeysLife::BuildCreatureMesh(F.Key, FM, 1.0); FishCache.Add(F.Key, MoveTemp(FM)); }
-		const FKeysMesh& FM = FishCache[F.Key];
-		if (!FM.V.Num()) continue;
 		// belly up and bobbing for a few seconds, then it rights itself and swims off, offended
 		const double Wake = FMath::Clamp((F.T - 4) / 1.2, 0.0, 1.0), Away = FMath::Max(0.0, F.T - 5.2);
 		const double X = F.X + F.DX * Away * Away * 1.2, Z = F.Z + F.DZ * Away * Away * 1.2;
 		const double Y = SurfaceY(X, Z, T) - .05 - Away * Away * .4 + FMath::Sin(T * 3) * .03;
 		const FQuat Q = FQuat(FVector::ZAxisVector, F.Yaw) * FQuat(FVector::XAxisVector, PI * (1 - Wake));
-		const double Sc = FMath::Clamp(KeysMesh::FishLength(F.Weight) / 1.0, .3, 2.5);
-		AppendXf(S, FM, FTransform(Q, ToUE(X, Y, Z), FVector(Sc)));
+		KeysKit::AppendFish(S, F.Key, FMath::Clamp(KeysMesh::FishLength(F.Weight), .3, 2.5), FTransform(Q, ToUE(X, Y, Z) / 100.0));
 	}
 	for (const FFall& F : Falls) if (F.T < 20) BirdShape(S, ToUE(F.P.X, F.P.Y, F.P.Z) / 100.0, F.T * 5, 1.3, F.Kind, 0, F.T * 7);
 	for (const FCarcass& C : Carcasses)

@@ -41,6 +41,9 @@ namespace KeysKit
 	struct FPose { double Y, Pitch, Roll; };
 	FPose RidePose(double X, double Z, double H, double Len, double Beam, double T, double RollK = .9);
 	FRotator PoseRot(const FPose& P, double H);
+	// the species' real model (AKeysLife::BuildCreatureMesh) normalised to LenM nose to tail, nose along +X of XfM,
+	// placed by XfM in meters; false if the species has no model (a plain fish shape is used)
+	bool AppendFish(FKeysMesh& Dst, const FString& Key, double LenM, const FTransform& XfM);
 }
 
 // World-space labels and speech the HUD projects onto the screen each frame (the web game's DOM `.tag`s):

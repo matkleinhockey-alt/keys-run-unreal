@@ -637,8 +637,17 @@ namespace KeysTown
 		return A;
 	}
 
+	TArray<FExtraDock>& ExtraDocks() { static TArray<FExtraDock> A; return A; }
+
 	bool GroundAt(double X, double Z, double& OutY, bool bNatural)
 	{
+		for (const FExtraDock& E : ExtraDocks())
+		{
+			// estates.ts estateGround: on the strip or the T-head; the ramp climbs from the shore
+			const double A = (X - E.X0) * E.SX + (Z - E.Z0) * E.SZ, C = FMath::Abs((X - E.X0) * -E.SZ + (Z - E.Z0) * E.SX);
+			const bool bStrip = A >= 0 && A <= E.Len && C <= E.HalfW, bHead = E.THead > 0 && A >= E.Len - 5 && A <= E.Len && C <= E.THead / 2;
+			if (bStrip || bHead) { OutY = A >= 8 ? 1.425 : E.G0 + (1.425 - E.G0) * (A / 8); return true; }
+		}
 		for (const FPier& Pp : Piers())
 		{
 			const double DX = X - Pp.X0, DZ = Z - Pp.Z0;
@@ -772,6 +781,7 @@ namespace KeysTown
 			Oriented(Pp.X0, Pp.Z0, Pp.NX, Pp.NZ, Pp.Len - PierHeadD / 2, Pp.Len + PierHeadD / 2, PierHeadW / 2, Pp.Name);
 		}
 		for (const FEstateSite& E : WaterfrontEstates()) Oriented(E.X, E.Z, E.NX, E.NZ, 14, E.DockLen, 1.1, E.Island + TEXT(" - a private dock"));
+		for (const FExtraDock& E : ExtraDocks()) Oriented(E.X0, E.Z0, E.SX, E.SZ, 9, E.Len, E.HalfW, E.Name);
 		return bFound;
 	}
 

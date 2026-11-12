@@ -121,6 +121,10 @@ namespace KeysTown
 	// the made ground under the town (depth.ts TOWN_FILL), in the marina's frame
 	bool InFill(double X, double Z);
 	// the closest point on any marina's deck to (x, z) within Reach, pulled 0.45 m inside the plank
+	// docks that come and go: what you have built on your Keys Run Estates lots (AKeysEstates). A ramp up from the
+	// shore over DockRamp m, then the deck at 1.425 m out to Len, and a T-head HalfT wide on a yacht dock.
+	struct FExtraDock { double X0, Z0, SX, SZ, Len, HalfW, THead, G0; FString Name; };
+	TArray<FExtraDock>& ExtraDocks();
 	bool FindBerth(double X, double Z, double Reach, double& OutX, double& OutZ, FString& OutName);
 	// which enterable lot's interior (x, z) is in, or nullptr
 	const FLot* InsideLot(double X, double Z);
