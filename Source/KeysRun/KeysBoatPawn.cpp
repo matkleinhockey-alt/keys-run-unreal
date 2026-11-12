@@ -9,6 +9,7 @@
 #include "KeysOnline.h"
 #include "KeysDiver.h"
 #include "KeysWalker.h"
+#include "KeysVisitors.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -595,6 +596,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("harbour")) { X = AKeysEvents::HarbourX(); Z = AKeysEvents::HarbourZ(); Speed = Thr = 0; bCamInit = false; }
 		else if (Cmd.StartsWith(TEXT("ev:"))) { if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->DebugCmd(Cmd.Mid(3)); }
 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
+		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
+		else if (Cmd == TEXT("banner")) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->StartBanner(); }
 		else if (Cmd.StartsWith(TEXT("indoorev="))) AKeysWalker::IndoorEV = FCString::Atod(*Cmd.Mid(9));
 		else if (Cmd == TEXT("ownall")) { for (const FBoatSpec& B : Boats()) Owned.Add(TEXT("boat.") + B.Id); }
 		else if (Cmd.StartsWith(TEXT("boat=")))
