@@ -177,6 +177,9 @@ public:
 	// another system's camera this frame (the pistol, the tournament's titles and ceremony); false for the boat's own
 	bool ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const;
 	bool bExtCam = false;
+	// the glass helm screens and the boat's lights (KeysHelm.cpp); ; switches the underwater and cockpit lights
+	void ToggleLights();
+	bool bUwLights = false;
 	bool HasGear(const TCHAR* Effect) const { return Owned.Contains(Effect); }
 	void ShopBuy(int32 Index);
 	void ShopClose();
@@ -342,4 +345,12 @@ private:
 	double JumpLook = 0;
 	void UpdateJumpCam(double Dt);
 	double FishLen = 1;
+	void UpdateHelm(double Dt, double T);
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> HelmScreens;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatLights;
+	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> UwLights;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> ScreenMID;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> LightMID;
+	double HelmT = 0;
+	TArray<float> SonarHist;
 };

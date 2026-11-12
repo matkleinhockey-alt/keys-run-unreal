@@ -666,6 +666,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd == TEXT("open")) { if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen(); }
 		else if (Cmd == TEXT("flare")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->DebugFlare(); }
+		else if (Cmd == TEXT("lights")) ToggleLights();
+		else if (Cmd.StartsWith(TEXT("view="))) View = FCString::Atoi(*Cmd.Mid(5));
 		else if (Cmd == TEXT("gun")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle(); }
 		else if (Cmd.StartsWith(TEXT("gunlook=")) || Cmd.StartsWith(TEXT("fire=")))
 		{
@@ -1255,6 +1257,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::K) && T - CaughtT > .7) KeepFish();
 	if (Hit(EKeys::Equals) || Hit(EKeys::Add)) ToggleTroll();
 	if (Hit(EKeys::Nine)) if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle();   // the boat pistol
+	if (Hit(EKeys::Semicolon)) ToggleLights();   // the web game's L (which logs in here)
 	if (Hit(EKeys::E))
 	{
 		if (NearMarina(X, Z) && FMath::Abs(Speed) < 2.5) WeighIn();
@@ -2399,6 +2402,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	if (AKeysLife* L = AKeysLife::Get(this))
 		if (GetWorld()->GetTimeSeconds() > ToastUntil) { const FString M = L->PopToast(); if (!M.IsEmpty()) ShowToast(M); }
 	UpdateCamera(Dt, T);
+	UpdateHelm(Dt, T);
 	UpdateJumpCam(Dt);
 	UpdateViewModel(Dt);
 	DrawLineAndRod(T);
