@@ -440,7 +440,7 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   and `perf:town0` / `perf:town1` hide / show the town and the landmarks for frame-time comparisons.
   Boats and trolling: `ownall` (own every boat), `boat=<id>` (robalo, grady, freeman, midnight, mti, yellowfin, contender, nortech),
   `troll` / `trollin`, `trollraise` (a fish comes up on the spread now), `trollstrike` (skip the raise: a fish on now),
-  `throttle=0.4`, `steer=0.3`, `reel=1` / `reel=0` (hold S). `fp=0` / `fp=1` sets the first-person fishing view, `boatcam=x,y,z,yaw,pitch,fov`
+  `throttle=0.4` (`throttle=-0.35` astern), `steer=0.3`, `reel=1` / `reel=0` (hold S). `fp=0` / `fp=1` sets the first-person fishing view, `boatcam=x,y,z,yaw,pitch,fov`
   holds the camera in the boat's own frame (`boatcam=off`), `gfx=0..3` / `res=N` set the graphics quality and resolution scale, and
   `rec=start` / `rec=stop:name` bounce the game's sound to a WAV.
   `buff=<key>` (diner.coffee, bar.beer, ...) as if bought at the counter.

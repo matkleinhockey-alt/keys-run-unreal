@@ -151,7 +151,7 @@ namespace KeysMesh
 	void BuildDash(FKeysMesh& M, const FDashLayout& D, const FLinearColor& Moulding, uint8 MouldingKind)
 	{
 		const uint8 Keep = M.Surf;
-		const FLinearColor PanelC = DSrgb(.035, .037, .04), BezelC = DSrgb(.018, .018, .02), Chrome = DSrgb(.9, .91, .93);
+		const FLinearColor PanelC = DSrgb(.022, .023, .026), BezelC = DSrgb(.018, .018, .02), Chrome = DSrgb(.9, .91, .93);
 		const FQuat PanelRot = FRotationMatrix::MakeFromXY(-D.N, D.Ux).ToQuat();
 		// the pod: a gelcoat wedge on the console top whose sloping face is the panel, a short cap over its top edge
 		if (D.bPod)
@@ -196,13 +196,32 @@ namespace KeysMesh
 		for (const FDashScreen& Sc : D.Screens)
 		{
 			M.AddRoundBox(D.P(Sc.U, Sc.V, .005), FVector(.012, Sc.W + 2 * D.Bezel, Sc.H + 2 * D.Bezel), .005, BezelC, PanelRot, 2);
+			if (GRodLod > 0)
+			{
+				// other people's boats: a dark glass face instead of the live picture
+				M.Surf = SurfGlass;
+				M.AddQuad(D.P(Sc.U - Sc.W * .5, Sc.V - Sc.H * .5, .0112), D.P(Sc.U + Sc.W * .5, Sc.V - Sc.H * .5, .0112), D.P(Sc.U + Sc.W * .5, Sc.V + Sc.H * .5, .0112), D.P(Sc.U - Sc.W * .5, Sc.V + Sc.H * .5, .0112), DSrgb(.04, .06, .09), D.N);
+				M.Surf = SurfGelcoat;
+				continue;
+			}
 			// a row of small keys along the bottom of the frame
 			for (int32 k = 0; k < 5; k++)
 				M.AddRoundBox(D.P(Sc.U + Sc.W * (.18 + .08 * k), Sc.V - Sc.H * .5 - D.Bezel * .5, .0115), FVector(.003, .014, .006), .0015, DSrgb(.12, .12, .13), PanelRot, 1);
 		}
-		// each gauge: a black bezel standing off the panel and a chrome ring round the glass
+		// each gauge: a black bezel standing off the panel and a chrome ring round the glass (other people's boats,
+		// seen from off the boat, get a plain ring and a dark face)
+		const bool bLite = GRodLod > 0;
 		for (const FDashGauge& G : D.Gauges)
 		{
+			if (bLite)
+			{
+				M.Surf = SurfSteel;
+				M.AddTube(D.P(G.U, G.V, -.002), D.P(G.U, G.V, .007), G.R * 1.15, G.R * 1.15, 12, Chrome);
+				M.Surf = SurfGlass;
+				for (int32 k = 0; k < 12; k++)
+					M.AddTri(D.P(G.U, G.V, .0065), D.P(G.U + FMath::Cos(2 * PI * k / 12) * G.R * 1.1, G.V + FMath::Sin(2 * PI * k / 12) * G.R * 1.1, .0065), D.P(G.U + FMath::Cos(2 * PI * (k + 1) / 12) * G.R * 1.1, G.V + FMath::Sin(2 * PI * (k + 1) / 12) * G.R * 1.1, .0065), BezelC, D.N);
+				continue;
+			}
 			const int32 Seg = 32;
 			const double R = G.R, Rb = R * 1.17, Rc = R * 1.09;
 			M.Surf = SurfGelcoat;
@@ -361,11 +380,12 @@ namespace
 	};
 
 	// labels made once
+	// keyed by the literal's address: no strings built per frame
 	const FText& Label(const TCHAR* S)
 	{
-		static TMap<FString, FText> Cache;
-		if (const FText* F = Cache.Find(S)) return *F;
-		return Cache.Add(S, FText::AsCultureInvariant(S));
+		static TMap<UPTRINT, FText> Cache;
+		if (const FText* F = Cache.Find(UPTRINT(S))) return *F;
+		return Cache.Add(UPTRINT(S), FText::AsCultureInvariant(FString(S)));
 	}
 	const FText& Num(int32 N)
 	{

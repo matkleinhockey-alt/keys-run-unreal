@@ -1722,7 +1722,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	if (bAc) TT = AcThr;
 	double TrollT = 0;
 	if (!bAc && bCanDrive && TrollThrottle(TopMs, TrollT)) { TT = TrollT; Gear = 0; }   // trolling holds seven knots
-	else if (!bAc && bCanDrive && ScriptThr >= 0) TT = ScriptThr;
+	else if (!bAc && bCanDrive && ScriptThr > -.5) TT = FMath::Max(ScriptThr, -.35);   // -1: no hold; down to -0.35 backs down
 	Thr += (TT - Thr) * FMath::Min(1.0, Dt * 2.5);
 
 	// trim: the sweet spot moves out as you get on plane; too far in plows the bow, too far out blows the props out

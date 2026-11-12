@@ -1042,8 +1042,8 @@ def _dash(mat):
     base.set_editor_property("const_b", 0.03)
     _link(tex, "RGB", base, "A")
     mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    mel.connect_material_property(_const(mat, 0.07, -600, 400), "", unreal.MaterialProperty.MP_ROUGHNESS)
-    mel.connect_material_property(_const(mat, 0.6, -600, 500), "", unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(_const(mat, 0.12, -600, 400), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(_const(mat, 0.35, -600, 500), "", unreal.MaterialProperty.MP_SPECULAR)
 
 
 # The windshields of your own boat, so the helm view looks out through them: tinted (the vertex colour), glossy, lit
