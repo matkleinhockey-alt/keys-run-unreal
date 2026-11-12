@@ -175,12 +175,12 @@ void AKeysExtras::BuildLayout()
 	}
 
 	// stern flags: Old Glory on the Freeman, a Jolly Roger on the Robalo
-	FlagKind = S.Id == TEXT("freeman") ? 1 : S.Id == TEXT("robalo") ? 2 : 0;
+	FlagKind = !CosFlag.IsEmpty() ? 3 : S.Id == TEXT("freeman") ? 1 : S.Id == TEXT("robalo") ? 2 : 0;
 	if (FlagKind)
 	{
 		const double Ht = FlagKind == 1 ? 3.1 : 2.4;
-		FlagW = FlagKind == 1 ? 1.5 : 1.2;
-		FlagH = FlagKind == 1 ? .79 : .8;
+		FlagW = FlagKind == 1 ? 1.5 : FlagKind == 3 ? 1.1 : 1.2;
+		FlagH = FlagKind == 1 ? .79 : FlagKind == 3 ? .7 : .8;
 		const FVector Base(-.47 * L, Deck.HB * .92 - .12, Deck.Free);
 		FlagTop = Base + FVector(-.55, .1, Ht);
 		Props.AddTube(Base, FlagTop, .025, .02, 8, XChrome);
@@ -460,6 +460,21 @@ namespace
 		return FMath::FloorToInt(V * 13) % 2 ? FLinearColor::White : XHex(0xb22234);
 	}
 
+	// content/cosmetics.ts FlagLook: stripes, an optional disc, an optional big letter
+	FLinearColor XCosFlag(const FString& Key, double U, double V)
+	{
+		auto C = [](uint32 X) { return FLinearColor(FColor(uint8(X >> 16), uint8(X >> 8), uint8(X))); };
+		if (Key == TEXT("cosmetic.flag.conch"))
+		{
+			const double DX = (U - .5) * 1.6, DY = V - .5;
+			return DX * DX + DY * DY < .09 ? C(0xf6c945) : C(0x1b4f9c);
+		}
+		if (Key == TEXT("cosmetic.flag.fishon")) return V < 1.0 / 3 || V > 2.0 / 3 ? C(0xd7263d) : C(0xf6f1e7);
+		// the white flag, with an L on it
+		const bool bL = (U > .38 && U < .48 && V > .22 && V < .78) || (U > .38 && U < .64 && V > .68 && V < .78);
+		return bL ? C(0x15171a) : C(0xf6f1e7);
+	}
+
 	FLinearColor XJollyRoger(double U, double V)
 	{
 		const double PX = U * 420, PY = V * 280, CX = 210;
@@ -509,7 +524,7 @@ void AKeysExtras::BuildFlag(FKeysMesh& M, double T, double Wind) const
 		for (int32 i = 0; i < NU; i++)
 		{
 			const double U = (i + .5) / NU, V = (j + .5) / NV;
-			const FLinearColor C = FlagKind == 1 ? XUsFlag(U, V) : XJollyRoger(U, V);
+			const FLinearColor C = FlagKind == 1 ? XUsFlag(U, V) : FlagKind == 3 ? XCosFlag(CosFlag, U, V) : XJollyRoger(U, V);
 			const int32 A = j * (NU + 1) + i;
 			M.AddQuad(P[A], P[A + 1], P[A + NU + 2], P[A + NU + 1], C, FVector(0, 1, 0));
 		}

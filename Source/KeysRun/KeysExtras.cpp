@@ -1,4 +1,5 @@
 #include "KeysExtras.h"
+#include "EngineUtils.h"
 #include "KeysBoatPawn.h"
 #include "KeysData.h"
 #include "KeysGeo.h"
@@ -81,6 +82,14 @@ AKeysExtras::AKeysExtras()
 	S.BloomIntensity = 2.5f;
 	S.bOverride_SceneColorTint = true;
 	S.SceneColorTint = FLinearColor(1.08f, 1.0f, .86f);
+}
+
+AKeysExtras* AKeysExtras::Get(const UObject* WorldContext)
+{
+	UWorld* W = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!W) return nullptr;
+	TActorIterator<AKeysExtras> It(W);
+	return It ? *It : nullptr;
 }
 
 void AKeysExtras::BeginPlay()

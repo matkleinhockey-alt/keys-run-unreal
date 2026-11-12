@@ -15,6 +15,7 @@
 #include "KeysTreasure.h"
 #include "KeysEstates.h"
 #include "KeysTourneyShow.h"
+#include "KeysSlots.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysEvents.h"
@@ -667,6 +668,15 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("open")) { if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen(); }
 		else if (Cmd == TEXT("flare")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->DebugFlare(); }
 		else if (Cmd == TEXT("lights")) ToggleLights();
+		else if (Cmd.StartsWith(TEXT("wear=")))
+		{
+			const FString K = Cmd.Mid(5);
+			Owned.Add(K);
+			Wearing.Add(K.Mid(9).Left(K.Mid(9).Find(TEXT("."))), K);
+			ApplyOutfit();
+		}
+		else if (Cmd == TEXT("slots")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(!Sl->bOpen); }
+		else if (Cmd == TEXT("spin")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Spin(); }
 		else if (Cmd.StartsWith(TEXT("view="))) View = FCString::Atoi(*Cmd.Mid(5));
 		else if (Cmd == TEXT("gun")) { if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle(); }
 		else if (Cmd.StartsWith(TEXT("gunlook=")) || Cmd.StartsWith(TEXT("fire=")))
@@ -935,7 +945,19 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	const FString Eff = It.Effect;
 	const bool bGear = Eff.StartsWith(TEXT("rod.")) || Eff.StartsWith(TEXT("reel.")) || Eff.StartsWith(TEXT("dive.")) || Eff.StartsWith(TEXT("spear.long")) || Eff.StartsWith(TEXT("spear.reel"))
 		|| Eff.StartsWith(TEXT("cosmetic.")) || Eff == TEXT("handgun.extmag") || Eff == TEXT("handgun.dot") || Eff.StartsWith(TEXT("tackle."));
+	if (Eff.StartsWith(TEXT("cosmetic.")) && Owned.Contains(Eff))
+	{
+		// sim/wardrobe.ts wear: one worn key per slot; the same one again takes it off
+		const FString Slot = Eff.Mid(9).Left(Eff.Mid(9).Find(TEXT(".")));
+		if (Wearing.FindRef(Slot) == Eff) { Wearing.Remove(Slot); ShowToast(FString::Printf(TEXT("You take off the %s."), It.Name)); }
+		else { Wearing.Add(Slot, Eff); ShowToast(FString::Printf(TEXT("You put on the %s."), It.Name)); }
+		ApplyOutfit();
+		SaveEconomy();
+		return;
+	}
+	if (Eff == TEXT("casino.slot")) { ShopClose(); if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(true); return; }   // the machines settle on their own screen (game/casino)
 	if (bGear && Owned.Contains(Eff)) { ShowToast(FString::Printf(TEXT("You already own the %s."), It.Name)); return; }
+	if (Eff.StartsWith(TEXT("tackle.")) && Eff == TEXT("tackle.braid80") && Owned.Contains(TEXT("tackle.braid130"))) { ShowToast(TEXT("You already fish 130 lb. The 80 lb rig would be a step down.")); return; }
 	if (Cash < It.Price) { ShowToast(FString::Printf(TEXT("%s is $%s and you have $%s. Sell fillets at a weigh-in (E at a marina dock)."), It.Name, *Commas(It.Price), *Commas(Cash)), 4); return; }
 	Cash -= It.Price;
 	const double T = GetWorld()->GetTimeSeconds();
@@ -948,7 +970,9 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 		Buffs.Add(Eff, T + KeysBuffs::Seconds(Eff));
 		Msg += TEXT(" ") + (bTop ? KeysBuffs::Label(Eff) + TEXT(": topped up.") : KeysBuffs::StartText(Eff));
 	}
-	if (Eff == TEXT("handgun.ammo")) { AddCount(*Eff, 50); Msg += FString::Printf(TEXT(" %d rounds for the console pistol (9)."), CountOf(*Eff)); }
+	if (Eff == TEXT("leader.fluoro")) { AddCount(*Eff, 1); Msg += FString::Printf(TEXT(" %d leaders: the next toothy fish cannot bite through."), CountOf(*Eff)); }
+	else if (Eff.StartsWith(TEXT("tackle."))) Msg += Eff == TEXT("tackle.braid130") ? TEXT(" 130 lb line on the reels now.") : TEXT(" 80 lb line on the reels now.");
+	else if (Eff == TEXT("handgun.ammo")) { AddCount(*Eff, 50); Msg += FString::Printf(TEXT(" %d rounds for the console pistol (9)."), CountOf(*Eff)); }
 	else if (Eff == TEXT("safety.flare")) { AddCount(*Eff, 3); Msg += FString::Printf(TEXT(" %d flares: Z with the pistol out."), CountOf(*Eff)); }
 	else if (Eff == TEXT("spear.shafts")) { AddCount(*Eff, 3); }
 	else if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
@@ -973,7 +997,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 		Cash += Payout;
 		Msg = Payout ? FString::Printf(TEXT("Scratch-off: $%d winner!"), Payout) : TEXT("Scratch-off: not a winner. The clerk saw that coming.");
 	}
-	else if (Eff.StartsWith(TEXT("cosmetic."))) { ApplyOutfit(); Msg += TEXT(" You're wearing it."); }
+	else if (Eff.StartsWith(TEXT("cosmetic."))) { Wearing.Add(Eff.Mid(9).Left(Eff.Mid(9).Find(TEXT("."))), Eff); ApplyOutfit(); Msg += Eff.StartsWith(TEXT("cosmetic.flag.")) ? TEXT(" It flies from your stern.") : TEXT(" You're wearing it."); }
 	SaveEconomy();
 	ShowToast(Msg, 5);
 }
@@ -982,10 +1006,22 @@ void AKeysBoatPawn::ApplyOutfit()
 {
 	AKeysWalker* W = AKeysWalker::Get(this);
 	if (!W) return;
-	FLinearColor Shirt(FColor(0x3f, 0xb6, 0xc9)), Cap(FColor(0x1d, 0x35, 0x57));
-	if (Owned.Contains(TEXT("cosmetic.shirt.hawaiian"))) Shirt = FLinearColor(FColor(0xf2, 0x6b, 0x5b));
-	if (Owned.Contains(TEXT("cosmetic.cap.conch"))) Cap = FLinearColor(FColor(0xf2, 0xc1, 0x4e));
+	// content/cosmetics.ts: what each worn key looks like (a save from before the wardrobe wears what it owns)
+	if (!Wearing.Num())
+		for (const FString& O : Owned)
+			if (O.StartsWith(TEXT("cosmetic."))) Wearing.Add(O.Mid(9).Left(O.Mid(9).Find(TEXT("."))), O);
+	auto C = [](uint32 X) { return FLinearColor(FColor(uint8(X >> 16), uint8(X >> 8), uint8(X))); };
+	FLinearColor Shirt = C(0x3fb6c9), Cap = C(0x1d3557);
+	const FString Sh = Wearing.FindRef(TEXT("shirt")), Cp = Wearing.FindRef(TEXT("cap"));
+	if (Sh == TEXT("cosmetic.shirt.hawaiian")) Shirt = C(0xf0a01c);
+	else if (Sh == TEXT("cosmetic.shirt.breton")) Shirt = C(0xf2efe6);
+	else if (Sh == TEXT("cosmetic.shirt.sunset")) Shirt = C(0xffd166);
+	else if (Sh == TEXT("cosmetic.shirt.luigi")) Shirt = C(0x2e9b3f);
+	if (Cp == TEXT("cosmetic.cap.conch")) Cap = C(0xf4a58a);
+	else if (Cp == TEXT("cosmetic.cap.bucket")) Cap = C(0xc9b37a);
+	else if (Cp == TEXT("cosmetic.cap.luigi")) Cap = C(0x2e9b3f);
 	W->SetOutfit(Shirt, true, Cap, true);
+	if (AKeysExtras* Ex = AKeysExtras::Get(this)) Ex->SetCosmeticFlag(Wearing.FindRef(TEXT("flag")));
 }
 
 void AKeysBoatPawn::PrepareToLeaveHelm()
@@ -1123,6 +1159,15 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 	if (Hit(EKeys::B)) { bBoardOpen = true; BoardTab = 0; bFwd = bBack = bLeft = bRight = bAction = false; bCharging = false; return; }
 
+	// a slot machine in the Gaff & Gill: it owns the keys while you sit at it
+	if (bRunning && Menu == EMenu::None)
+		if (AKeysSlots* Sl = AKeysSlots::Get(this); Sl && Sl->bOpen)
+		{
+			bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+			bCharging = false;
+			Sl->HandleInput(PC);
+			return;
+		}
 	// the land office (Keys Run Estates): , opens it from the helm or ashore, and it owns the keys while it is up
 	if (bRunning && Menu == EMenu::None)
 		if (AKeysEstates* Es = AKeysEstates::Get(this))
@@ -1885,6 +1930,11 @@ void AKeysBoatPawn::Land()
 {
 	if (AKeysLife* L = AKeysLife::Get(this)) L->OnCatchLanded(Spot);
 	if (AKeysAudio* A = AKeysAudio::Get(this)) A->Land();
+	{
+		// a fluorocarbon leader did its job on a toothy fish: it is used up
+		static const TSet<FString> Toothy = {TEXT("barracuda"), TEXT("kingfish"), TEXT("wahoo"), TEXT("cero"), TEXT("blacktip"), TEXT("bullshark"), TEXT("lemonshark"), TEXT("tigershark"), TEXT("hammerhead"), TEXT("bluefish")};
+		if (Toothy.Contains(Key) && UseOne(TEXT("leader.fluoro"))) SaveEconomy();
+	}
 	FState = EKeysFish::Caught;
 	bJumping = false;
 	const FSpecies& S = *Sp;

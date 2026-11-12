@@ -1282,26 +1282,33 @@ void AKeysHUD::DrawAshore(AKeysBoatPawn* P, AKeysWalker* W)
 	// the counter: name, greeting, the shelf, what you can afford
 	const KeysTown::FVenue* V = KeysTown::Venue(W->ShopVenue);
 	if (!V) return;
-	const float PW = 760 * U, X = SW * .5f - PW * .5f, Y = SH * .18f;
 	const int32 N = V->Sells.Num();
-	const float PH = (190 + N * 62 + 60) * U;
+	// a long shelf (the gift shop) goes compact: one line a row, the selected item's blurb at the foot
+	const bool bCompact = N > 7;
+	const float RH = (bCompact ? 38 : 62) * U;
+	const float PW = 760 * U, X = SW * .5f - PW * .5f, Y = bCompact ? SH * .06f : SH * .18f;
+	const float PH = 190 * U + N * RH + (bCompact ? 100 : 60) * U;
 	Panel(X, Y, PW, PH, .88f);
 	Text(V->Name, X + 28 * U, Y + 18 * U, 1.35f, Gold, GEngine->GetLargeFont());
 	Text(V->Tagline, X + 28 * U, Y + 70 * U, .9f, Teal);
 	Wrapped(FString::Printf(TEXT("\"%s\""), *W->ShopGreeting), X + 28 * U, Y + 104 * U, PW - 56 * U, .9f, Dim);
 	float RY = Y + 170 * U;
-	for (int32 i = 0; i < N; i++, RY += 62 * U)
+	for (int32 i = 0; i < N; i++, RY += RH)
 	{
 		const KeysTown::FShelfItem& It = V->Sells[i];
 		const bool bSel = i == W->ShopSel;
 		const bool bOwned = P->Owned.Contains(It.Effect);
-		if (bSel) DrawRect(FLinearColor(.2f, .5f, .55f, .35f), X + 16 * U, RY - 4 * U, PW - 32 * U, 58 * U);
-		Text(FString::Printf(TEXT("%d  %s"), i + 1, It.Name), X + 28 * U, RY, 1.0f, bOwned ? Dim : FLinearColor::White);
-		Text(It.Blurb, X + 58 * U, RY + 28 * U, .78f, Dim);
-		const FString Price = bOwned ? FString(TEXT("owned")) : FString::Printf(TEXT("$%s"), *FText::AsNumber(It.Price).ToString());
+		const FString Slot = FString(It.Effect).StartsWith(TEXT("cosmetic.")) ? FString(It.Effect).Mid(9).Left(FString(It.Effect).Mid(9).Find(TEXT("."))) : FString();
+		const bool bWorn = !Slot.IsEmpty() && P->Wearing.FindRef(Slot) == It.Effect;
+		if (bSel) DrawRect(FLinearColor(.2f, .5f, .55f, .35f), X + 16 * U, RY - 4 * U, PW - 32 * U, RH - 4 * U);
+		Text(FString::Printf(TEXT("%d  %s"), i + 1, It.Name), X + 28 * U, RY, 1.0f, bOwned && !bWorn ? Dim : FLinearColor::White);
+		if (!bCompact) Text(It.Blurb, X + 58 * U, RY + 28 * U, .78f, Dim);
+		const int32 Cnt = P->CountOf(It.Effect);
+		const FString Price = bWorn ? FString(TEXT("wearing")) : bOwned ? FString(Slot.IsEmpty() ? TEXT("owned") : TEXT("owned - wear it")) : It.Price == 0 ? FString(TEXT("sit down")) : FString::Printf(TEXT("$%s%s"), *FText::AsNumber(It.Price).ToString(), Cnt > 0 ? *FString::Printf(TEXT("   (%d on hand)"), Cnt) : TEXT(""));
 		float TW = 0, TH = 0;
 		GetTextSize(Price, TW, TH, GEngine->GetMediumFont(), 1.0f * U);
-		Text(Price, X + PW - 32 * U - TW, RY, 1.0f, bOwned ? Dim : P->Cash >= It.Price ? Gold : Red);
+		Text(Price, X + PW - 32 * U - TW, RY, 1.0f, bOwned ? (bWorn ? Teal : Dim) : P->Cash >= It.Price ? Gold : Red);
 	}
+	if (bCompact && V->Sells.IsValidIndex(W->ShopSel)) Wrapped(V->Sells[W->ShopSel].Blurb, X + 28 * U, RY + 6 * U, PW - 56 * U, .85f, Dim);
 	Text(FString::Printf(TEXT("You have $%s.   Up / Down + Enter or 1-%d to buy   -   F or Esc to step away"), *FText::AsNumber(P->Cash).ToString(), FMath::Min(9, N)), X + 28 * U, Y + PH - 44 * U, .85f, Dim);
 }

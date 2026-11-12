@@ -69,6 +69,12 @@ double AKeysBoatPawn::LineBreakAt() const
 	double LineMul = HasGear(TEXT("rod.heavy")) ? 1.35 : 1;
 	if (HasGear(TEXT("reel.lever"))) LineMul *= 1.05;
 	if (BuffOn(TEXT("diner.breakfast"))) LineMul *= 1.06;
+	// the line ladder (content/tackle.ts): the rung the fight is normalised against, the town's rod and reel on top of it
+	if (HasGear(TEXT("tackle.braid130"))) LineMul *= 130.0 / 50;
+	else if (HasGear(TEXT("tackle.braid80"))) LineMul *= 80.0 / 50;
+	// a fluorocarbon leader on a toothy fish
+	static const TSet<FString> Toothy = {TEXT("barracuda"), TEXT("kingfish"), TEXT("wahoo"), TEXT("cero"), TEXT("blacktip"), TEXT("bullshark"), TEXT("lemonshark"), TEXT("tigershark"), TEXT("hammerhead"), TEXT("bluefish")};
+	if (CountOf(TEXT("leader.fluoro")) > 0 && Toothy.Contains(Key)) LineMul *= 1.25;
 	return 1.06 + (LineMul - 1) * .17;
 }
 

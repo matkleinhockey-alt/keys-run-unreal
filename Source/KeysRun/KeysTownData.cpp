@@ -816,11 +816,14 @@ namespace KeysTown
 				{TEXT("Welcome in. Tell me what you are chasing and I will sell you the wrong thing with total confidence."),
 				 TEXT("Live shrimp are in the tank by the door. Pilchards are in the freezer. Dignity is not in stock."),
 				 TEXT("You want the good braid or the braid you can afford?")},
-				{{TEXT("rod-heavy"), TEXT("Heavy-action trolling rod"), TEXT("Stops a run the stock rod cannot: the line holds more tension."), 2400, TEXT("rod.heavy")},
-				 {TEXT("reel-lever"), TEXT("Lever-drag two-speed reel"), TEXT("Finer drag steps and a faster retrieve."), 4000, TEXT("reel.lever")},
+				{{TEXT("line-braid80"), TEXT("80 lb braid, stand-up rig"), TEXT("Steps the fight up from 50 lb line to 80 lb. Offshore trophies stop breaking you off."), 6500, TEXT("tackle.braid80")},
+				 {TEXT("line-braid130"), TEXT("130 lb big-game rig"), TEXT("The billfish rig: 130 lb line, 150 lb leader. Overkill inshore, the difference offshore."), 22000, TEXT("tackle.braid130")},
+				 {TEXT("rod-heavy"), TEXT("Heavy-action trolling rod"), TEXT("Stops a run the stock rod cannot. Changes the fight sim's line strength."), 2400, TEXT("rod.heavy")},
+				 {TEXT("reel-lever"), TEXT("Lever-drag two-speed reel"), TEXT("Finer drag steps and a longer spool."), 4000, TEXT("reel.lever")},
 				 {TEXT("bait-shrimp"), TEXT("Live shrimp (dozen)"), TEXT("Bite rate up on the flats."), 12, TEXT("bait.shrimp")},
 				 {TEXT("bait-ballyhoo"), TEXT("Rigged ballyhoo"), TEXT("Trolling bait for mahi and wahoo."), 18, TEXT("bait.ballyhoo")},
-				 {TEXT("ice-bag"), TEXT("Bag of ice"), TEXT("Keeps the cooler honest."), 4, TEXT("cooler.ice")}}});
+				 {TEXT("ice-bag"), TEXT("Bag of ice"), TEXT("Keeps the cooler honest."), 4, TEXT("cooler.ice")},
+				 {TEXT("leader-fluoro"), TEXT("80 lb fluorocarbon leader"), TEXT("Fewer bite-offs on toothy fish."), 22, TEXT("leader.fluoro")}}});
 			A.Add({TEXT("guns"), TEXT("Deadeye Guns & Ammo"), TEXT("Firearms - Ammunition - Spearguns - Pawn"),
 				{TEXT("Spearguns are on the left. Everything on the right is not for fish, and not for you today."), TEXT("Browsing is free. Dropping things is not."),
 				 TEXT("We do spearguns, flare guns and a very good lecture on both.")},
@@ -844,11 +847,12 @@ namespace KeysTown
 				{TEXT("Cooler on the left is beer. Cooler on the right is bait. Check before you drink."), TEXT("You look like a man who lost a fish.")}, Bar});
 			A.Add({TEXT("club"), TEXT("Pink Flamingo Cabaret"), TEXT("Live entertainment - Cocktails - Under new management"),
 				{TEXT("Boss is here! Drinks are on the house - well, on you, it's your house."), TEXT("Full room tonight. The DJ wants a raise.")},
-				{{TEXT("tip"), TEXT("Tip jar"), TEXT("The band and the staff still get paid. Tip them."), 10, TEXT("club.tip")},
+				{{TEXT("cover"), TEXT("Cover charge"), TEXT("Pay to get past the rope. Not you."), 50, TEXT("club.cover")},
+				 {TEXT("tip"), TEXT("Tip jar"), TEXT("The band and the staff still get paid. Tip them."), 10, TEXT("club.tip")},
 				 {TEXT("bottle"), TEXT("Bottle service"), TEXT("A very expensive way to feel important."), 2500, TEXT("club.bottle")}}});
 			A.Add({TEXT("casino"), TEXT("Gaff & Gill Casino"), TEXT("Slots - Tarpon - Free coffee, tipped"),
 				{TEXT("Chips? Coffee? A long hard look at your choices?"), TEXT("Every machine pays the same published odds. Allegedly.")},
-				{{TEXT("chips"), TEXT("Pull the slots ($20)"), TEXT("Three reels of fish. Pays 2x on two of a kind, 10x on three."), 20, TEXT("casino.slot")},
+				{{TEXT("chips"), TEXT("Sit down at a slot machine"), TEXT("Five lines, three reels of fish, bets $5 to $100. Pays 90.5 cents on the dollar, published."), 0, TEXT("casino.slot")},
 				 {TEXT("coffee"), TEXT("Free coffee (tip)"), TEXT("Tipped. Not free."), 2, TEXT("casino.coffee")}}});
 			A.Add({TEXT("diner"), TEXT("Salty Dog Diner"), TEXT("Breakfast all day - Fresh catch - Pie"),
 				{TEXT("Sit anywhere, hon. Coffee's on."), TEXT("Pie's key lime. It's always key lime.")},
@@ -870,21 +874,30 @@ namespace KeysTown
 				{TEXT("Everything is ten percent off if you can find the price tag."), TEXT("The shells are real. The hot sauce is a dare.")},
 				{{TEXT("shirt-hawaiian"), TEXT("Loud Hawaiian shirt"), TEXT("Changes what you wear ashore."), 35, TEXT("cosmetic.shirt.hawaiian")},
 				 {TEXT("cap-conch"), TEXT("Conch Republic cap"), TEXT("Shade for the head."), 18, TEXT("cosmetic.cap.conch")},
+				 {TEXT("shirt-breton"), TEXT("Breton stripe tee"), TEXT("Looks like you own a sailboat. You do not."), 28, TEXT("cosmetic.shirt.breton")},
+				 {TEXT("shirt-sunset"), TEXT("Sunset fade tee"), TEXT("Tie-dyed in the exact colours of the 7 p.m. sky."), 30, TEXT("cosmetic.shirt.sunset")},
+				 {TEXT("shirt-luigi"), TEXT("Green polo"), TEXT("For the deckhand who is always second."), 25, TEXT("cosmetic.shirt.luigi")},
+				 {TEXT("cap-bucket"), TEXT("Khaki bucket hat"), TEXT("Brim all the way round. Sunscreen is for other people."), 16, TEXT("cosmetic.cap.bucket")},
+				 {TEXT("cap-luigi"), TEXT("Green cap"), TEXT("An L is on it. For Luigi. Probably."), 20, TEXT("cosmetic.cap.luigi")},
 				 {TEXT("glasses-aviator"), TEXT("Gold aviators"), TEXT("Make every fish look like a mistake."), 22, TEXT("cosmetic.glasses.aviator")},
-				 {TEXT("flag-conch"), TEXT("Conch Republic flag"), TEXT("Seceded in 1982, as a joke."), 25, TEXT("cosmetic.flag.conch")}}});
+				 {TEXT("glasses-round"), TEXT("Round shades"), TEXT("Very 1967. Very Key West."), 15, TEXT("cosmetic.glasses.round")},
+				 {TEXT("glasses-neon"), TEXT("Neon wraparounds"), TEXT("Visible from space, and from the other marina."), 12, TEXT("cosmetic.glasses.neon")},
+				 {TEXT("flag-conch"), TEXT("Conch Republic flag"), TEXT("Flies from your stern. Seceded in 1982, as a joke."), 25, TEXT("cosmetic.flag.conch")},
+				 {TEXT("flag-fishon"), TEXT("\"Fish On\" pennant"), TEXT("Red and white, for when it is, and when it is not."), 14, TEXT("cosmetic.flag.fishon")},
+				 {TEXT("flag-loser"), TEXT("White flag"), TEXT("The seagull has a point. Fly it first."), 9, TEXT("cosmetic.flag.loser")}}});
 			A.Add({TEXT("pawn"), TEXT("Keys Pawn & Loan"), TEXT("We buy gold - We buy tackle - No questions"),
 				{TEXT("Everything in here has a story. None of them are true."), TEXT("I'll give you twenty for it. For anything.")},
 				{{TEXT("used-rod"), TEXT("Used spinning rod"), TEXT("Cheap and cheerful."), 40, TEXT("rod.used")}}});
 			A.Add({TEXT("laundromat"), TEXT("Suds & Sun Coin Laundry"), TEXT("Wash - Dry - Fold"),
 				{TEXT("Machine four eats quarters. Machine six eats socks."), TEXT("Change machine's broken. It's always broken.")},
 				{{TEXT("wash"), TEXT("Wash & dry"), TEXT("Takes the bar out of your shirt. And you."), 8, TEXT("laundromat.wash")},
-				 {TEXT("sock"), TEXT("Lost-and-found sock"), TEXT("A mystery sock. Nothing happens."), 3, TEXT("laundromat.sock")}}});
+				 {TEXT("sock"), TEXT("Lost-and-found sock"), TEXT("A mystery sock. Eight to collect. Nothing happens."), 3, TEXT("laundromat.sock")}}});
 			A.Add({TEXT("icecream"), TEXT("Cone Zone Ice Cream"), TEXT("Soft serve - Key lime - Shakes"),
 				{TEXT("Key lime is the flavour. The other flavours are also key lime.")},
 				{{TEXT("cone"), TEXT("Key lime cone"), TEXT("Cool off."), 5, TEXT("icecream.cone")}}});
 			A.Add({TEXT("motel"), TEXT("Sunset Motor Lodge"), TEXT("Vacancy - Color TV - Ice machine"),
 				{TEXT("Room seven's free. Room seven's always free. Don't ask why.")},
-				{{TEXT("night"), TEXT("One night, room 7"), TEXT("Sleep it off: skips to sunset (or back to day)."), 79, TEXT("motel.night")}}});
+				{{TEXT("night"), TEXT("One night, room 7"), TEXT("Skips to sunset."), 79, TEXT("motel.night")}}});
 			A.Add({TEXT("convenience"), TEXT("Stop-N-Go"), TEXT("Gas - Snacks - Live bait (maybe)"),
 				{TEXT("Pump three's out. Pumps one, two and four are also out.")},
 				{{TEXT("snacks"), TEXT("Chips and a soda"), TEXT("Morale."), 4, TEXT("conv.snacks")}}});

@@ -55,6 +55,9 @@ class KEYSRUN_API AKeysExtras : public AActor
 	GENERATED_BODY()
 
 public:
+	static AKeysExtras* Get(const UObject* WorldContext);
+	// a cosmetic flag flown from the stern of every boat you take out (content/cosmetics.ts FlagLook); empty for none
+	void SetCosmeticFlag(const FString& Key) { if (Key != CosFlag) { CosFlag = Key; LayoutFor.Empty(); } }
 	AKeysExtras();
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -147,7 +150,8 @@ private:
 	FVector PoleBase = FVector::ZeroVector;
 	double PoleAng = 0, PoleSpin = 0, PoleClimbT = 6;
 	FKeysHuman PoleH;
-	int32 FlagKind = 0;   // 0 none, 1 Old Glory, 2 Jolly Roger
+	int32 FlagKind = 0;   // 0 none, 1 Old Glory, 2 Jolly Roger, 3 the flag you bought at Conch Republic Gifts
+	FString CosFlag;
 	FVector FlagTop = FVector::ZeroVector;
 	double FlagW = 1.5, FlagH = .79;
 

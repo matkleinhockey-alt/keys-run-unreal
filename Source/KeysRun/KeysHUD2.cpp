@@ -7,6 +7,7 @@
 #include "KeysTreasure.h"
 #include "KeysEstates.h"
 #include "KeysTourneyShow.h"
+#include "KeysSlots.h"
 #include "KeysData.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Canvas.h"
@@ -172,6 +173,7 @@ void AKeysHUD::DrawMore(AKeysBoatPawn* P)
 bool AKeysHUD::DrawPanels(AKeysBoatPawn* P)
 {
 	if (const AKeysEstates* Es = AKeysEstates::Get(this); Es && Es->bOpen) { DrawEstates(P); return true; }
+	if (const AKeysSlots* Sl = AKeysSlots::Get(this); Sl && Sl->bOpen) { DrawSlots(P); return true; }
 	return false;
 }
 
@@ -298,4 +300,57 @@ void AKeysHUD::DrawEstates(AKeysBoatPawn* P)
 		}
 	}
 	Text(TEXT("Up / Down pick a lot  -  Left / Right the region  -  Enter buy or build  -  Tab the build sheet  -  , or Esc close"), Canvas->SizeX * .5f, Canvas->SizeY - 40 * U, .85f, Dim, nullptr, true);
+}
+
+// a Gaff & Gill slot machine (web game/casino/render.ts): the cabinet, three reels of fish, five lines, the paytable
+void AKeysHUD::DrawSlots(AKeysBoatPawn* P)
+{
+	const AKeysSlots* Sl = AKeysSlots::Get(this);
+	if (!Sl) return;
+	const float W = 980 * U, H = 640 * U, X = Canvas->SizeX * .5f - W * .5f, Y = Canvas->SizeY * .5f - H * .5f;
+	DrawRect(FLinearColor(.02f, .01f, .03f, .7f), 0, 0, Canvas->SizeX, Canvas->SizeY);
+	DrawRect(FLinearColor(.35f, .05f, .08f, .97f), X, Y, W, H);
+	DrawRect(Gold, X, Y, W, 6 * U); DrawRect(Gold, X, Y + H - 6 * U, W, 6 * U);
+	Text(TEXT("GAFF & GILL"), X + W * .5f, Y + 18 * U, 1.8f, Gold, nullptr, true);
+	Text(FString::Printf(TEXT("Five lines, always in play - pays %.1f cents on the dollar"), Sl->Rtp() * 100), X + W * .5f, Y + 64 * U, .85f, FLinearColor(1.f, .85f, .7f), nullptr, true);
+	// the window: three reels of three
+	const float RW = 170 * U, RH = 100 * U, WX = X + 50 * U, WY = Y + 110 * U;
+	DrawRect(FLinearColor(.95f, .93f, .86f), WX - 10 * U, WY - 10 * U, RW * 3 + 40 * U, RH * 3 + 20 * U);
+	for (int32 r = 0; r < 3; r++)
+	{
+		const double Frac = Sl->ReelPos[r] - FMath::FloorToDouble(Sl->ReelPos[r]);
+		for (int32 k = 0; k < 3; k++)
+		{
+			const int32 Sym = Sl->Symbol(r, k);
+			const float TX = WX + r * (RW + 10 * U), TY = WY + k * RH - float(Frac * RH);
+			if (TY < WY - RH * .5f || TY > WY + RH * 2.5f) continue;
+			DrawRect(Sl->bSpinning ? FLinearColor(.88f, .86f, .8f) : FLinearColor(1.f, 1.f, .97f), TX, TY + 3 * U, RW, RH - 6 * U);
+			DrawRect(AKeysSlots::SymbolColor(Sym), TX + 14 * U, TY + 18 * U, 44 * U, RH - 36 * U);
+			Text(AKeysSlots::SymbolName(Sym), TX + 68 * U, TY + RH * .5f - 14 * U, .95f, FLinearColor(.1f, .1f, .12f));
+		}
+	}
+	// the lines that paid, once the reels are still
+	if (!Sl->bSpinning)
+		for (int32 l : Sl->WinLines)
+		{
+			const int32* Ln = AKeysSlots::Lines[l];
+			for (int32 r = 0; r < 2; r++)
+			{
+				const FVector2D A(WX + r * (RW + 10 * U) + RW * .5f, WY + Ln[r] * RH + RH * .5f), B(WX + (r + 1) * (RW + 10 * U) + RW * .5f, WY + Ln[r + 1] * RH + RH * .5f);
+				DrawLine(A.X, A.Y, B.X, B.Y, FLinearColor(1.f, .2f, .3f, .9f), 5 * U);
+			}
+		}
+	// the paytable
+	const float PX = WX + RW * 3 + 70 * U;
+	float PY = WY;
+	Text(TEXT("Pays, per line bet"), PX, PY, .95f, Gold); PY += 34 * U;
+	const TCHAR* Pays[] = {TEXT("3 Blue Marlin   1000x"), TEXT("3 Tarpon         125x"), TEXT("3 Permit          40x"), TEXT("3 Bonefish        16x"), TEXT("3 Shrimp           8x"), TEXT("2 Shrimp (left)     1x"), TEXT("Old Boot        nothing")};
+	for (const TCHAR* L : Pays) { Text(L, PX, PY, .85f, FLinearColor::White); PY += 28 * U; }
+	// bet, cash, the result
+	const float BY = Y + H - 150 * U;
+	Text(FString::Printf(TEXT("Bet %s"), *KeysKit::Money(AKeysSlots::BetLadder[Sl->BetI])), X + 50 * U, BY, 1.4f, FLinearColor::White);
+	Text(FString::Printf(TEXT("($%d a line)"), AKeysSlots::BetLadder[Sl->BetI] / 5), X + 260 * U, BY + 12 * U, .85f, Dim);
+	Text(FString::Printf(TEXT("Cash %s"), *KeysKit::Money(double(P->Cash))), X + W - 330 * U, BY, 1.4f, Gold);
+	if (!Sl->bSpinning && !Sl->ResultText.IsEmpty()) Text(Sl->ResultText, X + W * .5f, BY + 54 * U, 1.15f, Sl->LastWin > 0 ? Gold : FLinearColor(1.f, .85f, .8f), nullptr, true);
+	Text(TEXT("Space spin  -  Left / Right the bet  -  Esc or F to get up"), X + W * .5f, Y + H - 40 * U, .85f, Dim, nullptr, true);
 }
