@@ -319,7 +319,16 @@ namespace KeysMesh
 			for (int32 i = 0; i < 5; i++)
 			{
 				const double Y = (i - 2) * S.Beam * .085;
-				Tube(FVector(MidX - 1.58, Y, DeckZ + 1.1), FVector(MidX - 2.33, Y, DeckZ + 3.4), .016, .007, 6, Dark, SurfRubber);
+				{
+					FRodPose RP;
+					RP.Butt = FVector(MidX - 1.5, Y, DeckZ + .85);
+					RP.Dir = FVector(MidX - 2.33, Y, DeckZ + 3.4) - RP.Butt;
+					RP.Len = RP.Dir.Size();
+					RP.Dir.Normalize();
+					RP.Up = FVector(-1, 0, 0);
+					RP.Lod = 1;
+					BuildTunaRod(M, RP);
+				}
 				Tube(FVector(MidX - 1.62, Y - .04, DeckZ + 1.25), FVector(MidX - 1.62, Y + .04, DeckZ + 1.25), .06, .06, 12, Srgb(.79, .64, .15), SurfSteel);
 			}
 		}
@@ -388,8 +397,15 @@ namespace KeysMesh
 				// rods racked along the aft edge of the top, butts in the holders, tips up and aft
 				const double Y = (i - 3.5) * TopW * .105, AX = MidX - .5 - TopL * .5;
 				Tube(FVector(AX + .08, Y, TopZ - .02), FVector(AX - .06, Y, TopZ + .32), .03, .03, 8, Dark, SurfRubber);
-				Tube(FVector(AX, Y, TopZ + .1), FVector(AX - .95, Y, TopZ + 2.5), .013, .006, 6, Srgb(.16, .18, .19), SurfGelcoat);
-				Tube(FVector(AX - .12, Y - .035, TopZ + .3), FVector(AX - .12, Y + .035, TopZ + .3), .055, .055, 12, Srgb(.79, .64, .15), SurfSteel);
+				FRodPose RP;
+				RP.Butt = FVector(AX + .1, Y, TopZ - .2);
+				RP.Dir = FVector(AX - .95, Y, TopZ + 2.5) - RP.Butt;
+				RP.Len = RP.Dir.Size();
+				RP.Dir.Normalize();
+				RP.Up = FVector(-1, 0, 0);
+				RP.Lod = 1;
+				RP.bReel = false;
+				BuildTunaRod(M, RP);
 			}
 		if (S.bRadar)
 		{
@@ -508,8 +524,17 @@ namespace KeysMesh
 			{
 				const double X = -L * .32 + k * .45;
 				const double Y0 = InnerHalfBeam(S, X) + Cap * .5, Z0 = SheerAt(S, X);
-				Tube(FVector(X, Side * Y0, Z0 - .25), FVector(X - .2, Side * (Y0 + .15), Z0 + 1.7), .012, .006, 6, Dark, SurfGelcoat);
-				Tube(FVector(X, Side * Y0, Z0 - .05), FVector(X - .024, Side * (Y0 + .018), Z0 + .16), .028, .028, 10, Steel, SurfSteel);
+				// a flush-mount holder in the covering board, and a tuna rod in it, reel up and aft
+				const FVector Mouth(X, Side * Y0, Z0 + .012);
+				const FVector Ax = FVector(-.2, Side * .15, 1.95).GetSafeNormal();
+				BuildRodHolder(M, Mouth, Ax, FVector::UpVector);
+				FRodPose RP;
+				RP.Butt = Mouth - Ax * .22;
+				RP.Dir = Ax;
+				RP.Up = FVector(-1, -Side * .4, 0);
+				RP.Len = 2.1;
+				RP.Lod = GRodLod;
+				BuildTunaRod(M, RP);
 			}
 		M.Surf = KeepSurf;
 	}

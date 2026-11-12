@@ -106,6 +106,24 @@ namespace KeysMesh
 	// Boats with a tuna tower (the Grady-White and the Freeman): true, and where your eyes are standing at the upper
 	// helm, in the boat's own frame (meters, +X toward the bow, Z up).
 	bool TowerEye(const KeysData::FBoatSpec& S, FVector& OutEye);
+	// A stand-up tuna rod with a two-speed lever-drag reel (KeysRod.cpp): an aluminium gimbal butt, the reel seat and
+	// its clamp, the reel (machined side plates with bolts, pillars, a spool packed with blue mono, the lever drag with a
+	// knurled knob, the crank with its big rubber knob), a long black foam fore grip, a blue-and-silver cross-wrapped
+	// butt section, a black blank with wrapped ring guides and a tip-top. Butt at the gimbal end, Dir along the rod, Up the
+	// side the reel sits on, meters. Bend (meters at the tip) curves the blank under load. Lod 0 near, 1 far (no bolts,
+	// fewer guides). Returns the tip.
+	struct FRodPose
+	{
+		FVector Butt = FVector::ZeroVector, Dir = FVector::UpVector, Up = FVector::ForwardVector, Bend = FVector::ZeroVector;
+		double Len = 1.9;
+		int32 Lod = 0;
+		bool bReel = true;
+	};
+	FVector BuildTunaRod(FKeysMesh& M, const FRodPose& P);
+	// the level of detail BuildBoat gives the rods in its holders (0 for the player's boat, 1 for everyone else's)
+	extern int32 GRodLod;
+	// a stainless flush-mount rod holder's flange and tube, set into a deck or gunwale top (Axis points out of the hole)
+	void BuildRodHolder(FKeysMesh& M, const FVector& Mouth, const FVector& Axis, const FVector& SurfaceN);
 	// a simple fish body with tail and dorsal fins, nose along +X, about Len meters long
 	void BuildFish(FKeysMesh& M, double Len, const FLinearColor& Color, bool bBill);
 	double FishLength(double WeightLb);

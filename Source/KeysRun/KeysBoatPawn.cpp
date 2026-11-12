@@ -165,7 +165,9 @@ AKeysWorld* AKeysBoatPawn::World()
 void AKeysBoatPawn::Rebuild()
 {
 	FKeysMesh M;
+	KeysMesh::GRodLod = 0;   // your own boat's rods are seen up close
 	KeysMesh::BuildBoat(M, Spec(), false);
+	KeysMesh::GRodLod = 1;
 	M.Commit(BoatMesh, 0, AKeysWorld::VertexColorMaterial());
 	RigBuilt = -1;   // the outriggers are their own mesh, so they can swing (KeysTroll.cpp)
 }
@@ -606,6 +608,18 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("shopclose")) ShopClose();
 		else if (Cmd.StartsWith(TEXT("cash="))) Cash = FCString::Atoi64(*Cmd.Mid(5));
 		else if (Cmd.StartsWith(TEXT("gfx="))) KeysGfx::SetQuality(FCString::Atoi(*Cmd.Mid(4)));
+		else if (Cmd.StartsWith(TEXT("boatcam=")))
+		{
+			TArray<FString> Pp;
+			Cmd.Mid(8).ParseIntoArray(Pp, TEXT(","));
+			bDbgCam = Pp.Num() >= 6;
+			if (bDbgCam)
+			{
+				DbgCamPos = FVector(FCString::Atod(*Pp[0]), FCString::Atod(*Pp[1]), FCString::Atod(*Pp[2]));
+				DbgCamRot = FRotator(FCString::Atod(*Pp[4]), FCString::Atod(*Pp[3]), 0);
+				DbgCamFov = FCString::Atof(*Pp[5]);
+			}
+		}
 		else if (Cmd.StartsWith(TEXT("res="))) KeysGfx::SetResScale(FCString::Atoi(*Cmd.Mid(4)));
 		else if (Cmd == TEXT("sunset")) { if (AKeysWorld* Wd = World()) Wd->ToggleSunset(); }
 		else if (Cmd.StartsWith(TEXT("con=")))
@@ -1151,6 +1165,14 @@ void AKeysBoatPawn::PrepareToLeaveHelm()
 
 bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const
 {
+	if (bDbgCam && BoatMesh)
+	{
+		const FTransform BT = BoatMesh->GetComponentTransform();
+		OutPos = BT.TransformPosition(DbgCamPos * 100.0);
+		OutRot = (BT.GetRotation() * DbgCamRot.Quaternion()).Rotator();
+		OutFov = DbgCamFov;
+		return true;
+	}
 	if (const AKeysTourneyShow* Sh = AKeysTourneyShow::Get(this); Sh && Sh->CameraFor(OutPos, OutRot, OutFov)) return true;
 	if (const AKeysHandgun* G = AKeysHandgun::Get(this); G && G->CameraFor(OutPos, OutRot, OutFov)) return true;
 	return false;
@@ -2409,35 +2431,34 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 		Skin(FColor(0xd9, 0xa2, 0x7f)), Sleeve(FColor(0x9c, 0xc8, 0xe0)), Guide(FColor(0xc9, 0xce, 0xd3));
 	const FQuat CQ = CT.GetRotation();
 
-	// five rod sections, each bent a little more toward the load
+	// where the bending rod's tip ends up: five sections, each bent a little more toward the load
 	const double SegL = .52;
 	FVector P = Base;
-	for (int32 i = 0; i < 5; i++)
-	{
-		const FVector Dir = Rot(Rx - VmBend * i, FVector(0, 1, 0));
-		const FVector Q = P + Dir * SegL;
-		const double R0 = .022 - .0034 * i, R1 = FMath::Max(.004, R0 - .0034);
-		M.AddTube(W(P), W(Q), R0, R1, 8, RodC);
-		if (i > 0) M.AddBox(W(P + Dir * .02 + Rot(Rx - VmBend * i, FVector(0, 0, -.02))), FVector(.006, .03, .03), Guide, CQ);
-		P = Q;
-	}
-	// cork grip, reel and crank
-	M.AddTube(W(S0(0, -.05, 0)), W(S0(0, .29, 0)), .032, .03, 10, Cork);
-	M.AddTube(W(S0(0, .26, -.075)), W(S0(0, .34, -.075)), .05, .045, 12, DarkC);
-	M.AddTube(W(S0(0, .34, -.075)), W(S0(0, .39, -.075)), .042, .042, 12, GoldC);
+	for (int32 i = 0; i < 5; i++) P += Rot(Rx - VmBend * i, FVector(0, 1, 0)) * SegL;
+	(void)RodC; (void)Cork; (void)DarkC; (void)GoldC; (void)Guide; (void)CQ;
+	// the tuna rod and lever-drag reel, the reel where the old one sat, the hands on the fore grip and the crank
+	KeysMesh::FRodPose RP;
+	RP.Butt = W(S0(0, -.115, 0));
+	RP.Dir = (W(S0(0, 1, 0)) - W(S0(0, 0, 0))).GetSafeNormal();
+	RP.Up = W(S0(0, 0, -1)) - W(S0(0, 0, 0));
+	RP.Len = SegL * 5 + .115;
+	RP.Bend = W(P) - (RP.Butt + RP.Dir * RP.Len);
+	RP.Lod = 0;
+	const FVector TipW = KeysMesh::BuildTunaRod(M, RP);
+	const uint8 KeepSurf = M.Surf;
+	M.Surf = SurfSkin;
 	const double Cc = FMath::Cos(VmCrank), Sc = FMath::Sin(VmCrank);
-	const FVector H0 = S0(.055, .3, -.075), Arm = S0(.055, .3 + .1 * Cc, -.075 + .1 * Sc);
-	M.AddTube(W(H0), W(Arm), .008, .008, 4, DarkC);
-	M.AddBox(W(S0(.1, .3 + .1 * Cc, -.075 + .1 * Sc)), FVector(.075, .075, .075), Skin, CQ);
-	// the hand on the grip and two forearms in sleeves
-	M.AddBox(W(S0(0, .38, -.02)), FVector(.1, .085, .11), Skin, CQ);
+	KeysShapes::AddBlob(M, W(S0(.1, .3 + .04 * Cc, -.16 + .04 * Sc)), FVector(.05, .045, .055), CQ, Skin, 10, 5);
+	KeysShapes::AddBlob(M, W(S0(0, .62, -.02)), FVector(.06, .05, .055), CQ, Skin, 10, 5);
+	M.Surf = SurfCloth;
 	{
 		const FVector C1(.02, .3, -.2), D1(0, FMath::Cos(1.1), FMath::Sin(1.1));
 		M.AddTube(W(S0(C1.X - D1.X * .225, C1.Y - D1.Y * .225, C1.Z - D1.Z * .225)), W(S0(C1.X + D1.X * .225, C1.Y + D1.Y * .225, C1.Z + D1.Z * .225)), .055, .05, 8, Sleeve);
 		const FVector D2 = FVector(.479, .546, .688).GetSafeNormal(), C2(.16, .16, -.22);
 		M.AddTube(W(S0(C2.X - D2.X * .2, C2.Y - D2.Y * .2, C2.Z - D2.Z * .2)), W(S0(C2.X + D2.X * .2, C2.Y + D2.Y * .2, C2.Z + D2.Z * .2)), .055, .05, 8, Sleeve);
 	}
-	return W(P);
+	M.Surf = KeepSurf;
+	return TipW;
 }
 
 // When a hooked fish jumps, the camera zooms in and swings to it, then eases back out once it's in the water again.
@@ -2496,9 +2517,16 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 		const double Bend = FState == EKeysFish::Fight ? Clamp(Tension, 0, 1) : 0;
 		const FVector Mid = (Butt + Tip) * .5 + (End - Tip).GetSafeNormal() * Bend * .5;
 		const FVector RodTipBent = Tip + (End - Tip).GetSafeNormal() * Bend * .6 - FVector(0, Bend * .5, 0);
-		M.AddTube(G2U(Butt), G2U(Mid), .025, .016, 6, FLinearColor(.02f, .02f, .025f));
-		M.AddTube(G2U(Mid), G2U(RodTipBent), .016, .006, 6, FLinearColor(.02f, .02f, .025f));
-		TipU = G2U(RodTipBent);
+		(void)Mid;
+		// the tuna rod: butt at the angler's hip, the blank bowing toward the load
+		KeysMesh::FRodPose RP;
+		RP.Butt = G2U(Butt) - (G2U(Tip) - G2U(Butt)).GetSafeNormal() * .6;
+		RP.Dir = (G2U(Tip) - RP.Butt).GetSafeNormal();
+		RP.Len = (G2U(Tip) - RP.Butt).Size();
+		RP.Up = FVector::UpVector;
+		RP.Bend = G2U(RodTipBent) - G2U(Tip);
+		RP.Lod = 0;
+		TipU = KeysMesh::BuildTunaRod(M, RP);
 	}
 	if (bLine)
 	{

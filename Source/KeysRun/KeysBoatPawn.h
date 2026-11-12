@@ -179,6 +179,11 @@ public:
 	// another system's camera this frame (the pistol, the tournament's titles and ceremony); false for the boat's own
 	bool ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const;
 	bool bExtCam = false;
+	// -KRScript boatcam=x,y,z,yaw,pitch,fov: a camera held in the boat's own frame (meters, degrees), for close-ups
+	bool bDbgCam = false;
+	FVector DbgCamPos = FVector::ZeroVector;
+	FRotator DbgCamRot = FRotator::ZeroRotator;
+	float DbgCamFov = 70.f;
 	// the glass helm screens and the boat's lights (KeysHelm.cpp); ; switches the underwater and cockpit lights
 	void ToggleLights();
 	bool bUwLights = false;
