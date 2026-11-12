@@ -21,6 +21,7 @@
 #include "KeysTownData.h"
 #include "KeysEvents.h"
 #include "KeysGfx.h"
+#include "AudioMixerBlueprintLibrary.h"
 #include "ProceduralMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -608,6 +609,12 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("shopclose")) ShopClose();
 		else if (Cmd.StartsWith(TEXT("cash="))) Cash = FCString::Atoi64(*Cmd.Mid(5));
 		else if (Cmd.StartsWith(TEXT("gfx="))) KeysGfx::SetQuality(FCString::Atoi(*Cmd.Mid(4)));
+		else if (Cmd == TEXT("rec=start")) UAudioMixerBlueprintLibrary::StartRecordingOutput(this, 30.f);
+		else if (Cmd.StartsWith(TEXT("rec=stop")))
+		{
+			// rec=stop:<name> writes <name>.wav of what the game played into Saved/BouncedWavFiles
+			UAudioMixerBlueprintLibrary::StopRecordingOutput(this, EAudioRecordingExportType::WavFile, Cmd.Len() > 9 ? Cmd.Mid(9) : FString(TEXT("krrec")), FString());
+		}
 		else if (Cmd.StartsWith(TEXT("boatcam=")))
 		{
 			TArray<FString> Pp;

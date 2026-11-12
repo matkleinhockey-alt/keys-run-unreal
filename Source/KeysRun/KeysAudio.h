@@ -113,6 +113,14 @@ private:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UKeysSfxSynth> Sfx;
+	// the drag screaming as a fish takes line: a real recording (Content/KeysRun/Sounds, audiopapkin via Pixabay). The
+	// strike plays its strongest surge at full level the instant a fish is on; the fight loop then follows the line
+	// going out. Empty if the assets are missing, and the synth's chopped tone takes over again.
+	UPROPERTY() TObjectPtr<class UAudioComponent> ReelStrikeAC;
+	UPROPERTY() TObjectPtr<class UAudioComponent> ReelLoopAC;
+	bool bWasFight = false;
+	double StrikeT = 99, ReelLoopVol = 0, EngDuck = 0;
+	void UpdateReelSample(double Dt, bool& bOutHandled);
 	UPROPERTY() TObjectPtr<UKeysMusicSynth> Music;
 
 	FKeysBoatAudioState Boat;

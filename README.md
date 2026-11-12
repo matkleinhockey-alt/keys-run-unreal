@@ -441,3 +441,9 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   `fin:caelen=2.2` (fire the pistol at Caelen / beside him), `fin:spawn=mako,mola` (schools of those round the boat),
   `fin:lot=N` (log the Nth plat parcel with scenery on it), `fin:fills=N`, `fin:wrecksreset`.
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.
+
+## Credits
+
+- Fishing reel sound: audiopapkin via Pixabay (Pixabay Content License)
+- Deck crew figure (Content/KeysRun/Crew, from the web game's models/crew/dance-01): the CC-BY-4.0 `bikini_girl` model
+  rigged to a Mixamo skeleton with its "Hip Hop Dancing" clip; see the web game's docs/ASSET-LICENCES.md for the full entry.

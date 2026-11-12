@@ -1,4 +1,6 @@
 #include "KeysAudio.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundWave.h"
 #include "KeysBoatPawn.h"
 #include "KeysMusicSynth.h"
 #include "KeysSynth.h"
@@ -346,7 +348,7 @@ void AKeysAudio::PushEngine(double InRpm, double Load, double Vol, double PitchM
 	P.GwGain = (float)(.003 + .01 * R * R);
 	P.WhineFreq = (float)(InRpm / 60 * 27 * PitchMul);
 	P.WhineGain = (float)(EngWhine * (.0075 + .024 * R * R) * AvgGateMul);
-	P.OutGain = (float)(EngineVol * Vol * EngVol * (.36 + .45 * R + .3 * Load) * (1 + .12 * (N - 1)));
+	P.OutGain = (float)(EngineVol * Vol * EngVol * (.36 + .45 * R + .3 * Load) * (1 + .12 * (N - 1)) * (1 - .8 * EngDuck));
 	Sfx->SetEngineParams(P);
 }
 
@@ -371,8 +373,11 @@ void AKeysAudio::UpdateLoops(double Dt, double T)
 	}
 
 	// the reel: drag scream while a fish runs, the crank ratchet while you reel
+	bool bSampled = false;
+	UpdateReelSample(Dt, bSampled);
 	double Rate = 0, Rg = 0, Pitch = 2700;
-	if (S.bFight)
+	if (S.bFight && bSampled && !(S.bReeling && !S.bFishRunning)) { }   // the recording has it
+	else if (S.bFight)
 	{
 		if (S.bFishRunning && !S.bReeling) { Rate = 40 + S.FishStr * 30; Rg = .025 + .012 * S.Drag; }
 		else if (S.bFishRunning) { Rate = 55; Rg = .02 + .01 * S.Drag; Pitch = 3100; }
@@ -384,6 +389,71 @@ void AKeysAudio::UpdateLoops(double Dt, double T)
 	Loops.ReelDepth = (float)Rg;
 	Loops.Master = (bReady && bSoundOn) ? .8f : 0.f;
 	if (Sfx) Sfx->SetLoopParams(Loops);
+}
+
+// ---------------------------------------------------------------- the reel drag, from the recording
+void AKeysAudio::UpdateReelSample(double Dt, bool& bOutHandled)
+{
+	static TWeakObjectPtr<USoundWave> StrikeW, LoopW;
+	static bool bTried = false;
+	if (!bTried)
+	{
+		bTried = true;
+		StrikeW = LoadObject<USoundWave>(nullptr, TEXT("/Game/KeysRun/Sounds/KR_ReelStrike.KR_ReelStrike"));
+		LoopW = LoadObject<USoundWave>(nullptr, TEXT("/Game/KeysRun/Sounds/KR_ReelLoop.KR_ReelLoop"));
+	}
+	bOutHandled = false;
+	EngDuck = FMath::Max(0.0, EngDuck - Dt / 1.6);
+	if (!StrikeW.IsValid() || !LoopW.IsValid()) return;
+	auto Make = [this](USoundWave* W) {
+		UAudioComponent* C = NewObject<UAudioComponent>(this);
+		C->SetSound(W);
+		C->bAutoActivate = false;
+		C->bIsUISound = false;
+		C->bAllowSpatialization = false;
+		C->RegisterComponent();
+		return C;
+	};
+	if (!ReelStrikeAC) ReelStrikeAC = Make(StrikeW.Get());
+	if (!ReelLoopAC) ReelLoopAC = Make(LoopW.Get());
+	const FKeysBoatAudioState& S = Boat;
+	const bool bOn = bReady && bSoundOn;
+	// the hit: the clicker goes from nothing to a full scream at once, the engine and the radio duck under it
+	if (S.bFight && !bWasFight && bOn)
+	{
+		StrikeT = 0;
+		ReelStrikeAC->SetVolumeMultiplier(2.8f);
+		ReelStrikeAC->SetPitchMultiplier(.97f + .015f * S.Drag);
+		ReelStrikeAC->Play(0.f);
+		EngDuck = 1;
+		if (bMusicOn && Music) { Music->SetOutGain(.3f, .08f); DuckUntil = GetWorld()->GetTimeSeconds() + 3.2; }
+	}
+	bWasFight = S.bFight;
+	StrikeT += Dt;
+	if (!S.bFight || !bOn)
+	{
+		if (ReelStrikeAC->IsPlaying() && (!bOn || StrikeT > .2)) ReelStrikeAC->FadeOut(.25f, 0.f);
+		if (ReelLoopAC->IsPlaying()) ReelLoopAC->FadeOut(.3f, 0.f);
+		ReelLoopVol = 0;
+		return;
+	}
+	bOutHandled = true;
+	// the fight: the loop's level and pitch follow the line going out (a running fish, how hard it pulls, the drag);
+	// it takes over as the strike's first run dies away
+	const double Str = FMath::Clamp(S.FishStr, 0.0, 1.5);
+	double Want = 0;
+	if (S.bFishRunning) Want = (S.bReeling ? .45 : .7) + .3 * FMath::Min(1.0, Str);
+	const double Hand = FMath::Clamp((StrikeT - 2.6) / 1.4, 0.0, 1.0);   // the strike's run, then the loop
+	ReelLoopVol += (Want * Hand - ReelLoopVol) * FMath::Min(1.0, Dt * (Want > ReelLoopVol ? 9.0 : 3.0));
+	if (ReelLoopVol > .02 && !ReelLoopAC->IsPlaying())
+		ReelLoopAC->Play(FMath::FRandRange(0.f, 11.f));   // a random way into the loop, so it never starts the same
+	if (ReelLoopAC->IsPlaying())
+	{
+		ReelLoopAC->SetVolumeMultiplier(float(ReelLoopVol * 2.2));
+		// heavier drag: tighter and higher; a hard run: a touch faster
+		ReelLoopAC->SetPitchMultiplier(float(.9 + .03 * S.Drag + .08 * FMath::Min(1.0, Str)));
+		if (ReelLoopVol < .01) ReelLoopAC->Stop();
+	}
 }
 
 // ---------------------------------------------------------------- the boat stereo
