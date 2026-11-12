@@ -1,4 +1,5 @@
 #include "KeysLandmarks.h"
+#include "KeysWrecks.h"
 #include "KeysMesh.h"
 #include "KeysTown.h"
 #include "KeysTownData.h"
@@ -42,6 +43,9 @@ AKeysLandmarks::AKeysLandmarks()
 	Beam->SetupAttachment(Root);
 	Beam->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Beam->SetCastShadow(false);
+	WreckMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Wrecks"));
+	WreckMesh->SetupAttachment(Root);
+	WreckMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AKeysLandmarks::BeginPlay()
@@ -59,6 +63,12 @@ void AKeysLandmarks::BeginPlay()
 	UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineDebugMaterials/VertexColorMaterial.VertexColorMaterial"));
 	G.M.Commit(Lamps, 0, GlowMat ? GlowMat : AKeysWorld::VertexColorMaterial());
 	BuildBuoys();
+	{
+		// the shipwrecks on the bottom (world/wrecks.ts)
+		FKeysMesh WM;
+		KeysWrecks::Build(WM);
+		WM.Commit(WreckMesh, 0, AKeysWorld::VertexColorMaterial());
+	}
 	// the lens: two flat fans off the lantern turning every 9 s, a narrow bright core and a wide faint spread
 	// (world/lighthouse.ts), night only - the sunset blend lights them
 	if (UMaterialInterface* GM = AKeysWorld::GlowMaterial())

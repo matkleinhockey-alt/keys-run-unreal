@@ -1,4 +1,5 @@
 #include "KeysLife.h"
+#include "KeysWrecks.h"
 #include "KeysSea.h"
 #include "KeysBoatPawn.h"
 #include "KeysMesh.h"
@@ -247,6 +248,12 @@ namespace
 	{
 		static const TArray<FZoneRow> L{{TEXT("amberjack"), 6}, {TEXT("blackfin"), 3}, {TEXT("cobia"), 3}, {TEXT("grouper"), 1.5}, {TEXT("gag"), 1.2}, {TEXT("barracuda"), 2},
 			{TEXT("kingfish"), 2.5}, {TEXT("mahi"), 1.5}, {TEXT("wahoo"), 1.5}, {TEXT("yellowfin"), .8}};
+		return L;
+	}
+	const TArray<FZoneRow>& LifeWreckFishing()
+	{
+		static TArray<FZoneRow> L;
+		if (!L.Num()) for (const TPair<FString, double>& R : KeysWrecks::Residents()) L.Add({R.Key, R.Value});
 		return L;
 	}
 	const TArray<FZoneRow>& LifeWeedFishing()
@@ -1799,6 +1806,7 @@ FKeysFishSpot AKeysLife::SpotAt(double X, double Z) const
 		if (LHyp(H.X - X, H.Z - Z) < 50) { S.HotspotId = H.Id; S.bHot = true; S.bFrenzy = H.Fr > .5; break; }
 	if (!S.bHot && NearWeedline(X, Z, 18)) { S.bHot = true; S.Zone = TEXT("Weedline"); }
 	if (NearRigPtr(X, Z, 70)) { S.bHot = true; S.Zone = TEXT("Oil Rig"); S.HotspotId = -1; S.bFrenzy = false; }
+	else if (KeysWrecks::Near(X, Z)) { S.bHot = true; S.Zone = TEXT("Wreck"); S.HotspotId = -1; S.bFrenzy = false; }
 	return S;
 }
 
@@ -1808,6 +1816,7 @@ const TArray<FZoneRow>& AKeysLife::FishTable(const FString& Zone)
 {
 	if (Zone == TEXT("Oil Rig")) return LifeRigFishing();
 	if (Zone == TEXT("Weedline")) return LifeWeedFishing();
+	if (Zone == TEXT("Wreck")) return LifeWreckFishing();
 	return KeysData::ZoneTable(Zone);
 }
 
@@ -1882,6 +1891,7 @@ FString AKeysLife::AreaLabel(double X, double Z) const
 {
 	if (NearRigPtr(X, Z, 90)) return TEXT("Oil Rig");
 	if (NearWeedline(X, Z, 30)) return TEXT("Weedline");
+	if (const KeysWrecks::FWreck* W = KeysWrecks::Near(X, Z, 60)) return FString::Printf(TEXT("Wreck: %s"), W->Name);
 	for (const FKeysHotspot& H : Hotspots) if (H.Fr > .5 && LHyp(H.X - X, H.Z - Z) < 120) return TEXT("Feeding frenzy!");
 	return FString();
 }
@@ -1890,6 +1900,7 @@ void AKeysLife::GetMarkers(TArray<FKeysMarker>& Out) const
 {
 	for (const FKeysRig& R : Rigs) if (!R.bTwin) { FKeysMarker M; M.Kind = 0; M.X = R.X; M.Z = R.Z; Out.Add(M); }
 	for (const FKeysWeedline& W : Weeds) { FKeysMarker M; M.Kind = 1; M.X = W.X; M.Z = W.Z; M.Ang = W.Ang; M.Len = W.Len; Out.Add(M); }
+	for (const KeysWrecks::FWreck& W : KeysWrecks::Wrecks()) { FKeysMarker M; M.Kind = 3; M.X = W.X; M.Z = W.Z; M.Ang = W.Heading; M.Len = W.Len; Out.Add(M); }
 	for (const FKeysHotspot& H : Hotspots) { FKeysMarker M; M.Kind = 2; M.X = H.X; M.Z = H.Z; M.Frenzy = H.Fr; Out.Add(M); }
 }
 

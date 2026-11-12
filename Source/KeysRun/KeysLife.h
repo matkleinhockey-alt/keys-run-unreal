@@ -27,7 +27,7 @@ struct FKeysTunaStrike
 	double FX = 0, FZ = 0;
 };
 
-// chart markers: 0 oil rig, 1 weedline (a line Len long at angle Ang), 2 bird pile
+// chart markers: 0 oil rig, 1 weedline (a line Len long at angle Ang), 2 bird pile, 3 wreck (Len long, heading Ang)
 struct FKeysMarker
 {
 	uint8 Kind = 0;

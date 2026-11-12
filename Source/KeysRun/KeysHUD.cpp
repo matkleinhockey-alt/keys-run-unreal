@@ -518,6 +518,18 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 				const FVector2D A1 = ChartXY(K.X + FMath::Cos(K.Ang) * HL, K.Z + FMath::Sin(K.Ang) * HL, X, Y, Size);
 				DrawLine(A0.X, A0.Y, A1.X, A1.Y, FLinearColor(.78f, .6f, .2f), 2.5f * U);
 			}
+			else if (K.Kind == 3)
+			{
+				// the chart's wreck symbol: a hull outline with a cross through it
+				const FVector2D Fw(-FMath::Sin(K.Ang), -FMath::Cos(K.Ang));
+				const double HL = FMath::Max(K.Len * .5, 40.0);
+				const FVector2D A0 = ChartXY(K.X - Fw.X * HL, K.Z - Fw.Y * HL, X, Y, Size), A1 = ChartXY(K.X + Fw.X * HL, K.Z + Fw.Y * HL, X, Y, Size);
+				const FLinearColor WC(.12f, .1f, .18f);
+				DrawLine(A0.X, A0.Y, A1.X, A1.Y, WC, 2.f * U);
+				DrawLine(A.X - 4 * U, A.Y - 4 * U, A.X + 4 * U, A.Y + 4 * U, WC, 1.5f * U);
+				DrawLine(A.X - 4 * U, A.Y + 4 * U, A.X + 4 * U, A.Y - 4 * U, WC, 1.5f * U);
+				if (P->bBigMap) Text(TEXT("WK"), A.X + 6 * U, A.Y - 8 * U, .55f, FLinearColor(.1f, .1f, .1f));
+			}
 			else
 			{
 				const float R = (2.f + float(K.Frenzy * (1.5 + Pulse * 1.5))) * U;

@@ -42,6 +42,7 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Static;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Lamps;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Beam;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> WreckMesh;
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> BuoyISMs;
 	UPROPERTY() TArray<TObjectPtr<UTextRenderComponent>> Labels;
 

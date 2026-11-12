@@ -611,7 +611,7 @@ namespace KeysGeo
 	FString ZoneDesc(const FString& Zone)
 	{
 		static const TMap<FString, FString> Desc = {
-			{TEXT("Creek"), TEXT("Mangrove creek")}, {TEXT("Flats"), TEXT("Skinny-water flats")}, {TEXT("Backcountry"), TEXT("Florida Bay backcountry")},
+			{TEXT("Creek"), TEXT("Mangrove creek")}, {TEXT("Wreck"), TEXT("Shipwreck")}, {TEXT("Oil Rig"), TEXT("Oil rig")}, {TEXT("Weedline"), TEXT("Weedline")}, {TEXT("Flats"), TEXT("Skinny-water flats")}, {TEXT("Backcountry"), TEXT("Florida Bay backcountry")},
 			{TEXT("Bridge"), TEXT("Bridge channel")}, {TEXT("Hawk Channel"), TEXT("Hawk Channel")}, {TEXT("Reef"), TEXT("Sombrero Reef")}, {TEXT("Offshore"), TEXT("Gulf Stream")}};
 		const FString* F = Desc.Find(Zone);
 		return F ? *F : Zone;
