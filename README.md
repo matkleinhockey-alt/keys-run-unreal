@@ -28,10 +28,11 @@ so there are no hand-made assets. The editor script creates the materials and th
   counter, shelves of stock, booths, racks and staff: the Salty Dog Diner, the Rusty Anchor, the Tipsy Tarpon and Reel
   Hammered, Hook Line & Sinker, Deadeye Guns, Cheap Beer & Lotto, Conch Republic Gifts, Keys Pawn, the coin laundry,
   Scuba Steve's, the Sunset Motor Lodge, Cone Zone and the Stop-N-Go; the Pink Flamingo Cabaret with its stage, two
-  dancers, the bar and the DJ; and the Gaff & Gill Casino with its slot banks, the cage, the Go Fish table, the marlin
+  of the web game's rigged dancers dancing their clip under a key light, the bar and the DJ; and the Gaff & Gill Casino with its slot banks, the cage, the Go Fish table, the marlin
   fountain and the aquarium wall. Harbor Row's four lots behind the casino are for sale.
 - **Ashore (Q):** the houses, palms, mangroves and estate houses out on the keys are solid, and the dark rooms (the casino,
-  the Pink Flamingo, the bars) hold their exposure so they stay moody instead of washing out. Tie up alongside any dock (the four marinas, the fishing piers, an estate's dock) when you are slow,
+  the Pink Flamingo, the bars) hold their exposure so they stay moody instead of washing out. The room you are in is lit by
+  real lights under its ceiling lamps (warm white in the shops, amber in the bars, pink with a stage light in the club). Tie up alongside any dock (the four marinas, the fishing piers, an estate's dock) when you are slow,
   and walk the docks, the town and the keys. F at a counter opens its shelf: buy with the cash the fish house pays for
   your fillets at the weigh-in (game fish, billfish and protected species don't sell). The heavy rod holds more tension,
   the lever reel brings fish in faster, diner coffee widens the strike window, live bait brings quicker bites, the dive
@@ -356,6 +357,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | `KeysDiver.*` | diving: controller, cameras, diver and gun models, bubbles, marine snow, the underwater post-process |
 | `KeysAudio.*`, `KeysSfxSynth.*`, `KeysMusicSynth.*`, `KeysSynth.*` | the sound engine, effects synth and radio |
 | `KeysExtras.*`, `KeysCrew.cpp`, `KeysHuman.*` | buddy boat, Luigi mode, Caelen, crew, party, shower and flags |
+| `KeysDancers.*` | the web game's rigged dancers, shared by the deck party, the club stage, the sandbar and the party boats |
 | `KeysTownData.*` | the town's layout, interiors, people, venues and shelves, docks, piers, estates, walkability (ported from the JS) |
 | `KeysTown.*`, `KeysTownInterior.cpp`, `KeysTownBatch.cpp` | builds Boot Key Harbor City: streets, buildings, signs, props, cars, interiors, the casino, people |
 | `KeysWalker.*` | going ashore: the walker, its cameras and body, interaction points |
@@ -462,3 +464,7 @@ from in front of the chair (V gives the angler's own view). After the catch card
 - Fishing reel sound: audiopapkin via Pixabay (Pixabay Content License)
 - Deck crew figure (Content/KeysRun/Crew, from the web game's models/crew/dance-01): the CC-BY-4.0 `bikini_girl` model
   rigged to a Mixamo skeleton with its "Hip Hop Dancing" clip; see the web game's docs/ASSET-LICENCES.md for the full entry.
+- The dancers on the club stage, the sandbar boats and the party boats (KeysDancers.cpp) are dance-01 and dance-02 from the
+  same folder; dance-02 was imported through `Tools/unmeshopt.py` and then `Tools/fixglb.py` (one mesh under one skin whose
+  bind matrices match the skeleton). dance-03 (Annie) is not used yet: Unreal's glTF import still parts her head and hair
+  from her body under the clip.

@@ -2138,7 +2138,7 @@ void AKeysBoatPawn::UpdateJump(double Dt)
 	{
 		const FVector JV(JDX * JRun / JDur, 4 * JH * (1 - 2 * P) / JDur, JDZ * JRun / JDur);
 		const int32 NShed = FMath::RoundToInt(Dt * (90 + FishLen * 30) * (1.1 - P) + FMath::FRand());
-		L->Shed(FVector(PX - JDX * FishLen * .3, PY, PZ - JDZ * FishLen * .3), JV, NShed, .07 + FishLen * .025);
+		L->Shed(FVector(PX - JDX * FishLen * .3, PY, PZ - JDZ * FishLen * .3), JV, NShed, .05 + FishLen * .018);
 	}
 	// nose up on the way out, nose down on the way back in, with a head-shake wobble
 	const double Yaw = FMath::Atan2(JDZ, JDX);

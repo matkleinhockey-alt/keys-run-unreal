@@ -1481,7 +1481,7 @@ void AKeysLife::Splash(double X, double Z, int32 N, double Power)
 		{
 			const double A = FMath::FRand() * PI * 2, S = LRand(0, .6) * Power;
 			SpawnDrop(FVector(X + FMath::Cos(A) * .15 * Power, Surf + .1, Z + FMath::Sin(A) * .15 * Power),
-				FVector(FMath::Cos(A) * S, LRand(4.5, 8) * FMath::Sqrt(Power), FMath::Sin(A) * S), LRand(1, 1.6), LRand(.8, 1.4) * .24 * SizeK, true);
+				FVector(FMath::Cos(A) * S, LRand(4.5, 8) * FMath::Sqrt(Power), FMath::Sin(A) * S), LRand(1, 1.6), LRand(.8, 1.4) * .19 * SizeK, true);
 		}
 	for (int32 i = 0; i < N; i++)
 	{
