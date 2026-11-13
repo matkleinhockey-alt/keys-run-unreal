@@ -56,7 +56,7 @@ bool UKeysSfxSynth::Init(int32& SampleRate)
 	Wh1.Wave = Wh2.Wave = KeysDSP::EWave::Sine; WhF.Init(315.f, .06f); WhG.Init(0, .08f);
 	EngOut.Init(0, .07f);
 
-	RushN.Seed(Rng); HissN.Seed(Rng); WindN.Seed(Rng); WashN.Seed(Rng);
+	RushN.Seed(Rng); HissN.Seed(Rng); WindN.Seed(Rng); WashN.Seed(Rng); BreathN.Seed(Rng); BreathG.Init(0, .3f); BreathD.Init(0, .3f); BreathFr.Init(480.f, .3f);
 	RushG.Init(0, .08f); RushFr.Init(650.f, .1f); HissG.Init(0, .08f); WindG.Init(0, .2f); WindFr.Init(550.f, .2f); WashG.Init(0, .3f);
 	ReelTone.Wave = KeysDSP::EWave::Square; ReelLfo.Wave = KeysDSP::EWave::Square;
 	ReelRate.Init(30.f, .03f); ReelPitch.Init(2700.f, .05f); ReelDepth.Init(0, .03f);
@@ -148,6 +148,8 @@ void UKeysSfxSynth::RenderBlock(float* Out, int32 Frames)
 
 	RushG.Target = Loops.RushGain; RushFr.Target = Loops.RushFreq; HissG.Target = Loops.HissGain; WindG.Target = Loops.WindGain;
 	WindFr.Target = Loops.WindFreq; WashG.Target = Loops.WashGain;
+	BreathG.Target = Loops.BreathGain; BreathD.Target = Loops.BreathDepth; BreathFr.Target = Loops.BreathFreq;
+	for (KeysDSP::FSmooth* S : {&BreathG, &BreathD, &BreathFr}) S->Step(Dt);
 	ReelRate.Target = FMath::Max(1.f, Loops.ReelRate); ReelPitch.Target = Loops.ReelPitch; ReelDepth.Target = Loops.ReelDepth;
 	Master.Target = Loops.Master;
 	for (KeysDSP::FSmooth* S : {&RushG, &RushFr, &HissG, &WindG, &WindFr, &WashG, &ReelRate, &ReelPitch, &ReelDepth, &Master}) S->Step(Dt);
@@ -159,6 +161,8 @@ void UKeysSfxSynth::RenderBlock(float* Out, int32 Frames)
 	InsBP.Set(KeysDSP::EFilter::Bandpass, InsF.V, 1.1f, Rate);
 	RushF.Set(KeysDSP::EFilter::Lowpass, RushFr.V, .6f, Rate); HissF.Set(KeysDSP::EFilter::Highpass, 3200.f, .5f, Rate);
 	WindF.Set(KeysDSP::EFilter::Bandpass, WindFr.V, .4f, Rate); WashF.Set(KeysDSP::EFilter::Lowpass, 380.f, .5f, Rate);
+	BreathF.Set(KeysDSP::EFilter::Bandpass, BreathFr.V, .9f, Rate);
+	const bool bBreath = BreathG.V > 1e-5f || BreathG.Target > 1e-5f;
 
 	const float RaspK = 8.f + .8f * 40.f;   // audShaper(8 + rough * 40)
 	const bool bEngineAudible = EngOut.V > 1e-5f || EngOut.Target > 1e-5f;
@@ -195,6 +199,13 @@ void UKeysSfxSynth::RenderBlock(float* Out, int32 Frames)
 		Amb += HissF.Tick(HissN.Tick()) * HissG.V;
 		Amb += WindF.Tick(WindN.Tick()) * WindG.V;
 		Amb += WashF.Tick(WashN.Tick()) * WashG.V;
+		// breathing: band-passed noise swelling in and out on a 4.2 s inhale / exhale
+		if (bBreath)
+		{
+			BreathPh += InvRate / 4.2;
+			if (BreathPh >= 1) BreathPh -= 1;
+			Amb += BreathF.Tick(BreathN.Tick()) * FMath::Max(0.f, BreathG.V + BreathD.V * FMath::Sin(float(BreathPh) * 2 * PI));
+		}
 		// the reel: an amplitude-chopped high square through a bandpass
 		const float Chop = ReelDepth.V * ReelLfo.Tick(ReelRate.V * InvRate);
 		Amb += ReelBP.Tick(ReelTone.Tick(ReelPitch.V * InvRate) * Chop);

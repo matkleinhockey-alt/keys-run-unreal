@@ -30,6 +30,7 @@ struct FKeysLoopParams
 	float HissGain = 0;
 	float WindGain = 0, WindFreq = 550.f;
 	float WashGain = 0;
+	float BreathGain = 0, BreathDepth = 0, BreathFreq = 480.f;   // the diver's own breathing (web audio/underwater.ts)
 	float ReelRate = 1.f, ReelPitch = 2700.f, ReelDepth = 0;
 	float Master = .8f;
 };
@@ -110,7 +111,10 @@ private:
 	KeysDSP::FOsc Wh1, Wh2; KeysDSP::FSmooth WhF, WhG;
 	KeysDSP::FSmooth EngOut;
 
-	KeysDSP::FNoise RushN, HissN, WindN, WashN;
+	KeysDSP::FNoise RushN, HissN, WindN, WashN, BreathN;
+	KeysDSP::FBiquad BreathF;
+	KeysDSP::FSmooth BreathG, BreathD, BreathFr;
+	double BreathPh = 0;
 	KeysDSP::FBiquad RushF, HissF, WindF, WashF;
 	KeysDSP::FSmooth RushG, RushFr, HissG, WindG, WindFr, WashG;
 	KeysDSP::FOsc ReelTone, ReelLfo; KeysDSP::FBiquad ReelBP;

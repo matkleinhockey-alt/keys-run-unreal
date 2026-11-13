@@ -58,6 +58,15 @@ void AKeysWorld::SetUnderside(bool bOn)
 	if (bOn == bUnderside || !bWaterBuilt) { bUnderside = bOn; return; }
 	bUnderside = bOn;
 	Water->SetMeshSectionVisible(2, bOn);
+	// god rays (web world/underwater/godrays.ts, High and up): the sun's screen-space light shafts while you're under,
+	// streaming down through the surface when you look up toward it
+	if (Sun)
+	{
+		const bool bRays = bOn && KeysGfx::Quality() >= KeysGfx::High;
+		Sun->bEnableLightShaftBloom = bRays;
+		Sun->BloomScale = .35f; Sun->BloomThreshold = .05f; Sun->BloomTint = FColor(255, 246, 221);
+		Sun->MarkRenderStateDirty();
+	}
 }
 
 void AKeysWorld::DebugOldWater(bool bOld)

@@ -614,6 +614,10 @@ void AKeysAudio::SetUnderwater(bool bUnder, double Depth, double AirFrac, bool b
 		if (bWant) C->SetLowPassFilterFrequency(FMath::Lerp(20000.f, Hz, float(UwLevel)));
 	}
 	bLpfOn = bWant;
+	// your own breathing: louder and a touch higher while holding a breath down there than idling in the shallows
+	Loops.BreathGain = UwLevel < .01 ? 0.f : float((bHolding ? .1 : .04) * UwLevel);
+	Loops.BreathDepth = UwLevel < .01 ? 0.f : float((bHolding ? .07 : .02) * UwLevel);
+	Loops.BreathFreq = bHolding ? 520.f : 440.f;
 	if (UwLevel < .01 || !bReady) return;
 	// bubbles off the mask
 	BubbleT -= Dt;
