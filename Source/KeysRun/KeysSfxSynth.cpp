@@ -26,6 +26,13 @@ void UKeysSfxSynth::SetLoopParams(const FKeysLoopParams& P)
 	bLoopsDirty = true;
 }
 
+void UKeysSfxSynth::SetRemoteParams(const FKeysRemoteParams& P)
+{
+	FScopeLock L(&ParamLock);
+	PendingRemote = P;
+	bRemoteDirty = true;
+}
+
 void UKeysSfxSynth::PushBurst(const FKeysBurst& B)
 {
 	FScopeLock L(&ParamLock);
@@ -56,7 +63,8 @@ bool UKeysSfxSynth::Init(int32& SampleRate)
 	Wh1.Wave = Wh2.Wave = KeysDSP::EWave::Sine; WhF.Init(315.f, .06f); WhG.Init(0, .08f);
 	EngOut.Init(0, .07f);
 
-	RushN.Seed(Rng); HissN.Seed(Rng); WindN.Seed(Rng); WashN.Seed(Rng); BreathN.Seed(Rng); BreathG.Init(0, .3f); BreathD.Init(0, .3f); BreathFr.Init(480.f, .3f);
+	RushN.Seed(Rng); HissN.Seed(Rng); WindN.Seed(Rng); WashN.Seed(Rng); BreathN.Seed(Rng);
+	for (FRemoteVoice& V : Rv) { V.A.Wave = KeysDSP::EWave::Saw; V.B.Wave = KeysDSP::EWave::Square; V.Fr.Init(40.f, .25f); V.G.Init(0, .25f); V.L.Init(.7f, .15f); V.R.Init(.7f, .15f); V.Cut.Init(700.f, .3f); } BreathG.Init(0, .3f); BreathD.Init(0, .3f); BreathFr.Init(480.f, .3f);
 	RushG.Init(0, .08f); RushFr.Init(650.f, .1f); HissG.Init(0, .08f); WindG.Init(0, .2f); WindFr.Init(550.f, .2f); WashG.Init(0, .3f);
 	ReelTone.Wave = KeysDSP::EWave::Square; ReelLfo.Wave = KeysDSP::EWave::Square;
 	ReelRate.Init(30.f, .03f); ReelPitch.Init(2700.f, .05f); ReelDepth.Init(0, .03f);
@@ -76,6 +84,7 @@ void UKeysSfxSynth::PullParams()
 		FScopeLock L(&ParamLock);
 		if (bEngineDirty) { Eng = PendingEngine; bEngineDirty = false; }
 		if (bLoopsDirty) { Loops = PendingLoops; bLoopsDirty = false; }
+		if (bRemoteDirty) { Remote = PendingRemote; bRemoteDirty = false; }
 		if (PendingBursts.Num()) { NewBursts = MoveTemp(PendingBursts); PendingBursts.Reset(); }
 	}
 	for (const FKeysBurst& B : NewBursts)
@@ -150,6 +159,15 @@ void UKeysSfxSynth::RenderBlock(float* Out, int32 Frames)
 	WindFr.Target = Loops.WindFreq; WashG.Target = Loops.WashGain;
 	BreathG.Target = Loops.BreathGain; BreathD.Target = Loops.BreathDepth; BreathFr.Target = Loops.BreathFreq;
 	for (KeysDSP::FSmooth* S : {&BreathG, &BreathD, &BreathFr}) S->Step(Dt);
+	bool bRemote = false;
+	for (int32 I = 0; I < 3; ++I)
+	{
+		FRemoteVoice& V = Rv[I]; const FKeysRemoteVoice& P = Remote.V[I];
+		V.Fr.Target = P.Freq; V.G.Target = P.Gain; V.L.Target = P.PanL; V.R.Target = P.PanR; V.Cut.Target = P.Cut;
+		for (KeysDSP::FSmooth* S : {&V.Fr, &V.G, &V.L, &V.R, &V.Cut}) S->Step(Dt);
+		V.F.Set(KeysDSP::EFilter::Lowpass, V.Cut.V, .9f, Rate);
+		bRemote |= V.G.V > 1e-5f || V.G.Target > 1e-5f;
+	}
 	ReelRate.Target = FMath::Max(1.f, Loops.ReelRate); ReelPitch.Target = Loops.ReelPitch; ReelDepth.Target = Loops.ReelDepth;
 	Master.Target = Loops.Master;
 	for (KeysDSP::FSmooth* S : {&RushG, &RushFr, &HissG, &WindG, &WindFr, &WashG, &ReelRate, &ReelPitch, &ReelDepth, &Master}) S->Step(Dt);
@@ -210,6 +228,14 @@ void UKeysSfxSynth::RenderBlock(float* Out, int32 Frames)
 		const float Chop = ReelDepth.V * ReelLfo.Tick(ReelRate.V * InvRate);
 		Amb += ReelBP.Tick(ReelTone.Tick(ReelPitch.V * InvRate) * Chop);
 
+		// other boats' engines
+		if (bRemote)
+			for (FRemoteVoice& V : Rv)
+			{
+				if (V.G.V < 1e-5f && V.G.Target < 1e-5f) continue;
+				const float S = V.F.Tick(V.A.Tick(V.Fr.V * InvRate) * .6f + V.B.Tick(V.Fr.V * .5f * InvRate) * .4f) * V.G.V;
+				L += S * V.L.V; R += S * V.R.V;
+			}
 		Out[F * 2] = L + Amb;
 		Out[F * 2 + 1] = R + Amb;
 	}

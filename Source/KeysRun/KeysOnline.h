@@ -51,6 +51,8 @@ public:
 	const FString& Name() const { return MyName; }
 	const FString& Crew() const { return MyCrew; }
 	int32 FriendsOnWater() const;
+	// friends' boats on the water (drawn position), for their engine sound
+	void FriendBoats(TArray<TPair<FString, FVector2D>>& Out) const { for (const auto& KV : Friends) if (KV.Value.bOn && KV.Value.bPlaced) Out.Add({KV.Key, FVector2D(KV.Value.SX, KV.Value.SZ)}); }
 
 	const TArray<FKeysCrewCatch>& Catches() const { return CrewCatches; }
 	const TArray<FKeysCrewScore>& Scores() const { return CrewScores; }

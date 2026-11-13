@@ -108,6 +108,9 @@ private:
 	void UpdateEngine(double Dt, double Now);
 	void PushEngine(double Rpm, double Load, double Vol, double PitchMul, double Now);
 	void UpdateLoops(double Dt, double Now);
+	void UpdateRemoteEngines(double Dt);
+	TMap<FString, FVector2D> RemotePrev;
+	TMap<FString, double> RemoteVr;
 	void UpdateMusic(double Dt, double Now);
 	void HandleKeys();
 	void Place(FKeysBurst& B, const FVector& GamePos, float RefDist, float Rolloff = 1.1f) const;

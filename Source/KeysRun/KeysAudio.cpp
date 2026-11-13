@@ -1,4 +1,7 @@
 #include "KeysAudio.h"
+#include "KeysOnline.h"
+#include "KeysLocals.h"
+#include "KeysTraffic.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundWave.h"
 #include "KeysBoatPawn.h"
@@ -245,6 +248,7 @@ void AKeysAudio::Tick(float DeltaSeconds)
 	{
 		UpdateEngine(Dt, Now);
 		UpdateLoops(Dt, Now);
+		UpdateRemoteEngines(Dt);
 	}
 	UpdateMusic(Dt, Now);
 }
@@ -658,4 +662,85 @@ void AKeysAudio::SetUnderwater(bool bUnder, double Depth, double AirFrac, bool b
 		}
 	}
 	else HeartT = FMath::Min(HeartT, 1.0);
+}
+
+// ---------------------------------------------------------------- other boats' engines (web audio/engine.ts)
+// Traffic, the go-fast racers, the working fleet and friends online: the three nearest within earshot get a voice,
+// pitched by how fast they're going (from their motion) and shifted by the Doppler of a pass, panned where they are.
+void AKeysAudio::UpdateRemoteEngines(double Dt)
+{
+	if (!Sfx || Dt <= 0) return;
+	struct FSrc { FString Id; double X, Z, Range; bool bRacer; };
+	TArray<FSrc> Src;
+	const double LX = ListenerPos.X / 100.0, LZ = ListenerPos.Y / 100.0;
+	if (TActorIterator<AKeysTraffic> It(GetWorld()); It)
+	{
+		const TArray<FKeysAIBoat>& Tr = It->Traffic();
+		for (int32 I = 0; I < Tr.Num(); ++I) if (Tr[I].Kind != FKeysAIBoat::Sail) Src.Add({FString::Printf(TEXT("t%d"), I), Tr[I].X, Tr[I].Z, 650, false});
+		const TArray<FKeysAIBoat>& Rc = It->Racers();
+		for (int32 I = 0; I < Rc.Num(); ++I) Src.Add({FString::Printf(TEXT("r%d"), I), Rc[I].X, Rc[I].Z, 1400, true});
+	}
+	if (AKeysLocals* Lc = AKeysLocals::Get(this))
+	{
+		TArray<FVector2D> Fl; Lc->FleetDots(Fl);
+		for (int32 I = 0; I < Fl.Num(); ++I) Src.Add({FString::Printf(TEXT("f%d"), I), Fl[I].X, Fl[I].Y, 650, false});
+	}
+	if (AKeysOnline* On = AKeysOnline::Get(this))
+	{
+		TArray<TPair<FString, FVector2D>> Fr; On->FriendBoats(Fr);
+		for (const auto& P : Fr) Src.Add({TEXT("o") + P.Key, P.Value.X, P.Value.Y, 900, false});
+	}
+	// speeds and closing rates from the last frame's positions
+	struct FHeard { int32 I; double D, Sp, Vr; };
+	TArray<FHeard> Near;
+	TMap<FString, FVector2D> Now;
+	for (int32 I = 0; I < Src.Num(); ++I)
+	{
+		const FSrc& S = Src[I];
+		Now.Add(S.Id, FVector2D(S.X, S.Z));
+		const double D = FMath::Sqrt(FMath::Square(S.X - LX) + FMath::Square(S.Z - LZ));
+		if (D > S.Range) continue;
+		double Sp = 0, Vr = 0;
+		if (const FVector2D* Pv = RemotePrev.Find(S.Id))
+		{
+			const double VX = (S.X - Pv->X) / Dt, VZ = (S.Z - Pv->Y) / Dt;
+			if (FMath::Abs(VX) < 120 && FMath::Abs(VZ) < 120)   // (a respawn jump isn't a speed)
+			{
+				Sp = FMath::Sqrt(VX * VX + VZ * VZ);
+				Vr = FMath::Clamp((VX * (LX - S.X) + VZ * (LZ - S.Z)) / FMath::Max(D, 1.0), -90.0, 90.0);
+			}
+		}
+		double& Sm = RemoteVr.FindOrAdd(S.Id);
+		Sm = FMath::Lerp(Sm, Vr, FMath::Min(1.0, Dt * 4));
+		Near.Add({I, D, Sp, Sm});
+	}
+	RemotePrev = MoveTemp(Now);
+	Near.Sort([](const FHeard& A, const FHeard& B) { return A.D < B.D; });
+	FKeysRemoteParams P;
+	const bool bOn = bSoundOn;
+	for (int32 K = 0; K < 3; ++K)
+	{
+		FKeysRemoteVoice& V = P.V[K];
+		if (!bOn || K >= Near.Num()) { V.Gain = 0; continue; }
+		const FHeard& H = Near[K]; const FSrc& S = Src[H.I];
+		const double Fr = FMath::Clamp(H.Sp / (S.bRacer ? 40.0 : 22.0), 0.0, 1.0);
+		const double Dop = FMath::Clamp(343 / (343 - H.Vr), .82, 1.22);
+		V.Freq = float((S.bRacer ? FMath::Lerp(55.0, 120.0, Fr) : FMath::Lerp(34.0, 85.0, Fr)) * Dop);
+		V.Cut = float(FMath::Lerp(380.0, S.bRacer ? 2200.0 : 1300.0, Fr) * FMath::Clamp(120 / FMath::Max(H.D, 30.0), .35, 1.0));
+		const double Loud = (S.bRacer ? .11 : .07) * (.35 + .65 * Fr);
+		const double Att = 18 / (18 + FMath::Max(0.0, H.D - 10) * 1.0);   // inverse-distance, ref 18 m
+		float L = 1.f, R = 1.f;
+		KeysDSP::Spatialize(ListenerPos, ListenerRight, KeysGeo::ToUE(S.X, 1.2, S.Z), 1e6f, 0.f, L, R);   // pan only
+		V.Gain = float(Loud * Att); V.PanL = L; V.PanR = R;
+	}
+	static double LogT = 0;
+	LogT += Dt;
+	if (LogT > 5 && FString(FCommandLine::Get()).Contains(TEXT("KRScript=")))
+	{
+		LogT = 0;
+		FString Msg;
+		for (int32 K = 0; K < FMath::Min(3, Near.Num()); ++K) Msg += FString::Printf(TEXT(" [%s %.0f m %.1f m/s %.0f Hz gain %.3f]"), *Src[Near[K].I].Id, Near[K].D, Near[K].Sp, P.V[K].Freq, P.V[K].Gain);
+		UE_LOG(LogTemp, Log, TEXT("KRAudio remote engines: %d in earshot of %d%s"), Near.Num(), Src.Num(), *Msg);
+	}
+	Sfx->SetRemoteParams(P);
 }

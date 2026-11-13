@@ -23,6 +23,11 @@ struct FKeysEngineParams
 	float OutGain = 0;
 };
 
+// Other boats' engines (web audio/engine.ts remote synths): the nearest few, each a buzzy pair of oscillators
+// through a lowpass, placed in stereo, pitched by their speed and the Doppler shift of a pass.
+struct FKeysRemoteVoice { float Freq = 40.f, Gain = 0.f, PanL = .7f, PanR = .7f, Cut = 700.f; };
+struct FKeysRemoteParams { FKeysRemoteVoice V[3]; };
+
 // The ambient loops (rush / hiss / wind / wash), the reel, and the master gain.
 struct FKeysLoopParams
 {
@@ -61,6 +66,7 @@ public:
 	// game thread
 	void SetEngineParams(const FKeysEngineParams& P);
 	void SetLoopParams(const FKeysLoopParams& P);
+	void SetRemoteParams(const FKeysRemoteParams& P);
 	void PushBurst(const FKeysBurst& B);
 
 protected:
@@ -92,6 +98,8 @@ private:
 	FCriticalSection ParamLock;
 	FKeysEngineParams PendingEngine;
 	FKeysLoopParams PendingLoops;
+	FKeysRemoteParams PendingRemote;
+	bool bRemoteDirty = false;
 	TArray<FKeysBurst> PendingBursts;
 	bool bEngineDirty = false, bLoopsDirty = false;
 
@@ -113,6 +121,9 @@ private:
 
 	KeysDSP::FNoise RushN, HissN, WindN, WashN, BreathN;
 	KeysDSP::FBiquad BreathF;
+	struct FRemoteVoice { KeysDSP::FOsc A, B; KeysDSP::FBiquad F; KeysDSP::FSmooth Fr, G, L, R, Cut; };
+	FRemoteVoice Rv[3];
+	FKeysRemoteParams Remote;
 	KeysDSP::FSmooth BreathG, BreathD, BreathFr;
 	double BreathPh = 0;
 	KeysDSP::FBiquad RushF, HissF, WindF, WashF;
