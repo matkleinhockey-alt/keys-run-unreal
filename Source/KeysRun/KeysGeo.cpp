@@ -39,12 +39,25 @@ namespace KeysGeo
 
 	static TArray<FSeaState> GSea;
 	static int32 GSeaIdx = 1;
-	static double SW = 1.3, CH = 1.2;
+	static double SW = 1.3, CH = 1.2;   // eased swell and wind-sea height factors
 
-	// [kx, kz, angular speed, amplitude, crest sharpness, phase, swell?]
-	static const double WAVES[8][7] = {
-		{.0114, .0262, .53, .62, .12, 0, 1}, {.0302, .0322, .66, .32, .16, 1.7, 1}, {.074, .046, .93, .13, .28, 2.4, 0}, {-.052, .092, 1.02, .09, .25, .6, 0},
-		{.0205, .0178, .516, .45, .1, 3.1, 1}, {-.0128, .0251, .526, .35, .1, 4.4, 1}, {.118, .071, 1.162, .06, .3, 1.1, 0}, {-.09, .13, 1.244, .05, .3, 5.2, 0}};
+	// the swell: four long trains out of the southeast [kx, kz, angular speed, amplitude, crest sharpness, phase]
+	static const double SWELL[4][6] = {
+		{.0114, .0262, .53, .62, .12, 0}, {.0302, .0322, .66, .32, .16, 1.7}, {.0205, .0178, .516, .45, .1, 3.1}, {-.0128, .0251, .526, .35, .1, 4.4}};
+
+	// the wind sea: a fixed spectrum, ChopL lengths x ChopD directions. Lengths and directions never change (so the phases
+	// never jump); the driver only reweights their heights every frame.
+	static constexpr int32 ChopL = 6, ChopD = 12;
+	static const double ChopLen[ChopL] = {5.5, 9, 14, 22, 34, 52};
+	struct FWaveTrain { double KX, KZ, W, A, S, Ph, Len; };
+	static FWaveTrain GChop[ChopL * ChopD];
+	static TArray<FWaveTrain> GLive;           // the trains with any height right now (swell first)
+	static bool GChopInit = false;
+
+	// the driver: base wind from the sea state, storm wind from the weather; eased values below
+	static double BaseWind = 7, BaseSwell = 1.3, StormSpd = 0, StormDir = 0, StormConf = 0, StormSwell = 0;
+	static double WindNow = 7, WindDirNow = -2.75, SeaDirNow = -2.75, ChopNow = 1.2, ConfNow = 0, CapsNow = .2, RmsNow = .3;
+	static constexpr double BaseDir = -2.75;   // the trade wind out of the east-southeast, blowing toward the west-northwest
 
 	// wake rings: where and when each was dropped, how fast it spreads (C, m/s) and how tall it starts (A, m)
 	struct FWakeRing { double X = 0, Z = 0, T = -999, C = 0, A = 0; };
@@ -363,11 +376,12 @@ namespace KeysGeo
 			Snake(TEXT("Mangrove river"), -2400, -2620, -2950, -4100, 150, 3, 32),
 			Snake(TEXT("Little River"), 3650, -2640, 3950, -3700, 70, 2, 26)};
 
-		GSea = {{TEXT("Calm"), .8, .5, TEXT("a long, lazy ground swell.")},
-				{TEXT("Choppy"), 1.3, 1.2, TEXT("steady swells with afternoon chop on top.")},
-				{TEXT("Haulover"), 1.6, 2.2, TEXT("steep, stacked inlet chop. Trim up and hang on.")},
-				{TEXT("Big swell"), 2.6, 1.1, TEXT("big Atlantic rollers. Ride the backs and watch the troughs.")}};
+		GSea = {{TEXT("Calm"), .8, .5, TEXT("glassy, a long, lazy ground swell."), 1.5},
+				{TEXT("Choppy"), 1.3, 1.2, TEXT("a steady trade wind, swells with afternoon chop on top."), 7},
+				{TEXT("Haulover"), 1.6, 2.2, TEXT("blowing 20 - steep, stacked chop and whitecaps. Trim up and hang on."), 11},
+				{TEXT("Big swell"), 2.6, 1.1, TEXT("big Atlantic rollers. Ride the backs and watch the troughs."), 6.5}};
 		SetSeaState(1);
+		SnapSea();
 		for (FWakeRing& W : WakeP) W = FWakeRing();
 		for (FTrailPt& P : TrailP) P = FTrailPt();
 
@@ -677,42 +691,169 @@ namespace KeysGeo
 	void SetSeaState(int32 Index)
 	{
 		GSeaIdx = Index;
-		if (GSea.IsValidIndex(Index)) { SW = GSea[Index].SW; CH = GSea[Index].CH; }
+		if (GSea.IsValidIndex(Index)) { BaseWind = GSea[Index].Wind; BaseSwell = GSea[Index].SW; }
 	}
 	int32 SeaIndex() { return GSeaIdx; }
 	double SeaSW() { return SW; }
 	double SeaCH() { return CH; }
+	double WindSpeed() { return WindNow; }
+	double WindDir() { return WindDirNow; }
+	double SeaConfusion() { return ConfNow; }
+	double Whitecaps() { return CapsNow; }
+	double WaveRms() { return RmsNow; }
+	void SetStormWind(double Speed, double DirToward, double Confuse, double SwellAdd)
+	{
+		StormSpd = FMath::Max(0.0, Speed); StormDir = DirToward; StormConf = Clamp(Confuse, 0, 1); StormSwell = FMath::Max(0.0, SwellAdd);
+	}
+
+	static double AngDiff(double A, double B) { return FMath::UnwindRadians(A - B); }
+
+	// the wind sea a steady wind U raises (fetch-limited, the Keys are never far from land): height factor, peak length
+	static double ChopFor(double U) { return FMath::Min(3.2, .04 + 1.2 * FMath::Square(U / 7)); }
+	static double PeakLen(double U) { return Clamp(2.0 * U + .06 * U * U, 6, 48); }
+
+	static void InitChop()
+	{
+		if (GChopInit) return;
+		GChopInit = true;
+		uint32 Sd = 0x5eed1234u;
+		auto Rnd = [&Sd]() { Sd = Sd * 1664525u + 1013904223u; return double(Sd >> 8) / 16777216.0; };
+		for (int32 l = 0; l < ChopL; l++)
+			for (int32 d = 0; d < ChopD; d++)
+			{
+				FWaveTrain& W = GChop[l * ChopD + d];
+				// directions jittered and lengths spread a little, so no two trains line up into a visible grid
+				const double Ang = (d + .5 * Rnd() - .25) * 2 * PI / ChopD + l * .37;
+				W.Len = ChopLen[l] * (.9 + .2 * Rnd());
+				const double K = 2 * PI / W.Len;
+				W.KX = FMath::Cos(Ang) * K; W.KZ = FMath::Sin(Ang) * K;
+				W.W = FMath::Sqrt(9.81 * K);
+				W.Ph = Rnd() * 2 * PI;
+				W.A = 0; W.S = 0;
+			}
+	}
+
+	// rebuild the live list from the eased driver
+	static void Reweight()
+	{
+		InitChop();
+		GLive.Reset();
+		double Sum2 = 0;
+		for (int32 i = 0; i < 4; i++)
+		{
+			const double* W = SWELL[i];
+			// phase = k.x + w t: the swell rolls in from the southeast
+			FWaveTrain T{W[0], W[1], W[2], W[3] * SW, W[4], W[5], 2 * PI / FMath::Sqrt(W[0] * W[0] + W[1] * W[1])};
+			GLive.Add(T);
+			Sum2 += T.A * T.A * .5;
+		}
+		// the wind sea: lengths around the peak the wind can raise, spread around the direction the sea runs, wider when confused
+		const double Lp = PeakLen(WindNow);
+		const double Steep = Clamp((WindNow - 3) / 12, 0, 1);
+		double Wt[ChopL * ChopD], WSum2 = 0;
+		for (int32 i = 0; i < ChopL * ChopD; i++)
+		{
+			const FWaveTrain& W = GChop[i];
+			const double Lw = FMath::Exp(-FMath::Square(FMath::Loge(W.Len / Lp)) / .3);
+			const double C = FMath::Cos(AngDiff(FMath::Atan2(W.KZ, W.KX), SeaDirNow));
+			const double Dw = Lerp(FMath::Pow(FMath::Max(0.0, C), 4.0), .25 + .25 * FMath::Max(0.0, C), ConfNow);
+			Wt[i] = Lw * Dw;
+			WSum2 += Wt[i] * Wt[i];
+		}
+		// the old four chop trains' rms height per unit of CH, so the sea states keep their size
+		const double Rms = .126 * CH, Norm = WSum2 > 1e-9 ? Rms * FMath::Sqrt(2.0) / FMath::Sqrt(WSum2) : 0;
+		double ChopSum2 = 0;
+		for (int32 i = 0; i < ChopL * ChopD; i++)
+		{
+			const double A = Wt[i] * Norm;
+			if (A < .002) continue;
+			FWaveTrain T = GChop[i];
+			T.A = A;
+			// short seas peak up as the wind builds, steepest when confused (a storm's outflow)
+			T.S = FMath::Min(.42, (.12 + .18 * Steep + .12 * ConfNow) * (T.Len < 12 ? 1.0 : .8));
+			T.W = -T.W;   // phase = k.x - w t: runs along k
+			GLive.Add(T);
+			ChopSum2 += A * A * .5;
+		}
+		RmsNow = FMath::Sqrt(Sum2 + ChopSum2);
+	}
+
+	void TickSea(double Dt)
+	{
+		Dt = Clamp(Dt, 0, .25);
+		// the wind: base trade wind plus the storm's outflow, as vectors
+		const double BX = FMath::Cos(BaseDir) * BaseWind + FMath::Cos(StormDir) * StormSpd, BZ = FMath::Sin(BaseDir) * BaseWind + FMath::Sin(StormDir) * StormSpd;
+		const double TU = FMath::Sqrt(BX * BX + BZ * BZ), TD = TU > .05 ? FMath::Atan2(BZ, BX) : WindDirNow;
+		const double KW = 1 - FMath::Exp(-Dt / 5);
+		WindNow += (TU - WindNow) * KW;
+		WindDirNow = FMath::UnwindRadians(WindDirNow + AngDiff(TD, WindDirNow) * KW);
+		// the sea follows the wind's direction slowly; while it lags, the old and new seas cross (confused)
+		SeaDirNow = FMath::UnwindRadians(SeaDirNow + AngDiff(WindDirNow, SeaDirNow) * (1 - FMath::Exp(-Dt / 45)));
+		const double ConfT = FMath::Max(StormConf, Clamp(FMath::Abs(AngDiff(WindDirNow, SeaDirNow)) / 1.3, 0, 1));
+		ConfNow += (ConfT - ConfNow) * (1 - FMath::Exp(-Dt / (ConfT > ConfNow ? 15.0 : 90.0)));
+		// the sea builds over half a minute and lies down over a few minutes
+		const double ChT = ChopFor(WindNow);
+		CH += (ChT - CH) * (1 - FMath::Exp(-Dt / (ChT > CH ? 30.0 : 150.0)));
+		const double SwT = BaseSwell + StormSwell;
+		SW += (SwT - SW) * (1 - FMath::Exp(-Dt / 120));
+		CapsNow = SS(4.5, 12, WindNow) * Clamp(CH / ChopFor(WindNow) * 1.2, 0, 1) + .25 * ConfNow * SS(6, 14, WindNow);
+		CapsNow = Clamp(CapsNow, 0, 1);
+		Reweight();
+	}
+
+	void SnapSea()
+	{
+		const double BX = FMath::Cos(BaseDir) * BaseWind + FMath::Cos(StormDir) * StormSpd, BZ = FMath::Sin(BaseDir) * BaseWind + FMath::Sin(StormDir) * StormSpd;
+		WindNow = FMath::Sqrt(BX * BX + BZ * BZ);
+		if (WindNow > .05) WindDirNow = SeaDirNow = FMath::Atan2(BZ, BX);
+		ConfNow = StormConf;
+		CH = ChopFor(WindNow);
+		SW = BaseSwell + StormSwell;
+		CapsNow = Clamp(SS(4.5, 12, WindNow) + .25 * ConfNow * SS(6, 14, WindNow), 0, 1);
+		Reweight();
+	}
 
 	// small inshore, big rollers in deep blue water
 	double AmpFor(double D) { return .1 + .9 * Clamp((D - 1) / 40, 0, 1) + 1 * Clamp((D - 45) / 250, 0, 1); }
 	double AmpAt(double X, double Z) { return AmpFor(DepthFast(X, Z)) * (1 + .9 * GridAt(InletG, X, Z)); }
 
+	// The swell scales with Amp (depth and inlets); the wind sea much less, so a blow still chops up the flats.
+	static FORCEINLINE double ChopAmp(double Amp) { return FMath::Min(1.3, .3 + .7 * Amp); }
+
+	double WaveHLod(double X, double Z, double T, double Amp, double MinLen)
+	{
+		if (!GLive.Num()) Reweight();
+		double HS = 0, HC = 0;
+		for (int32 i = 0; i < GLive.Num(); i++)
+		{
+			const FWaveTrain& W = GLive[i];
+			if (W.Len < MinLen) continue;
+			const double P = W.KX * X + W.KZ * Z + W.W * T + W.Ph;
+			const double V = W.A * (FMath::Sin(P) - W.S * FMath::Cos(2 * P));
+			if (i < 4) HS += V; else HC += V;
+		}
+		return Amp * HS + ChopAmp(Amp) * HC;
+	}
+
 	double WaveH(double X, double Z, double T, double Amp, bool bWithWake)
 	{
-		double H = 0;
-		for (int32 i = 0; i < 8; i++)
-		{
-			const double* W = WAVES[i];
-			const double P = W[0] * X + W[1] * Z + W[2] * T + W[5];
-			const double A = W[3] * (W[6] > 0 ? SW : FMath::Min(CH, 2.2));
-			H += A * (FMath::Sin(P) - W[4] * FMath::Cos(2 * P));
-		}
-		return Amp * H + (bWithWake ? WakeH(X, Z, T) : 0);
+		return WaveHLod(X, Z, T, Amp, 0) + (bWithWake ? WakeH(X, Z, T) : 0);
 	}
 
 	FVector2D WaveSlope(double X, double Z, double T, double Amp)
 	{
+		if (!GLive.Num()) Reweight();
 		double HX = 0, HZ = 0;
-		for (int32 i = 0; i < 8; i++)
+		const double CA = ChopAmp(Amp);
+		for (int32 i = 0; i < GLive.Num(); i++)
 		{
-			const double* W = WAVES[i];
-			const double P = W[0] * X + W[1] * Z + W[2] * T + W[5];
-			const double A = W[3] * (W[6] > 0 ? SW : FMath::Min(CH, 2.2));
-			const double D = FMath::Cos(P) + 2 * W[4] * FMath::Sin(2 * P);
-			HX += A * W[0] * D;
-			HZ += A * W[1] * D;
+			const FWaveTrain& W = GLive[i];
+			const double P = W.KX * X + W.KZ * Z + W.W * T + W.Ph;
+			const double D = W.A * (FMath::Cos(P) + 2 * W.S * FMath::Sin(2 * P)) * (i < 4 ? Amp : CA);
+			HX += W.KX * D;
+			HZ += W.KZ * D;
 		}
-		return FVector2D(Amp * HX, Amp * HZ);
+		return FVector2D(HX, HZ);
 	}
 
 	// boat wakes: every moving boat drops expanding wave rings from its stern; together they form the V-shaped Kelvin wake

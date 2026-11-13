@@ -14,6 +14,7 @@
 #include "KeysGfx.h"
 #include "KeysBoatPawn.h"
 #include "KeysMesh.h"
+#include "KeysWeather.h"
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -454,7 +455,11 @@ void AKeysWorld::UpdateWater()
 		WN_.Init(FVector::UpVector, S * S);
 		WUV.Init(FVector2D::ZeroVector, S * S);
 		WC.Init(FLinearColor::Black, S * S);
+		WUV1.Init(FVector2D::ZeroVector, S * S);
+		WUV2.Init(FVector2D::ZeroVector, S * S);
 		WH.Init(0, S * S);
+		WSp.SetNum(S);
+		for (int32 i = 0; i < S; i++) WSp[i] = (WGrid[FMath::Min(i + 1, WN)] - WGrid[FMath::Max(i - 1, 0)]) * .5;
 		TArray<int32> T;
 		T.Reserve(WN * WN * 6);
 		for (int32 j = 0; j < WN; j++)
@@ -463,7 +468,7 @@ void AKeysWorld::UpdateWater()
 				const int32 K = j * S + i;
 				T.Append({K, K + S, K + 1, K + 1, K + S, K + S + 1});
 			}
-		Water->CreateMeshSection_LinearColor(0, WV, T, WN_, WUV, WC, TArray<FProcMeshTangent>(), false);
+		Water->CreateMeshSection_LinearColor(0, WV, T, WN_, WUV, WUV1, WUV2, TArray<FVector2D>(), WC, TArray<FProcMeshTangent>(), false);
 		WaterMID = UMaterialInstanceDynamic::Create(WaterMaterial(), this);
 		{
 			// -KRScat=r,g,b / -KRAbs=r,g,b override the water's scattering / absorption (per meter) for tuning
@@ -483,16 +488,18 @@ void AKeysWorld::UpdateWater()
 		}
 		Water->SetMaterial(0, WaterMID ? (UMaterialInterface*)WaterMID : WaterMaterial());
 
-		// deep blue out past the fine grid, so the horizon never shows a hole
-		const double Far = 80000;
+		// deep blue out past the fine grid, so the horizon never shows a hole. A ring, not a plane: it has a hole under the
+		// fine grid (it follows the grid), so a flat sheet can never show up through a cockpit sitting low in a trough.
 		FLinearColor Deep = DepthRGB(600);
 		Deep.A = 0;   // alpha carries foam
-		TArray<FVector> FV = {ToUE(-Far, -.6, -Far), ToUE(Far, -.6, -Far), ToUE(-Far, -.6, Far), ToUE(Far, -.6, Far)};
-		TArray<FVector> FN = {FVector::UpVector, FVector::UpVector, FVector::UpVector, FVector::UpVector};
-		TArray<FVector2D> FUV = {FVector2D(0, 0), FVector2D(0, 0), FVector2D(0, 0), FVector2D(0, 0)};   // UV0 drives crest glow and wash; none out here
-		TArray<FLinearColor> FC = {Deep, Deep, Deep, Deep};
-		const TArray<int32> FT = {0, 2, 1, 1, 2, 3};
-		Water->CreateMeshSection_LinearColor(1, FV, FT, FN, FUV, FC, TArray<FProcMeshTangent>(), false);
+		FarV.Init(FVector::ZeroVector, 8);
+		TArray<FVector> FN; FN.Init(FVector::UpVector, 8);
+		TArray<FVector2D> FUV; FUV.Init(FVector2D::ZeroVector, 8);   // UV0 drives crest glow and wash; none out here
+		TArray<FVector2D> FUV2; FUV2.Init(FVector2D(1, 0), 8);       // all deep
+		TArray<FLinearColor> FC; FC.Init(Deep, 8);
+		// 0-3 the outer corners, 4-7 the inner ones (counter-clockwise from -x,-z)
+		const TArray<int32> FT = {0, 4, 1, 1, 4, 5, 1, 5, 2, 2, 5, 6, 2, 6, 3, 3, 6, 7, 3, 7, 0, 0, 7, 4};
+		Water->CreateMeshSection_LinearColor(1, FarV, FT, FN, FUV, FUV, FUV2, TArray<FVector2D>(), FC, TArray<FProcMeshTangent>(), false);
 		Water->SetMaterial(1, WaterMID ? (UMaterialInterface*)WaterMID : WaterMaterial());
 
 		// the underside, seen from below: the same grid wound the other way, with Snell's window in its material
@@ -505,7 +512,7 @@ void AKeysWorld::UpdateWater()
 				TU.Append({K, K + 1, K + S, K + 1, K + S + 1, K + S});
 			}
 		WNU.Init(-FVector::UpVector, S * S);
-		Water->CreateMeshSection_LinearColor(2, WV, TU, WNU, WUV, WC, TArray<FProcMeshTangent>(), false);
+		Water->CreateMeshSection_LinearColor(2, WV, TU, WNU, WUV, WUV1, WUV2, TArray<FVector2D>(), WC, TArray<FProcMeshTangent>(), false);
 		if (UMaterialInterface* UM = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_WaterUnder.M_KR_WaterUnder")))
 		{
 			UnderMID = UMaterialInstanceDynamic::Create(UM, this);
@@ -525,8 +532,27 @@ void AKeysWorld::UpdateWater()
 	const double Snap = FMath::Max(.5, WGrid[S / 2 + 1] - WGrid[S / 2]);
 	const double CX = FMath::RoundToDouble(FocusX / Snap) * Snap, CZ = FMath::RoundToDouble(FocusZ / Snap) * Snap;
 	const double T = GetWorld()->GetTimeSeconds();
-	const double SWv = SeaSW(), CHv = SeaCH();
 	const double FX = FocusX, FZ = FocusZ;
+	// crest foam is measured against the sea's own rms height; whitecaps come with the wind
+	const double Rms = FMath::Max(.01, WaveRms()), Caps = Whitecaps(), Wind = WindSpeed();
+	{
+		// the ring past the fine grid follows it, overlapping its outer few percent
+		const double Far = 80000, In = WR * .96;
+		const double OX[4] = {-1, 1, 1, -1}, OZ[4] = {-1, -1, 1, 1};
+		for (int32 k = 0; k < 4; k++)
+		{
+			FarV[k] = ToUE(CX + OX[k] * Far, -.6, CZ + OZ[k] * Far);
+			FarV[k + 4] = ToUE(CX + OX[k] * In, -.6, CZ + OZ[k] * In);
+		}
+		Water->UpdateMeshSection_LinearColor(1, FarV, TArray<FVector>(), TArray<FVector2D>(), TArray<FLinearColor>(), TArray<FProcMeshTangent>());
+	}
+	if (WaterMID)
+	{
+		// glassy in a calm, rippled in a breeze, roughed up in a blow; the ripples run with the wind
+		WaterMID->SetScalarParameterValue(TEXT("RippleStrength"), float(.22 + .85 * SStep(.5, 8, Wind) + .35 * SStep(10, 18, Wind)));
+		WaterMID->SetScalarParameterValue(TEXT("WindDir"), float(WindDir()));
+		WaterMID->SetScalarParameterValue(TEXT("Whitecap"), float(Caps));
+	}
 	constexpr double NearR = 450;
 	GatherWakes(FX, FZ, NearR, T, LiveWakes);
 	GatherTrails(FX, FZ, NearR, T, LiveTrails);
@@ -560,16 +586,27 @@ void AKeysWorld::UpdateWater()
 	auto KeepOut = [&](double X, double Z, double H)
 	{
 		if (!bHull || FMath::Square(X - HullC.X) + FMath::Square(Z - HullC.Y) > HullR2) return H;
-		const FVector Lc = HullT.InverseTransformPosition(ToUE(X, H, Z)) / 100;
+		// Where the vertical line through (X, Z) meets the sole, in the hull's frame. Found from the sole's own height (two
+		// passes), not the wave's: with the hull rolled or pitched, a crest's height would shift the point sideways and
+		// a vertex over the cockpit could be judged outside it and left standing up through the deck.
+		double Yq = HullC.Z, Floor = Yq;
+		FVector Lc = FVector::ZeroVector;
+		int32 K = 0;
+		double U = 0;
+		for (int32 It = 0; It < 2; It++)
+		{
+			Lc = HullT.InverseTransformPosition(ToUE(X, Yq, Z)) / 100;
+			const double F = FMath::Clamp((Lc.X - HullX0) / (HullX1 - HullX0), 0.0, 1.0) * HullN;
+			K = FMath::Clamp(int32(F), 0, HullN - 1);
+			U = F - K;
+			Floor = HullT.TransformPosition(FVector(Lc.X, Lc.Y, FMath::Lerp(HullSole[K], HullSole[K + 1], U)) * 100).Z / 100;
+			Yq = Floor;
+		}
 		// a grid cell's worth past the liner too, or the triangles that cross the gunwale would carry the swell
 		// back up over the sole; outside the hull that dip stays under the topsides
 		constexpr double Reach = .95;
 		if (Lc.X <= HullX0 - Reach || Lc.X >= HullX1 + Reach * .5) return H;
-		const double F = FMath::Clamp((Lc.X - HullX0) / (HullX1 - HullX0), 0.0, 1.0) * HullN;
-		const int32 K = FMath::Clamp(int32(F), 0, HullN - 1);
-		const double U = F - K;
 		if (FMath::Abs(Lc.Y) >= FMath::Lerp(HullHalf[K], HullHalf[K + 1], U) + Reach) return H;
-		const double Floor = HullT.TransformPosition(FVector(Lc.X, Lc.Y, FMath::Lerp(HullSole[K], HullSole[K + 1], U)) * 100).Z / 100;
 		return FMath::Min(H, Floor);
 	};
 
@@ -584,22 +621,26 @@ void AKeysWorld::UpdateWater()
 			const bool bNear = FMath::Square(X - FX) + FMath::Square(Z - FZ) < NearR * NearR;
 			const double Wk = bNear ? WakeHFrom(LiveWakes, X, Z) : 0;
 			const FVector2D Tr = bNear ? TrailFrom(LiveTrails, X, Z) : FVector2D::ZeroVector;
-			const double Sea = WaveH(X, Z, T, Amp, false);
+			// wave trains shorter than ~3 grid cells here would only alias on the coarse outer grid
+			const double Sea = WaveHLod(X, Z, T, Amp, 2.6 * FMath::Max(WSp[i], WSp[j]));
 			// the prop wash knocks down the chop a little, so the trail reads as a smoother, glassier lane
 			const double H = KeepOut(X, Z, Sea * (1 - .25 * Tr.Y) + Wk);
 			WH[K] = H;
 			WV[K] = ToUE(X, H, Z);
-			// foam on breaking crests, on the crests of fresh wakes, in the prop wash and along the beach.
-			// Vertex alpha carries the amount; the material breaks it up into real-looking patches.
-			const double Crest = Sea / (Amp * (1.74 * SWv + .33 * FMath::Min(CHv, 2.2)) + .001);
+			// foam on breaking crests (whitecaps, with the wind), on the crests of fresh wakes, in the prop wash and along
+			// the beach, where it comes and goes with the swell. Vertex alpha carries the amount; the material breaks it up.
+			const double Crest = Sea / (Amp * 2.4 * Rms + .001);
 			const double D = DepthFast(X, Z);
-			double F = SStep(.55, .95, Crest) * .5 * FMath::Clamp(CHv - .4, 0.0, 1.0);
+			double F = SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
 			// white lines along the arms of a fresh wake, where the crests are tallest
 			F = FMath::Max(F, SStep(.03, .22, Wk) * .7);
 			F = FMath::Max(F, Tr.X);
-			F = FMath::Max(F, SStep(.75, .32, D) * .45);
+			F = FMath::Max(F, SStep(.9, .25, D) * (.3 + .3 * FMath::Clamp(Crest + .5, 0.0, 1.0)));
 			// UV0: x = how high on a crest (light glows through thin crests), y = aerated wash under the foam
 			WUV[K] = FVector2D(FMath::Clamp(Crest * .8 + Wk * .8, 0.0, 1.0), FMath::Clamp(Tr.Y, 0.0, 1.0));
+			// UV1: x = rain on the water here, y = whitecap cover (wind-streaked foam); UV2: x = how deep (0 flats .. 1 blue water)
+			WUV1[K] = FVector2D(KeysWx::RainAt(X, Z), Caps);
+			WUV2[K] = FVector2D(SStep(4, 60, D), 0);
 			FLinearColor C = DepthColorFast(X, Z);
 			C.A = float(FMath::Clamp(F, 0.0, 1.0));
 			WC[K] = C;
@@ -615,11 +656,11 @@ void AKeysWorld::UpdateWater()
 			WN_[j * S + i] = FVector(-DX, -DZ, 1).GetSafeNormal();
 		}
 	});
-	Water->UpdateMeshSection_LinearColor(0, WV, WN_, WUV, WC, TArray<FProcMeshTangent>());
+	Water->UpdateMeshSection_LinearColor(0, WV, WN_, WUV, WUV1, WUV2, TArray<FVector2D>(), WC, TArray<FProcMeshTangent>());
 	if (bUnderside)
 	{
 		for (int32 k = 0; k < WN_.Num(); k++) WNU[k] = -WN_[k];
-		Water->UpdateMeshSection_LinearColor(2, WV, WNU, WUV, WC, TArray<FProcMeshTangent>());
+		Water->UpdateMeshSection_LinearColor(2, WV, WNU, WUV, WUV1, WUV2, TArray<FVector2D>(), WC, TArray<FProcMeshTangent>());
 		if (UnderMID)
 		{
 			UnderMID->SetVectorParameterValue(TEXT("SunDir"), FLinearColor(SunDirUE.X, SunDirUE.Y, SunDirUE.Z, 0));
@@ -673,5 +714,6 @@ void AKeysWorld::Tick(float DeltaSeconds)
 		SunK = SunK < SunsetTarget ? FMath::Min(SunsetTarget, SunK + DeltaSeconds * .25) : FMath::Max(SunsetTarget, SunK - DeltaSeconds * .25);
 		ApplySun(SStep(0, 1, SunK));
 	}
+	KeysGeo::TickSea(DeltaSeconds);
 	UpdateWater();
 }

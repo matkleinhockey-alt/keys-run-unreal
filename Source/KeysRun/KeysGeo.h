@@ -45,6 +45,7 @@ namespace KeysGeo
 		FString Name;
 		double SW, CH;
 		FString Desc;
+		double Wind = 7;   // the trade wind this sea state stands for, m/s
 	};
 
 	// Builds islands, creeks, marinas and the fast depth grids. Safe to call more than once.
@@ -93,10 +94,28 @@ namespace KeysGeo
 
 	// sea state and waves
 	const TArray<FSeaState>& SeaStates();
+	// picks the sea state's wind and swell as the driver's base (the sea eases into it; SnapSea jumps)
 	void SetSeaState(int32 Index);
 	int32 SeaIndex();
-	double SeaSW();
-	double SeaCH();
+	double SeaSW();   // the swell's height factor right now (eased)
+	double SeaCH();   // the wind sea's height factor right now (eased; ~1.2 in a 7 m/s breeze)
+
+	// ---- the wind and sea driver. One wind (speed m/s and the direction it blows toward, radians in the game x/z plane)
+	// sets the wind sea: how tall, how long, how steep, how confused and how much whitecap. The base wind comes from the
+	// sea state (H); weather (storm outflow) adds its own on top. Everything eases - wind in seconds, the sea it raises
+	// in tens of seconds, and it lies down again slowly after the wind drops - so nothing ever snaps.
+	// The waves are a fixed spectrum of wave trains (fixed lengths and directions, so their phases never jump) whose
+	// heights are reweighted every frame. The water mesh and every hull sample the same WaveH.
+	void SetStormWind(double Speed, double DirToward, double Confuse, double SwellAdd);
+	void TickSea(double Dt);
+	void SnapSea();
+	double WindSpeed();
+	double WindDir();          // radians, toward (game x/z)
+	double SeaConfusion();     // 0 a clean wind sea, 1 short steep seas from everywhere
+	double Whitecaps();        // 0..1
+	double WaveRms();          // rms height of the open-water sea for Amp = 1 (crest foam normalizes by it)
+	// the same sea, without the wave trains shorter than MinLen meters (a coarse mesh can't show them and would alias)
+	double WaveHLod(double X, double Z, double T, double Amp, double MinLen);
 	double AmpFor(double D);
 	double AmpAt(double X, double Z);
 	double WaveH(double X, double Z, double T, double Amp, bool bWithWake = true);

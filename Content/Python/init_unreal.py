@@ -73,11 +73,24 @@ n = saturate(n / 1.05);
 // Even full cover leaves gaps of green water, like real churned-up wash.
 float th = 0.92 - cover * 0.55;
 float m = smoothstep(th, th + 0.1, n) * saturate(cover * 3.0);
+// a windy day: long streaks of old foam lying down the wind, and scattered breaking whitecaps between the crests
+float2 wd = float2(cos(WD), sin(WD));
+float2 sq = float2(dot(p, wd) * 0.045, dot(p, float2(-wd.y, wd.x)) * 0.6) + float2(-T * 0.08, 0.0);
+float2 si = floor(sq), sf = frac(sq); float2 su = sf * sf * (3.0 - 2.0 * sf);
+float3 s3a = frac(float3(si.xyx) * .1031); s3a += dot(s3a, s3a.yzx + 33.33); float sa = frac((s3a.x + s3a.y) * s3a.z);
+float3 s3b = frac(float3((si + float2(1, 0)).xyx) * .1031); s3b += dot(s3b, s3b.yzx + 33.33); float sb = frac((s3b.x + s3b.y) * s3b.z);
+float3 s3c = frac(float3((si + float2(0, 1)).xyx) * .1031); s3c += dot(s3c, s3c.yzx + 33.33); float sc = frac((s3c.x + s3c.y) * s3c.z);
+float3 s3d = frac(float3((si + float2(1, 1)).xyx) * .1031); s3d += dot(s3d, s3d.yzx + 33.33); float sd = frac((s3d.x + s3d.y) * s3d.z);
+float streak = lerp(lerp(sa, sb, su.x), lerp(sc, sd, su.x), su.y);
+float caps = saturate(Caps);
+m = max(m, smoothstep(0.78, 0.95, streak) * smoothstep(0.55, 0.85, n) * caps * 0.55);
+// rain beats the sea down to a matte, faintly frothy grey-white
+m = max(m, smoothstep(0.75, 0.95, n) * saturate(Rain) * 0.18);
 // thin lacy edge around each patch
 m = max(m, 0.35 * smoothstep(th - 0.08, th, n) * (1.0 - smoothstep(th, th + 0.04, n)) * saturate(cover * 4.0));
 // far away the noise would shimmer, so fade to the average
 float far = saturate((D - 8000.0) / 40000.0);
-return lerp(m, cover * 0.75, far);
+return lerp(m, max(cover * 0.75, caps * 0.06), far);
 """
 
 OCEAN_NORMAL = """
@@ -85,7 +98,7 @@ float2 p = WP.xy / 100.0;
 float2 g = float2(0, 0);
 // ripples blown by an easterly trade wind: 18 wave trains from 0.2 m to about 15 m long, spread unevenly
 // around the wind so they never line up into a visible grid
-const float wind = 3.4;
+float wind = WD;
 float foot = max(D, 1.0) / 100.0 * 0.0012;   // meters per pixel at this distance
 for (int i = 0; i < 18; i++) {
   float fi = (float)i;
@@ -102,12 +115,35 @@ for (int i = 0; i < 18; i++) {
   g += dir * (steep * cos(ph)) * aa;
 }
 float s = Strength * (1.0 - 0.75 * saturate(F)) * (1.0 - 0.5 * saturate(Aer));
-return normalize(VN + float3(-g.x, -g.y, 0.0) * s);
+g *= s;
+// rain: every drop leaves a little ring spreading out and fading; two staggered layers of drop cells
+float rain = saturate(Rain);
+if (rain > 0.01 && foot < 0.04) {
+  float near = 1.0 - saturate(foot / 0.04);
+  for (int l = 0; l < 2; l++) {
+    float2 rp = p * 2.6 + float2(l * 0.37, l * 0.71);
+    float2 ci = floor(rp), cf = frac(rp);
+    float3 h3 = frac(float3(ci.xyx + l * 17.0) * float3(.1031, .1030, .0973)); h3 += dot(h3, h3.yzx + 33.33);
+    float3 hh = frac((h3.xxy + h3.yzz) * h3.zyx);
+    if (hh.z > rain * 1.1) continue;
+    float age = frac(T * 1.1 + hh.x * 7.0 + l * 0.5);
+    float2 dv = cf - (0.25 + 0.5 * hh.xy);
+    float d = length(dv);
+    float r = age * 0.42;
+    float w = (d - r) * 28.0;
+    float ring = sin(w * 3.1416) * exp(-w * w * 0.5) * (1.0 - age) * (1.0 - age);
+    g += dv / max(d, 1e-3) * ring * 0.55 * near;
+  }
+}
+return normalize(VN + float3(-g.x, -g.y, 0.0));
 """
 
 OCEAN_ROUGH = """
-// glassy up close, a little rougher far out (the ripples there are too small to draw but still blur the reflection)
+// glassy up close, a little rougher far out (the ripples there are too small to draw but still blur the reflection);
+// rain and a hard blow roughen the whole surface into a duller sheen
 float r = lerp(0.035, 0.14, saturate(D / 120000.0));
+r = lerp(r, 0.22, saturate(Rain) * 0.7);
+r = lerp(r, 0.1, saturate(Caps) * 0.5);
 return lerp(r, 0.6, saturate(F));
 """
 
@@ -458,7 +494,9 @@ OCEAN_SCATTER = """
 // Single Layer Water: per-meter scattering, boosted where light shines through the thin top of a crest,
 // and turned milky in the aerated prop wash. Returned per centimeter, which is what the water output wants.
 float glow = saturate((UV.x - 0.4) * 1.6) * (1.0 - saturate(F));
-float3 sc = Scat * (1.0 + glow * 3.0);
+// gin-clear turquoise over the flats, a cleaner, bluer cobalt out over the deep (the Gulf Stream has almost nothing in it)
+float3 sc = lerp(Scat * float3(1.25, 1.2, 0.95), Scat * float3(0.6, 0.62, 1.12), saturate(Deep));
+sc *= (1.0 + glow * 3.0);
 sc = lerp(sc, float3(0.32, 0.5, 0.48), saturate(UV.y) * 0.55);
 return sc / 100.0;
 """
@@ -491,20 +529,42 @@ def _ocean(mat):
     strength = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, 760)
     strength.set_editor_property("parameter_name", "RippleStrength")
     strength.set_editor_property("default_value", 1.0)
+    wdir = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, 1300)
+    wdir.set_editor_property("parameter_name", "WindDir")
+    wdir.set_editor_property("default_value", 3.4)
+    # UV1: x = rain here, y = whitecap cover; UV2: x = how deep (0 flats .. 1 blue water)
+    uv1 = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1400, 1400)
+    uv1.set_editor_property("coordinate_index", 1)
+    uv2 = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1400, 1500)
+    uv2.set_editor_property("coordinate_index", 2)
+    rain = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1150, 1400)
+    rain.set_editor_property("r", True); rain.set_editor_property("g", False)
+    _link(uv1, "", rain, "")
+    caps = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1150, 1460)
+    caps.set_editor_property("r", False); caps.set_editor_property("g", True)
+    _link(uv1, "", caps, "")
+    deep = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1150, 1520)
+    deep.set_editor_property("r", True); deep.set_editor_property("g", False)
+    _link(uv2, "", deep, "")
 
-    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D"], "Foam")
+    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D", "WD", "Caps", "Rain"], "Foam")
     _link(wp, "", foam, "WP")
     _link(tm, "", foam, "T")
     _link(vc, "A", foam, "A")
     _link(dp, "", foam, "D")
+    _link(wdir, "", foam, "WD")
+    _link(caps, "", foam, "Caps")
+    _link(rain, "", foam, "Rain")
 
-    nrm = _custom(mat, -500, 300, OCEAN_NORMAL, F3, ["WP", "T", "VN", "D", "F", "Aer", "Strength"], "Ripples")
-    for src, pin in ((wp, "WP"), (tm, "T"), (vn, "VN"), (dp, "D"), (foam, "F"), (aer, "Aer"), (strength, "Strength")):
+    nrm = _custom(mat, -500, 300, OCEAN_NORMAL, F3, ["WP", "T", "VN", "D", "F", "Aer", "Strength", "WD", "Rain"], "Ripples")
+    for src, pin in ((wp, "WP"), (tm, "T"), (vn, "VN"), (dp, "D"), (foam, "F"), (aer, "Aer"), (strength, "Strength"), (wdir, "WD"), (rain, "Rain")):
         _link(src, "", nrm, pin)
 
-    rough = _custom(mat, -500, 150, OCEAN_ROUGH, F1, ["F", "D"], "Roughness")
+    rough = _custom(mat, -500, 150, OCEAN_ROUGH, F1, ["F", "D", "Rain", "Caps"], "Roughness")
     _link(foam, "", rough, "F")
     _link(dp, "", rough, "D")
+    _link(rain, "", rough, "Rain")
+    _link(caps, "", rough, "Caps")
 
     foam_col = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -500, -150)
     foam_col.set_editor_property("constant", unreal.LinearColor(0.84, 0.9, 0.93, 1.0))
@@ -515,7 +575,8 @@ def _ocean(mat):
     absorb = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 1050)
     absorb.set_editor_property("parameter_name", "Absorption")
     absorb.set_editor_property("default_value", unreal.LinearColor(0.45, 0.085, 0.04, 1.0))
-    sc = _custom(mat, -500, 900, OCEAN_SCATTER, F3, ["Scat", "UV", "F"], "Scattering")
+    sc = _custom(mat, -500, 900, OCEAN_SCATTER, F3, ["Scat", "UV", "F", "Deep"], "Scattering")
+    _link(deep, "", sc, "Deep")
     _link(scat, "", sc, "Scat")
     _link(uv, "", sc, "UV")
     _link(foam, "", sc, "F")

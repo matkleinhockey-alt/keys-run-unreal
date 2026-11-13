@@ -82,7 +82,9 @@ private:
 	double WR = 5200;
 	TArray<double> WGrid;     // warped offsets, meters
 	TArray<FVector> WV, WN_;
-	TArray<FVector2D> WUV;
+	TArray<FVector2D> WUV, WUV1, WUV2;
+	TArray<double> WSp;       // grid spacing at each row / column, meters
+	TArray<FVector> FarV;     // the ring of open sea past the grid
 	TArray<FLinearColor> WC;
 	TArray<double> WH;
 	bool bWaterBuilt = false;
