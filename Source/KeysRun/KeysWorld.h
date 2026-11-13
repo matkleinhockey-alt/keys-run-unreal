@@ -102,4 +102,5 @@ private:
 	double SunK = 0, SunsetTarget = 0;
 	UPROPERTY() TMap<int32, TObjectPtr<class UProceduralMeshComponent>> ParcelScenery;
 	TSet<int32> ClearedParcels;
+	double TrackPX = 0, TrackPZ = 0, TrackDirS = 0;   // the boat's track direction for the wash foam
 };

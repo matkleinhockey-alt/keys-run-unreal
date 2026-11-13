@@ -558,6 +558,33 @@ void AKeysBoatPawn::RunTestScript(double T)
 				SetHook();
 			}
 		}
+		else if (Cmd.StartsWith(TEXT("rig=")))
+		{
+			// rig=N[,metres]: the boat that far off the N-th oil rig (150 m by default), bow on to it
+			FString Ns, Ds;
+			if (!Cmd.Mid(4).Split(TEXT(","), &Ns, &Ds)) Ns = Cmd.Mid(4);
+			const double Dd = Ds.IsEmpty() ? 150 : FCString::Atod(*Ds);
+			double RX, RZ;
+			if (AKeysLife* L = AKeysLife::Get(this); L && L->RigAt(FCString::Atoi(*Ns), RX, RZ))
+			{
+				X = RX + Dd * .966; Z = RZ + Dd * .259; H = FMath::Atan2(-(RX - X), -(RZ - Z)); Speed = Thr = 0; bCamInit = false;
+			}
+		}
+		else if (Cmd.StartsWith(TEXT("lookrig")))
+		{
+			// lookrig[=pitch]: point the diver's mask (or the chase camera) at the nearest oil rig
+			const double LkPitch = Cmd.Contains(TEXT("=")) ? FCString::Atod(*Cmd.Mid(8)) : 0;
+			double BX = 1e18, BZ = 0, RX, RZ, Ex = X, Ez = Z;
+			AKeysDiver* Dv = AKeysDiver::Get(this);
+			if (Dv && Dv->IsDiving()) { Ex = Dv->State().X; Ez = Dv->State().Z; }
+			if (AKeysLife* L = AKeysLife::Get(this))
+				for (int32 i = 0; i < 4 && L->RigAt(i, RX, RZ); i++)
+					if (Hyp(RX - Ex, RZ - Ez) < Hyp(BX - Ex, BZ - Ez)) { BX = RX; BZ = RZ; }
+			const double Yaw = FMath::Atan2(-(BX - Ex), -(BZ - Ez));
+			const double DvYaw = FMath::Atan2(-(BZ - Ez), -(BX - Ex)) + (Cmd.Contains(TEXT(",")) ? FCString::Atod(*Cmd.RightChop(Cmd.Find(TEXT(",")) + 1)) : 0);   // the mask's own yaw; lookrig=pitch,turn
+			if (Dv && Dv->IsDiving()) Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%f,%f"), DvYaw, LkPitch));
+			else CamYaw = FMath::UnwindRadians(Yaw - H + PI);
+		}
 		else if (Cmd.StartsWith(TEXT("tp=")))
 		{
 			// tp=X,Z[,heading]: put the boat there (game meters)

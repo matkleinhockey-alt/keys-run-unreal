@@ -985,7 +985,10 @@ namespace KeysGeo
 			const double D = FMath::Sqrt(FMath::Square(X - (L.AX + SX * U)) + FMath::Square(Z - (L.AZ + SZ * U)));
 			const double W = FMath::Lerp(L.W0, L.W1, U), Q = D / FMath::Max(.1, W);
 			// solid in the middle, ragged at the edges (the material breaks the edges up further)
-			Foam = FMath::Max(Foam, FMath::Lerp(L.F0, L.F1, U) * (1 - WSStep(.2, 1.0, Q)));
+			// fresh wash comes off twin motors as two white streams with a darker lane between; they merge as it ages
+			const double Fr = FMath::Lerp(L.F0, L.F1, U), Young = FMath::Clamp((Fr - .35) / .5, 0.0, 1.0);
+			const double Twin = 1 - .7 * Young * FMath::Exp(-Q * Q / .025);
+			Foam = FMath::Max(Foam, Fr * Twin * (1 - WSStep(.25, 1.0, Q)));
 			Aer = FMath::Max(Aer, FMath::Lerp(L.A0, L.A1, U) * (1 - WSStep(.5, 1.5, Q)));
 		}
 		return FVector2D(Foam, Aer);

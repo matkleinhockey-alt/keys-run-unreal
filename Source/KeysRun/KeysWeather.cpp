@@ -686,6 +686,10 @@ void AKeysWeather::UpdateLook(double Dt)
 					CC->SetLayerHeight(11.5f);
 					CC->SetTracingMaxDistance(70.f);
 					CC->SetShadowTracingDistance(12.f);
+					// the layer is tall (the storm towers): at the default sample count each step through a fair-weather
+					// cumulus is long enough that the jittered steps show as salt-and-pepper speckle on the cloud edges
+					CC->SetViewSampleCountScale(3.f);
+					CC->SetReflectionViewSampleCountScale(1.5f);
 				}
 	}
 

@@ -711,7 +711,6 @@ namespace
 			{TEXT("albacore"), TEXT("blackfin")}, {TEXT("skipjack"), TEXT("blackfin")}, {TEXT("goldbluefin"), TEXT("bluefin")},
 			{TEXT("blacktip"), TEXT("mako")}, {TEXT("lemonshark"), TEXT("mako")}, {TEXT("bullshark"), TEXT("mako")}, {TEXT("tigershark"), TEXT("mako")},
 			{TEXT("greatwhite"), TEXT("mako")}, {TEXT("nurse"), TEXT("mako")},
-			{TEXT("cobia"), TEXT("snook")}, {TEXT("blackfin"), TEXT("yellowfin")},   // until they have models of their own
 		};
 		FString Src = V.Key;
 		FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Fish") / (Src + TEXT(".krfish"));
@@ -1441,81 +1440,245 @@ void AKeysLife::UpdateWeeds(double Dt, double T)
 }
 
 // ---------------------------------------------------------------- offshore oil platforms: steel jackets in blue water (JS 2097)
+// The four rigs off the reef line, three designs (after the user's reference sheet): a fixed production platform on
+// four concrete columns, crowded with process modules, tanks, stacks, a derrick, cranes, a flare boom and a helideck;
+// jack-ups standing on three lattice legs that run up past the hull, derrick out on its cantilever; and a
+// semi-submersible on two pontoons and four banded columns, twin derricks, cranes, containers and a helicopter on its
+// deck. Built in the mesh's own frame (meters, x and y across, z up, the sea at z = 0).
 void AKeysLife::BuildRigs()
 {
 	const double Spots[4][2] = {{-3250, 2950}, {-900, 3150}, {1550, 2800}, {3350, 3100}};
+	const int32 Kinds[4] = {0, 1, 2, 1};   // 0 fixed platform, 1 jack-up, 2 semi-sub
 	auto C = [](uint32 H) { return LLin(LHex(H)); };
-	const FLinearColor Steel = C(0xc9a227), Rust = C(0x7a4a2a), Deck = C(0x6b7178), White = C(0xeef0f1), Orange = C(0xe4572e), Heli = C(0x2f6e4a), RingC = C(0xf2c14e);
+	const FLinearColor Grey = C(0x8a9096), Dark = C(0x4a5056), Yellow = C(0xd9a521), Red = C(0xb8322a), Rust = C(0x6e4128), Deck = C(0x6b7178),
+		White = C(0xe8eaec), Orange = C(0xe4572e), Concrete = C(0xa9a79f), Heli = C(0x2f6e4a), Blue = C(0x2f5d8a), Green = C(0x3f7a4a), Window = C(0x2a3a48);
 	for (int32 Ri = 0; Ri < 4; Ri++)
 	{
 		const double X = Spots[Ri][0], Z = ChainZ(X) + Spots[Ri][1], Dep = DepthAt(X, Z);
 		if (Dep < 20) continue;
-		const double Rot = Ri * .6;
+		const int32 Kind = Kinds[Ri];
+		const double Rot = Ri * .6, Base = -FMath::Min(40.0, Dep);
 		FKeysMesh M;
-		// JS local (x, y up, z) -> FKeysMesh (x, y, z up), meters
-		auto V = [](double A, double B, double Cc) { return FVector(A, Cc, B); };
-		auto Beam = [&M](const FVector& A, const FVector& B, double R, const FLinearColor& Col) { M.AddTube(A, B, R, R, 8, Col); };
-		auto Box = [&](double W, double H, double D, const FLinearColor& Col, double PX, double PY, double PZ) { M.AddBox(V(PX, PY, PZ), FVector(W, D, H), Col); };
-		const double Hl = 12, Base = -FMath::Min(40.0, Dep), Top = 18;
-		const double Legs[4][2] = {{-Hl, -Hl}, {Hl, -Hl}, {Hl, Hl}, {-Hl, Hl}};
-		// jacket legs, splayed slightly, rust below the waterline, painted above
-		for (int32 i = 0; i < 4; i++)
+		auto P = [](double A, double B, double Cc) { return FVector(A, B, Cc); };
+		auto Beam = [&M](const FVector& A, const FVector& B, double R, const FLinearColor& Col, int32 Sides = 6) { M.AddTube(A, B, R, R, Sides, Col); };
+		auto Box = [&M](const FVector& Ctr, const FVector& Size, const FLinearColor& Col) { M.AddBox(Ctr, Size, Col); };
+		// a square lattice: four chords from half-width W0 at z0 to W1 at z1, rings and X braces every Seg meters
+		auto Lattice = [&](double Cx, double Cy, double Z0, double Z1, double W0, double W1, double Seg, double R, const FLinearColor& Col)
 		{
-			const double LX = Legs[i][0], LZ = Legs[i][1];
-			Beam(V(LX * 1.25, Base, LZ * 1.25), V(LX * 1.04, -.6, LZ * 1.04), .95, Rust);
-			Beam(V(LX * 1.04, -.6, LZ * 1.04), V(LX, Top, LZ), .9, Steel);
-		}
-		// horizontal and X bracing between the legs
-		for (const double Y : {-16.0, -6.0, 6.0, 13.0})
-		{
-			const double K = Y < 0 ? 1.04 + (-.6 - Y) / (-.6 - Base) * .21 : 1.0;
-			for (int32 i = 0; i < 4; i++)
+			const int32 N = FMath::Max(1, FMath::RoundToInt((Z1 - Z0) / Seg));
+			auto Corner = [&](int32 k, double t) { const double W = FMath::Lerp(W0, W1, t); const double Sx = (k == 0 || k == 3) ? -1 : 1, Sy = k < 2 ? -1 : 1; return P(Cx + Sx * W, Cy + Sy * W, FMath::Lerp(Z0, Z1, t)); };
+			for (int32 k = 0; k < 4; k++) Beam(Corner(k, 0), Corner(k, 1), R, Col);
+			for (int32 i = 0; i <= N; i++)
 			{
-				const int32 j = (i + 1) % 4;
-				Beam(V(Legs[i][0] * K, Y, Legs[i][1] * K), V(Legs[j][0] * K, Y, Legs[j][1] * K), .35, Y < 0 ? Rust : Steel);
+				const double t = double(i) / N;
+				for (int32 k = 0; k < 4; k++) Beam(Corner(k, t), Corner((k + 1) % 4, t), R * .55, Col, 4);
+				if (i < N)
+					for (int32 k = 0; k < 4; k++) Beam(Corner(k, t), Corner((k + 1) % 4, double(i + 1) / N), R * .45, Col, 4);
 			}
-		}
-		for (int32 i = 0; i < 4; i++)
+		};
+		// a crane: pedestal, cab, and a lattice boom (two chords and zigzag) out to its tip, the fall hanging from it
+		auto Crane = [&](const FVector& Ped, double Yaw, double Len, double Up, const FLinearColor& BoomC)
 		{
-			const int32 j = (i + 1) % 4;
-			const double AX = Legs[i][0], AZ = Legs[i][1], BX = Legs[j][0], BZ = Legs[j][1];
-			Beam(V(AX * 1.02, 1, AZ * 1.02), V(BX, 12.5, BZ), .25, Steel);
-			Beam(V(BX * 1.02, 1, BZ * 1.02), V(AX, 12.5, AZ), .25, Steel);
-		}
-		// decks and modules
-		Box(34, 1.2, 34, Deck, 0, Top, 0);
-		Box(30, 1, 30, Deck, 0, Top + 6.5, 0);
-		for (int32 i = 0; i < 4; i++) Beam(V(Legs[i][0] / Hl * 14, Top + .6, Legs[i][1] / Hl * 14), V(Legs[i][0] / Hl * 14, Top + 6, Legs[i][1] / Hl * 14), .45, Steel);
-		Box(14, 5.5, 10, White, -6, Top + 3.3, -8);
-		Box(14, 1, 10, Orange, -6, Top + 6.2, -8);
-		Box(8, 4, 8, Orange, 8, Top + 2.6, 6);
-		Box(6, 9, 6, White, 9, Top + 11, -9);
-		// helideck with its yellow ring
+			Beam(Ped, Ped + P(0, 0, 4), 1.1, Yellow, 10);
+			Box(Ped + P(0, 0, 5.2), P(3.2, 2.4, 2.4), Yellow);
+			const FVector Dir(FMath::Cos(Yaw) * FMath::Cos(Up), FMath::Sin(Yaw) * FMath::Cos(Up), FMath::Sin(Up)), Side(-FMath::Sin(Yaw), FMath::Cos(Yaw), 0);
+			const FVector B0 = Ped + P(0, 0, 5), Tip = B0 + Dir * Len;
+			const FVector L0 = B0 + Side * .7, R0 = B0 - Side * .7, L1 = Tip + Side * .2, R1 = Tip - Side * .2;
+			Beam(L0, L1, .22, BoomC); Beam(R0, R1, .22, BoomC);
+			const int32 N = FMath::Max(4, int32(Len / 2.2));
+			for (int32 i = 0; i < N; i++)
+			{
+				const double t0 = double(i) / N, t1 = double(i + 1) / N;
+				Beam(FMath::Lerp(L0, L1, t0), FMath::Lerp(R0, R1, t1), .1, i % 2 ? White : BoomC, 4);
+			}
+			Beam(Tip, Tip - P(0, 0, FMath::Max(3.0, Tip.Z - Ped.Z - 2)), .05, Dark, 3);
+			Box(Tip - P(0, 0, FMath::Max(3.0, Tip.Z - Ped.Z - 2)), P(.6, .6, .8), Yellow);
+		};
+		// an octagonal helideck with its yellow ring and H
+		auto Helideck = [&](const FVector& Ctr, double R)
 		{
-			const FVector Lo = V(-8, Top + 12.35, 6), Hi = V(-8, Top + 12.85, 6);
-			M.AddTube(Lo, Hi, 8, 8, 24, Heli);
+			M.AddTube(Ctr - P(0, 0, .5), Ctr, R, R, 8, Heli);
+			for (int32 i = 0; i < 8; i++)
+			{
+				const double A0 = PI / 8 + 2 * PI * i / 8, A1 = PI / 8 + 2 * PI * (i + 1) / 8;
+				M.AddTri(Ctr + P(0, 0, .01), Ctr + P(FMath::Cos(A0) * R, FMath::Sin(A0) * R, .01), Ctr + P(FMath::Cos(A1) * R, FMath::Sin(A1) * R, .01), Heli, FVector::UpVector);
+			}
 			for (int32 i = 0; i < 24; i++)
 			{
-				const double A0 = 2 * PI * i / 24, A1 = 2 * PI * (i + 1) / 24;
-				const FVector O0(FMath::Cos(A0) * 8, FMath::Sin(A0) * 8, 0), O1(FMath::Cos(A1) * 8, FMath::Sin(A1) * 8, 0);
-				M.AddTri(Hi, Hi + O0, Hi + O1, Heli, FVector::UpVector);
-				M.AddTri(Lo, Lo + O1, Lo + O0, Heli, -FVector::UpVector);
+				const double A0 = 2 * PI * i / 24, A1 = 2 * PI * (i + 1) / 24, Rr = R * .62;
+				Beam(Ctr + P(Rr * FMath::Cos(A0), Rr * FMath::Sin(A0), .06), Ctr + P(Rr * FMath::Cos(A1), Rr * FMath::Sin(A1), .06), .16, Yellow, 4);
 			}
-			Beam(V(-8, Top + 7, 6), V(-8, Top + 12.3, 6), .6, Steel);
-			for (int32 i = 0; i < 32; i++)
+			Box(Ctr + P(-1.2, 0, .05), P(.45, 3, .1), White); Box(Ctr + P(1.2, 0, .05), P(.45, 3, .1), White); Box(Ctr + P(0, 0, .05), P(2.4, .45, .1), White);
+			for (int32 i = 0; i < 8; i++) Beam(Ctr - P(0, 0, .5), Ctr + P(FMath::Cos(2 * PI * i / 8) * R * .9, FMath::Sin(2 * PI * i / 8) * R * .9, -3), .2, Grey, 4);
+		};
+		auto Lifeboat = [&](const FVector& Ctr, double Yaw)
+		{
+			const FVector D(FMath::Cos(Yaw) * 3, FMath::Sin(Yaw) * 3, 0);
+			M.AddTube(Ctr - D, Ctr + D, 1.1, 1.1, 8, Orange);
+			M.AddTube(Ctr - D * 1.2, Ctr - D, .3, 1.1, 8, Orange); M.AddTube(Ctr + D, Ctr + D * 1.2, 1.1, .3, 8, Orange);
+		};
+		// an accommodation / process module: a block with a darker band of windows and a yellow-railed roof
+		auto Module = [&](const FVector& Ctr, const FVector& Size, const FLinearColor& Col, bool bWindows)
+		{
+			Box(Ctr, Size, Col);
+			if (bWindows)
+				for (double Zw = Ctr.Z - Size.Z * .5 + 1.6; Zw < Ctr.Z + Size.Z * .5 - .8; Zw += 2.8)
+				{
+					Box(P(Ctr.X, Ctr.Y - Size.Y * .5 - .02, Zw), P(Size.X * .86, .05, .7), Window);
+					Box(P(Ctr.X, Ctr.Y + Size.Y * .5 + .02, Zw), P(Size.X * .86, .05, .7), Window);
+				}
+			Box(Ctr + P(0, Size.Y * .5, Size.Z * .5 + .5), P(Size.X, .08, .08), Yellow);
+			Box(Ctr + P(0, -Size.Y * .5, Size.Z * .5 + .5), P(Size.X, .08, .08), Yellow);
+		};
+		TArray<FVector> LegsAt;   // collision columns at the waterline (x, y, radius)
+		FVector FlarePos;
+		if (Kind == 0)
+		{
+			// ---- fixed production platform on four concrete columns
+			const double Top = 20;
+			const double Cols[4][2] = {{-13, -10}, {13, -10}, {13, 10}, {-13, 10}};
+			for (int32 i = 0; i < 4; i++)
 			{
-				const double A0 = 2 * PI * i / 32, A1 = 2 * PI * (i + 1) / 32;
-				M.AddTube(V(-8 + 5 * FMath::Cos(A0), Top + 12.9, 6 + 5 * FMath::Sin(A0)), V(-8 + 5 * FMath::Cos(A1), Top + 12.9, 6 + 5 * FMath::Sin(A1)), .18, .18, 4, RingC);
+				const FVector B0 = P(Cols[i][0], Cols[i][1], Base), W = P(Cols[i][0], Cols[i][1], 0);
+				M.AddTube(B0, W - P(0, 0, 1.5), 6.2, 5.4, 16, Rust);
+				M.AddTube(W - P(0, 0, 1.5), W + P(0, 0, 1.5), 5.4, 5.3, 16, Dark);
+				M.AddTube(W + P(0, 0, 1.5), P(Cols[i][0], Cols[i][1], Top), 5.3, 4.8, 16, Concrete);
+				LegsAt.Add(P(Cols[i][0], Cols[i][1], 5.4));
 			}
+			// three decks of steel, girders and yellow rails
+			for (const double Zd : {Top, Top + 6.0, Top + 12.0})
+			{
+				Box(P(0, 0, Zd), P(40, 30, .9), Deck);
+				Box(P(0, 15.2, Zd + .9), P(40, .1, .1), Yellow); Box(P(0, -15.2, Zd + .9), P(40, .1, .1), Yellow);
+				Box(P(20.2, 0, Zd + .9), P(.1, 30, .1), Yellow); Box(P(-20.2, 0, Zd + .9), P(.1, 30, .1), Yellow);
+			}
+			for (const double Xc : {-19.5, -6.5, 6.5, 19.5}) for (const double Yc : {-14.5, 14.5}) Beam(P(Xc, Yc, Top), P(Xc, Yc, Top + 12), .35, Grey);
+			for (const double Xc : {-19.5, 19.5}) for (const double Yc : {-14.5, 14.5}) { Beam(P(Xc, Yc, Top), P(Xc * .5, Yc, Top + 6), .2, Yellow, 4); Beam(P(Xc * .5, Yc, Top + 6), P(Xc, Yc, Top + 12), .2, Yellow, 4); }
+			// process modules, tanks and pipe runs on the lower decks
+			Module(P(-12, -6, Top + 3), P(12, 12, 5), Grey, false);
+			Module(P(3, 7, Top + 3), P(16, 10, 5), White, true);
+			for (int32 i = 0; i < 6; i++) Beam(P(4 + (i % 3) * 3.2, -9 + (i / 3) * 3.2, Top + .5), P(4 + (i % 3) * 3.2, -9 + (i / 3) * 3.2, Top + 5.4), 1.3, i % 2 ? White : Grey, 10);
+			for (int32 i = 0; i < 4; i++) Beam(P(-19, -13 + i * .9, Top + 1.2 + i * .3), P(19, -13 + i * .9, Top + 1.2 + i * .3), .25, i % 2 ? Yellow : Grey, 5);
+			Module(P(-10, 4, Top + 9), P(14, 14, 5), Grey, false);
+			Module(P(9, -4, Top + 9), P(14, 12, 5), White, true);
+			Module(P(9, 8, Top + 14.5), P(10, 8, 4), White, true);   // the accommodation on top
+			for (int32 i = 0; i < 3; i++) Beam(P(-14 + i * 2.5, -10, Top + 12), P(-14 + i * 2.5, -10, Top + 22), .9, Dark, 10);   // turbine exhausts
+			Box(P(9, -10.6, Top + 8), P(9, .2, 2), Yellow);   // the name board
+			// the derrick on the north-east corner, the flare boom off the west end, two cranes and the helideck
+			Lattice(13, 9, Top + 12.5, Top + 40, 3.5, 1.2, 4, .3, Grey);
+			Box(P(13, 9, Top + 41), P(3, 3, 1.5), Grey);
+			{
+				const FVector B0 = P(-20, -8, Top + 12), Tip = P(-50, -14, Top + 34);
+				const FVector Sd(0, 1, 0);
+				Beam(B0 + Sd, Tip + Sd * .3, .3, Grey); Beam(B0 - Sd, Tip - Sd * .3, .3, Grey); Beam(B0 + P(0, 0, 1.6), Tip + P(0, 0, .4), .3, Grey);
+				for (int32 i = 0; i < 14; i++) { const double t0 = i / 14.0, t1 = (i + 1) / 14.0; Beam(FMath::Lerp(B0 + Sd, Tip + Sd * .3, t0), FMath::Lerp(B0 - Sd, Tip - Sd * .3, t1), .12, Grey, 4); Beam(FMath::Lerp(B0 - Sd, Tip - Sd * .3, t0), FMath::Lerp(B0 + P(0, 0, 1.6), Tip + P(0, 0, .4), t1), .12, Grey, 4); }
+				FlarePos = Tip + P(0, 0, 1.5);
+			}
+			Crane(P(-16, 12, Top + 12), .9, 26, .7, Red);
+			Crane(P(16, -13, Top + 12), -1.2, 22, .75, Red);
+			Box(P(25, 8, Top + 15.5), P(10, 3, .4), Grey);
+			Helideck(P(29, 8, Top + 16), 9);
+			Lifeboat(P(-6, 16.4, Top + 4.5), 0); Lifeboat(P(2, 16.4, Top + 4.5), 0);
+			// the boat landing and its stair
+			Box(P(0, -21, 1.6), P(8, 3, .4), Deck);
+			Beam(P(-3, -19.6, 1.8), P(-3, -15, Top), .15, Yellow, 4); Beam(P(3, -19.6, 1.8), P(3, -15, Top), .15, Yellow, 4);
 		}
-		// crane and flare boom
-		Beam(V(12, Top + 7, 12), V(12, Top + 12, 12), .7, Steel);
-		Beam(V(12, Top + 12, 12), V(-4, Top + 22, 20), .35, Orange);
-		Beam(V(17, Top + 6, -6), V(36, Top + 16, -12), .4, Steel);
-		// stairs down to the boat landing
-		Box(6, .4, 3, Deck, Hl + 3, 1.6, 0);
-		Beam(V(Hl + 3, 1.8, -1.5), V(Hl, Top, -1.5), .15, Steel);
-		Beam(V(Hl + 3, 1.8, 1.5), V(Hl, Top, 1.5), .15, Steel);
+		else if (Kind == 1)
+		{
+			// ---- jack-up: a triangular hull up on three lattice legs that stand well above it
+			const double Top = 18, HullH = 6;
+			const double Lg[3][2] = {{-15, -13}, {-15, 13}, {16, 0}};
+			for (int32 i = 0; i < 3; i++)
+			{
+				Lattice(Lg[i][0], Lg[i][1], Base + 2, Top + HullH + 26, 2.6, 2.6, 4, .32, i == 2 ? Grey : Grey);
+				M.AddTube(P(Lg[i][0], Lg[i][1], Base), P(Lg[i][0], Lg[i][1], Base + 2.5), 6, 3.4, 12, Rust);   // the spud can
+				Box(P(Lg[i][0], Lg[i][1], Top + HullH + .8), P(7.5, 7.5, 2.2), Yellow);   // the jacking house
+				LegsAt.Add(P(Lg[i][0], Lg[i][1], 3.4));
+			}
+			// the hull: a stepped wedge of boxes, rusty below its painted rim
+			for (int32 i = 0; i < 6; i++)
+			{
+				const double Xs = -21 + i * 7, W = FMath::Lerp(34.0, 14.0, FMath::Max(0.0, double(i - 2) / 3));
+				Box(P(Xs, 0, Top + HullH * .5), P(7.2, W, HullH), i % 2 ? Grey : Grey);
+				Box(P(Xs, 0, Top + .6), P(7.3, W + .1, 1.2), Rust);
+				Box(P(Xs, 0, Top + HullH + .05), P(7.2, W, .1), Deck);
+			}
+			const double Dk = Top + HullH;
+			// derrick out on the cantilever over the stern, drill floor and pipe rack
+			Box(P(-27, 0, Dk + 1.5), P(10, 10, 3), Grey);
+			Lattice(-28, 0, Dk + 3, Dk + 38, 4, 1.3, 4, .3, Grey);
+			Box(P(-28, 0, Dk + 15), P(5, 5, 3), White);
+			Box(P(-28, 0, Dk + 39), P(3, 3, 1.4), Yellow);
+			for (int32 i = 0; i < 8; i++) Beam(P(-14, -6 + i * .5, Dk + .4 + (i % 2) * .4), P(0, -6 + i * .5, Dk + .4 + (i % 2) * .4), .22, Rust, 5);
+			for (int32 i = 0; i < 4; i++) Beam(P(-26 + i * .6, 6, -1), P(-26 + i * .6, 6, Top), .2, Dark, 4);   // risers to the sea
+			// accommodation block, cranes, helideck and lifeboats at the bow
+			Module(P(7, 0, Dk + 4), P(10, 16, 8), White, true);
+			Box(P(9, 0, Dk + 10), P(3, 3, 4), Grey); Beam(P(9, 0, Dk + 12), P(9, 0, Dk + 17), .15, White, 4);   // the mast
+			Crane(P(-6, -12, Dk), .4, 24, .8, Red);
+			Crane(P(-4, 13, Dk), 2.4, 20, .7, Yellow);
+			Box(P(20, 0, Dk + 2.3), P(8, 3, .4), Grey);
+			Helideck(P(24, 0, Dk + 3), 8.5);
+			Lifeboat(P(5, -9, Dk + 1.2), 0); Lifeboat(P(12, -6, Dk + 1.2), -.45);
+			FlarePos = P(-30, 14, Dk + 4);
+			Beam(P(-24, 12, Dk), FlarePos - P(0, 0, 1.5), .35, Grey);
+		}
+		else
+		{
+			// ---- semi-submersible: two pontoons below the surface, four columns banded at the waterline
+			const double Top = 22;
+			for (const double Yp : {-17.0, 17.0})
+			{
+				Box(P(0, Yp, -13), P(62, 10, 7), Rust);
+				M.AddTube(P(31, Yp, -13), P(33, Yp, -13), 4.8, 2, 10, Rust); M.AddTube(P(-31, Yp, -13), P(-33, Yp, -13), 4.8, 2, 10, Rust);
+			}
+			for (const double Xc : {-22.0, 22.0})
+				for (const double Yc : {-17.0, 17.0})
+				{
+					M.AddTube(P(Xc, Yc, -10), P(Xc, Yc, -1.5), 5, 5, 12, Rust);
+					for (int32 b = 0; b < 4; b++) M.AddTube(P(Xc, Yc, -1.5 + b * .9), P(Xc, Yc, -.6 + b * .9), 5.02, 5.02, 12, b % 2 ? Yellow : Red);   // the hazard bands
+					M.AddTube(P(Xc, Yc, 2.1), P(Xc, Yc, Top), 5, 4.8, 12, Grey);
+					LegsAt.Add(P(Xc, Yc, 5));
+				}
+			Beam(P(-22, -12, -6), P(-22, 12, -6), 1.2, Rust, 10); Beam(P(22, -12, -6), P(22, 12, -6), 1.2, Rust, 10);   // cross braces
+			Beam(P(-17, -17, 4), P(17, -17, 14), .8, Grey, 8); Beam(P(-17, 17, 4), P(17, 17, 14), .8, Grey, 8);
+			// the deck box
+			Box(P(0, 0, Top + 3), P(56, 44, 6), Grey);
+			Box(P(0, 0, Top + .4), P(56.2, 44.2, .8), Rust);
+			Box(P(0, 0, Top + 6.05), P(56, 44, .1), Deck);
+			Box(P(-12, 22.05, Top + 3), P(14, .1, 1.6), Yellow);   // the name board
+			const double Dk = Top + 6;
+			// twin derricks amidships
+			for (const double Xd : {-6.0, 8.0})
+			{
+				Box(P(Xd, 0, Dk + 1.5), P(10, 10, 3), Grey);
+				Lattice(Xd, 0, Dk + 3, Dk + 40, 4.2, 1.3, 4, .32, Grey);
+				Box(P(Xd, 0, Dk + 16), P(5, 5, 3), White);
+				Box(P(Xd, 0, Dk + 41), P(3, 3, 1.5), Yellow);
+			}
+			// accommodation, containers, cranes, helideck with its helicopter, lifeboats
+			Module(P(20, 8, Dk + 3.5), P(14, 18, 7), White, true);
+			const FLinearColor Cc[5] = {Blue, Red, Green, Orange, White};
+			for (int32 i = 0; i < 7; i++) Box(P(-22 + (i % 4) * 6.4, -16 + (i / 4) * 2.7, Dk + 1.3 + (i / 4) * 2.6), P(6, 2.4, 2.6), Cc[i % 5]);
+			Crane(P(-24, 18, Dk), -.6, 26, .7, Red);
+			Crane(P(24, -18, Dk), 2.6, 24, .75, Red);
+			Box(P(-30, -10, Dk + 2.6), P(8, 3, .4), Grey);
+			const FVector Hd = P(-34, -12, Dk + 3);
+			Helideck(Hd, 9);
+			{
+				// the helicopter: an orange body, its tail boom, skids and two blades
+				const FVector H0 = Hd + P(0, 0, 1.4);
+				M.AddTube(H0 + P(-2.2, 0, 0), H0 + P(2.4, 0, 0), 1.2, 1.0, 10, Orange);
+				M.AddTube(H0 + P(-2.2, 0, 0), H0 + P(-2.8, 0, 0), 1.2, .4, 10, Window);
+				M.AddTube(H0 + P(2.4, 0, .2), H0 + P(7.5, 0, .6), .45, .2, 6, Orange);
+				Box(H0 + P(7.5, 0, 1.1), P(.6, .1, 1.6), Orange);
+				Beam(H0 + P(-1.5, -1, -1.2), H0 + P(2, -1, -1.2), .08, Dark, 4); Beam(H0 + P(-1.5, 1, -1.2), H0 + P(2, 1, -1.2), .08, Dark, 4);
+				Beam(H0 + P(0, 0, 1.1), H0 + P(0, 0, 1.6), .2, Dark, 6);
+				Box(H0 + P(0, 0, 1.6), P(11, .35, .06), Dark); Box(H0 + P(0, 0, 1.62), P(.35, 11, .06), Dark);
+			}
+			Lifeboat(P(-26, 22.8, Top + 2), 0); Lifeboat(P(-19, 22.8, Top + 2), 0);
+			FlarePos = P(30, 24, Dk + 6);
+			Beam(P(26, 20, Dk), FlarePos - P(0, 0, 1.5), .4, Grey);
+		}
 
 		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this, *FString::Printf(TEXT("Rig%d"), Ri));
 		PM->SetupAttachment(Root);
@@ -1534,7 +1697,7 @@ void AKeysLife::BuildRigs()
 		FC->SetupAttachment(PM);
 		FC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		FC->SetCastShadow(false);
-		FC->SetRelativeLocation(V(37, Top + 17.5, -12.5) * 100.0);
+		FC->SetRelativeLocation(FlarePos * 100.0);
 		FC->RegisterComponent();
 		FM.Commit(FC, 0, AKeysWorld::VertexColorMaterial());
 
@@ -1548,13 +1711,12 @@ void AKeysLife::BuildRigs()
 		Twin.X = X + 18; Twin.Z = Z - 14; Twin.Rot = Rot; Twin.bTwin = true;
 		Rigs.Add(Twin);
 
-		// collisions on the four legs at the waterline
+		// collisions on the legs / columns at the waterline (mesh x, y -> game x, z, turned with the rig)
 		const double CR = FMath::Cos(Rot), SR = FMath::Sin(Rot);
-		for (int32 i = 0; i < 4; i++)
+		for (const FVector& L : LegsAt)
 		{
-			const double LX = Legs[i][0] * 1.04, LZ = Legs[i][1] * 1.04;
 			KeysGeo::FPillar Leg;
-			Leg.X = X + LX * CR + LZ * SR; Leg.Z = Z - LX * SR + LZ * CR; Leg.R = 2; Leg.bOld = false;
+			Leg.X = X + L.X * CR + L.Y * SR; Leg.Z = Z - L.X * SR + L.Y * CR; Leg.R = L.Z; Leg.bOld = false;
 			RigLegs.Add(Leg);
 		}
 	}

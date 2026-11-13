@@ -58,6 +58,10 @@ def _water(mat):
 OCEAN_FOAM = """
 float2 p = WP.xy / 100.0;
 float cover = saturate(A);
+// in the prop wash the foam is dragged out into streaks along the boat's track (TD, radians in the sea's own x/y)
+float2 td = float2(cos(TD), sin(TD));
+float2 tp = float2(dot(p, td) * 0.3, dot(p, float2(-td.y, td.x)));
+p = lerp(p, tp, saturate(Aer * 1.6));
 // two layers of value noise drifting at different speeds: bubbly cells plus larger streaks
 float n = 0.0, amp = 0.55;
 float2 q = p * float2(1.25, 0.95) + float2(T * 0.035, T * 0.021);
@@ -76,7 +80,31 @@ n = saturate(n / 1.05);
 // more cover = the threshold drops, so foam grows from the brightest noise cells outward.
 // Even full cover leaves gaps of green water, like real churned-up wash.
 float th = 0.92 - cover * 0.55;
-float m = smoothstep(th, th + 0.1, n) * saturate(cover * 3.0);
+float m = smoothstep(th - 0.06, th + 0.16, n) * saturate(cover * 3.0);   // soft edges, not a cut-out
+// real wash is lace, not paint: a web of bubbles around holes of dark water, at two sizes. Cellular noise: the
+// distance to the nearest of a jittered grid of points; foam lies along the cell walls, the cells are the holes.
+float lace = 0.0;
+for (int s2 = 0; s2 < 2; s2++) {
+  float sc = s2 == 0 ? 1.6 : 4.3;
+  float2 lq = p * sc + float2(T * (0.06 + 0.05 * s2), -T * 0.04) + s2 * 11.7;
+  float2 li = floor(lq), lf = frac(lq);
+  float f1 = 9.0, f2 = 9.0;
+  for (int yy = -1; yy <= 1; yy++)
+    for (int xx = -1; xx <= 1; xx++) {
+      float2 c = li + float2(xx, yy);
+      float3 h3 = frac(float3(c.xyx) * float3(.1031, .1030, .0973)); h3 += dot(h3, h3.yzx + 33.33);
+      float2 o = frac((h3.xx + h3.yz) * h3.zy);
+      o = 0.5 + 0.38 * sin(T * (0.4 + o * 0.6) + o * 6.2831853);   // the bubbles drift and pop
+      float d = length(float2(xx, yy) + o - lf);
+      if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
+    }
+  float wall = 1.0 - smoothstep(0.02, 0.22, f2 - f1);   // near a wall between two cells
+  lace += (s2 == 0 ? 0.6 : 0.4) * wall;
+}
+// fresh, thick foam (high cover) is nearly solid; thin, old foam is mostly lace with water showing through
+float thick = smoothstep(0.55, 1.0, cover) * smoothstep(th + 0.1, th + 0.35, n);
+m *= lerp(0.25 + 0.75 * lace, 0.85 + 0.15 * lace, thick);
+m = min(m, 0.92);
 // a windy day: long streaks of old foam lying down the wind, and scattered breaking whitecaps between the crests
 float2 wd = float2(cos(WD), sin(WD));
 float2 sq = float2(dot(p, wd) * 0.045, dot(p, float2(-wd.y, wd.x)) * 0.6) + float2(-T * 0.08, 0.0);
@@ -114,7 +142,9 @@ for (int i = 0; i < 18; i++) {
   float k = 6.2831853 / L;
   float w = sqrt(9.81 * k);
   float steep = 0.055 * (0.6 + 0.8 * r2);
-  float aa = saturate(L / (foot * 8.0) - 1.0);   // drop waves too small to see at this distance (no sparkle noise)
+  // drop waves too small to draw at this distance: a wave needs a dozen pixels or it only makes single-pixel glints
+  // (and more again once the upscaler has stretched them); the slope it would have had goes to roughness instead
+  float aa = saturate(L / (foot * 14.0) - 1.0);
   float ph = k * dot(dir, p) - w * T + r1 * 6.2831853 + r2 * 3.1;
   g += dir * (steep * cos(ph)) * aa;
 }
@@ -143,9 +173,11 @@ return normalize(VN + float3(-g.x, -g.y, 0.0));
 """
 
 OCEAN_ROUGH = """
-// glassy up close, a little rougher far out (the ripples there are too small to draw but still blur the reflection);
-// rain and a hard blow roughen the whole surface into a duller sheen
-float r = lerp(0.035, 0.14, saturate(D / 120000.0));
+// glassy up close, rougher with distance as the ripples there are too small to draw but still blur the reflection
+// (a mirror-smooth sea throws the sun back as single-pixel glints that shimmer and read as pixelated); rain and a
+// hard blow roughen the whole surface into a duller sheen
+float r = lerp(0.06, 0.12, saturate(D / 4000.0));
+r = lerp(r, 0.2, saturate((D - 4000.0) / 60000.0));
 r = lerp(r, 0.22, saturate(Rain) * 0.7);
 r = lerp(r, 0.1, saturate(Caps) * 0.5);
 return lerp(r, 0.6, saturate(F));
@@ -690,7 +722,22 @@ float glow = saturate((UV.x - 0.4) * 1.6) * (1.0 - saturate(F));
 // gin-clear turquoise over the flats, a cleaner, bluer cobalt out over the deep (the Gulf Stream has almost nothing in it)
 float3 sc = lerp(Scat * float3(1.25, 1.2, 0.95), Scat * float3(0.6, 0.62, 1.12), saturate(Deep));
 sc *= (1.0 + glow * 3.0);
-sc = lerp(sc, float3(0.32, 0.5, 0.48), saturate(UV.y) * 0.55);
+// the prop wash: milky with air, not a lit-up cyan carpet. Boils of churned water well up and drift apart, darker
+// clearer water between them; the milk is whiter and greener than the sea round it, never neon.
+float2 bp = WP.xy / 100.0 * 0.32 + float2(T * 0.07, -T * 0.05);
+float boil = 0.0, bamp = 0.6;
+for (int bi = 0; bi < 3; bi++) {
+  float2 bi2 = floor(bp), bf = frac(bp); float2 bu = bf * bf * (3.0 - 2.0 * bf);
+  float3 a3 = frac(float3(bi2.xyx) * .1031); a3 += dot(a3, a3.yzx + 33.33); float n00 = frac((a3.x + a3.y) * a3.z);
+  float3 b3 = frac(float3((bi2 + float2(1, 0)).xyx) * .1031); b3 += dot(b3, b3.yzx + 33.33); float n10 = frac((b3.x + b3.y) * b3.z);
+  float3 c3 = frac(float3((bi2 + float2(0, 1)).xyx) * .1031); c3 += dot(c3, c3.yzx + 33.33); float n01 = frac((c3.x + c3.y) * c3.z);
+  float3 d3 = frac(float3((bi2 + float2(1, 1)).xyx) * .1031); d3 += dot(d3, d3.yzx + 33.33); float n11 = frac((d3.x + d3.y) * d3.z);
+  boil += bamp * lerp(lerp(n00, n10, bu.x), lerp(n01, n11, bu.x), bu.y);
+  bp = bp * 2.3 + float2(5.2, 1.3) + float2(-T * 0.09, T * 0.06); bamp *= 0.5;
+}
+boil = saturate(boil / 1.05);
+float wash = saturate(UV.y) * smoothstep(0.38, 0.85, boil * 0.85 + saturate(UV.y) * 0.3);
+sc = lerp(sc, float3(0.13, 0.16, 0.15) * (0.5 + 0.9 * boil), wash * 0.38);
 return sc / 100.0;
 """
 
@@ -740,7 +787,12 @@ def _ocean(mat):
     deep.set_editor_property("r", True); deep.set_editor_property("g", False)
     _link(uv2, "", deep, "")
 
-    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D", "WD", "Caps", "Rain"], "Foam")
+    trackdir = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, 1600)
+    trackdir.set_editor_property("parameter_name", "TrackDir")
+    trackdir.set_editor_property("default_value", 0.0)
+    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D", "WD", "Caps", "Rain", "Aer", "TD"], "Foam")
+    _link(aer, "", foam, "Aer")
+    _link(trackdir, "", foam, "TD")
     _link(wp, "", foam, "WP")
     _link(tm, "", foam, "T")
     _link(vc, "A", foam, "A")
@@ -768,7 +820,9 @@ def _ocean(mat):
     absorb = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 1050)
     absorb.set_editor_property("parameter_name", "Absorption")
     absorb.set_editor_property("default_value", unreal.LinearColor(0.45, 0.085, 0.04, 1.0))
-    sc = _custom(mat, -500, 900, OCEAN_SCATTER, F3, ["Scat", "UV", "F", "Deep"], "Scattering")
+    sc = _custom(mat, -500, 900, OCEAN_SCATTER, F3, ["Scat", "UV", "F", "Deep", "WP", "T"], "Scattering")
+    _link(wp, "", sc, "WP")
+    _link(tm, "", sc, "T")
     _link(deep, "", sc, "Deep")
     _link(scat, "", sc, "Scat")
     _link(uv, "", sc, "UV")

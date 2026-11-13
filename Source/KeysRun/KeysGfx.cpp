@@ -23,7 +23,7 @@ namespace
 	int32 GFrames = 0;
 
 	// render height Auto aims for per preset: TSR fills in the rest of a Retina panel's pixels
-	const double TargetH[4] = {800, 1000, 1250, 1e9};
+	const double TargetH[4] = {900, 1200, 1440, 1e9};   // Medium was 1000: too coarse for the sea's fine sparkle once upscaled
 
 	bool Scripted() { return FString(FCommandLine::Get()).Contains(TEXT("KRScript=")); }
 
@@ -92,7 +92,7 @@ namespace
 		ApplyResolution();
 
 		// sharpen what TSR upscales, more when it upscales more
-		SetCVar(TEXT("r.Tonemapper.Sharpen"), Q == KeysGfx::Low ? 1.f : Q == KeysGfx::Medium ? .8f : Q == KeysGfx::High ? .6f : .4f);
+		SetCVar(TEXT("r.Tonemapper.Sharpen"), Q == KeysGfx::Low ? .5f : Q == KeysGfx::Medium ? .3f : Q == KeysGfx::High ? .2f : .1f);   // gentle: sharpening the sea's glints made them crunchy pixels
 		// Lumen: the final gather and reflections a notch finer on the bigger presets
 		// no short-range AO: its screen-space noise never settles on a hull that pitches and rolls under the camera, and
 		// it read as grain all over the white decks and liners (contact shadows still ground things at Medium and up)
@@ -104,7 +104,7 @@ namespace
 		SetCVarInt(TEXT("r.ContactShadows"), Q >= KeysGfx::Medium ? 1 : 0);
 		SetCVarInt(TEXT("r.AmbientOcclusion.Method"), 0);
 		// the clouds: half the ray-march steps below High
-		SetCVar(TEXT("r.VolumetricCloud.ViewRaySampleMaxCount"), Q >= KeysGfx::High ? 768.f : 256.f);
+		SetCVar(TEXT("r.VolumetricCloud.ViewRaySampleMaxCount"), Q >= KeysGfx::High ? 768.f : Q >= KeysGfx::Medium ? 512.f : 256.f);
 		SetCVar(TEXT("r.VolumetricCloud.ReflectionRaySampleMaxCount"), Q >= KeysGfx::High ? 80.f : 24.f);
 		SetCVarInt(TEXT("r.VolumetricCloud.EnableAerialPerspectiveSampling"), Q >= KeysGfx::High ? 1 : 0);
 		UE_LOG(LogTemp, Log, TEXT("KRGFX quality %s (scalability %d), resolution scale %s, GPU %s"), *KeysGfx::QualityLabel(), G, *KeysGfx::ResScaleLabel(), *GRHIAdapterName);

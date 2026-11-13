@@ -555,6 +555,17 @@ void AKeysWorld::UpdateWater()
 		WaterMID->SetScalarParameterValue(TEXT("RippleStrength"), float(.22 + .85 * SStep(.5, 8, Wind) + .35 * SStep(10, 18, Wind)));
 		WaterMID->SetScalarParameterValue(TEXT("WindDir"), float(WindDir()));
 		WaterMID->SetScalarParameterValue(TEXT("Whitecap"), float(Caps));
+		// which way the boat's track runs (for the wash's foam streaks), from how the focus moves, eased
+		{
+			const double MX = FocusX - TrackPX, MZ = FocusZ - TrackPZ;
+			if (MX * MX + MZ * MZ > .04 && MX * MX + MZ * MZ < 400)
+			{
+				const double A = FMath::Atan2(MZ, MX);
+				TrackDirS = FMath::Atan2(FMath::Lerp(FMath::Sin(TrackDirS), FMath::Sin(A), .15), FMath::Lerp(FMath::Cos(TrackDirS), FMath::Cos(A), .15));
+			}
+			TrackPX = FocusX; TrackPZ = FocusZ;
+			WaterMID->SetScalarParameterValue(TEXT("TrackDir"), float(TrackDirS));
+		}
 	}
 	constexpr double NearR = 450;
 	GatherWakes(FX, FZ, NearR, T, LiveWakes);
