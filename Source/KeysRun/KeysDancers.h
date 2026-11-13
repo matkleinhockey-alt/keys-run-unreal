@@ -7,7 +7,9 @@ class USceneComponent;
 class UObject;
 
 // The web game's rigged, animated dancers (apps/client/public/models/crew/dance-0N.glb, imported into
-// Content/KeysRun/Crew/DanceNN): 1 the bikini_girl boat crew, 2 the stripper, 3 Annie. All three play Mixamo's
+// Content/KeysRun/Crew/DanceNN): 1 the bikini_girl boat crew, 2 the stripper, 3 Annie; and 4, the girl: bikini_girl at
+// full detail under dance-01's rig (Tools/girlglb.py, Content/KeysRun/Crew/Girl), each one dressed in her own skin tone,
+// hair, eyes and swimsuit. Everyone dances as the girl when she is there. All of them play Mixamo's
 // "Hip Hop Dancing" clip. dance-02 and dance-03 go through Tools/fixglb.py first (one mesh, one skin, bind matrices
 // that match the skeleton's rest pose). Shared by the player's boat party, the Pink Flamingo's stage, the sandbar and
 // the party boats on the hook.
