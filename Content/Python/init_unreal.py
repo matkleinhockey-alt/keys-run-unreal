@@ -1286,13 +1286,15 @@ for (int i = 0; i < 4; i++) {
   float2 dv = p.xy - Cs[i].xy;
   float2 dva = dv - Shear.xy * u * u * R * 1.4;
   float r = length(dv), ra = length(dva);
-  if (min(r, ra) > R * 4.5) continue;
+  if (min(r, ra) > R * 5.0) continue;
   float3 r3 = float3(p.xy, alt) + float3(Cs[i].xy * 0.37, 0.0);
-  float nz = K.n(r3 / 650.0) * 0.6 + K.n(r3 / 230.0) * 0.4 - 0.5;
-  float colR = R * (0.55 + 0.3 * sin(saturate(u) * 3.1416)) * (0.6 + 0.4 * saturate(pw));
-  float col = saturate((colR - r) / (0.3 * R) + nz * 2.2) * saturate((1.0 - u) * 9.0);
+  // cauliflower turrets: big lumps, smaller lumps on them
+  float nz = K.n(r3 / 1100.0) * 0.5 + K.n(r3 / 420.0) * 0.32 + K.n(r3 / 150.0) * 0.18 - 0.5;
+  // a wide column swelling through the middle and rounding off into a dome at the top
+  float colR = R * (1.0 + 0.45 * sin(saturate(u) * 3.1416)) * (0.65 + 0.35 * saturate(pw)) * sqrt(saturate((1.0 - u) * 3.5));
+  float col = saturate((colR - r) / (0.3 * R) + nz * 3.2);
   float an = smoothstep(0.72, 0.9, u) * saturate((1.04 - u) * 12.0) * saturate((pw - 0.45) * 3.0);
-  float anvil = saturate((R * (1.2 + 2.0 * saturate(pw)) - ra) / (0.5 * R) + nz * 1.6) * an;
+  float anvil = saturate((R * (1.6 + 2.4 * saturate(pw)) - ra) / (0.6 * R) + nz * 2.0) * an;
   float d = max(col, anvil) * saturate(u * 25.0);
   dens = max(dens, d * 1.7);
   dark = max(dark, d * saturate(pw));
@@ -1306,6 +1308,8 @@ return float4(dens, glow, dark, 0.0);
 def _cloud(mat):
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_VOLUME)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    # without this the cloud passes' shaders are never compiled for it, and the renderer falls back and asserts
+    mat.set_editor_property("used_with_volumetric_cloud", True)
     F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
     F4 = unreal.CustomMaterialOutputType.CMOT_FLOAT4
     wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1400, 0)
@@ -1391,6 +1395,10 @@ if (mode == 0) {
   c = lerp(c, float3(1.0, 1.0, 1.0), core * core);
 }
 a *= VA * Amount;
+// a little haze with distance instead of the height fog (which would hide a shaft 8 km off completely)
+float hz = saturate(PD / 60000.0) * 0.45;
+c = lerp(c, float3(0.62, 0.68, 0.74), hz);
+a *= 1.0 - hz * 0.5;
 float fade = saturate((SD - PD) / max(Fade, 1.0));
 return float4(c * Bright / max(Ex, 1e-6), saturate(a * fade));
 """
@@ -1399,6 +1407,8 @@ return float4(c * Bright / max(Ex, 1e-6), saturate(a * fade));
 def _rain(mat):
     mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    # no height fog: the haze would swallow a rain shaft or a bolt a few km off whole (the material fades them itself)
+    mat.set_editor_property("use_translucency_vertex_fog", False)
     F4 = unreal.CustomMaterialOutputType.CMOT_FLOAT4
     vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -1200, 0)
     uv = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1200, 120)

@@ -156,9 +156,9 @@ void AKeysWorld::BeginPlay()
 	Fog->SetDirectionalInscatteringColor(FLinearColor(.55f, .45f, .32f));
 	// contact shadows tuck the small things (cleats, feet, rod butts) into what they stand on
 	Sun->ContactShadowLength = KeysGfx::ContactShadowsOn() ? .04f : 0.f;
-	// the clouds (and the storm towers) shade the sea and the islands
-	Sun->bCastCloudShadows = true;
-	Sun->CloudShadowOnSurfaceStrength = 1.f;
+	// No volumetric cloud shadow map: its pass asserts (check, not a fallback) on a cloud material whose shaders are
+	// still compiling, and ours compiles on demand in a -game run. Storm shade comes from KeysWeather's gloom instead.
+	Sun->bCastCloudShadows = false;
 	Sun->MarkRenderStateDirty();
 	if (UMaterialInterface* CloudMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineSky/VolumetricClouds/m_SimpleVolumetricCloud_Inst.m_SimpleVolumetricCloud_Inst")))
 		Clouds->SetMaterial(CloudMat);

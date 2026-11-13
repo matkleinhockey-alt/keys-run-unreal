@@ -106,6 +106,7 @@ private:
 	double DriftX = 0, DriftZ = 0;       // the fair-weather cumulus drift, m
 	double Gloom = 0, RainCam = 0, GustT = 0, Gust = 1, GustTarget = 1;
 	bool bCloudsOn = false;
+	double CloudWaitT = 0, CloudLogT = -99;
 	// lightning: a flash's strokes (time, strength), the light and where it is
 	TArray<FVector2D> Strokes;
 	double FlashI = 0, BoltT = -99, BoltShowUntil = -99;

@@ -9,6 +9,9 @@
 #include "Components/VolumetricCloudComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/Material.h"
+#include "MaterialShared.h"
+#include "MaterialDomain.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
@@ -136,7 +139,7 @@ void AKeysWeather::BeginPlay()
 	{
 		UProceduralMeshComponent* S = Make(*FString::Printf(TEXT("Shaft%d"), i));
 		BuildUnitCone(S, 40, 1, 1.12, .95, .3);
-		UMaterialInstanceDynamic* D = Mid(1, FLinearColor(.42f, .45f, .5f), .55, 4000);
+		UMaterialInstanceDynamic* D = Mid(1, FLinearColor(.3f, .33f, .37f), .5, 4000);
 		S->SetMaterial(0, D);
 		Shafts.Add(S);
 		ShaftMIDs.Add(D);
@@ -146,7 +149,7 @@ void AKeysWeather::BeginPlay()
 	RainMID = Mid(0, FLinearColor(.75f, .78f, .82f), .5, 40);
 	RainCyl->SetMaterial(0, RainMID);
 	Spout = Make(TEXT("Spout"));
-	SpoutMID = Mid(2, FLinearColor(.5f, .53f, .57f), .6, 600);
+	SpoutMID = Mid(2, FLinearColor(.36f, .38f, .42f), .55, 600);
 	Skirt = Make(TEXT("SpoutSpray"));
 	BuildUnitCone(Skirt, 32, 1, 3.2, .85, 0);
 	SkirtMID = Mid(1, FLinearColor(.85f, .88f, .9f), .75, 300);
@@ -231,11 +234,11 @@ void AKeysWeather::BuildSpout(const FCell& C, double T)
 		const double Bow = FMath::Sin(Vv * PI) * (1 - Rope * .5);
 		const double AX = C.SX + LX * Vv - LX * .6 * Bow + FMath::Sin(Vv * 5 + T * .6 + C.Seed) * 14 * (1 - Vv) * (1 + Rope * 2);
 		const double AZ = C.SZ + LZ * Vv - LZ * .6 * Bow + FMath::Cos(Vv * 4 + T * .5 + C.Seed) * 14 * (1 - Vv) * (1 + Rope * 2);
-		double R = FMath::Lerp(4.0, 30.0, FMath::Pow(Vv, 2.4)) + 70 * WStep(.82, 1, Vv);
+		double R = FMath::Lerp(7.0, 42.0, FMath::Pow(Vv, 2.0)) + 110 * WStep(.8, 1, Vv);
 		R *= (1 - .55 * Rope) * (.4 + .6 * K);
 		// it condenses from the top down as it forms
 		const double Vis = WStep(1 - K * 1.15, 1.05 - K * 1.15, Vv);
-		const float Alpha = float((.82 - .5 * WStep(.85, 1, Vv)) * (1 - Vis));
+		const float Alpha = float((.82 - .5 * WStep(.85, 1, Vv)) * Vis);
 		for (int32 i = 0; i <= Seg; i++)
 		{
 			const double A = 2 * PI * i / Seg;
@@ -257,7 +260,7 @@ void AKeysWeather::BuildSpout(const FCell& C, double T)
 	if (SpoutMID) SpoutMID->SetScalarParameterValue(TEXT("Amount"), float(K));
 	// the spray vortex where it touches the water
 	Skirt->SetWorldLocation(ToUE(C.SX, -1, C.SZ));
-	Skirt->SetWorldScale3D(FVector(14 * 100 * (.5 + .5 * K), 14 * 100 * (.5 + .5 * K), 34 * 100));
+	Skirt->SetWorldScale3D(FVector(20 * 100 * (.5 + .5 * K), 20 * 100 * (.5 + .5 * K), 45 * 100));
 	Skirt->SetVisibility(K > .05);
 	if (SkirtMID) SkirtMID->SetScalarParameterValue(TEXT("Amount"), float(K * (1 - Rope * .6)));
 }
@@ -652,10 +655,30 @@ void AKeysWeather::UpdateLook(double Dt)
 	// the volumetric clouds: our own material, with the cells in it
 	if (!bCloudsOn)
 	{
-		bCloudsOn = true;
+		// only once its shaders are ready: the cloud renderer asserts on a volume material that has fallen back to the
+		// default surface material while it compiles
+		UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Cloud.M_KR_Cloud"));
+		UMaterial* Base = M ? M->GetMaterial() : nullptr;
+		FMaterialResource* Res = Base ? Base->GetMaterialResource(GMaxRHIShaderPlatform) : nullptr;
+		bool bReady = false;
+		// Once it has compiled (the view pass falls back gracefully while its cloud shaders come in on demand; the cloud
+		// shadow pass would assert, so AKeysWorld keeps cloud shadows off). Give up after five minutes.
+		CloudWaitT += Dt;
+		const bool bLog = CloudWaitT - CloudLogT > 10;
+		if (bLog) CloudLogT = CloudWaitT;
+		if (!Base || !Res) { bCloudsOn = true; UE_LOG(LogTemp, Warning, TEXT("Keys weather: no M_KR_Cloud (%d) or no resource for this platform - keeping the engine's clouds"), Base ? 1 : 0); }
+		else
+		{
+			for (const FString& E : Res->GetCompileErrors()) { UE_LOG(LogTemp, Warning, TEXT("Keys weather: M_KR_Cloud: %s"), *E); }
+			if (Res->GetCompileErrors().Num() || Base->MaterialDomain != MD_Volume || CloudWaitT > 300) bCloudsOn = true;
+			else if (Res->IsCompilationFinished()) { bReady = true; bCloudsOn = true; }
+			if (bLog || bCloudsOn)
+				UE_LOG(LogTemp, Log, TEXT("Keys weather: M_KR_Cloud after %.0f s: finished %d, errors %d, complete %d -> %s"), CloudWaitT, Res->IsCompilationFinished() ? 1 : 0,
+					Res->GetCompileErrors().Num(), Res->IsGameThreadShaderMapComplete() ? 1 : 0, bReady ? TEXT("on") : bCloudsOn ? TEXT("gave up") : TEXT("waiting"));
+		}
+		if (bReady)
 		if (AKeysWorld* W = AKeysWorld::Get(this))
 			if (UVolumetricCloudComponent* CC = W->CloudComponent())
-				if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Cloud.M_KR_Cloud")))
 				{
 					CloudMID = UMaterialInstanceDynamic::Create(M, this);
 					CC->SetMaterial(CloudMID);
@@ -698,7 +721,7 @@ void AKeysWeather::UpdateLook(double Dt)
 	Gloom = FMath::Min(.92, Gloom * .95);
 	if (CloudMID)
 	{
-		CloudMID->SetScalarParameterValue(TEXT("Cov"), float(.4 + .12 * NearCloud));
+		CloudMID->SetScalarParameterValue(TEXT("Cov"), float(.5 + .1 * NearCloud));
 		CloudMID->SetVectorParameterValue(TEXT("Drift"), FLinearColor(float(DriftX), float(DriftZ), 0, 0));
 		CloudMID->SetVectorParameterValue(TEXT("Shear"), FLinearColor(float(FMath::Cos(SteerDir)), float(FMath::Sin(SteerDir)), 0, 0));
 		CloudMID->SetVectorParameterValue(TEXT("Flash"), FLinearColor(float(FlashPos.X), float(FlashPos.Z), float(FlashPos.Y), 0));
