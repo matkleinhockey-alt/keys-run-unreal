@@ -289,6 +289,17 @@ namespace
 	constexpr double LifeNearCell = 18, LifeNearRadius = 72;
 	constexpr uint32 LifeNearSeed = 0x4b52u;
 
+	const TArray<FZoneRow>& LifeZoneLife(const FString& Zone);
+	// the life table for a spot: its zone, except that the Reef hands off by depth to the wall top / ledges (12 m) and
+	// the deep wall and wrecks (20 m) - web entities/fish/spawn.ts REEF_WALL_DEPTH / DEEP_WALL_DEPTH
+	FString LifeHabitat(double X, double Z)
+	{
+		const FString Zn = ZoneAt(X, Z);
+		if (Zn != TEXT("Reef")) return Zn;
+		const double D = DepthAt(X, Z);
+		return D >= 20 ? FString(TEXT("DeepWall")) : D >= 12 ? FString(TEXT("ReefWall")) : Zn;
+	}
+
 	// what you can see swimming in each zone (JS ZONE_LIFE)
 	const TArray<FZoneRow>& LifeZoneLife(const FString& Zone)
 	{
@@ -302,6 +313,10 @@ namespace
 		Z(TEXT("Bridge"), {{TEXT("flounder"), 1.5}, {TEXT("tarpon"), 5}, {TEXT("snook"), 2}, {TEXT("mangrove"), 3}, {TEXT("eagleray"), 1}, {TEXT("sheepshead"), 3}, {TEXT("goliath"), 0.6}, {TEXT("jackcrevalle"), 1.5}, {TEXT("nurse"), 1}, {TEXT("cobia"), 1}, {TEXT("barracuda"), 1}, {TEXT("dolphin"), 1.2}, {TEXT("lookdown"), 3.5}, {TEXT("bluerunner"), 4}, {TEXT("schoolmaster"), 2}, {TEXT("manatee"), 0.9}});
 		Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("eagleray"), 2}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("nurse"), 1.5}, {TEXT("mutton"), 2}, {TEXT("dolphin"), 1.8}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("graytrigger"), 1.2}, {TEXT("jackcrevalle"), 1.8}, {TEXT("yellowtail"), 1.5}, {TEXT("sheepshead"), 1.2}, {TEXT("tarpon"), 1.6}, {TEXT("goliath"), 0.5}, {TEXT("bullshark"), 0.35}, {TEXT("bluerunner"), 4.5}, {TEXT("lanesnapper"), 3}, {TEXT("spanishmack"), 3}, {TEXT("lookdown"), 1.5}, {TEXT("schoolmaster"), 2}});
 		Z(TEXT("Reef"), {{TEXT("cubera"), 0.5}, {TEXT("yellowtail"), 5}, {TEXT("parrotfish"), 3}, {TEXT("angelfish"), 2}, {TEXT("hogfish"), 2}, {TEXT("grouper"), 2}, {TEXT("gag"), 1.2}, {TEXT("redgrouper"), 1.2}, {TEXT("nurse"), 1}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 1.5}, {TEXT("mutton"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("cero"), 2}, {TEXT("goliath"), 1.1}, {TEXT("hammerhead"), 0.3}, {TEXT("bullshark"), 0.3}, {TEXT("tarpon"), 1.2}, {TEXT("dolphin"), 1}, {TEXT("schoolmaster"), 4.5}, {TEXT("lanesnapper"), 3.5}, {TEXT("bluerunner"), 4}, {TEXT("vermilion"), 2}, {TEXT("spanishmack"), 2}});
+		// the reef wall's top and ledges (12-20 m) and the deep wall and wrecks (20 m+): the web game's ReefWall and DeepWall
+		// tables (content/creatures.ts), which the Reef zone hands off to by depth (LifeHabitat) so the wall feels different
+		Z(TEXT("ReefWall"), {{TEXT("cubera"), .7}, {TEXT("tigershark"), .12}, {TEXT("grouper"), 3}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("yellowtail"), 4}, {TEXT("mutton"), 2.5}, {TEXT("amberjack"), 2}, {TEXT("kingfish"), 1.5}, {TEXT("cero"), 1.5}, {TEXT("nurse"), 1}, {TEXT("goliath"), .6}, {TEXT("graytrigger"), 1.2}, {TEXT("lionfish"), 1}, {TEXT("hammerhead"), .8}, {TEXT("bullshark"), .5}, {TEXT("cobia"), 1}, {TEXT("dolphin"), 1.3}, {TEXT("vermilion"), 5}, {TEXT("bluerunner"), 3}, {TEXT("schoolmaster"), 2}});
+		Z(TEXT("DeepWall"), {{TEXT("warsaw"), 1}, {TEXT("cubera"), .6}, {TEXT("mako"), .3}, {TEXT("giantmanta"), .04}, {TEXT("tigershark"), .2}, {TEXT("grouper"), 3.5}, {TEXT("gag"), 2.5}, {TEXT("redgrouper"), 2}, {TEXT("amberjack"), 3}, {TEXT("kingfish"), 2}, {TEXT("cobia"), 1.5}, {TEXT("goliath"), 1.3}, {TEXT("nurse"), 1.5}, {TEXT("hammerhead"), .7}, {TEXT("bullshark"), .5}, {TEXT("mutton"), 1.4}, {TEXT("yellowtail"), 1}, {TEXT("cero"), 1}, {TEXT("dolphin"), 1}, {TEXT("vermilion"), 3.5}, {TEXT("bluerunner"), 1.5}});
 		Z(TEXT("Offshore"), {{TEXT("halibut"), 1.1}, {TEXT("mako"), 0.5}, {TEXT("mola"), 0.03}, {TEXT("greatwhite"), 0.025}, {TEXT("whaleshark"), 0.04}, {TEXT("giantmanta"), 0.04}, {TEXT("tigershark"), 0.14}, {TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2.5}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), 0.12}, {TEXT("humpback"), 0.02}, {TEXT("skipjack"), 4}, {TEXT("bigeye"), 0.7}});
 		}
 		const TArray<FZoneRow>* R = T.Find(Zone);
@@ -1905,7 +1920,7 @@ void AKeysLife::TrySpawn(double RMin)
 		X = BoatX + FMath::Cos(A) * R;
 		Z = BoatZ + FMath::Sin(A) * R;
 		if (X < WBX0 || X > WBX1 || Z < WBZ0 || Z > WBZ1) return;
-		Type = LifeWeighted(LifeZoneLife(ZoneAt(X, Z)));
+		Type = LifeWeighted(LifeZoneLife(LifeHabitat(X, Z)));
 		// the web game's Humps life table: pilot whales hang round the offshore humps
 		if (const FHump* Hm = NearHump(X, Z); Hm && !Hm->bPatch && FMath::FRand() < .35)
 		{
@@ -2422,7 +2437,7 @@ void AKeysLife::UpdateNearField()
 		}
 	}
 	if (!bDiver) return;
-	static const TMap<FString, double> Density = {{TEXT("Reef"), 1.0}, {TEXT("Bridge"), 1.0}, {TEXT("Hawk Channel"), .55}, {TEXT("Flats"), .5},
+	static const TMap<FString, double> Density = {{TEXT("Reef"), 1.0}, {TEXT("ReefWall"), .8}, {TEXT("DeepWall"), .7}, {TEXT("Bridge"), 1.0}, {TEXT("Hawk Channel"), .55}, {TEXT("Flats"), .5},
 		{TEXT("Backcountry"), .4}, {TEXT("Creek"), .4}, {TEXT("Offshore"), .12}};
 	const int32 R = FMath::CeilToInt32(LifeNearRadius / LifeNearCell);
 	const int32 IX = FMath::FloorToInt32(DiverX / LifeNearCell), IZ = FMath::FloorToInt32(DiverZ / LifeNearCell);
@@ -2435,7 +2450,7 @@ void AKeysLife::UpdateNearField()
 			const int64 K = (int64(CX) << 32) ^ int64(uint32(CZ));
 			if (NearCells.Contains(K)) continue;
 			NearCells.Add(K, -1);   // rolled; -1 if it holds nothing
-			const FString Zone = ZoneAt(X0, Z0);
+			const FString Zone = LifeHabitat(X0, Z0);
 			const double* Dn = Density.Find(Zone);
 			if (KeysSea::HashCell(LifeNearSeed, CX, CZ, 9701) >= (Dn ? *Dn : .4)) continue;
 			// a minority of cells hold one big fish rather than a shoal
