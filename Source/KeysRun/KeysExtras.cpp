@@ -1,4 +1,5 @@
 #include "KeysExtras.h"
+#include "KeysDiver.h"
 #include "EngineUtils.h"
 #include "KeysBoatPawn.h"
 #include "KeysData.h"
@@ -631,6 +632,7 @@ bool AKeysExtras::CaelenHitbox(FVector& OutA, FVector& OutB, double& OutR) const
 
 void AKeysExtras::CaelenShot(bool bHit)
 {
+	UE_LOG(LogTemp, Log, TEXT("KRCaelen shot: %s"), bHit ? TEXT("hit") : TEXT("near miss"));
 	if (CAway > 0) return;
 	if (!bHit) { CaelenSay(TEXT("you suck at this braowww")); return; }
 	CaelenSay(TEXT("AYO- that's assault braowww"), 2.4);
@@ -680,10 +682,26 @@ void AKeysExtras::UpdateCaelen(double Dt, double T)
 	}
 	else
 	{
+		// over a diver in the water he comes down and circles them instead (web caelen.ts DIVE_RADIUS / DIVE_HEIGHT):
+		// what gulls do to a spearo, and inside a speargun's reach so he can be shot at; slow enough to track
+		const AKeysDiver* Dv = AKeysDiver::Get(this);
+		const bool bOverDiver = Dv && Dv->IsDiving();
+		double OX = P->BoatX(), OZ = P->BoatZ(), OY = BoatY;
+		if (bOverDiver) { OX = Dv->State().X; OZ = Dv->State().Z; OY = 0; }
+		if (bOverDiver)
+		{
+			CA += Dt * .22;
+			CR = FMath::Lerp(CR, 5.5, FMath::Min(1.0, Dt * .6));
+			CHt = FMath::Lerp(CHt, 2.9, FMath::Min(1.0, Dt * .6));
+			CSwoop = 0;
+		}
+		else
+		{
 		// keep pace with the boat: circle wider and higher when running, swoop low over the cockpit now and then
 		CA += Dt * (.35 + FMath::Min(.5, Sp * .012));
 		CR = FMath::Lerp(CR, Sp > 8 ? 20.0 : 12.0, Dt * .5);
 		CHt = FMath::Lerp(CHt, Sp > 8 ? 10.0 : 7.0, Dt * .5);
+		}
 		if (CSwoop <= 0 && FMath::FRand() < Dt * .03 && Sp < 6) CSwoop = 3.5;
 		double R = CR, Hh = CHt;
 		if (CSwoop > 0)
@@ -693,7 +711,7 @@ void AKeysExtras::UpdateCaelen(double Dt, double T)
 			R = FMath::Lerp(R, 3.0, Q);
 			Hh = FMath::Lerp(Hh, 3.2, Q);
 		}
-		NewPos = FVector(P->BoatX() + FMath::Cos(CA) * R, BoatY + Hh + FMath::Sin(T * 1.7) * .6, P->BoatZ() + FMath::Sin(CA) * R);
+		NewPos = FVector(OX + FMath::Cos(CA) * R, OY + Hh + FMath::Sin(T * 1.7) * (bOverDiver ? .25 : .6), OZ + FMath::Sin(CA) * R);
 	}
 
 	// steer: face along the motion and bank into the turn (JS moveBird)

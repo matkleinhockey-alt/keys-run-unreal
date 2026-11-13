@@ -1,4 +1,5 @@
 #include "KeysDiver.h"
+#include "KeysExtras.h"
 #include "KeysSchools.h"
 #include "KeysBoatPawn.h"
 #include "KeysGeo.h"
@@ -394,6 +395,19 @@ bool AKeysDiver::TryFire()
 	ShotRange = FMath::Clamp((SpearRange + FMath::Max(0.0, SpearRangeBonusM)) * (bSpare ? .6 : 1.0), SpearRange * .6, SpearRange + 6);
 	const FVector Dir = AssistAim(Origin, Aim, Tg, Lock, AssistStrength, ShotRange, &Eye);
 	Shot = Fire(Origin, Dir, ShotRange);
+	// a shot at Caelen circling overhead (web caelen.ts resolveSpearShot): the shaft's whole path against his capsule
+	if (AKeysExtras* Ex = AKeysExtras::Get(this))
+	{
+		FVector CA, CB; double CR;
+		if (Ex->CaelenHitbox(CA, CB, CR))
+		{
+			FVector P1, P2;
+			FMath::SegmentDistToSegmentSafe(Origin, Origin + Dir * ShotRange, CA, CB, P1, P2);
+			const double D = (P1 - P2).Size();
+			if (D <= CR) Ex->CaelenShot(true);
+			else if (D <= CR + AKeysExtras::CaelenNearMiss) Ex->CaelenShot(false);
+		}
+	}
 	Gun = StartReload();
 	KickT = 1;
 	KickYaw = (FMath::FRand() - .5) * .05;
@@ -1053,6 +1067,17 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 		if (P.Num() >= 1) CamYaw = FCString::Atod(*P[0]);
 		if (P.Num() >= 2) CamPitch = FCString::Atod(*P[1]);
 		PrevYaw = CamYaw;
+	}
+	else if (Cmd == TEXT("aimcaelen"))
+	{
+		// point the gun at Caelen (from the muzzle), for the spear-the-gull test
+		FVector CA, CB; double CR;
+		if (AKeysExtras* Ex = AKeysExtras::Get(this); Ex && Ex->CaelenHitbox(CA, CB, CR))
+		{
+			const FVector D = ((CA + CB) * .5 - MuzzleWorld()).GetSafeNormal();
+			CamYaw = FMath::Atan2(-D.X, -D.Z); CamPitch = FMath::Asin(FMath::Clamp(D.Y, -1.0, 1.0));
+			UE_LOG(LogTemp, Log, TEXT("KRDive Caelen at %.1f m"), ((CA + CB) * .5 - MuzzleWorld()).Size());
+		}
 	}
 	else if (Cmd == TEXT("aimfish"))
 	{
