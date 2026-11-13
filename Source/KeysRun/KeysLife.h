@@ -193,6 +193,12 @@ public:
 	void FishNear(double X, double Z, double R, TArray<FVector>& OutPos, TArray<double>& OutLen) const;
 	// the real species model (nose along +X, meters) for the hooked fish; false if the key has no model
 	static bool BuildCreatureMesh(const FString& Key, FKeysMesh& Out, double Scale = 1.35);
+	// the same close-up, its body bent by the tail beat (the swimmers' own weights): Phase in radians, Amp 1 = swimming
+	static bool BuildCreatureMeshBent(const FString& Key, FKeysMesh& Out, double Scale, double Phase, double Amp);
+	// a cheaper body for the instanced school fish (KeysSchools): Lod 1 near, 2 far; same frame and units as BuildCreatureMesh
+	static bool BuildSchoolMesh(const FString& Key, FKeysMesh& Out, int32 Lod);
+	// sharks and the fish that hunt bait (barracuda, jacks, tarpon, mackerels...) near a point: (x, y, z, length), game meters
+	void PredatorsNear(double X, double Z, double R, TArray<FVector4>& Out) const;
 	// a burst of spray at a point on the water
 	void Splash(double X, double Z, int32 N, double Power);
 	// water streaming off a leaping fish: N drops at P (game meters, Y up) flung with the fish's velocity V
@@ -211,7 +217,7 @@ public:
 	void ShootableBirds(double X, double Z, double R, TArray<FKeysBirdTarget>& Out);
 	void DownBird(FKeysBird* B, double Secs);
 	// test hook: bring the nearest spearable school to (X, Z) and keep it there
-	void DebugBringSchool(double X, double Z);
+	void DebugBringSchool(double X, double Z, const FString& Type = FString(), double Dist = 0);
 
 	// test hook: a school of that kind there now, past the population cap
 	bool DebugSpawn(const FString& Type, double X, double Z);

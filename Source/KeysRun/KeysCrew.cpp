@@ -296,10 +296,86 @@ void AKeysExtras::UpdateCrew(double Dt, double T)
 	if (const AKeysBoatPawn* P = PawnRef.Get(); P && P->ThrottleGrip(Grip) && Captain.Yaw == 0) HelmR = Grip + FVector(-.07, 0, -.07) - Captain.Pos;   // the wrist aft of and under the grip, the hand over it
 	Captain.Pose(HelmL, HelmR);
 	Crew.DefaultPose();
+	PoseLanding(T);
 
 	UpdateShower(Dt, T);
 	UpdatePole(Dt, T);
 	UpdateParty(Dt, T);
+}
+
+// You and the mate landing the fish (AKeysBoatPawn::Stage): at the gunwale leaning out over the side, gaff and hand line
+// on its head, hauling it up and in and stepping back as it comes over; or inside the transom heaving it through the
+// tuna door in three pulls. Once it's aboard you put both hands up and the mate stands over it, hands on hips.
+void AKeysExtras::PoseLanding(double T)
+{
+	const AKeysBoatPawn* P = PawnRef.Get();
+	const bool bOn = P && P->Stage.bOn;
+	LandYou.bVisible = LandMate.bVisible = bOn;
+	if (!bOn) return;
+	if (!bLandInit)
+	{
+		bLandInit = true;
+		FKeysHumanLook Y;
+		Y.Shirt = XHex(0x2a8fb0); Y.Bottom = XHex(0x3b4a5a); Y.bCap = true; Y.CapColor = XHex(0xf2efe6); Y.bGlasses = true; Y.Hair = XHex(0x2b1d14);
+		Y.Skin = FLinearColor(FColor(0xc6, 0x8e, 0x6a)); Y.bShoes = true; Y.Shoes = XHex(0x30343a);
+		LandYou.Init(Y, false);
+		FKeysHumanLook M;
+		M.Shirt = XHex(0xe9e4d6); M.Bottom = XHex(0x6b5b45); M.bShortsLong = true; M.bCap = true; M.CapColor = XHex(0x8a2b2b); M.Hair = XHex(0x14100c);
+		M.Skin = FLinearColor(FColor(0x8d, 0x5a, 0x3c)); M.bShoes = true; M.Shoes = XHex(0xeeeeee);
+		LandMate.Init(M, false);
+	}
+	const AKeysBoatPawn::FLandStage& S = P->Stage;
+	auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };
+	const double Aboard = Ease((S.Pull - .9) / .1);
+	const double Sd = S.Side;
+	auto Reach = [](FKeysHuman& H, const FVector& L, const FVector& R) { const FTransform Tr = H.ToBoat(); H.Pose(Tr.InverseTransformPosition(L), Tr.InverseTransformPosition(R)); };
+	auto Face = [](const FKeysHuman& H, const FVector& At) { return FMath::Atan2(At.Y - H.Pos.Y, At.X - H.Pos.X); };
+	FKeysHuman* Hs[2] = {&LandYou, &LandMate};
+	for (int32 k = 0; k < 2; k++)
+	{
+		FKeysHuman& H = *Hs[k];
+		H.DefaultPose();
+		H.Roll = 0;
+		if (!S.bDoor)
+		{
+			// at the gunwale, either side of where it comes over; a step inboard as it does
+			const double X = S.Final.X + (k == 0 ? .42 : -.5);
+			const double Y = Sd * (Deck.InnerHB(X) - .3 - Ease((S.Pull - .45) / .5) * .5);
+			H.Pos = FVector(X, Y, Deck.SoleAt(X));
+			const double Out = Face(H, FVector(H.Pos.X, Sd * (Deck.HB + 3), 0));   // over the side
+			H.Yaw = FMath::Lerp(Out, Face(H, S.Fish), Aboard);
+			H.Pitch = -.42 * (1 - Ease((S.Pull - .2) / .5)) + .12 * Ease(S.Pull / .4) * (1 - Aboard);   // lean out, then sit back on it
+		}
+		else
+		{
+			// inside the side door, either side of where it slides in, backing up the cockpit with it on each heave
+			const double Heave = FMath::Max(0.0, FMath::Sin(FMath::Max(0.0, S.Age - .4) * PI / 1.2)) * (1 - Aboard);
+			const double DoorX = S.DoorX;
+			// along the rail either side of the door: you forward, the mate aft, out of the fish's way as it swings in
+			const double X = DoorX + (k == 0 ? .7 + .5 * S.Pull : -.75 - .35 * S.Pull);
+			const double Y = Sd * (Deck.InnerHB(X) - .42 - .15 * Heave);
+			H.Pos = FVector(X, Y, Deck.SoleAt(X));
+			H.Yaw = FMath::Lerp(Face(H, FVector(DoorX, Sd * (Deck.HB + 2), 0)), Face(H, S.Fish), Aboard);
+			H.Pitch = (.24 * Heave - .2 * (1 - Heave)) * (1 - Aboard);
+		}
+		if (Aboard < 1) H.PoseLegs(XJ(-.17, .085, -.13), XJ(.17, .085, .16));   // braced, one foot forward
+		H.HeadNod = .35 * (1 - Aboard);
+		H.bHoldHead = true;
+		if (Aboard < 1)
+		{
+			const FVector G = S.Grip, Al = FVector(0, 0, .04);
+			if (k == 1) Reach(H, G + FVector(.06, 0, .05) + Al, G + Al);                                    // the gaff, two hands
+			else Reach(H, G + FVector(-.04, .05 * Sd, 0), G + FVector(-.1, -.05 * Sd, .02));                 // a fist round the head
+		}
+		else if (k == 0)
+		{
+			const double Pump = FMath::Abs(FMath::Sin((S.Age - S.Done) * 5)) * .06;
+			H.Pose(XJ(-.24, H.HipY + 1.0 + Pump, .1), XJ(.24, H.HipY + 1.0 + Pump, .1));   // both hands up
+		}
+		else H.Pose(XJ(-.24, H.HipY + .02, -.02), XJ(.24, H.HipY + .02, -.02));            // hands on hips over it
+		H.Pos.Z += .0;
+		(void)T;
+	}
 }
 
 void AKeysExtras::UpdateShower(double Dt, double T)
@@ -313,7 +389,7 @@ void AKeysExtras::UpdateShower(double Dt, double T)
 		ShowerT = bShowerOn ? XRand(10, 16) : XRand(25, 45);
 	}
 	const AKeysBoatPawn* SP = PawnRef.Get();
-	const bool bOn = (ShowerForced >= 0 ? ShowerForced == 1 : bShowerOn) && bCalm && !(SP && SP->IsInFight());
+	const bool bOn = (ShowerForced >= 0 ? ShowerForced == 1 : bShowerOn) && bCalm && !(SP && (SP->IsInFight() || SP->Stage.bOn));
 	FKeysHuman& H = ShowerH;
 	H.bVisible = bOn;
 	if (!bOn) return;
@@ -333,6 +409,9 @@ void AKeysExtras::UpdatePole(double Dt, double T)
 {
 	if (!bHasPole) return;
 	FKeysHuman& H = PoleH;
+	// she leaves the pole while a fish is hauled aboard over the aft deck (she'd be standing in the haul)
+	const AKeysBoatPawn* LP = PawnRef.Get();
+	H.bVisible = !(LP && LP->Stage.bOn);
 	const bool bFast = FMath::Abs(PawnSpeed()) > 6;
 	const double Beat = FMath::Sin(T * MusicBpm / 60 * PI);
 	H.bHoldHead = false;
@@ -388,7 +467,7 @@ void AKeysExtras::UpdateParty(double Dt, double T)
 	static const int32 Moves[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 6, 4, 8};   // sway hands step roll groove twirl hipcircle shimmy wave
 	const bool bModels = PartyModelsReady();
 	const AKeysBoatPawn* FP = PawnRef.Get();
-	const bool bFight = FP && FP->IsInFight();
+	const bool bFight = FP && (FP->IsInFight() || FP->Stage.bOn);   // and while the fish comes aboard: clear of the haul
 	int32 Idx = 0;
 	for (FKeysPartyGoer& G : Party)
 	{
@@ -650,8 +729,18 @@ void AKeysExtras::UpdatePartyModels()
 	{
 		FKeysDancerFig& F = PartyFigs[i];
 		const bool bOn = Party.IsValidIndex(i) && (!bEye || FVector2D(Party[i].H.Pos.X - Eye.X, Party[i].H.Pos.Y - Eye.Y).Size() > 1.1);
-		F.SetVisible(bOn);
-		if (!bOn) continue;
+		// a guest still strolling forward when a fish comes aboard would stand in the haul: she's out of shot until it's done
+		bool bInHaul = false;
+		if (bOn && EP && EP->Stage.bOn)
+		{
+			const FVector2D Me(Party[i].H.Pos.X, Party[i].H.Pos.Y);
+			bInHaul = FVector2D::Distance(Me, FVector2D(EP->Stage.Fish.X, EP->Stage.Fish.Y)) < FMath::Max(1.3, EP->Stage.Lv * .55)
+				|| FVector2D::Distance(Me, FVector2D(EP->Stage.Final.X, EP->Stage.Final.Y)) < 1.7   // where it will land
+				|| FVector2D::Distance(Me, FVector2D(LandYou.Pos.X, LandYou.Pos.Y)) < 1.1
+				|| FVector2D::Distance(Me, FVector2D(LandMate.Pos.X, LandMate.Pos.Y)) < 1.1;
+		}
+		F.SetVisible(bOn && !bInHaul);
+		if (!bOn || bInHaul) continue;
 		const FKeysHuman& H = Party[i].H;
 		F.Place(FVector(H.Pos.X, H.Pos.Y, Deck.SoleAt(H.Pos.X) + Party[i].SpotLift), H.Yaw, Heights[i % 5], Dt);
 	}
@@ -755,6 +844,38 @@ void AKeysExtras::CommitCrew(double T)
 	FKeysMesh M;
 	Captain.Build(M);
 	Crew.Build(M);
+	if (LandYou.bVisible)
+	{
+		LandYou.Build(M);
+		LandMate.Build(M);
+		// the side door for a big fish: an opening in the gunwale and its panel swung open inboard against the hinge
+		if (const AKeysBoatPawn* DP = PawnRef.Get(); DP && DP->Stage.bOn && DP->Stage.bDoor)
+		{
+			const double Sd = DP->Stage.Side, DX = DP->Stage.DoorX, W = .72;
+			const double Z0 = Deck.SoleAt(DX), Z1 = Deck.Free, H = Z1 - Z0;
+			const double Y = Sd * Deck.InnerHB(DX);
+			const double Open = FMath::Clamp(DP->Stage.Age / .5, 0.0, 1.0);
+			// the dark gap through the hull side, a hair proud of the inside and outside faces
+			M.AddBox(FVector(DX, Sd * (Deck.HB + .005), Z0 + H * .5), FVector(W, .02, H), XHex(0x15181c));
+			M.AddBox(FVector(DX, Y + Sd * .02, Z0 + H * .5), FVector(W, .02, H), XHex(0x15181c));
+			// the panel, hinged at its forward edge, swung inboard
+			const double A = -Sd * FMath::DegreesToRadians(100.0 * (1 - FMath::Pow(1 - Open, 3)));
+			const FVector Hinge(DX + W * .5, Y, Z0 + H * .5);
+			const FVector Mid = Hinge + FVector(-FMath::Cos(A), -FMath::Sin(A), 0) * W * .5;
+			const FQuat Rq(FVector::UpVector, A);
+			M.AddBox(Mid, FVector(W, .045, H - .04), XHex(0xf3f1ea), Rq);
+			M.AddBox(Mid + Rq.RotateVector(FVector(0, .03, H * .15)), FVector(.12, .02, .04), XHex(0xb9bec4), Rq);   // the latch
+		}
+		// the mate's gaff, and your hand line, from the hands to the fish's head while it's still coming aboard
+		if (const AKeysBoatPawn* LP = PawnRef.Get(); LP && LP->Stage.bOn && LP->Stage.Pull < .98)
+		{
+			const FVector G = LP->Stage.Grip;
+			const FVector MH = LandMate.ToBoat().TransformPosition(LandMate.HandR), YH = LandYou.ToBoat().TransformPosition(LandYou.HandL);
+			M.AddTube(MH, G, .026, .02, 7, XHex(0x3a3f45));   // the gaff's dark shaft
+			M.AddTube(G, G + (G - MH).GetSafeNormal() * .11 + FVector(0, 0, -.08), .014, .008, 5, XHex(0xc9ced3));   // the hook
+			if (FVector::Dist(YH, G) > .12) M.AddTube(YH, G, .006, .006, 4, XHex(0x2a6f97));
+		}
+	}
 	// the fighting chair, turned toward the fish, and the angler strapped into it while a trolled fish is on
 	if (const AKeysBoatPawn* CP = PawnRef.Get(); CP && Deck.Spec && KeysMesh::HasFightChair(*Deck.Spec))
 	{

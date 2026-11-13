@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "KeysSchools.h"
 #include "KeysWeather.h"
 #include "Components/PointLightComponent.h"
 #include "KeysGeo.h"
@@ -499,6 +500,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 	{
 		bParsed = true;
 		FString Script;
+		bScriptLogFight = FCommandLine::Get() && FCString::Strifind(FCommandLine::Get(), TEXT("KRScript=")) != nullptr;
 		if (FParse::Value(FCommandLine::Get(), TEXT("KRScript="), Script, false))
 		{
 			TArray<FString> Parts;
@@ -540,6 +542,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("login")) { bLoginOpen = true; LoginField = 0; LoginName = TEXT("Mat"); LoginCrew = TEXT("keys"); }
 		else if (Cmd == TEXT("closeall")) { bLoginOpen = bBoardOpen = false; }
 		else if (Cmd == TEXT("cast")) CastLine(.55);
+		else if (Cmd == TEXT("autostrike")) bScriptAutoStrike = true;   // strike on the bite, as a player would
 		else if (Cmd.StartsWith(TEXT("hook=")))
 		{
 			// a fish of that species takes the bait right now: straight into the fight
@@ -674,6 +677,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 				if (It->GetClass()->GetName() == TEXT("KeysSeafloor") || It->GetClass()->GetName() == TEXT("KeysReef")) It->SetActorHiddenInGame(bOld);
 		}
+		else if (Cmd.StartsWith(TEXT("fish:"))) { if (AKeysSchools* Sc = AKeysSchools::Get(this)) Sc->DebugCmd(Cmd.Mid(5)); }   // fish:bait, fish:snapper, fish:pred, fish:scare, fish:flats, fish:stats ...
 		else if (Cmd.StartsWith(TEXT("dv:")))
 		{
 			// dv:depth=6, dv:look=1.2,-0.3, dv:aimfish, dv:spear, dv:reload, dv:air=0.2, dv:swim=1, dv:haul=1, dv:chase, dv:mask
@@ -805,7 +809,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			// throttle=0.3: hold the throttle lever there (for driving shots without a keyboard)
 			ScriptThr = FCString::Atod(*Cmd.Mid(9));
 		}
-		else if (Cmd.StartsWith(TEXT("reel="))) bScriptReel = FCString::Atoi(*Cmd.Mid(5)) != 0;   // reel=1 holds S
+		else if (Cmd.StartsWith(TEXT("reel="))) { bScriptReelAuto = Cmd.Mid(5) == TEXT("auto"); bScriptReel = !bScriptReelAuto && FCString::Atoi(*Cmd.Mid(5)) != 0; }   // reel=1 holds S; reel=auto reels like a player watching the bar
 		else if (Cmd.StartsWith(TEXT("steer="))) ScriptSteer = FCString::Atod(*Cmd.Mid(6));   // steer=0.3 (left positive)
 		else if (Cmd.StartsWith(TEXT("catch=")))
 		{
@@ -856,7 +860,7 @@ void AKeysBoatPawn::ToggleDive()
 		// going over the side with a line out (or a cast still charging) would leave the rod with nobody on it
 		if (bCharging || IsLineOut()) ReelIn(FString());
 		bCharging = false;
-		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+		bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 		bTrimMode = false;
 		D->SetDefaultChase(bDiveChase);
 		D->UnderwaterHaze = UnderwaterHaze;
@@ -881,7 +885,7 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 	auto Down = [PC](const FKey& K) { return PC->IsInputKeyDown(K); };
 	auto Hit = [PC](const FKey& K) { return PC->WasInputKeyJustPressed(K); };
 	AKeysDiver* D = AKeysDiver::Get(this);
-	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+	bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 	bCharging = false;
 	if (!D) return;
 	FKeysDiverButtons B;
@@ -958,7 +962,7 @@ void AKeysBoatPawn::ToggleAshore()
 		if (!W->TryEnter(X, Z, H, Speed, Spec().Len, Why)) { ShowToast(Why); return; }
 		if (bCharging || IsLineOut()) ReelIn(FString());
 		bCharging = false;
-		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+		bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 		bTrimMode = false;
 		PinX = X; PinZ = Z; PinH = H;
 		ApplyOutfit();
@@ -982,7 +986,7 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 	auto Down = [PC](const FKey& K) { return PC->IsInputKeyDown(K); };
 	auto Hit = [PC](const FKey& K) { return PC->WasInputKeyJustPressed(K); };
 	AKeysWalker* W = AKeysWalker::Get(this);
-	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = false;
+	bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = false;
 	if (!W) return;
 	// a rod out from the planks (shore.ts shoreHoldsStill): the angler stands still from the charge to the card,
 	// S (or holding Space in a fight) reels, R reels in, K / Space / T deal with the catch; the mouse still looks round
@@ -994,7 +998,8 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 		B.LookYaw = MX * .004;
 		B.LookPitch = MY * .004;
 		W->SetButtons(B);
-		bBack = Down(EKeys::S) || Down(EKeys::Down);
+		bBack = Down(EKeys::S);
+		bReelKey = Down(EKeys::Down);   // reel: the down arrow
 		bAction = Down(EKeys::SpaceBar) && FState == EKeysFish::Fight;
 		if (Hit(EKeys::SpaceBar)) { bAction = true; OnAction(); }
 		if (PC->WasInputKeyJustReleased(EKeys::SpaceBar) && bCharging) { bCharging = false; BeginShoreSwap(); CastLine(Charge); EndShoreSwap(); }
@@ -1217,7 +1222,7 @@ void AKeysBoatPawn::PrepareToLeaveHelm()
 	if (bCharging || IsLineOut()) ReelIn(FString());
 	bCharging = false;
 	StopTroll(true);
-	bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+	bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 	bTrimMode = false;
 	ScriptThr = -1;
 }
@@ -1386,7 +1391,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	// online login panel: typing goes into the name or crew code, nothing else reacts
 	if (bLoginOpen)
 	{
-		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+		bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 		bCharging = false;
 		FString& Field = LoginField == 0 ? LoginName : LoginCrew;
 		const int32 MaxLen = LoginField == 0 ? 20 : 24;
@@ -1409,7 +1414,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	// the leaderboard is modal, like the JS panel: B (or Esc) closes it, Tab / Left / Right switch tabs
 	if (bBoardOpen)
 	{
-		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+		bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 		bCharging = false;
 		if (Hit(EKeys::B) || Hit(EKeys::Escape)) bBoardOpen = false;
 		{
@@ -1421,19 +1426,19 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		}
 		return;
 	}
-	if (Hit(EKeys::B)) { bBoardOpen = true; BoardTab = 0; bFwd = bBack = bLeft = bRight = bAction = false; bCharging = false; return; }
+	if (Hit(EKeys::B)) { bBoardOpen = true; BoardTab = 0; bReelKey = bFwd = bBack = bLeft = bRight = bAction = false; bCharging = false; return; }
 
 	// the gear screen: Tab opens and closes it (Esc too), nothing else reacts while it is up
 	if (bRunning && Menu == EMenu::None && !IsDiving())
 	{
-		if (bGearOpen) { if (Hit(EKeys::Tab) || Hit(EKeys::Escape)) bGearOpen = false; bFwd = bBack = bLeft = bRight = bAction = false; return; }
+		if (bGearOpen) { if (Hit(EKeys::Tab) || Hit(EKeys::Escape)) bGearOpen = false; bReelKey = bFwd = bBack = bLeft = bRight = bAction = false; return; }
 		if (Hit(EKeys::Tab)) { if (AKeysWalker* Wk = AKeysWalker::Get(this); !Wk || !Wk->bShopOpen) { bGearOpen = true; return; } }
 	}
 	// a slot machine in the Gaff & Gill: it owns the keys while you sit at it
 	if (bRunning && Menu == EMenu::None)
 		if (AKeysSlots* Sl = AKeysSlots::Get(this); Sl && Sl->bOpen)
 		{
-			bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+			bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 			bCharging = false;
 			Sl->HandleInput(PC);
 			return;
@@ -1445,7 +1450,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 			if (!Es->bOpen && Hit(EKeys::Comma) && !IsDiving()) { Es->Open(true); return; }
 			if (Es->bOpen)
 			{
-				bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+				bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 				bCharging = false;
 				Es->HandleInput(PC);
 				return;
@@ -1455,7 +1460,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (bRunning && Menu == EMenu::None)
 		if (AKeysHandgun* Gun = AKeysHandgun::Get(this); Gun && Gun->IsOut())
 		{
-			bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+			bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 			bCharging = false;
 			Gun->HandleInput(PC, Dt);
 			if (Hit(EKeys::M)) bBigMap = !bBigMap;
@@ -1467,7 +1472,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Menu == EMenu::None && bRunning && Hit(EKeys::Escape)) { Menu = EMenu::Pause; MenuSel = 0; bCharging = false; return; }
 	if (Menu != EMenu::None)
 	{
-		bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
+		bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
 		bCharging = false;
 		if (Menu == EMenu::Main) CamYaw += Dt * .05;   // the camera drifts slowly around your boat behind the main menu
 		TArray<FMenuItem> Items;
@@ -1516,7 +1521,10 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::Q)) { ToggleAshore(); return; }
 
 	bFwd = Down(EKeys::W) || (!bTrimMode && Down(EKeys::Up));
-	bBack = Down(EKeys::S) || (!bTrimMode && Down(EKeys::Down)) || bScriptReel;
+	if (bScriptReelAuto) bAutoReelOn = FState == EKeysFish::Fight && (bAutoReelOn ? Tension < .86 : Tension < .62);   // ease off in the red, wind again once it drops
+	// reel on the down arrow (it backs the boat down only with no line out); S is the throttle astern
+	bReelKey = (IsLineOut() && Down(EKeys::Down)) || bScriptReel || bAutoReelOn;
+	bBack = Down(EKeys::S) || (!bTrimMode && !IsLineOut() && Down(EKeys::Down));
 	bLeft = Down(EKeys::A) || Down(EKeys::Left);
 	bRight = Down(EKeys::D) || Down(EKeys::Right);
 	if (FParse::Param(FCommandLine::Get(), TEXT("KRDemo")))
@@ -1527,7 +1535,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		bLeft = FMath::Fmod(T, 6.0) > 4.3 || DepthFast(X + Fdx * 150, Z + Fdz * 150) < 6 || DepthFast(X + Fdx * 60, Z + Fdz * 60) < 6;
 	}
 	bTrimUp = bTrimMode && Down(EKeys::Up);
-	bTrimDn = bTrimMode && Down(EKeys::Down);
+	bTrimDn = bTrimMode && !IsLineOut() && Down(EKeys::Down);
 
 	if (Hit(EKeys::SpaceBar)) { bAction = true; OnAction(); }
 	if (PC->WasInputKeyJustReleased(EKeys::SpaceBar))
@@ -1931,6 +1939,7 @@ void AKeysBoatPawn::SyncChaseCam()
 
 void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 {
+	Stage.bOn = false;   // set again below while a landing is being shot
 	if (IsDiving() || IsAshore()) { bExtCam = false; return; }   // the diver / walker actor places the camera (ApplyDiveCamera)
 	{
 		FVector EP; FRotator ER; float EF;
@@ -1940,7 +1949,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	const FBoatSpec& S = Spec();
 
 	// first person while fishing (V), and the helm view (1) while driving
-	const bool bWantFp = bRunning && bFpPref && IsFishingActive();
+	const bool bWantFp = bRunning && bFpPref && IsFishingActive() && FState != EKeysFish::Caught;   // the landing has its own shot
 	if (bWantFp != bFpOn)
 	{
 		bFpOn = bWantFp;
@@ -2009,18 +2018,136 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	FVector WantPos, WantLook;
 	if (FState == EKeysFish::Caught)
 	{
-		// a hero shot of the catch held up over the gunwale
-		const double Rx = FMath::Cos(H), Rz = -FMath::Sin(H), Fx = -FMath::Sin(H), Fz = -FMath::Cos(H);
-		const double Back = 2.4 + FishLen * 1.1;
-		WantPos = FVector(ShowPos.X + Rx * ShowSgn * Back + Fx * .9, ShowPos.Y + .5, ShowPos.Z + Rz * ShowSgn * Back + Fz * .9);
-		// aim a little to the fish's right so it sits left of center, clear of the catch card
-		WantLook = ShowPos + FVector(Fx, 0, Fz) * ShowSgn * Back * .32;
-		// hold it up side-on to the lens, nose high, kicking a little
-		const double Age = T - CaughtT;
-		const double Kick = FMath::Sin(Age * 5.3) * .14 * FMath::Exp(-Age * .35) + FMath::Sin(Age * 1.7) * .04;
-		const double ToCam = FMath::Atan2(CamPos.Z - ShowPos.Z, CamPos.X - ShowPos.X);
-		FishMesh->SetWorldLocationAndRotation(ToUE(ShowPos.X, ShowPos.Y + FMath::Sin(Age * 2.1) * .03, ShowPos.Z),
-			FRotator(80, FMath::RadiansToDegrees(ToCam + Kick) - 90, FMath::RadiansToDegrees(Kick * .6)));
+		// the landing, shot like a film: you and the mate haul the fish in, over the gunwale and onto the cockpit sole,
+		// or (too long for the cockpit) heave it through the tuna door in three pulls, the tail still out over the water.
+		// The lens starts outboard and low to see it come up out of the sea and cranes up over the cockpit once it's in;
+		// a long lens wide open, the boat around it soft; the lower third waits until the fish is aboard.
+		const double Age0 = T - CaughtT;
+		auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };
+		const FBoatSpec& BS = Spec();
+		const FTransform HullT = GetActorTransform();   // the crew's frame, so their hands meet the fish
+		// measured once as it lands (the mesh is reshaped every frame from here on: the tail beat and the drape)
+		if (Age0 < .05 || LandLB.BoxExtent.IsNearlyZero()) LandLB = FishMesh->CalcBounds(FTransform::Identity);
+		const FBoxSphereBounds LB = LandLB;   // nose along +X
+		const double Lv = FMath::Max(.4, LB.BoxExtent.X * 2 / 100);
+		const double Aft = -BS.Len * .5 + .75, Fore = .05 * BS.Len - 1.05;    // the clear cockpit sole, boat meters
+		const bool bDoor = Lv > (Fore - Aft) * .95;
+		const double Sd = ShowSgn >= 0 ? 1 : -1, HB = BS.Beam * .5;
+		double LX, LY, LYaw = 0;
+		const double DoorX = (Aft + Fore) * .5 - .3;            // the side door in the gunwale, mid-cockpit
+		if (bDoor) { LX = DoorX; LY = 0; }
+		else { LX = (Aft + Fore) * .5; LY = -Sd * BS.Beam * .06; LYaw = .22 * Sd; }           // a little askew
+		const double SoleZ = KeysMesh::SoleAt(BS, FMath::Max(LX, -BS.Len * .5 + .3));
+		double Haul = 0, Done = 2.3, Land = 0;
+		FVector PosL;
+		FQuat Q;
+		const double Kick = FMath::Sin(Age0 * 6.1) * (Age0 < .7 ? 1.6 : FMath::Exp(-FMath::Max(0.0, Age0 - 1.5) * .5)) + FMath::Sin(Age0 * 1.3) * .08;
+		if (!bDoor)
+		{
+			// thrashing beside the hull, then two pulls: up out of the water head first, then over the gunwale and down
+			const FVector P0(LX + .1, Sd * (HB + .6), SoleZ - 1.0), P1(LX + .05, Sd * (HB + .02), SoleZ + 1.0 + Lv * .3), P2(LX, LY, SoleZ);
+			Haul = .55 * Ease((Age0 - .6) / .6) + .45 * Ease((Age0 - 1.3) / .6);
+			PosL = Haul < .55 ? FMath::Lerp(P0, P1, Ease(Haul / .55)) : FMath::Lerp(P1, P2, Ease((Haul - .55) / .45));
+			const FQuat Hang = FRotator(78, FMath::RadiansToDegrees(-Sd * PI / 2), Kick * 12).Quaternion();   // nose up, side to the boat
+			const FQuat Flat = FRotator(0, FMath::RadiansToDegrees(LYaw + Kick * .05), 90 + Kick * 14).Quaternion();
+			Q = FQuat::Slerp(Hang, Flat, float(Ease((Haul - .45) / .55)));
+			Land = Ease((Haul - .85) / .15);
+		}
+		else
+		{
+			// too big to lift: alongside, head to the side door, and slid in through it in three heaves, swinging round
+			// to lie across the cockpit toward the bow, whatever doesn't fit still out of the door
+			Done = 4.4;
+			for (const double T0 : {.5, 1.7, 2.9}) Haul += Ease((Age0 - T0) / .8) / 3;
+			const double Yaw0 = -Sd * PI / 2, Yaw1 = -Sd * (PI / 2 - .55);
+			const double Yaw = FMath::Lerp(Yaw0, Yaw1, Ease((Haul - .3) / .7));
+			const FVector Dir(FMath::Cos(Yaw), FMath::Sin(Yaw), 0);
+			const FVector Nose0(DoorX, Sd * (HB + .35), SoleZ - .55), Nose1(DoorX + .6, -Sd * (HB - .45), SoleZ);
+			FVector Nose = FMath::Lerp(Nose0, Nose1, Haul);
+			Nose.Z = FMath::Lerp(Nose0.Z, Nose1.Z, Ease(Haul * 2.2));
+			PosL = Nose - Dir * Lv * .45;
+			Q = FRotator(FMath::Lerp(12.0, 0.0, Ease(Haul * 2)), FMath::RadiansToDegrees(Yaw), 90 + Kick * (Haul >= 1 ? 14 : 7)).Quaternion();
+			Land = Ease((Haul - .55) / .45);
+			LX = PosL.X; LY = PosL.Y;
+		}
+		// spray as it breaks the surface, and water streaming off it while it comes up
+		if (Age0 < .05) { bLandSplash = false; LandShedT = 0; }
+		if (AKeysLife* LL = AKeysLife::Get(this))
+		{
+			const FVector W = HullT.TransformPosition(PosL * 100.0) / 100;   // UE meters: X, Y, Z up
+			if (!bLandSplash && Haul > .06) { bLandSplash = true; LL->Splash(W.X, W.Y, 7, FMath::Clamp(Lv * .18, .2, .45)); if (AKeysAudio* Au = AKeysAudio::Get(this)) Au->Splash(W.X, W.Y, 10, 1.2); }
+			LandShedT -= Dt;
+			if (Haul > .05 && Land < .5 && LandShedT <= 0) { LandShedT = .12; LL->Shed(FVector(W.X, W.Z, W.Y), FVector(0, 1.0, 0), 3, .03); }
+		}
+		// lying down it rests on its flank: lift it by half its girth (the model's half-width, nose along +X)
+		PosL.Z += LB.BoxExtent.Y / 100 * .8 * Land;
+		const FTransform CompT(HullT.GetRotation() * Q, HullT.TransformPosition(PosL * 100.0));
+		// the fish isn't a plank: it beats its tail, hard while it thrashes at the side and hangs on the gaff, then in
+		// slowing bursts as it lies on the deck. And it lies on what's under it: through the side door, what is past the
+		// sill has nothing under it, so it bends down over the edge toward the water instead of sticking out stiff.
+		{
+			const double Aboard = Ease((Haul - .9) / .1);
+			const double Thrash = Age0 < .7 ? 1.6 : 1.1;
+			const double Settle = FMath::Max(0.0, Age0 - Done);
+			const double Burst = .5 + .5 * FMath::Sin(Age0 * 1.7);
+			const double Amp = FMath::Lerp(Thrash, (2.4 * FMath::Exp(-Settle * .45) + .25) * Burst, Aboard);
+			LandFlopPh += Dt * FMath::Lerp(11.0, 8.0 + 4 * Burst, Aboard);
+			FKeysMesh FM;
+			const double Scale = 1.35 * FMath::Clamp(FMath::Pow(Weight / ((Sp->Min + Sp->Max) / 2), 1.0 / 3), .75, 1.5);
+			if (AKeysLife::BuildCreatureMeshBent(Key, FM, Scale, LandFlopPh, Amp))
+			{
+				if (bDoor && Land > 0)
+				{
+					const double Sill = HB - .04, SillZ = SoleZ + .02;   // the door's outer edge, boat meters
+					for (FVector& V : FM.V)
+					{
+						const FVector Bm = HullT.InverseTransformPosition(CompT.TransformPosition(V)) / 100;
+						const double Out = Sd * Bm.Y - Sill;
+						if (Out <= 0) continue;
+						// curl about the sill: the further out, the more it hangs (toward 70 degrees), as a heavy body would
+						const double Th = FMath::Min(1.2, Out * 1.1) * Land;
+						const double Up = Bm.Z - SillZ;
+						const double O2 = Out * FMath::Cos(Th) + Up * FMath::Sin(Th), U2 = Up * FMath::Cos(Th) - Out * FMath::Sin(Th);
+						const FVector B2(Bm.X, Sd * (Sill + O2), SillZ + U2);
+						V = CompT.InverseTransformPosition(HullT.TransformPosition(B2 * 100.0));
+					}
+				}
+				FM.Commit(FishMesh, 0, AKeysWorld::VertexColorMaterial());
+			}
+		}
+		FishMesh->SetWorldTransform(CompT);
+		const FTransform FT = FishMesh->GetComponentTransform();
+		const FBoxSphereBounds B = FishMesh->CalcBounds(FT);
+		const FVector NoseU = FT.TransformPosition(FVector(LB.Origin.X + LB.BoxExtent.X * .72, 0, 0));
+		Stage.bOn = true; Stage.bDoor = bDoor; Stage.Age = Age0; Stage.Lv = Lv; Stage.Side = Sd; Stage.Pull = Haul; Stage.Done = Done; Stage.DoorX = DoorX;
+		Stage.Fish = HullT.InverseTransformPosition(B.Origin) / 100; Stage.Grip = HullT.InverseTransformPosition(NoseU) / 100; Stage.Final = FVector(LX, LY, SoleZ);
+		// while it's coming aboard, frame the rail too, where you two are hauling on it
+		const FVector RailU = HullT.TransformPosition(FVector(bDoor ? DoorX : LX, Sd * (HB - .25), SoleZ + 1.1) * 100.0);
+		const FVector CtrU = FMath::Lerp(FMath::Lerp(B.Origin, NoseU, .25), RailU, .55 * (1 - Land));
+		ShowPos = FVector(CtrU.X / 100, CtrU.Z / 100, CtrU.Y / 100);
+		CatchFov = 34.f;
+		// the lens, in the boat's frame: outboard and low (astern for the door) for the haul, craning up over the
+		// cockpit once the fish is in; it arcs a little all the while
+		const double Crane = Ease((Age0 - Done + .6) / 1.2);
+		const double Arc = FMath::Lerp(-.15, .12, Ease(Age0 / (Done + 4))) + FMath::Max(0.0, Age0 - Done - 4) * .01;
+		const FVector D0 = bDoor ? FVector(-.3, Sd, .7) : FVector(-.35, Sd, .85), D1 = bDoor ? FVector(-.55, Sd * .8, .5) : FVector(-.5, Sd * .3, 1.25);
+		const FVector DirL = FQuat(FVector::UpVector, Arc).RotateVector(FMath::Lerp(D0.GetSafeNormal(), D1.GetSafeNormal(), Crane).GetSafeNormal());
+		const FVector DirU = HullT.GetRotation().RotateVector(DirL).GetSafeNormal();
+		const double Span = FMath::Max(Lv, FMath::Lerp(3.2, 2.4, Land));   // the fish and the two of you
+		const double Fit = Span / FMath::Lerp(.55, bDoor ? .48 : .42, Crane) * .5 / FMath::Tan(FMath::DegreesToRadians(CatchFov * .5));
+		const double Dist = Fit * FMath::Lerp(1.08, .98, Ease(Age0 / (Done + 5)));
+		const FVector PosU = CtrU + DirU * Dist * 100;
+		const FVector FwU = (CtrU - PosU).GetSafeNormal(), RightU = FVector::CrossProduct(FVector::UpVector, FwU).GetSafeNormal();
+		const FVector LookU = CtrU - RightU * Dist * 100 * FMath::Tan(FMath::DegreesToRadians(CatchFov * .5)) * .28 * Ease((Age0 - Done) / 1.2);
+		WantPos = FVector(PosU.X / 100, PosU.Z / 100, PosU.Y / 100);
+		WantLook = FVector(LookU.X / 100, LookU.Z / 100, LookU.Y / 100);
+		FPostProcessSettings& PP = Camera->PostProcessSettings;
+		PP.bOverride_DepthOfFieldFocalDistance = true; PP.DepthOfFieldFocalDistance = float(Dist * 100);
+		PP.bOverride_DepthOfFieldFstop = true; PP.DepthOfFieldFstop = 2.2f;
+		PP.bOverride_DepthOfFieldSensorWidth = true; PP.DepthOfFieldSensorWidth = 36.f;
+		PP.bOverride_VignetteIntensity = true; PP.VignetteIntensity = .55f;
+		Camera->PostProcessBlendWeight = 1.f;
+		Shake = 0;
 		if (!CatchLight)
 		{
 			CatchLight = NewObject<UPointLightComponent>(this);
@@ -2036,7 +2163,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		// up and to one side of the lens, so the scales and the eye carry a highlight even with the sun behind the fish
 		const FVector Fish(ShowPos.X, ShowPos.Y, ShowPos.Z), ToLens = (CamPos - Fish).GetSafeNormal2D();
 		CatchLight->SetWorldLocation(ToUE(Fish.X + ToLens.X * 1.6 - ToLens.Z * .8, Fish.Y + 1.2, Fish.Z + ToLens.Z * 1.6 + ToLens.X * .8));
-		CatchLight->SetIntensity(float(500 + FishLen * 500));
+		CatchLight->SetIntensity(float(180 + FishLen * 180));   // a soft fill: enough for a catchlight, not to burn out the belly
 		CatchLight->SetAttenuationRadius(float((4 + FishLen * 2) * 100));
 		CatchLight->SetVisibility(true);
 	}
@@ -2085,6 +2212,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	if (!bCamInit) { CamPos = WantPos; CamLook = WantLook; bCamInit = true; }
 	CamPos = FMath::Lerp(CamPos, WantPos, 1 - FMath::Exp(-Dt * 4));
 	CamLook = FMath::Lerp(CamLook, WantLook, 1 - FMath::Exp(-Dt * 5));
+	if (FState == EKeysFish::Caught) { CamPos = WantPos; CamLook = WantLook; }   // the landing shot flies its own path (and opens on a cut)
 	// keep the lens out of the water
 	const double Surf = WaveH(CamPos.X, CamPos.Z, T, AmpAt(CamPos.X, CamPos.Z), false);
 	if (CamPos.Y < Surf + .6) CamPos.Y = Surf + .6;
@@ -2238,7 +2366,7 @@ void AKeysBoatPawn::SetHook()
 	JumpQ = 0; Deep = 0; DeepT = 0; ShakeT = Rand(.6, 1.4);
 	FState = EKeysFish::Fight;
 	FightLabel = SizeT > .7 ? TEXT("Something heavy is on") : SizeT > .35 ? TEXT("Solid fish on") : TEXT("Fish on");
-	FightSub = TEXT("It's running! Hold S (or Space) to reel, ease off when the bar runs red.");
+	FightSub = TEXT("It's running! Hold the down arrow (or Space) to reel, ease off when the bar runs red.");
 	Shake = FMath::Max(Shake, .3);
 	ShowFishMesh(true);
 	// the hit itself: the jumpers go airborne straight away (a tarpon always, a billfish nearly always, greyhounding)
@@ -2420,6 +2548,7 @@ void AKeysBoatPawn::ReleaseFish()
 
 void AKeysBoatPawn::FinishCatch()
 {
+	LandLB = FBoxSphereBounds(ForceInit);
 	CurTag = -1;
 	CardTagHead.Reset();
 	CardTagLines.Reset();
@@ -2461,7 +2590,7 @@ void AKeysBoatPawn::OnAction()
 		case EKeysFish::Nibble: MissFish(TEXT("Too early! You pulled the bait away from the fish.")); break;
 		case EKeysFish::Bite: SetHook(); break;
 		case EKeysFish::Caught: if (GetWorld()->GetTimeSeconds() - CaughtT > 1.6) ReleaseFish(); break;   // ignore the reeling taps still coming in as the fish lands
-		case EKeysFish::Waiting: ShowToast(TEXT("Wait for the float to go under, then strike. Hold S to retrieve, R to reel in.")); break;
+		case EKeysFish::Waiting: ShowToast(TEXT("Wait for the float to go under, then strike. Hold the down arrow to retrieve, R to reel in.")); break;
 		default: break;
 	}
 }
@@ -2487,6 +2616,15 @@ void AKeysBoatPawn::UpdateFeeding(double Dt)
 
 void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 {
+	if (bScriptLogFight && FState != LoggedFState)
+	{
+		static const TCHAR* Names[] = {TEXT("Idle"), TEXT("Casting"), TEXT("Waiting"), TEXT("Nibble"), TEXT("Bite"), TEXT("Fight"), TEXT("Caught")};
+		const int32 I = int32(FState);
+		UE_LOG(LogTemp, Log, TEXT("KRFish state %s  bob %.0f m out  key %s  toast \"%s\""), I >= 0 && I < 7 ? Names[I] : TEXT("?"), Hyp(Bob.X - X, Bob.Z - Z), *Key, *Toast);
+		LoggedFState = FState;
+	}
+	// strike: like pressing Space the moment the float goes under (scripted runs)
+	if (bScriptAutoStrike && FState == EKeysFish::Bite) OnAction();
 	UpdateFeeding(Dt);
 	if (bCharging) { ChargeT += Dt; Charge = FMath::Min(1.0, ChargeT / 1.3); }
 	if (AKeysLife* L = AKeysLife::Get(this))
@@ -2510,7 +2648,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 		}
 	}
 	if (FState == EKeysFish::Idle || FState == EKeysFish::Caught) return;
-	const bool bReel = bBack || (bAction && FState == EKeysFish::Fight);
+	const bool bReel = bReelKey || (bAction && FState == EKeysFish::Fight);
 
 	if (FState == EKeysFish::Casting)
 	{
@@ -2643,7 +2781,14 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 		const bool bInAir = bJumping;
 		const double Dg = Drag, PullK = (.55 + .15 * Dg) * (DeepT > 0 ? 1.25 : 1);
 		// reeling loads the line; when you stop, the drag lets line slip and tension settles to what the drag holds
-		if (bReel) Tension = Clamp(Tension + (.36 + (bRunningFish ? Pull * .72 * PullK : .04) + (bInAir ? .65 : 0)) * Dt, 0, 1.15);
+		// reeling pulls the line toward what the fish is doing, it doesn't just climb: on a resting fish it holds a working
+		// tension and gains line fast; into a running fish it climbs into the red (ease off, let the drag work, reel
+		// again when it turns); with the fish in the air it's the quickest way to snap it. Pump and wind.
+		if (bReel)
+		{
+			const double Tgt = bInAir ? 1.12 : bRunningFish ? Clamp(.66 + .34 * Pull * PullK + .03 * Dg, 0, 1.15) : .44 + .04 * Dg;
+			Tension = Clamp(Tension + (Tgt - Tension) * FMath::Min(1.0, Dt * (Tgt > Tension ? 1.5 : 1.8)), 0, 1.15);   // time to see the bar go red
+		}
 		else
 		{
 			const double Tgt = bInAir ? .05 : bRunningFish ? Clamp(.28 + .11 * Dg + .17 * Pull * (DeepT > 0 ? 1.2 : 1), 0, .97) : .08;
@@ -2666,13 +2811,15 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 			FZ -= DZ * R * Dt;
 		}
 		Stamina = FMath::Max(0.0, Stamina - Dt * .1 * (.45 + Tension) / FMath::Sqrt(S));
-		if (Tension >= LineBreakAt()) { OverT += Dt; if (OverT > .6) { Lose(TEXT("Snap! Too much pressure and the line parted.")); return; } }
+		if (Tension >= LineBreakAt()) { OverT += Dt; if (OverT > 1.0) { Lose(TEXT("Snap! Too much pressure and the line parted.")); return; } }
 		else OverT = FMath::Max(0.0, OverT - Dt);
 		if (Tension < .06) { SlackT += Dt; if (SlackT > 2.6) { Lose(TEXT("Slack line - the fish shook the hook.")); return; } }
 		else SlackT = 0;
 		if (Dist > MaxLine) { Lose(TEXT("Spooled! Chase the big ones with the boat next time.")); return; }
 		if (LandH(FX, FZ) > .2) { Lose(TEXT("Cut off in the mangroves.")); return; }
 		LineDist = Dist;
+		if (bScriptLogFight && FMath::Fmod(T, 1.0) < Dt)
+			UE_LOG(LogTemp, Log, TEXT("KRFight %s dist %.1f tension %.2f stamina %.2f reel %d run %d jump %d"), *Key, Dist, Tension, Stamina, bReel ? 1 : 0, bRunningFish ? 1 : 0, bJumping ? 1 : 0);
 		if (Dist < 4.5) { Land(); return; }
 		UpdateJump(Dt);
 		if (!bJumping)
@@ -2760,6 +2907,19 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 	// the chair cameras set their own field of view each frame: start the zoom from it and hand it back after
 	if (bExtCam && !bOn && JumpLook < .001) { JumpFov = Camera->FieldOfView; return; }
 	float Want = bExtCam ? Camera->FieldOfView : 88.f;
+	// the landing shot's long lens: cut to it, and cut back out of it when the catch is done
+	const bool bLand = FState == EKeysFish::Caught && !bExtCam && !IsDiving();
+	if (bLand || bWasLanding)
+	{
+		if (!bLand)
+		{
+			// out of the landing shot: hand the lens back without its depth of field and vignette
+			FPostProcessSettings& PP = Camera->PostProcessSettings;
+			PP.bOverride_DepthOfFieldFocalDistance = PP.bOverride_DepthOfFieldFstop = PP.bOverride_DepthOfFieldSensorWidth = PP.bOverride_VignetteIntensity = false;
+		}
+		bWasLanding = bLand; JumpFov = bLand ? CatchFov : 88.f; Camera->SetFieldOfView(JumpFov);
+		if (bLand) return;
+	}
 	if (bOn)
 	{
 		const FVector F = FishMesh->GetComponentLocation(), C = Camera->GetComponentLocation();
@@ -2888,10 +3048,10 @@ FString AKeysBoatPawn::Hint() const
 	{
 		case EKeysFish::Idle: return Kn > 3 ? TEXT("W/S throttle - A/D steer - H changes the sea state - O for sunset") : TEXT("Hold Space to power a cast - drag the mouse to aim");
 		case EKeysFish::Casting:
-		case EKeysFish::Waiting: return TEXT("Watch the float - hold S to retrieve - R reels in");
+		case EKeysFish::Waiting: return TEXT("Watch the float - hold the down arrow to retrieve - R reels in");
 		case EKeysFish::Nibble: return TEXT("Nibble... wait for the float to go under");
 		case EKeysFish::Bite: return TEXT("SPACE now to set the hook!");
-		case EKeysFish::Fight: return (bAutoOn ? AutoMode + TEXT(" - ") : FString()) + TEXT("Hold S to reel - ease off when red - T/Shift+T drag - F toggles auto-chase");
+		case EKeysFish::Fight: return (bAutoOn ? AutoMode + TEXT(" - ") : FString()) + TEXT("Hold the down arrow to reel - ease off when red - T/Shift+T drag - F toggles auto-chase");
 		default: return FString();
 	}
 }
@@ -2959,7 +3119,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 		S.bAir = bAir; S.Gear = Gear; S.bFwd = bFwd; S.BoatPos = FVector(X, Y, Z);
 		S.bLineOut = IsLineOut();
 		S.bFight = FState == EKeysFish::Fight; S.bFishRunning = bRunningFish;
-		S.bReeling = bBack || (bAction && FState == EKeysFish::Fight);
+		S.bReeling = bReelKey || (bAction && FState == EKeysFish::Fight);
 		S.FishStr = Str; S.Drag = Drag;
 		A->SetBoatState(S);
 		FString M;

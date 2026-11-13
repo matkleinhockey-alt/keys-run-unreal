@@ -1,4 +1,5 @@
 #include "KeysDiver.h"
+#include "KeysSchools.h"
 #include "KeysBoatPawn.h"
 #include "KeysGeo.h"
 #include "KeysSea.h"
@@ -421,7 +422,10 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 	if (bFireQueued)
 	{
 		bFireQueued = false;
+		const bool bWasOut = Shot.bAlive;
 		TryFire();
+		// the gun's thump: the school fish around bolt (the fish the shaft passes are spooked when it lands)
+		if (!bWasOut && Shot.bAlive) if (AKeysSchools* Sc = AKeysSchools::Get(this)) Sc->Startle(S.X, S.Z, 8);
 	}
 	// the latch lets go by itself once the gun is seated, or when the hands are busy
 	if (bDrawLatched && (CanFire(Gun) || !HandsFree())) { bDrawLatched = false; bDrawing = false; }
@@ -1063,7 +1067,11 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 	}
 	else if (Cmd == TEXT("fishahead"))
 	{
-		if (AKeysLife* L = AKeysLife::Get(this)) L->DebugBringSchool(S.X - FMath::Sin(CamYaw) * 7, S.Z - FMath::Cos(CamYaw) * 7);
+		// fishahead or fishahead=marlin[,dist]: the nearest school (of that species) to a few metres in front of the mask
+		FString Ty, Ds;
+		if (!Arg.Split(TEXT(","), &Ty, &Ds)) Ty = Arg;
+		const double D = Ds.IsEmpty() ? 7 : FCString::Atod(*Ds);
+		if (AKeysLife* L = AKeysLife::Get(this)) L->DebugBringSchool(S.X - FMath::Sin(CamYaw) * D, S.Z - FMath::Cos(CamYaw) * D, Ty);
 	}
 	else if (Cmd == TEXT("hold")) DebugHoldDepth = FCString::Atod(*Arg);
 	else if (Cmd == TEXT("spear")) bFireQueued = true;

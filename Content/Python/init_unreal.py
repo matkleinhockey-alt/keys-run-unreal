@@ -351,8 +351,10 @@ if (kind < 0.5) {
   float asc = F.aa(90.0, fw);
   g = (qa * c.x + qb * c.y) * 0.22 * asc + F.nd(p * 9.0).yzw * 0.025 + F.nd(p * 600.0).yzw * 0.01 * F.aa(600.0, fw);
   float3 ir = 0.5 + 0.5 * cos(6.2831853 * (ndv * 1.4 + float3(0.0, 0.33, 0.67)));
-  col = col * lerp(1.0, 0.86, rim * asc) * (1.0 + 0.45 * ir * (1.0 - ndv)) + 0.03 * ir;
-  rough = 0.07 + 0.08 * rim * asc; spec = 0.95;
+  // a wet sheen, not a mirror: in full sun the old glassy setting (rough 0.07, spec 0.95, +45% rainbow) burned the
+  // flanks out to white
+  col = col * lerp(1.0, 0.88, rim * asc) * (1.0 + 0.14 * ir * (1.0 - ndv));
+  rough = 0.26 + 0.1 * rim * asc; spec = 0.55;
 } else if (kind < 16.5) {          // bark / palm trunk: rings and fibres
   float4 w = F.nd(p * 3.0);
   float ph = p.z * 6.2831853 * 4.5 + w.x * 2.0;
@@ -487,6 +489,193 @@ def _vertex_color(mat):
     s.set_editor_property("additional_outputs", outs)
     for src, pin in ((vc, "VC"), (uv1, "K"), (lp, "LP"), (vn, "VN"), (cv, "CV"), (dp, "D"), (axes[0], "AX"), (axes[1], "AY"), (axes[2], "AZ"), (ts, "TS")):
         _link(src, "", s, pin)
+    mel.connect_material_property(s, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(s, "Rough", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(s, "Metal", unreal.MaterialProperty.MP_METALLIC)
+    mel.connect_material_property(s, "Spec", unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(s, "Nrm", unreal.MaterialProperty.MP_NORMAL)
+
+
+# The schooling fish (KeysSchools.cpp). The motion lives here, on the GPU: the C++ only steers a few leaders per school
+# and writes their recent track (20 samples a second, ~2.4 s of history) into a float texture, one row per leader,
+# four texels per sample: A = position (cm) + tail-beat phase, B = heading + the school's spread, C = the threat
+# (position + strength), D = floor top z, surface z, swim strength, alarm. Every fish is an instance that never moves:
+# from its custom data (0 leader row, 1 delay s, 2-4 slot cm in the leader's frame, 5 seed, 6 length m, 7 shade) this
+# shader reads where its leader was Delay seconds ago, places the fish at its slot around that (so turns ripple back
+# through the school), adds an idle wander, pushes it away from the threat (the school splits around a predator and
+# closes behind it), turns it along its motion, bends the body in a tail wave and returns the whole move as WPO.
+# The mesh runs nose (+X 50) to tail (-50) in its own units.
+FISH_MOVE = """
+float hist = max(Hist, 4.0);
+float s = Head - Delay / StepDt;
+float i0 = floor(s); float fr = s - i0;
+i0 = i0 - floor(i0 / hist) * hist;
+float i1 = i0 + 1.0; i1 = i1 - floor(i1 / hist) * hist;
+float vv = (Row + 0.5) / Rows;
+float tw = hist * 4.0;
+float4 A0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 0.5) / tw, vv), 0);
+float4 A1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 0.5) / tw, vv), 0);
+float4 B0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 1.5) / tw, vv), 0);
+float4 B1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 1.5) / tw, vv), 0);
+float4 C0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 2.5) / tw, vv), 0);
+float4 C1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 2.5) / tw, vv), 0);
+float4 D0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 3.5) / tw, vv), 0);
+float4 D1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 3.5) / tw, vv), 0);
+float ph1 = A1.w; if (ph1 < A0.w - 100.0) ph1 += 3216.9908772;
+float3 P = lerp(A0.xyz, A1.xyz, fr);
+float ph = lerp(A0.w, ph1, fr);
+float4 B = lerp(B0, B1, fr); float4 C = lerp(C0, C1, fr); float4 D = lerp(D0, D1, fr);
+float3 Up = float3(0, 0, 1);
+float3 F = normalize(B.xyz + float3(1e-4, 0, 0));
+float3 R = cross(Up, F); float rl = length(R); R = rl > 1e-3 ? R / rl : float3(0, 1, 0);
+float3 U = cross(F, R);
+float3 sl = float3(SlotX, SlotY, SlotZ);
+float sp = 6.0 + 0.1 * length(sl);
+sl *= B.w;
+float a1 = Seed * 40.0, a2 = Seed * 71.0, a3 = Seed * 13.0;
+float f1 = 0.31 + Seed * 0.2, f2 = 0.27 + frac(Seed * 7.0) * 0.2, f3 = 0.21;
+float3 wv = float3(sin(T * f1 + a1), sin(T * f2 + a2), 0.5 * sin(T * f3 + a3)) * sp;
+float3 wd = float3(f1 * cos(T * f1 + a1), f2 * cos(T * f2 + a2), 0.5 * f3 * cos(T * f3 + a3)) * sp;
+float3 pos = P + F * (sl.x + wv.x) + R * (sl.y + wv.y) + U * (sl.z + wv.z);
+// the threat: fish within ~10 m of it are pushed off its line and close in again behind it
+float3 dv = pos - C.xyz; float dist = length(dv) + 1.0;
+float k = C.w * saturate(1.6 - dist / 700.0);
+float3 away = dv / dist; away.z *= 0.35;
+pos += away * k * 450.0;
+pos.z = clamp(pos.z, D.x + 15.0 + Size * 25.0, D.y - 20.0 - Size * 12.0);
+// face along the motion: the leader's heading, the wander and the dodge
+float3 Fh = F * 110.0 + (F * wd.x + R * wd.y + U * wd.z) * 1.4 + away * (k * 300.0);
+Fh.z = clamp(Fh.z, -0.5 * length(Fh.xy), 0.5 * length(Fh.xy));
+float3 F2 = normalize(Fh + float3(1e-4, 0, 0));
+float3 R2 = cross(Up, F2); float r2 = length(R2); R2 = r2 > 1e-3 ? R2 / r2 : float3(0, 1, 0);
+float3 U2 = cross(F2, R2);
+// the body wave
+float u = saturate((50.0 - LP.x) / 100.0);
+float env = 0.05 + 0.95 * u * u;
+float amp = D.z * (1.0 + 1.2 * k);
+float lat = amp * 12.0 * env * sin(ph + Seed * 6.2831853 - u * 5.2);
+float3 lv = float3(LP.x - abs(lat) * 0.15 * u, LP.y + lat, LP.z) * Size;
+float3 world = pos + F2 * lv.x + R2 * lv.y + U2 * lv.z;
+float fl = saturate(k + D.w * 0.6) * (0.5 + 0.5 * sin(Seed * 31.0 + T * 6.0));
+FT = float4(F2, Shade * (1.0 + 0.7 * fl));
+RR = R2;
+return world - WP;
+"""
+
+# pixel side: the mesh's normals and axes turned to the way the fish faces now
+FISH_AXES = """
+float3 F = normalize(FT.xyz); float3 R = normalize(RR); float3 U = cross(F, R);
+AY = R; AZ = U;
+return F;
+"""
+
+FISH_NRM = """
+float3 F = normalize(FT.xyz); float3 R = normalize(RR); float3 U = cross(F, R);
+return normalize(F * VN.x + R * VN.y + U * VN.z);
+"""
+
+
+def _fish_tex():
+    path = MAT_DIR + "/T_KR_FishData"
+    if eal.does_asset_exist(path):
+        return eal.load_asset(path)
+    tools = unreal.AssetToolsHelpers.get_asset_tools()
+    tex = tools.create_asset("T_KR_FishData", MAT_DIR, unreal.Texture2D, unreal.Texture2DFactoryNew())
+    tex.set_editor_property("srgb", False)
+    tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_HDR)
+    tex.set_editor_property("filter", unreal.TextureFilter.TF_NEAREST)
+    eal.save_loaded_asset(tex)
+    return tex
+
+
+def _fish(mat):
+    F1 = unreal.CustomMaterialOutputType.CMOT_FLOAT1
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    F4 = unreal.CustomMaterialOutputType.CMOT_FLOAT4
+    tex = mel.create_material_expression(mat, unreal.MaterialExpressionTextureObjectParameter, -2400, 1400)
+    tex.set_editor_property("parameter_name", "LeaderTex")
+    tex.set_editor_property("texture", _fish_tex())
+    tex.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+    names = ["Row", "Delay", "SlotX", "SlotY", "SlotZ", "Seed", "Size", "Shade"]
+    cd = {}
+    for i, n in enumerate(names):
+        c = mel.create_material_expression(mat, unreal.MaterialExpressionPerInstanceCustomData, -2400, 1500 + i * 80)
+        c.set_editor_property("data_index", i)
+        cd[n] = c
+    params = {}
+    for i, (n, dv) in enumerate((("Head", 0.0), ("HeadPrev", 0.0), ("Hist", 48.0), ("Rows", 512.0), ("StepDt", 0.05))):
+        e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -2400, 2200 + i * 80)
+        e.set_editor_property("parameter_name", n)
+        e.set_editor_property("default_value", dv)
+        params[n] = e
+    # motion vectors: the previous frame reads the track as it stood then
+    pf = mel.create_material_expression(mat, unreal.MaterialExpressionPreviousFrameSwitch, -2100, 2200)
+    if not (mel.connect_material_expressions(params["Head"], "", pf, "Current Frame") and mel.connect_material_expressions(params["HeadPrev"], "", pf, "Previous Frame")):
+        unreal.log_warning("Keys Run: no previous-frame switch; fish motion vectors follow the current frame")
+        pf = params["Head"]
+    lp = mel.create_material_expression(mat, unreal.MaterialExpressionLocalPosition, -2400, 2650)
+    wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -2400, 2750)
+    try:
+        wp.set_editor_property("world_position_shader_offset", unreal.WorldPositionIncludedOffsets.WPT_EXCLUDE_ALL_SHADER_OFFSETS)
+    except Exception as e:
+        unreal.log_warning("Keys Run: fish world position: %s" % e)
+    tm = mel.create_material_expression(mat, unreal.MaterialExpressionTime, -2400, 2850)
+    mv = _custom(mat, -1800, 1600, FISH_MOVE, F3, ["Tex", "Row", "Delay", "SlotX", "SlotY", "SlotZ", "Seed", "Size", "Shade", "LP", "WP", "T", "Head", "Hist", "Rows", "StepDt"], "Follow the leader")
+    outs = []
+    for name, ty in (("FT", F4), ("RR", F3)):
+        o = unreal.CustomOutput()
+        o.set_editor_property("output_name", name)
+        o.set_editor_property("output_type", ty)
+        outs.append(o)
+    mv.set_editor_property("additional_outputs", outs)
+    _link(tex, "", mv, "Tex")
+    for n in names:
+        _link(cd[n], "", mv, n)
+    for src, pin in ((lp, "LP"), (wp, "WP"), (tm, "T"), (pf, "Head"), (params["Hist"], "Hist"), (params["Rows"], "Rows"), (params["StepDt"], "StepDt")):
+        _link(src, "", mv, pin)
+    mel.connect_material_property(mv, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+    ift = mel.create_material_expression(mat, unreal.MaterialExpressionVertexInterpolator, -1500, 1900)
+    _link(mv, "FT", ift, "")
+    irr = mel.create_material_expression(mat, unreal.MaterialExpressionVertexInterpolator, -1500, 2000)
+    _link(mv, "RR", irr, "")
+    # the everyday surface (as M_KR_VertexColor), with the paint brightened per fish and the frame turned with it
+    mat.set_editor_property("tangent_space_normal", False)
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -1400, 0)
+    tint = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1300, 1900)
+    tint.set_editor_property("r", False); tint.set_editor_property("g", False); tint.set_editor_property("b", False); tint.set_editor_property("a", True)
+    _link(ift, "", tint, "")
+    vct = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -1150, 0)
+    _link(vc, "", vct, "A")
+    _link(tint, "", vct, "B")
+    uv1 = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1400, 120)
+    uv1.set_editor_property("coordinate_index", 1)
+    vn = mel.create_material_expression(mat, unreal.MaterialExpressionVertexNormalWS, -1400, 360)
+    cv = mel.create_material_expression(mat, unreal.MaterialExpressionCameraVectorWS, -1400, 480)
+    dp = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -1400, 600)
+    ts = mel.create_material_expression(mat, unreal.MaterialExpressionTwoSidedSign, -1400, 1100)
+    ax = _custom(mat, -1100, 700, FISH_AXES, F3, ["FT", "RR"], "Fish axes")
+    aouts = []
+    for name in ("AY", "AZ"):
+        o = unreal.CustomOutput()
+        o.set_editor_property("output_name", name)
+        o.set_editor_property("output_type", F3)
+        aouts.append(o)
+    ax.set_editor_property("additional_outputs", aouts)
+    nr = _custom(mat, -1100, 360, FISH_NRM, F3, ["FT", "RR", "VN"], "Fish normal")
+    for c in (ax, nr):
+        _link(ift, "", c, "FT")
+        _link(irr, "", c, "RR")
+    _link(vn, "", nr, "VN")
+    s = _custom(mat, -700, 0, SURFACE_FN, F3, ["VC", "K", "LP", "VN", "CV", "D", "AX", "AY", "AZ", "TS"], "Surface")
+    so = []
+    for name, ty in (("Rough", F1), ("Metal", F1), ("Spec", F1), ("Nrm", F3)):
+        o = unreal.CustomOutput()
+        o.set_editor_property("output_name", name)
+        o.set_editor_property("output_type", ty)
+        so.append(o)
+    s.set_editor_property("additional_outputs", so)
+    for src, out, pin in ((vct, "", "VC"), (uv1, "", "K"), (lp, "", "LP"), (nr, "", "VN"), (cv, "", "CV"), (dp, "", "D"), (ax, "", "AX"), (ax, "AY", "AY"), (ax, "AZ", "AZ"), (ts, "", "TS")):
+        _link(src, out, s, pin)
     mel.connect_material_property(s, "", unreal.MaterialProperty.MP_BASE_COLOR)
     mel.connect_material_property(s, "Rough", unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(s, "Metal", unreal.MaterialProperty.MP_METALLIC)
@@ -1454,7 +1643,7 @@ BUILDERS = {
     "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
     "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble, "M_KR_Dash": _dash, "M_KR_Glass": _glass,
     "M_KR_GirlSkin": _girl(0), "M_KR_GirlHair": _girl(1), "M_KR_GirlSuit": _girl(2),
-    "M_KR_Cloud": _cloud, "M_KR_Rain": _rain,
+    "M_KR_Cloud": _cloud, "M_KR_Rain": _rain, "M_KR_Fish": _fish,
 }
 
 

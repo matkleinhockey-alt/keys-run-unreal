@@ -214,7 +214,7 @@ so there are no hand-made assets. The editor script creates the materials and th
   it: the captain holding the fish up on deck, anything past 25 lb or 1.5 m hung on the gin pole instead, and a speared
   fish held up under water by a diver in a wetsuit, mask and snorkel.
 - **Fishing from the planks** (`game/fishing/shore.ts`): ashore, standing on a pier, a dock or a marina's decking facing open
-  water, Space casts. The rod's whole state machine runs with you standing in for the boat: bites, the fight (S reels), the
+  water, Space casts. The rod's whole state machine runs with you standing in for the boat: bites, the fight (the down arrow reels), the
   card, keeping, releasing, tagging.
 - **The gold bluefin** (`entities/fish/legend-path.ts`): three gilded 3 m giants on a closed loop through deep water at
   least 60 m off any shore, routed on a grid with A* between hashed targets and rounded; where they are is a function of
@@ -280,7 +280,8 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Key | Action |
 | --- | --- |
 | A / D, Enter | choose a boat (Enter on the Boat row buys it), start |
-| W / S | throttle / reverse (S also reels) |
+| W / S | throttle / reverse |
+| Down arrow (hold) | reel (and wind the float back in); backs the boat down only with no line out |
 | A / D | steer |
 | U | gear D → N → R |
 | T | trim mode (Up/Down trims); during a fight, T / Shift+T sets drag |
@@ -524,3 +525,14 @@ best times and the species list (B) a word for each. Spearfishing isn't affected
   (`python3 Tools/girlglb.py raw/bikini_girl.glb dance-01.decoded.glb girl.glb`, dance-01 decoded with
   `Tools/unmeshopt.py`), then imported with four generated LODs. Each girl's skin tone, hair, eyes and swimsuit are
   material parameters (KeysDancers.cpp).
+
+## Modelled fish (Content/KeysRun/Fish)
+
+The big offshore fish (blue and black marlin, sailfish, swordfish, mahi, yellowfin, bluefin, bigeye, wahoo and the mako) are generated 3D models instead of the lofted
+procedural bodies: a side-view reference image and an image-to-3D model from Artlist, turned into the game's own fish mesh
+by `Tools/fishglb.py` (`python Tools/fishglb.py model.glb <species key> --preview check.png`; needs numpy<2, pillow,
+trimesh, scipy and fast_simplification). The tool puts the fish in KeysLife's frame (nose to -Z, back up), bakes the
+texture into vertex colours and writes two sizes: about 2,400 triangles for the fish swimming about and 16,000 for the
+close-up (the fish on the line, the catch card, the speared fish). KeysLife loads `<key>.krfish` when it exists and
+builds the procedural fish otherwise, so the same tail beat drives both. `-KRProcFish` turns the models off (before/after
+shots), and `dv:fishahead=<species>[,metres]` brings a school of that species in front of the diver.

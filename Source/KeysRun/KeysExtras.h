@@ -156,6 +156,9 @@ private:
 	FString LayoutFor;
 	FKeysDeck Deck;
 	FKeysHuman Captain, Crew;
+	FKeysHuman LandYou, LandMate;   // you and the mate, hauling a landed fish aboard (KeysCrew.cpp PoseLanding)
+	bool bLandInit = false;
+	void PoseLanding(double T);
 	FKeysHuman ChairH;   // the angler in the fighting chair (the Freeman's trolling fights)
 	FVector ChairEyeL = FVector::ZeroVector;
 	bool bChairEyeOn = false;

@@ -211,6 +211,14 @@ void AKeysHUD::DrawHUD()
 		return;
 	}
 	UpdateElectronics(P, Now);
+	if (P->FState == EKeysFish::Caught)
+	{
+		DrawCard(P);
+		if (Now < P->ToastUntil && !P->Toast.IsEmpty()) Text(P->Toast, Canvas->SizeX * .5f, Canvas->SizeY * .1f + 14 * U, .95f, FLinearColor::White, nullptr, true);
+		Contacts.Reset();
+		KeysTags::Live().Reset();
+		return;
+	}
 	AKeysDiver* Dv = AKeysDiver::Get(this);
 	const bool bDive = Dv && Dv->IsDiving();
 	AKeysWalker* Wk = AKeysWalker::Get(this);
@@ -253,8 +261,7 @@ void AKeysHUD::DrawHUD()
 	}
 	else if (P->bBigMap) DrawChart(P);
 	if (!bDive && !bAshore && !bGun) DrawEvents(P);
-	if (P->FState == EKeysFish::Caught) DrawCard(P);
-	else if (P->bElectronics && !P->bBigMap) DrawElectronics(P);
+	if (P->bElectronics && !P->bBigMap) DrawElectronics(P);
 	DrawTags();
 	DrawMore(P);
 
@@ -404,7 +411,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("G"), TEXT("Chartplotter and fish finder ([ ] zoom)")}, {TEXT("1"), TEXT("Chase, helm or tuna tower camera")}, {TEXT("Mouse drag / wheel"), TEXT("Look around / zoom")}};
 	static const FRow Fish[] = {
 		{TEXT("Hold Space"), TEXT("Power up a cast, release to throw")}, {TEXT("Space"), TEXT("Strike when a fish bites")},
-		{TEXT("Hold Space or S"), TEXT("Reel during the fight")}, {TEXT("T / Shift+T"), TEXT("Drag tighter / looser")}, {TEXT("R"), TEXT("Reel in")},
+		{TEXT("Hold Space or Down arrow"), TEXT("Reel during the fight")}, {TEXT("T / Shift+T"), TEXT("Drag tighter / looser")}, {TEXT("R"), TEXT("Reel in")},
 		{TEXT("K / Space / T"), TEXT("Keep / release / tag and release the fish")}, {TEXT("E"), TEXT("Weigh in at a marina dock")}, {TEXT("F / V"), TEXT("Auto-chase / first-person view")},
 		{TEXT("="), TEXT("Troll: riggers out, lines out, hold 5 kn")},
 		{TEXT("Cast at a wreck"), TEXT("Wreck fish (the crossed hulls on the chart)")}, {TEXT("Space, ashore"), TEXT("Fish from a pier, a dock or the marina's planks")}};
@@ -934,44 +941,57 @@ void AKeysHUD::DrawDiving(AKeysBoatPawn* P, AKeysDiver* D)
 
 void AKeysHUD::DrawCard(AKeysBoatPawn* P)
 {
+	// the landing: a letterboxed hero shot (the boat pawn flies the camera), the rest of the HUD out of the way, and a
+	// lower third that slides in once the shot has settled. No picture-in-picture.
+	const float SW = Canvas->SizeX, SH = Canvas->SizeY;
+	const double Age = P->CaughtAge();
+	auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return float(V * V * (3 - 2 * V)); };
+	const float Bars = Ease(Age / .5), BarH = SH * .1f * Bars;
+	DrawRect(FLinearColor::Black, 0, 0, SW, BarH);
+	DrawRect(FLinearColor::Black, 0, SH - BarH, SW, BarH);
+	const float In = Ease((Age - P->CardDelay()) / .7);   // once the fish is aboard
+	if (In <= 0) return;
+
 	const bool bTag = !P->CardTagHead.IsEmpty();
-	const float W = 560 * U, PH = (bTag ? 400 + 34 + 26 * P->CardTagLines.Num() : 400) * U, X = Canvas->SizeX - W - 40 * U, Y = Canvas->SizeY * .24f;
-	// a speared catch: the underwater portrait beside the card (game/catch/underwater-trophy.ts)
-	if (const AKeysFinal* Fn = AKeysFinal::Get(this))
-		if (UTextureRenderTarget2D* RT = Fn->Portrait())
-		{
-			const float IW = 480 * U, IH = 360 * U, IX = X - IW - 18 * U, IY = Y;
-			DrawRect(FLinearColor(0, 0, 0, .7f), IX - 4 * U, IY - 4 * U, IW + 8 * U, IH + 8 * U);
-			DrawTexture(RT, IX, IY, IW, IH, 0, 0, 1, 1, FLinearColor::White, BLEND_Opaque);
-			Text(Fn->PortraitUnderwater() ? TEXT("Speared - and held up for the camera, five metres down") : Fn->PortraitHung() ? TEXT("Too big to hold up - on the gin pole") : TEXT("Grip and grin"),
-				IX + 10 * U, IY + IH - 26 * U, .7f, FLinearColor(.85f, .95f, .97f));
-		}
-	Panel(X, Y, W, PH, .7f);
-	float Yy = Y + 16 * U;
-	Text(P->CardName, X + 24 * U, Yy, 1.6f, Gold, GEngine->GetLargeFont());
-	Yy += 56 * U;
-	Text(FString::Printf(TEXT("%.1f lb  -  %d in  -  %s"), P->CardWeight, P->CardInches, *P->CardSex), X + 24 * U, Yy, 1.15f);
-	Yy += 36 * U;
-	Text(FString::Printf(TEXT("+%s points"), *FText::AsNumber(P->CardPts).ToString()), X + 24 * U, Yy, 1.05f, Teal);
+	const float W = 760 * U, X = 72 * U - (1 - In) * 90 * U;
+	UFont* Big = GEngine->GetLargeFont();
+	float FW = 0, FH = 0;
+	GetTextSize(TEXT("Ag"), FW, FH, GEngine->GetMediumFont(), .9f * U);
+	// lay it out from the top of the lower bar upward: name, stats, points (+ bonus), place, tag, fact
+	float Hh = 84 + 52 + 38 + 32;
+	if (!P->CardBonus.IsEmpty()) Hh += 36;
+	if (bTag) Hh += 36 + 28 * P->CardTagLines.Num();
+	const int32 FactLines = FMath::Max(1, FMath::CeilToInt(P->CardFact.Len() * 9.5f * .9f / 760.f));
+	Hh += 12 + FactLines * FH / U;
+	const float Y0 = SH - BarH - 36 * U - Hh * U;
+	Panel(X - 28 * U, Y0 - 22 * U, W + 56 * U, Hh * U + 44 * U, .62f * In);
+	DrawRect(FLinearColor(Gold.R, Gold.G, Gold.B, In), X - 28 * U, Y0 - 22 * U, 4 * U, Hh * U + 44 * U);
+
+	float Yy = Y0;
+	Text(P->CardName.ToUpper(), X, Yy, 2.6f, FLinearColor(1, 1, 1, In), Big);
+	Yy += 84 * U;
+	Text(FString::Printf(TEXT("%.1f lb   |   %d in   |   %s"), P->CardWeight, P->CardInches, *P->CardSex), X, Yy, 1.6f, FLinearColor(Gold.R, Gold.G, Gold.B, In));
+	Yy += 52 * U;
+	Text(FString::Printf(TEXT("+%s points"), *FText::AsNumber(P->CardPts).ToString()), X, Yy, 1.4f, FLinearColor(Teal.R, Teal.G, Teal.B, In));
+	Yy += 38 * U;
+	if (!P->CardBonus.IsEmpty()) { Text(P->CardBonus, X, Yy, 1.1f, Gold); Yy += 36 * U; }
+	Text(P->CardZone, X, Yy, .9f, FLinearColor(.85f, .9f, .95f, In));
 	Yy += 32 * U;
-	Text(P->CardZone, X + 24 * U, Yy, .8f, Dim);
-	Yy += 30 * U;
-	if (!P->CardBonus.IsEmpty()) { Text(P->CardBonus, X + 24 * U, Yy, .95f, Gold); Yy += 30 * U; }
 	if (bTag)
 	{
-		// the recaptured fish's history (game/catch/tags.ts describeTag)
-		DrawRect(FLinearColor(.95f, .76f, .31f, .16f), X + 16 * U, Yy - 4 * U, W - 32 * U, (30 + 26 * P->CardTagLines.Num()) * U);
-		Text(P->CardTagHead, X + 24 * U, Yy, .9f, Gold);
-		Yy += 30 * U;
-		for (const FString& L : P->CardTagLines) { Text(TEXT("- ") + L, X + 30 * U, Yy, .78f, FLinearColor::White); Yy += 26 * U; }
-		Yy += 10 * U;
+		Text(P->CardTagHead, X, Yy, 1.f, Gold);
+		Yy += 36 * U;
+		for (const FString& L : P->CardTagLines) { Text(TEXT("- ") + L, X + 6 * U, Yy, .85f, FLinearColor::White); Yy += 28 * U; }
 	}
-	Yy += Wrapped(P->CardFact, X + 24 * U, Yy, W - 48 * U, .85f) + 10 * U;
-	Yy += Wrapped(P->CardNote, X + 24 * U, Yy, W - 48 * U, .8f, P->bCanKeep ? Dim : Red) + 10 * U;
-	const FString Rel = bTag ? TEXT("Space  release & report tag (+60%)") : TEXT("Space  release (+25%)");
-	const FString TagK = bTag || P->bCardSpeared ? FString() : FString(TEXT("      T  tag & release (+40%)"));
-	Text(P->bCanKeep ? TEXT("K  keep it on ice      ") + Rel : Rel, X + 24 * U, Y + PH - (TagK.IsEmpty() ? 40 : 66) * U, .95f, FLinearColor::White);
-	if (!TagK.IsEmpty()) Text(TagK.TrimStart(), X + 24 * U, Y + PH - 40 * U, .95f, FLinearColor(.55f, 1.f, .75f));
+	Yy += 12 * U;
+	Wrapped(P->CardFact, X, Yy, W, .9f, FLinearColor(.88f, .92f, .96f, In));
+
+	// the choices live in the lower bar, centred, with the release-only / cooler note above them when it matters
+	const FString Rel = bTag ? TEXT("SPACE  release & report tag  +60%") : TEXT("SPACE  release  +25%");
+	FString Keys = P->bCanKeep ? TEXT("K  keep on ice        ") + Rel : Rel;
+	if (!bTag && !P->bCardSpeared) Keys += TEXT("        T  tag & release  +40%");
+	Text(Keys, SW * .5f, SH - BarH * .5f - 18 * U, 1.45f, FLinearColor(1, 1, 1, In), nullptr, true);
+	if (!P->bCanKeep) Text(P->CardNote, SW * .5f, BarH * .5f - 14 * U, 1.05f, FLinearColor(1.f, .55f, .45f, In), nullptr, true);
 }
 
 // ================================================================ electronics: chartplotter and fish finder (JS ELEC)

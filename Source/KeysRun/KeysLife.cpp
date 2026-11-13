@@ -6,12 +6,15 @@
 #include "KeysMesh.h"
 #include "KeysWorld.h"
 #include "KeysFinal.h"
+#include "KeysSchools.h"
 #include "ProceduralMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
 #include "EngineUtils.h"
 #include "Templates/Function.h"
 #include "Templates/UniquePtr.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 using namespace KeysGeo;
 using KeysData::FZoneRow;
@@ -173,6 +176,10 @@ namespace
 	{ FKeysVis& V = Add(TEXT("mola")); V.Kind = EKeysKind::Fish; V.Len = 3; V.H = 2.6; V.W = 0.55; V.Back = LHex(0x8d939a); V.Belly = LHex(0xd8dce0); V.Fin = V.Back; V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 0; V.Speed = 0.5; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 18; V.DMax = 100000; V.Act = EKeysAct::Roll; V.bNoCatch = true; }
 	{ FKeysVis& V = Add(TEXT("warsaw")); V.Kind = EKeysKind::Fish; V.Len = 2.3; V.H = 0.72; V.W = 0.5; V.Back = LHex(0x3b332e); V.Belly = LHex(0x6d625a); V.Fin = LHex(0x2c2521); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.45; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 25; V.DMax = 100000; }
 	{ FKeysVis& V = Add(TEXT("cubera")); V.Kind = EKeysKind::Fish; V.Len = 1.6; V.H = 0.52; V.W = 0.28; V.Back = LHex(0x5a4a46); V.Belly = LHex(0xb9a89c); V.Fin = LHex(0x3e3330); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.8; V.SMin = 1; V.SMax = 3; V.Spread = 3; V.DMin = 8; V.DMax = 60; }
+	// ambient school fish only (KeysSchools.cpp): bait and grunts, never spawned by the zone tables here
+	{ FKeysVis& V = Add(TEXT("silverside")); V.Kind = EKeysKind::Fish; V.Len = 0.11; V.H = 0.022; V.W = 0.014; V.Back = LHex(0x7d9fa8); V.Belly = LHex(0xf2f6f7); V.Fin = LHex(0xc8d6da); V.Finlet = V.Fin; V.Pattern = EKeysPat::Line; V.Level = 1; V.Speed = 1; V.SMin = 1; V.SMax = 1; V.DMin = 1; V.DMax = 60; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("herring")); V.Kind = EKeysKind::Fish; V.Len = 0.2; V.H = 0.05; V.W = 0.025; V.Back = LHex(0x4f7f92); V.Belly = LHex(0xeef3f5); V.Fin = LHex(0xb9c7cc); V.Finlet = V.Fin; V.Level = 1; V.Speed = 1; V.SMin = 1; V.SMax = 1; V.DMin = 1; V.DMax = 60; V.bNoCatch = true; }
+	{ FKeysVis& V = Add(TEXT("grunt")); V.Kind = EKeysKind::Fish; V.Len = 0.3; V.H = 0.1; V.W = 0.05; V.Back = LHex(0xc9a640); V.Belly = LHex(0xe8dca8); V.Fin = LHex(0x3f78b8); V.Finlet = LHex(0xd8b440); V.Pattern = EKeysPat::Yline; V.Level = 1; V.Speed = 1; V.SMin = 1; V.SMax = 1; V.DMin = 1; V.DMax = 40; V.bNoCatch = true; }
 	// the gold bluefin (entities/fish/legend-path.ts): never caught, placed by the wall clock (AKeysFinal)
 	{ FKeysVis& V = Add(TEXT("goldbluefin")); V.Kind = EKeysKind::Tuna; V.Len = 3.1; V.H = .84; V.W = .66; V.Back = LHex(0x8a6a1c); V.Belly = LHex(0xf6e7a8); V.Fin = LHex(0xb8902c); V.Finlet = LHex(0xffd84a); V.Sickle = .46; V.Pattern = EKeysPat::Spots; V.Level = 0; V.Speed = 3.4; V.SMin = 3; V.SMax = 3; V.Spread = 5; V.DMin = 6; V.DMax = 100000; V.Act = EKeysAct::Bust; }
 		return M;
@@ -256,6 +263,8 @@ namespace
 	{ FKeysShape& S = Add(TEXT("mola")); S.Peak = 0.45; S.Nose = 0.4; S.Ped = 0.62; S.Tail = EKeysTail::Truncate; S.TL = 0.06; S.TH = 1.4; S.Pec = 0.1; S.Dor.Add({0.3, 0.52, 1.5, EKeysFin::Tri}); S.Anal.Add({0.3, 0.52, 1.5, EKeysFin::Tri}); }
 	{ FKeysShape& S = Add(TEXT("warsaw")); S.Peak = 0.4; S.Nose = 0.5; S.Ped = 0.34; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.2; S.Dor.Add({0.26, 0.8, 0.26, EKeysFin::Spiny}); S.Anal.Add({0.64, 0.82, 0.26, EKeysFin::Round}); S.Belly = 1.1; }
 	{ FKeysShape& S = Add(TEXT("cubera")); S.Peak = 0.38; S.Nose = 0.8; S.Ped = 0.22; S.Tail = EKeysTail::Truncate; S.TL = 0.2; S.TH = 0.62; S.Pec = 0.17; S.Dor.Add({0.3, 0.76, 0.3, EKeysFin::Spiny}); S.Anal.Add({0.64, 0.78, 0.3, EKeysFin::Round}); S.Belly = 1.02; }
+	{ FKeysShape& S = Add(TEXT("silverside")); S.Peak = 0.4; S.Nose = 1.1; S.Ped = 0.2; S.Tail = EKeysTail::Fork; S.TL = 0.22; S.TH = 0.7; S.Pec = 0.12; S.Dor.Add({0.45, 0.55, 0.5, EKeysFin::Tri}); S.Anal.Add({0.6, 0.72, 0.3, EKeysFin::Tri}); }
+	{ FKeysShape& S = Add(TEXT("herring")); S.Peak = 0.38; S.Nose = 0.9; S.Ped = 0.16; S.Tail = EKeysTail::Fork; S.TL = 0.24; S.TH = 0.75; S.Pec = 0.12; S.Dor.Add({0.4, 0.52, 0.45, EKeysFin::Tri}); S.Anal.Add({0.68, 0.78, 0.2, EKeysFin::Tri}); S.Belly = 1.1; }
 	{ FKeysShape& S = Add(TEXT("goldbluefin")); S.Peak = .43; S.Nose = .88; S.Ped = .06; S.Tail = EKeysTail::Lunate; S.TL = .23; S.TH = 1.1; S.Pec = .15; S.Dor.Add({.3, .4, .42, EKeysFin::Tri}); S.bFinlets = true; }
 		}
 		const FKeysShape* S = M.Find(K);
@@ -518,11 +527,12 @@ namespace
 
 	// JS buildFishGeo (2361): a lofted super-ellipse body with shaped fins, at lower resolution
 	// bHigh: the close-up model (the catch card, the photo, the fish on the line): a finer body, round eyes
-	void LifeBuildFish(const FKeysVis& V, FLifeTpl& M, bool bHigh)
+	// Lo: the school fish's cheaper bodies (1 near, 2 far: fewer rings, no eyes or pelvic fins on 2)
+	void LifeBuildFish(const FKeysVis& V, FLifeTpl& M, bool bHigh, int32 Lo = 0)
 	{
 		const FKeysShape& S = LifeShapeOf(V.Key);
 		const double L = V.Len, Hh = V.H > 0 ? V.H : L * .17, W = V.W > 0 ? V.W : L * .16, NE = 2.3;
-		const int32 NS = bHigh ? 36 : 24, NR = bHigh ? 22 : 14;
+		const int32 NS = bHigh ? 36 : Lo == 1 ? 12 : Lo == 2 ? 7 : 24, NR = bHigh ? 22 : Lo == 1 ? 8 : Lo == 2 ? 6 : 14;
 		const FLinearColor Fin = V.Fin, Back = V.Back;
 		const bool bDolphin = V.Key == TEXT("dolphin"), bCet = V.Kind == EKeysKind::Dolphin;
 		auto Prof = [&S](double t) { return t < S.Peak ? FMath::Pow(FMath::Sin(PI / 2 * t / S.Peak), S.Nose) : LLerp(1, S.Ped, FMath::Pow((t - S.Peak) / (1 - S.Peak), 1.25)); };
@@ -555,7 +565,7 @@ namespace
 		M.CurK = SurfFin;
 		auto MidFin = [&](const FKeysFin& F, bool bTop)
 		{
-			const int32 NSeg = bHigh ? 16 : 10;
+			const int32 NSeg = bHigh ? 16 : Lo ? 4 : 10;
 			auto Pt = [&](double U, bool bEdge)
 			{
 				const double t = LLerp(F.T0, F.T1, U), z = -L / 2 + t * L, yb = bTop ? TopY(t) - .004 : BotY(t) + .004;
@@ -630,17 +640,17 @@ namespace
 		{
 			const FLifeR3 R1 = FLifeR3::RZ(Sx * (S.bShark ? -.35 : -.15)) * FLifeR3::RY(FMath::Atan2(-.88, Sx * .48));
 			PFin(Pl, Pl * (S.bWings ? .55 : .38), R1, FVector(Sx * W / 2 * Prof(TP) * .82, -Hh * .12, -L / 2 + TP * L), S.bShark ? Back : Fin);
-			if (!S.bShark && !bCet)
+			if (!S.bShark && !bCet && Lo < 2)
 				PFin(Pl * .55, Pl * .25, FLifeR3::RY(FMath::Atan2(-.95, Sx * .3)), FVector(Sx * W * .12, BotY(.36) + .01, -L / 2 + .36 * L), Fin);
 		}
 
 		// eyes, bill, beak, hammer
 		const double Te = .09, Ke = Prof(Te), Ex = W / 2 * Ke * .86, Ey = Hh * .1 * Ke + Hh * .04, Ez = -L / 2 + Te * L, Er = FMath::Max(.008, FMath::Min(Hh, W) * .085);
 		M.CurK = SurfEye;
-		for (int32 Sx = -1; Sx <= 1; Sx += 2)
+		for (int32 Sx = -1; Sx <= 1 && Lo < 2; Sx += 2)
 		{
-			M.Blob(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), bHigh ? 10 : 6, bHigh ? 6 : 4, (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
-			if (!S.bShark && !bCet) M.Blob(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), bHigh ? 8 : 5, bHigh ? 5 : 3, LHex(0x0a0a0c));
+			M.Blob(FVector(Sx * Ex, Ey, Ez), FVector(Er * .6, Er, Er), bHigh ? 10 : Lo ? 5 : 6, bHigh ? 6 : Lo ? 3 : 4, (S.bShark || bCet) ? LHex(0x1a1a1a) : LHex(0xe8dca0));
+			if (!S.bShark && !bCet && !Lo) M.Blob(FVector(Sx * (Ex + Er * .35), Ey, Ez), FVector(Er * .3, Er * .6, Er * .6), bHigh ? 8 : 5, bHigh ? 5 : 3, LHex(0x0a0a0c));
 		}
 		M.CurK = SurfFish;
 		if (V.Bill > 0) M.Tube(FVector(0, Hh * .02, -L / 2 + .04), FVector(0, Hh * .02, -L / 2 - L * V.Bill + .04), .03, 0, 6, Back);
@@ -681,6 +691,113 @@ namespace
 		}
 	}
 
+	// A modelled fish (Content/KeysRun/Fish/<key>.krfish, made from a generated model by Tools/fishglb.py): the same
+	// frame as LifeBuildFish (nose toward -Z, back up +Y) at 1 unit nose to tail, colours baked from its texture.
+	// Lod 0 swims about (the CPU tail beat runs over it every frame), lod 1 is the close-up. -KRProcFish skips them.
+	bool LifeLoadModel(const FKeysVis& V, FLifeTpl& M, bool bHigh)
+	{
+		static const bool bOff = FParse::Param(FCommandLine::Get(), TEXT("KRProcFish"));
+		if (bOff) return false;
+		TArray<uint8> B;
+		// a species with no model of its own borrows its nearest relative's, reshaped and repainted (below)
+		static const TMap<FString, FString> Kin = {
+			{TEXT("mangrove"), TEXT("mutton")}, {TEXT("lanesnapper"), TEXT("mutton")}, {TEXT("vermilion"), TEXT("mutton")}, {TEXT("schoolmaster"), TEXT("mutton")},
+			{TEXT("cubera"), TEXT("mutton")}, {TEXT("yellowtail"), TEXT("mutton")}, {TEXT("sheepshead"), TEXT("mutton")},
+			{TEXT("gag"), TEXT("grouper")}, {TEXT("redgrouper"), TEXT("grouper")}, {TEXT("goliath"), TEXT("grouper")}, {TEXT("warsaw"), TEXT("grouper")},
+			{TEXT("jackcrevalle"), TEXT("amberjack")}, {TEXT("bluerunner"), TEXT("amberjack")},
+			{TEXT("pompano"), TEXT("permit")}, {TEXT("palometa"), TEXT("permit")}, {TEXT("lookdown"), TEXT("permit")},
+			{TEXT("ladyfish"), TEXT("bonefish")}, {TEXT("trout"), TEXT("redfish")},
+			{TEXT("cero"), TEXT("kingfish")}, {TEXT("spanishmack"), TEXT("kingfish")},
+			{TEXT("albacore"), TEXT("blackfin")}, {TEXT("skipjack"), TEXT("blackfin")}, {TEXT("goldbluefin"), TEXT("bluefin")},
+			{TEXT("blacktip"), TEXT("mako")}, {TEXT("lemonshark"), TEXT("mako")}, {TEXT("bullshark"), TEXT("mako")}, {TEXT("tigershark"), TEXT("mako")},
+			{TEXT("greatwhite"), TEXT("mako")}, {TEXT("nurse"), TEXT("mako")},
+			{TEXT("cobia"), TEXT("snook")}, {TEXT("blackfin"), TEXT("yellowfin")},   // until they have models of their own
+		};
+		FString Src = V.Key;
+		FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Fish") / (Src + TEXT(".krfish"));
+		if (!FPaths::FileExists(Path))
+			if (const FString* K = Kin.Find(V.Key)) { Src = *K; Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Fish") / (Src + TEXT(".krfish")); }
+		if (!FPaths::FileExists(Path) || !FFileHelper::LoadFileToArray(B, *Path) || B.Num() < 8 || FMemory::Memcmp(B.GetData(), "KRF1", 4)) return false;
+		// borrowed: reshape to this species' depth and girth (relative to the model's own), and repaint in its colours,
+		// keeping the model's light and dark (scales, bars, spots) under the new paint
+		const bool bKin = Src != V.Key;
+		const FKeysVis* BV = bKin ? LifeVis(Src) : nullptr;
+		double Hs = 1, Ws = 1;
+		if (BV)
+		{
+			auto Hr = [](const FKeysVis& X) { return (X.H > 0 ? X.H : X.Len * .17) / X.Len; };
+			auto Wr = [](const FKeysVis& X) { return (X.W > 0 ? X.W : X.Len * .16) / X.Len; };
+			Hs = FMath::Clamp(Hr(V) / Hr(*BV), .6, 1.6);
+			Ws = FMath::Clamp(Wr(V) / Wr(*BV), .6, 1.6);
+		}
+		int64 Off = 4;
+		auto U32 = [&]() -> uint32 { uint32 X = 0; if (Off + 4 <= B.Num()) FMemory::Memcpy(&X, B.GetData() + Off, 4); Off += 4; return X; };
+		const uint32 NLod = U32();
+		const uint32 Want = bHigh ? FMath::Min<uint32>(1, NLod - 1) : 0;
+		for (uint32 l = 0; l < NLod; l++)
+		{
+			const uint32 NV = U32(), NT = U32();
+			const int64 VBytes = int64(NV) * 28, TBytes = int64(NT) * 12;
+			if (Off + VBytes + TBytes > B.Num()) return false;
+			if (l != Want) { Off += VBytes + TBytes; continue; }
+			// the file runs 1 unit from the bill tip to the tail; the species' length is the body without the bill
+			const double L = V.Len, Tot = L * (1 + V.Bill), Shift = L / 2 - Tot / 2;
+			M.P.Reserve(NV); M.C.Reserve(NV); M.Kd.Reserve(NV);
+			// the model's own average brightness, so a borrowed model's light and dark are kept as relative detail
+			double LumAvg = 0;
+			for (uint32 i = 0; i < NV; i++)
+			{
+				const uint8* R = B.GetData() + Off + int64(i) * 28;
+				const FLinearColor C0(FColor(R[24], R[25], R[26], 255));
+				LumAvg += C0.R * .2126 + C0.G * .7152 + C0.B * .0722;
+			}
+			LumAvg = FMath::Max(.02, LumAvg / FMath::Max(1u, NV));
+			// and its body's extents, to put the species' own countershading and markings on it (LifeBodyColor works in
+			// body-normalised -1..1: x across, y up, z nose to tail)
+			FVector Mn(1e9), Mx(-1e9);
+			for (uint32 i = 0; i < NV; i++)
+			{
+				float F0[3];
+				FMemory::Memcpy(F0, B.GetData() + Off + int64(i) * 28, 12);
+				Mn = Mn.ComponentMin(FVector(F0[0], F0[1], F0[2])); Mx = Mx.ComponentMax(FVector(F0[0], F0[1], F0[2]));
+			}
+			const FVector Mid = (Mn + Mx) * .5, Half = ((Mx - Mn) * .5).ComponentMax(FVector(.01));
+			for (uint32 i = 0; i < NV; i++)
+			{
+				const uint8* R = B.GetData() + Off + int64(i) * 28;
+				float F[6];
+				FMemory::Memcpy(F, R, 24);
+				M.P.Add(FVector(F[0] * Tot * Ws, F[1] * Tot * Hs, F[2] * Tot + Shift));
+				// the model's colours come from a photo, light already in them: take the glare out (the near-white silver
+				// bellies burned out in the sun) and give a little of the colour back
+				FLinearColor Cl(FColor(R[24], R[25], R[26], 255));
+				const float Lum = Cl.R * .2126f + Cl.G * .7152f + Cl.B * .0722f;
+				Cl = FLinearColor(FMath::Lerp(Lum, Cl.R, 1.18f), FMath::Lerp(Lum, Cl.G, 1.18f), FMath::Lerp(Lum, Cl.B, 1.18f)) * .78f;
+				if (bKin)
+				{
+					// the species' countershading by height on the body (the file is 1 unit long; its height is about
+					// +-0.2), carried by the model's own brightness so its markings still read
+					// the fins stretch the extents, so the body proper is about two thirds of the height
+					const FVector Nv((F[0] - Mid.X) / Half.X, FMath::Clamp((F[1] - Mid.Y) / (Half.Y * .68), -1.0, 1.0), (F[2] - Mid.Z) / Half.Z);
+					const FLinearColor Pal = LLin(LifeBodyColor(V, Nv));
+					const FLinearColor Raw(FColor(R[24], R[25], R[26], 255));
+					const float Detail = FMath::Clamp(float((Raw.R * .2126 + Raw.G * .7152 + Raw.B * .0722) / LumAvg), .45f, 1.6f);
+					Cl = FLinearColor(FMath::Lerp(Cl.R, Pal.R * Detail, .9f), FMath::Lerp(Cl.G, Pal.G * Detail, .9f), FMath::Lerp(Cl.B, Pal.B * Detail, .9f));
+				}
+				Cl.R = FMath::Clamp(Cl.R, 0.f, 1.f); Cl.G = FMath::Clamp(Cl.G, 0.f, 1.f); Cl.B = FMath::Clamp(Cl.B, 0.f, 1.f); Cl.A = 1;
+				M.C.Add(Cl);
+				M.Kd.Add(SurfFish);
+			}
+			Off += VBytes;
+			M.T.SetNumUninitialized(NT * 3);
+			FMemory::Memcpy(M.T.GetData(), B.GetData() + Off, TBytes);
+			for (int32& Ix : M.T) if (uint32(Ix) >= NV) Ix = 0;
+			UE_LOG(LogTemp, Log, TEXT("KeysLife: %s from %s model (%s, %u verts)"), *V.Key, bKin ? *(Src + TEXT("'s")) : TEXT("its own"), bHigh ? TEXT("close-up") : TEXT("swimming"), NV);
+			return true;
+		}
+		return false;
+	}
+
 	const FLifeTpl& LifeCreatureTpl(const FKeysVis* V, bool bHigh = false)
 	{
 		static TMap<const FKeysVis*, TUniquePtr<FLifeTpl>> Cache, CacheHi;
@@ -688,7 +805,8 @@ namespace
 		if (!Slot)
 		{
 			Slot = MakeUnique<FLifeTpl>();
-			if (V->Kind == EKeysKind::Ray || V->Kind == EKeysKind::Turtle || V->Kind == EKeysKind::Manatee) LifeBuildOld(*V, *Slot);
+			if (LifeLoadModel(*V, *Slot, bHigh)) {}
+			else if (V->Kind == EKeysKind::Ray || V->Kind == EKeysKind::Turtle || V->Kind == EKeysKind::Manatee) LifeBuildOld(*V, *Slot);
 			else LifeBuildFish(*V, *Slot, bHigh);
 			Slot->Finish(V);
 		}
@@ -2033,6 +2151,32 @@ void AKeysLife::FishNear(double X, double Z, double R, TArray<FVector>& OutPos, 
 	}
 }
 
+bool AKeysLife::BuildCreatureMeshBent(const FString& Key, FKeysMesh& Out, double Scale, double Phase, double Amp)
+{
+	const FKeysVis* V = LifeVis(Key);
+	if (!V) return false;
+	const FLifeTpl& Tp = LifeCreatureTpl(V, true);
+	Out.SyncKinds();
+	const int32 I0 = Out.V.Num();
+	for (int32 i = 0; i < Tp.P.Num(); i++)
+	{
+		FVector P = Tp.P[i];
+		// the tail beat as it swims (CPU swim in UpdateSchools), the wave running back down the body
+		const double Sw = Phase - Tp.Wph[i];
+		if (Tp.Wig[i] != 0) P.X += Tp.Wig[i] * Amp * FMath::Sin(Sw);
+		if (Tp.WigY[i] != 0) P.Y += Tp.WigY[i] * Amp * FMath::Sin(Sw * .55);
+		P *= Scale;
+		const FVector N = Tp.N[i];
+		Out.V.Add(FVector(-P.Z, P.X, P.Y) * 100.0);
+		Out.N.Add(FVector(-N.Z, N.X, N.Y));
+		Out.UV.Add(FVector2D(P.X, P.Y));
+		Out.C.Add(Tp.C[i]);
+		Out.K.Add(FVector2D(Tp.Kd.IsValidIndex(i) ? Tp.Kd[i] : SurfFish, 0));
+	}
+	for (const int32 Ix : Tp.T) Out.T.Add(I0 + Ix);
+	return true;
+}
+
 bool AKeysLife::BuildCreatureMesh(const FString& Key, FKeysMesh& Out, double Scale)
 {
 	const FKeysVis* V = LifeVis(Key);
@@ -2054,13 +2198,52 @@ bool AKeysLife::BuildCreatureMesh(const FString& Key, FKeysMesh& Out, double Sca
 	return true;
 }
 
+bool AKeysLife::BuildSchoolMesh(const FString& Key, FKeysMesh& Out, int32 Lod)
+{
+	const FKeysVis* V = LifeVis(Key);
+	if (!V || V->Kind == EKeysKind::Ray || V->Kind == EKeysKind::Turtle || V->Kind == EKeysKind::Manatee) return false;
+	FLifeTpl Tp;
+	LifeBuildFish(*V, Tp, false, FMath::Clamp(Lod, 0, 2));
+	Tp.Finish(nullptr);
+	Out.SyncKinds();
+	const int32 I0 = Out.V.Num();
+	for (int32 i = 0; i < Tp.P.Num(); i++)
+	{
+		const FVector P = Tp.P[i], N = Tp.N[i];
+		Out.V.Add(FVector(-P.Z, P.X, P.Y) * 100.0);
+		Out.N.Add(FVector(-N.Z, N.X, N.Y));
+		Out.UV.Add(FVector2D(P.X, P.Y));
+		Out.C.Add(Tp.C[i]);
+		Out.K.Add(FVector2D(Tp.Kd.IsValidIndex(i) ? Tp.Kd[i] : SurfFish, 0));
+	}
+	for (const int32 Ix : Tp.T) Out.T.Add(I0 + Ix);
+	return true;
+}
+
+void AKeysLife::PredatorsNear(double X, double Z, double R, TArray<FVector4>& Out) const
+{
+	static const TSet<FString> Hunters = {TEXT("barracuda"), TEXT("tarpon"), TEXT("jackcrevalle"), TEXT("bluerunner"), TEXT("kingfish"), TEXT("cero"), TEXT("spanishmack"),
+		TEXT("amberjack"), TEXT("cobia"), TEXT("snook"), TEXT("ladyfish"), TEXT("mahi"), TEXT("dolphin"), TEXT("blackfin"), TEXT("wahoo")};
+	for (const FKeysSchool& G : Schools)
+	{
+		if (!G.V || FMath::Abs(G.CX - X) > R + 30 || FMath::Abs(G.CZ - Z) > R + 30) continue;
+		if (G.V->Kind != EKeysKind::Shark && !Hunters.Contains(G.Type)) continue;
+		for (const FKeysSwimmer& M : G.Members)
+			if (LHyp(M.WX - X, M.WZ - Z) < R) Out.Add(FVector4(M.WX, M.WY, M.WZ, M.Sz));
+	}
+}
+
 // ================================================================ diving
 void AKeysLife::SetDiver(bool bOn, double X, double Z, double RelSpeed)
 {
 	bDiver = bOn; DiverX = X; DiverZ = Z; DiverSpeed = RelSpeed;
 }
 
-void AKeysLife::SpookAt(double X, double Z) { Spooks.Add(FVector2D(X, Z)); }
+void AKeysLife::SpookAt(double X, double Z)
+{
+	Spooks.Add(FVector2D(X, Z));
+	if (AKeysSchools* Sc = AKeysSchools::Get(this)) Sc->Startle(X, Z, 7);
+}
 
 void AKeysLife::UpdateNearField()
 {
@@ -2177,13 +2360,14 @@ void AKeysLife::TakeSpeared(int32 TargetId)
 		}
 }
 
-void AKeysLife::DebugBringSchool(double X, double Z)
+void AKeysLife::DebugBringSchool(double X, double Z, const FString& Type, double Dist)
 {
 	FKeysSchool* Best = nullptr;
 	double BestD = 1e9;
 	for (FKeysSchool& G : Schools)
 	{
 		if (!G.V || !G.Members.Num() || !KeysData::Species(G.Type) || G.V->Kind == EKeysKind::Dolphin || G.V->Kind == EKeysKind::Turtle || G.V->Kind == EKeysKind::Manatee || G.V->bNoCatch) continue;
+		if (!Type.IsEmpty() && G.Type != Type) continue;
 		const double D = LHyp(G.CX - X, G.CZ - Z);
 		if (D < BestD) { BestD = D; Best = &G; }
 	}

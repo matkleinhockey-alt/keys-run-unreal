@@ -8,3 +8,4 @@ DerivedDataCache/
 Server/node_modules/
 Server/data.json
 .DS_Store
+__pycache__/

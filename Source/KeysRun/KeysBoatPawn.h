@@ -74,6 +74,12 @@ public:
 	double CoolerLb() const;
 
 	// catch card
+	// the landing's staging, in the boat's frame (meters, X bow, Y starboard, Z up): the crew actor draws you and the
+	// mate hauling the fish in over the gunwale, or through the tuna door if it's too big for the cockpit
+	struct FLandStage { bool bOn = false, bDoor = false; double Age = 0, Lv = 1, Side = 1, Pull = 0, Done = 2.3, DoorX = 0; FVector Fish = FVector::ZeroVector, Grip = FVector::ZeroVector, Final = FVector::ZeroVector; };
+	FLandStage Stage;
+	double CardDelay() const { return Stage.bOn ? Stage.Done : 1.3; }
+	double CaughtAge() const { return GetWorld() ? GetWorld()->GetTimeSeconds() - CaughtT : 0; }   // seconds since the landing
 	FString CardName, CardZone, CardFact, CardBonus, CardNote, CardSex;
 	double CardWeight = 0;
 	int32 CardPts = 0, CardInches = 0;
@@ -399,6 +405,17 @@ private:
 	bool bDragging = false;
 	FVector ShowPos = FVector::ZeroVector;   // where the catch is held up for the photo, game meters
 	double ShowSgn = 1;
+	float CatchFov = 35.f;      // the landing shot's lens, degrees
+	bool bWasLanding = false;
+	bool bLandSplash = false;
+	bool bScriptLogFight = false;
+	bool bReelKey = false;   // the reel is held (down arrow, or a script)
+	bool bScriptReelAuto = false, bAutoReelOn = false, bScriptAutoStrike = false;
+	EKeysFish LoggedFState = EKeysFish::Idle;   // -KRScript runs log the fight once a second
+	double LandFlopPh = 0;
+	FBoxSphereBounds LandLB = FBoxSphereBounds(ForceInit);      // the landed fish's tail beat   // the landing's spray as the fish breaks the surface
+	double LandShedT = 0;
+	double ShowSide = 1;        // which way "screen right" runs for the landing shot (flip if the fish lands left)
 	FVector CamPos = FVector::ZeroVector, CamLook = FVector::ZeroVector;   // game meters
 	bool bCamInit = false;
 	// first-person fishing eye (fp) and helm look offsets

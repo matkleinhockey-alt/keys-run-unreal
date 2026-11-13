@@ -15,6 +15,7 @@
 #include "KeysExtras.h"
 #include "KeysAudio.h"
 #include "KeysLife.h"
+#include "KeysSchools.h"
 #include "KeysOnline.h"
 #include "KeysGeo.h"
 #include "KeysSeafloor.h"
@@ -63,6 +64,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	SpawnOnce<AKeysWalker>(W);
 	SpawnOnce<AKeysLandmarks>(W);
 	SpawnOnce<AKeysLife>(W);
+	SpawnOnce<AKeysSchools>(W);
 	SpawnOnce<AKeysTraffic>(W);
 	SpawnOnce<AKeysOnline>(W);
 	SpawnOnce<AKeysEvents>(W);
