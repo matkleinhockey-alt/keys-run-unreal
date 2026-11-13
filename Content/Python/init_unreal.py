@@ -1061,10 +1061,125 @@ def _glass(mat):
     mel.connect_material_property(_const(mat, 0.9, -800, 500), "", unreal.MaterialProperty.MP_SPECULAR)
 
 
+# The girls (Content/KeysRun/Crew/Girl, Tools/girlglb.py): one textured figure in three sections, each with its own
+# material, and each girl her own skin tone, hair, eye and swimsuit colours (vector parameters set per figure).
+# The source texture is a baked, pale-peach skin, dark navy hair and a navy swimsuit with white stripes; every pixel is
+# recoloured by what it shows: peach -> the skin tone (its shading and blush kept as a ratio to the average skin),
+# navy -> hair or swimsuit colour (its light and dark kept), the white stripes -> the stripe colour, the bright blue of
+# the eyes -> the eye colour. Fine strands run down the hair and a soft weave over the swimsuit, from noise in the
+# figure's own rest space so they ride along with the dance; both fade out with distance.
+GIRL_FN = KRF_NOISE + """
+KRF F;
+float3 t = T;
+float l = dot(t, float3(0.3, 0.59, 0.11));
+float sat = max(t.r, max(t.g, t.b)) - min(t.r, min(t.g, t.b));
+float3 p = P / 100.0;
+#if PIXELSHADER
+float fw = max(length(ddx(p)), length(ddy(p)));
+#else
+float fw = 0.01;
+#endif
+float3 n = normalize(lerp(float3(0, 0, 1), NM, NS));
+float2 g = 0;
+// peach: the skin, its pale bake remapped to this girl's tone (0.92 0.69 0.52 is the bake's average skin)
+float skin = saturate((t.r - t.b) * 6.0 - 0.6) * saturate((t.r - t.g) * 12.0) * saturate(t.r * 4.0 - 1.2);
+// (its contrast eased: the bake's streaks and seams fade, its shading and blush stay)
+float3 sk = pow(max(t / float3(0.92, 0.69, 0.52), 0.0), 0.6) * Tone;
+float4 m = F.nd(p * 30.0);
+float rough = 0.5 - 0.08 * m.x; float spec = 0.36;
+float3 col;
+if (Part < 0.5) {
+  // anything here that is not peach (a navy-tinted seam, a stray texel of swimsuit) is just more skin
+  col = lerp(Tone * lerp(0.8, 1.0, m.x), sk, saturate(skin * 2.0));
+} else if (Part < 1.5) {
+  // hair: dark navy -> the hair colour, keeping the bake's light and shade; bright, unsaturated texels a sheen on
+  // the hair (and the eye whites a soft grey);
+  // the bright blue irises -> the eye colour; peach here is the face's edge -> skin
+  float dark = 1.0 - smoothstep(0.1, 0.3, l);
+  float4 st = F.nd(p * float3(320.0, 320.0, 9.0));
+  float4 cl = F.nd(p * float3(45.0, 45.0, 3.0));
+  float ast = F.aa(320.0, fw);
+  float3 hc = Hair * clamp(l / 0.045, 0.45, 2.0) * lerp(1.0, lerp(0.7, 1.25, st.x), ast) * lerp(0.88, 1.1, cl.x);
+  float blue = saturate((t.b - t.r) * 5.0) * smoothstep(0.08, 0.2, l);
+  float3 other = lerp(lerp(hc * 1.5, float3(l, l, l) * 0.7, 0.3), Eye * l * 2.5, blue);
+  other = lerp(other, sk, skin);
+  col = lerp(other, hc, dark);
+  g = (st.yz * 0.16 * ast + cl.yz * 0.05) * dark;
+  rough = lerp(0.45, 0.32 + 0.12 * cl.x, dark); spec = lerp(0.4, 0.55, dark);
+} else {
+  // swimsuit: navy -> the suit colour, the white stripes -> the stripe colour, a fine lycra knit
+  float stripe = smoothstep(0.25, 0.5, l) * (1.0 - saturate(sat * 2.5));
+  float3 sc = Suit * clamp(l / 0.05, 0.4, 1.8);
+  col = lerp(sc, Suit2 * saturate(l * 1.3), stripe);
+  col = lerp(col, sk, skin);
+  float4 kn = F.nd(p * 400.0);
+  float akn = F.aa(400.0, fw);
+  g = kn.yz * 0.05 * akn * (1.0 - skin);
+  rough = lerp(0.42 + 0.1 * kn.x * akn, rough, skin); spec = lerp(0.45, spec, skin);
+}
+Nrm = normalize(n + float3(g, 0));
+Rough = saturate(rough);
+Spec = spec;
+return saturate(col);
+"""
+
+
+def _girl(part):
+    def build(mat):
+        mat.set_editor_property("two_sided", part == 1)
+        mat.set_editor_property("used_with_skeletal_mesh", True)
+        if part == 0:
+            # the engine's default skin scattering profile (no profile asset needed)
+            mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_SUBSURFACE_PROFILE)
+        F1 = unreal.CustomMaterialOutputType.CMOT_FLOAT1
+        F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+        tex = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, -1400, 0)
+        tex.set_editor_property("parameter_name", "Base")
+        tex.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/DefaultTexture"))
+        nm = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, -1400, 300)
+        nm.set_editor_property("parameter_name", "Normal")
+        nm.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL)
+        nm.set_editor_property("texture", unreal.load_asset("/Engine/EngineMaterials/DefaultNormal"))
+        # the rest-pose position is a vertex-shader value: carried to the pixels through an interpolator
+        lp = mel.create_material_expression(mat, unreal.MaterialExpressionPreSkinnedPosition, -1700, 600)
+        vi = mel.create_material_expression(mat, unreal.MaterialExpressionVertexInterpolator, -1400, 600)
+        _link(lp, "", vi, "")
+        ins = [(tex, "RGB", "T"), (nm, "RGB", "NM"), (vi, "", "P")]
+        y = 700
+        for name, v in (("Tone", (0.6, 0.42, 0.32)), ("Hair", (0.05, 0.025, 0.012)), ("Eye", (0.12, 0.07, 0.03)),
+                        ("Suit", (0.02, 0.05, 0.25)), ("Suit2", (0.9, 0.9, 0.9))):
+            c = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1400, y)
+            c.set_editor_property("parameter_name", name)
+            c.set_editor_property("default_value", unreal.LinearColor(v[0], v[1], v[2], 1.0))
+            ins.append((c, "", name))
+            y += 120
+        ns = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1400, y)
+        ns.set_editor_property("parameter_name", "NormalStrength")
+        ns.set_editor_property("default_value", 0.45)
+        ins.append((ns, "", "NS"))
+        ins.append((_const(mat, float(part), -1400, y + 120), "", "Part"))
+        s = _custom(mat, -700, 0, GIRL_FN, F3, [i[2] for i in ins], "Girl")
+        outs = []
+        for name, ty in (("Rough", F1), ("Spec", F1), ("Nrm", F3)):
+            o = unreal.CustomOutput()
+            o.set_editor_property("output_name", name)
+            o.set_editor_property("output_type", ty)
+            outs.append(o)
+        s.set_editor_property("additional_outputs", outs)
+        for src, out, pin in ins:
+            _link(src, out, s, pin)
+        mel.connect_material_property(s, "", unreal.MaterialProperty.MP_BASE_COLOR)
+        mel.connect_material_property(s, "Rough", unreal.MaterialProperty.MP_ROUGHNESS)
+        mel.connect_material_property(s, "Spec", unreal.MaterialProperty.MP_SPECULAR)
+        mel.connect_material_property(s, "Nrm", unreal.MaterialProperty.MP_NORMAL)
+    return build
+
+
 BUILDERS = {
     "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
     "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
     "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble, "M_KR_Dash": _dash, "M_KR_Glass": _glass,
+    "M_KR_GirlSkin": _girl(0), "M_KR_GirlHair": _girl(1), "M_KR_GirlSuit": _girl(2),
 }
 
 
