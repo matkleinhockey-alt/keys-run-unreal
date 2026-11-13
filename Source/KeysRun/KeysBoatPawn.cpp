@@ -684,6 +684,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			}
 		}
 		else if (Cmd.StartsWith(TEXT("res="))) KeysGfx::SetResScale(FCString::Atoi(*Cmd.Mid(4)));
+		else if (Cmd.StartsWith(TEXT("fishcam"))) { FishCamT = -1; TriggerFishCam(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 0); }
 		else if (Cmd == TEXT("sunset")) { if (AKeysWorld* Wd = World()) Wd->ToggleSunset(); }
 		else if (Cmd.StartsWith(TEXT("con=")))
 		{
@@ -1271,7 +1272,7 @@ bool AKeysBoatPawn::FpEyeLocal(FVector& Out) const
 {
 	if (InChair() && bFpPref) { Out = ChairEyeLocal(); return true; }
 	Out = FpEyeL;
-	return bFpOn;
+	return bFpOn && FishCamT < 0;   // (during the fish cam you are back in the shot, rod in hand)
 }
 
 bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& OutFov) const
@@ -2022,6 +2023,14 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		FpYaw += FMath::Sin(T * .5 + 2) * .045 * Sw * Dt;
 		// game yaw: forward is (-sin, -cos) in x/z, which is Unreal X/Y
 		const FVector Dir(-FMath::Sin(FpYaw) * FMath::Cos(Pp), -FMath::Cos(FpYaw) * FMath::Cos(Pp), FMath::Sin(Pp));
+		// the fish cam takes the lens from the first-person view too
+		FVector FcPos = Eye, FcLook = Eye + FVector(Dir.X, Dir.Z, Dir.Y) * 10;
+		if (ApplyFishCam(Dt, T, FcPos, FcLook))
+		{
+			const FVector Pu = ToUE(FcPos.X, FcPos.Y, FcPos.Z), Lu = ToUE(FcLook.X, FcLook.Y, FcLook.Z);
+			Camera->SetWorldLocationAndRotation(Pu, (Lu - Pu).Rotation());
+			return;
+		}
 		Camera->SetWorldLocationAndRotation(EyeU, Dir.Rotation());
 		return;
 	}
@@ -2240,13 +2249,61 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	CamPos = FMath::Lerp(CamPos, WantPos, 1 - FMath::Exp(-Dt * 4));
 	CamLook = FMath::Lerp(CamLook, WantLook, 1 - FMath::Exp(-Dt * 5));
 	if (FState == EKeysFish::Caught) { CamPos = WantPos; CamLook = WantLook; }   // the landing shot flies its own path (and opens on a cut)
-	// keep the lens out of the water
+	FVector ShotPos = CamPos, ShotLook = CamLook;
+	const bool bFishCam = ApplyFishCam(Dt, T, ShotPos, ShotLook);
+	// keep the lens out of the water (but for the fish cam, which is meant to be under it)
 	const double Surf = WaveH(CamPos.X, CamPos.Z, T, AmpAt(CamPos.X, CamPos.Z), false);
 	if (CamPos.Y < Surf + .6) CamPos.Y = Surf + .6;
-	FVector P = ToUE(CamPos.X, CamPos.Y, CamPos.Z);
+	if (!bFishCam) { ShotPos = CamPos; ShotLook = CamLook; }
+	FVector P = ToUE(ShotPos.X, ShotPos.Y, ShotPos.Z);
 	if (Shake > 0) P += FVector(FMath::FRand() - .5, FMath::FRand() - .5, FMath::FRand() - .5) * Shake * 60;
-	const FVector L = ToUE(CamLook.X, CamLook.Y, CamLook.Z);
+	const FVector L = ToUE(ShotLook.X, ShotLook.Y, ShotLook.Z);
 	Camera->SetWorldLocationAndRotation(P, (L - P).Rotation());
+}
+
+// ================================================================ the fish cam
+// On the hookset (never the bite: the strike window is the one skill check, and the camera stays with you for it), a
+// 2.3 s cut under the water: low and looking a little up so the surface is in frame, on the far side of the fish from
+// the boat, arcing round it and pushing in, with a little handheld drift, easing in and out so it never jump-cuts.
+void AKeysBoatPawn::TriggerFishCam(double Hold)
+{
+	if (FishCamT >= 0 || Stage.bOn) return;
+	FishCamT = 0; FishCamBlend = 0; FishCamLen = Hold > 0 ? Hold : 2.3;
+	FishCamSeed = FMath::FRand() * 1000; FishCamSide = FMath::RandBool() ? -1 : 1;
+	FishCamFrom = FVector(FX, 0, FZ);
+}
+
+bool AKeysBoatPawn::ApplyFishCam(double Dt, double T, FVector& Pos, FVector& Look)
+{
+	if (FishCamT < 0) return false;
+	if (FState != EKeysFish::Fight || IsDiving()) { FishCamT = -1; FishCamBlend = 0; return false; }
+	FishCamT += Dt;
+	if (FishCamT >= FishCamLen) { FishCamT = -1; FishCamBlend = 0; return false; }
+	auto SS = [](double V) { const double K = FMath::Clamp(V, 0.0, 1.0); return K * K * (3 - 2 * K); };
+	FishCamBlend = FMath::Min(SS(FishCamT / .28), SS((FishCamLen - FishCamT) / .45));
+	const double K = FMath::Min(1.0, FishCamT / FishCamLen);
+	const double SurfY = WaveH(FX, FZ, T, AmpAt(FX, FZ), false), FloorY = -DepthAt(FX, FZ);
+	const double Lo = FloorY + .7, Hi = SurfY - .5;
+	// where the fish really is (just under the surface, or down where a sounder has taken it): look straight at it
+	// from a little under it, so it's climbing across frame with the surface above
+	const double FishY = SurfY - FishLen * .09 - Deep;
+	FVector Lk(FX, FMath::Min(Hi, FMath::Max(Lo, FishY)), FZ);
+	const double DeepY = FMath::Min(Hi, FMath::Max(Lo, FishY - .9));
+	// composed round the boat: the lens on the far side of the fish from the hull, looking back along the line
+	double AX = Lk.X - X, AZ = Lk.Z - Z;
+	if (Hyp(AX, AZ) < .5) { AX = Lk.X - FishCamFrom.X; AZ = Lk.Z - FishCamFrom.Z; }
+	const double Ang = FMath::Atan2(AX, AZ) + FishCamSide * (.85 * (K - .5));
+	const double Range = 5.6 + (3.1 - 5.6) * SS(K);
+	FVector Ps(Lk.X + FMath::Sin(Ang) * Range, DeepY, Lk.Z + FMath::Cos(Ang) * Range);
+	// handheld: two octaves, the fast one settling
+	auto N = [&](double F, double Ph) { return FMath::Sin(FishCamT * F + FishCamSeed + Ph); };
+	const double J = .14 * (1 - .6 * K);
+	Ps.X += N(2.1, 0) * J + N(5.7, 1.1) * J * .4;
+	Ps.Y += N(1.7, 2.0) * J * .8 + N(6.3, .4) * J * .3;
+	Ps.Z += N(1.9, 4.0) * J + N(5.1, 2.6) * J * .4;
+	Pos = FMath::Lerp(Pos, Ps, FishCamBlend);
+	Look = FMath::Lerp(Look, Lk, FishCamBlend);
+	return true;
 }
 
 // ================================================================ fishing
@@ -2392,6 +2449,7 @@ void AKeysBoatPawn::SetHook()
 	Tension = .55; Stamina = 1; bRunningFish = true; RunT = Rand(2, 4); RunAng = Rand(-.7, .7); Pull = Str * 1.05; SlackT = 0; OverT = 0;
 	JumpQ = 0; Deep = 0; DeepT = 0; ShakeT = Rand(.6, 1.4);
 	FState = EKeysFish::Fight;
+	if (RaiseCamT <= 0) TriggerFishCam();
 	FightLabel = SizeT > .7 ? TEXT("Something heavy is on") : SizeT > .35 ? TEXT("Solid fish on") : TEXT("Fish on");
 	FightSub = TEXT("It's running! Hold the down arrow (or Space) to reel, ease off when the bar runs red.");
 	Shake = FMath::Max(Shake, .3);
@@ -2984,7 +3042,7 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 
 	FKeysMesh M;
 	FVector TipU;   // rod tip, Unreal axes, meters
-	if (bFpOn && !InChair()) TipU = BuildViewModel(M);
+	if (bFpOn && !InChair() && FishCamT < 0) TipU = BuildViewModel(M);   // (the fish cam has the lens: the rod is back in your hands)
 	else
 	{
 		const FVector Tip = RodTip(End);

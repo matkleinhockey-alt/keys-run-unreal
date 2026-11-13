@@ -76,6 +76,11 @@ public:
 	// catch card
 	// the landing's staging, in the boat's frame (meters, X bow, Y starboard, Z up): the crew actor draws you and the
 	// mate hauling the fish in over the gunwale, or through the tuna door if it's too big for the cockpit
+	// the fish cam (web game/fishing/fish-cam.ts): a 2.3 s underwater shot of the fish the moment it's hooked
+	double FishCamT = -1, FishCamLen = 2.3, FishCamSeed = 0, FishCamSide = 1, FishCamBlend = 0;
+	FVector FishCamFrom = FVector::ZeroVector;
+	void TriggerFishCam(double Hold = 0);
+	bool ApplyFishCam(double Dt, double T, FVector& Pos, FVector& Look);
 	struct FLandStage { bool bOn = false, bDoor = false; double Age = 0, Lv = 1, Side = 1, Pull = 0, Done = 2.3, DoorX = 0; FVector Fish = FVector::ZeroVector, Grip = FVector::ZeroVector, Final = FVector::ZeroVector; };
 	FLandStage Stage;
 	double CardDelay() const { return Stage.bOn ? Stage.Done : 1.3; }
