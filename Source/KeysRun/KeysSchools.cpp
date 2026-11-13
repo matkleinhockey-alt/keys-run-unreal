@@ -1011,7 +1011,7 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		const FVector D = PC->GetCameraRotation().Vector();
 		Fw = FVector(D.X, D.Z, D.Y).GetSafeNormal();
 	}
-	const double Ahead = A.IsEmpty() ? 9 : FCString::Atod(*A);
+	const double Ahead = A.IsNumeric() ? FCString::Atod(*A) : 9;   // put=<species> passes a name, not a distance
 	const FVector Flat2 = Flat(Fw).GetSafeNormal();
 	FVector At = Eye + Flat2 * Ahead;
 	auto Put = [&](int32 Sp, double Y, double NScale) -> FSchool*
@@ -1046,7 +1046,19 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		UE_LOG(LogTemp, Log, TEXT("KRSchools put %s at %.1f %.1f %.1f (top %.1f): %d fish, %d leaders"), Specs[Sp].Key, At.X, Yc, At.Z, Top, S ? S->NFish : 0, S ? S->L.Num() : 0);
 		return S;
 	};
-	if (C == TEXT("bait")) Put(Silverside, Eye.Y, 1.1);
+	if (C == TEXT("put"))
+	{
+		// put=<species>: any of them, a few metres ahead (reef and hole fish near the floor, the rest at eye level)
+		for (int32 k = 0; k < NumSpec; k++)
+			if (A == Specs[k].Key)
+			{
+				const bool bLow = Specs[k].Role == ERole::Reef || Specs[k].Role == ERole::Hole;
+				Put(k, bLow ? -100 : Eye.Y, 1.2);
+				break;
+			}
+	}
+	else if (C == TEXT("clearall")) { for (int32 i = Schools.Num() - 1; i >= 0; i--) Despawn(i); }
+	else if (C == TEXT("bait")) Put(Silverside, Eye.Y, 1.1);
 	else if (C == TEXT("herring")) Put(Herring, Eye.Y, 1);
 	else if (C == TEXT("snapper")) Put(Schoolmaster, -100, 1.4);
 	else if (C == TEXT("grunt")) Put(Grunt, -100, 1.4);
