@@ -1,4 +1,5 @@
 #include "KeysAudio.h"
+#include "KeysUserMusic.h"
 #include "KeysSpeech.h"
 #include "KeysOnline.h"
 #include "KeysLocals.h"
@@ -470,13 +471,27 @@ void AKeysAudio::PlayStation(int32 K)
 	if (!Music) return;
 	Station = FMath::Clamp(K, 0, 2);
 	bMusicOn = true;
+	KeysUserMusic::Stop();
 	Music->PlayStation(Station);
 	Music->SetOutGain(.85f, .2f);
 	DuckUntil = -1;
 }
 
+void AKeysAudio::PlayMyMusic()
+{
+	Ready();
+	if (!Music || !KeysUserMusic::Play(FMath::Max(0, KeysUserMusic::Current()))) return;
+	Station = 3;
+	bMusicOn = true;
+	Music->PlayStation(-1);
+	Music->SetOutGain(0.f, .15f);
+	DuckUntil = -1;
+	AddToast(FString::Printf(TEXT("My Music - \"%s\" on the boat speakers. P changes the station."), *KeysUserMusic::Title()));
+}
+
 void AKeysAudio::MusicOff()
 {
+	KeysUserMusic::Stop();
 	bMusicOn = false;
 	if (Music)
 	{
@@ -490,12 +505,19 @@ void AKeysAudio::MusicToggle()
 	if (!bMusicOn) { bUserOff = false; PlayStation(2); AddToast(TEXT("Beno Bonanza - house music, four on the floor. P changes the station.")); }
 	else if (Station == 2) { PlayStation(0); AddToast(TEXT("Margaritaville - easygoing island songs.")); }
 	else if (Station == 0) { PlayStation(1); AddToast(TEXT("Hip-hop station - boom-bap beats on the boat speakers.")); }
-	else { MusicOff(); bUserOff = true; AddToast(TEXT("Radio off.")); }
+	else if (Station == 1 && KeysUserMusic::Scan() > 0) PlayMyMusic();
+	else
+	{
+		const bool bNone = Station == 1 && KeysUserMusic::Count() == 0;
+		MusicOff(); bUserOff = true;
+		AddToast(bNone ? TEXT("Radio off. (Put your own songs in Music > Keys Run for a station of your own.)") : TEXT("Radio off."));
+	}
 }
 
 FString AKeysAudio::GetRadioLabel() const
 {
 	if (!bMusicOn) return TEXT("Radio: Off");
+	if (Station == 3) return FString(TEXT("Radio: My Music - \"")) + KeysUserMusic::Title() + TEXT("\"");
 	FString L = FString(TEXT("Radio: ")) + StationNames[FMath::Clamp(Station, 0, 2)];
 	if (Music)
 	{
@@ -563,6 +585,14 @@ void AKeysAudio::UpdateMusic(double Dt, double Now)
 	const FVector Spk = KeysGeo::ToUE(Boat.BoatPos.X, Boat.BoatPos.Y + 1.5, Boat.BoatPos.Z);
 	KeysDSP::Spatialize(ListenerPos, ListenerRight, Spk, 10.f, 1.f, L, R);
 	Music->SetSpatial(L, R, (bReady && bSoundOn) ? .8f : 0.f);
+	// your own songs play through macOS: the same speaker placement as volume and pan, ducked under a callout and
+	// dulled underwater (it can't be filtered, so it's turned down instead)
+	if (bMusicOn && Station == 3)
+	{
+		const float Duck = DuckUntil > 0 ? .35f : 1.f;
+		const float Vol = (bReady && bSoundOn) ? .8f * .5f * (L + R) * .6f * Duck * float(1 - .75 * UwLevel) : 0.f;
+		KeysUserMusic::Update(Vol, (R - L) / FMath::Max(.01f, L + R));
+	}
 }
 
 void AKeysAudio::PlayExtra(FName Id, const FVector& GamePos, float Power)

@@ -495,6 +495,7 @@ void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 		if (L.IsValidIndex(N)) UE_LOG(LogTemp, Log, TEXT("KRScript lot %d of %d: %s"), N, L.Num(), KeysPlat::Parcels[L[N]].Id);
 	}
 	else if (C == TEXT("say")) KeysSpeech::Speak(A, 1.08f, 1.9f);   // say=text: Caelen's voice
+	else if (C == TEXT("radio")) { if (AKeysAudio* Au = AKeysAudio::Get(this)) { Au->MusicToggle(); UE_LOG(LogTemp, Log, TEXT("KRScript radio: %s"), *Au->GetRadioLabel()); } }
 	else if (C == TEXT("caelensay")) { if (AKeysExtras* Ex = AKeysExtras::Get(this)) Ex->CaelenShot(false); }
 	else if (C == TEXT("wrecksreset")) WrecksFound.Reset();
 	else if (C == TEXT("shorecast"))

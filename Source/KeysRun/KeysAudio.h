@@ -86,6 +86,7 @@ public:
 
 	// ---- boat stereo
 	void MusicToggle();                    // P key: Beno Bonanza -> Margaritaville -> Hip-hop -> off
+	void PlayMyMusic();                    // station 3: your own songs from ~/Music/Keys Run
 	void PlayStation(int32 K);             // 0 Margaritaville, 1 Hip-hop, 2 Beno Bonanza
 	void MusicOff();
 	bool IsMusicOn() const { return bMusicOn; }
