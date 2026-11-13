@@ -80,7 +80,7 @@ namespace KeysDive
 
 	struct FGun { double ReloadT = 0, Draw = 1; };
 	inline bool CanFire(const FGun& G) { return G.ReloadT <= 0 && G.Draw >= 1; }
-	void StepReload(FGun& G, double Dt, bool bDrawing, double Speed);
+	void StepReload(FGun& G, double Dt, bool bDrawing, double Speed, double DrawMul = 1);   // DrawMul < 1 draws faster (long gun, reel)
 	inline FGun StartReload() { FGun G; G.ReloadT = FMath::Max(SpearReloadFloor, SpearReload); G.Draw = 0; return G; }
 
 	struct FShot

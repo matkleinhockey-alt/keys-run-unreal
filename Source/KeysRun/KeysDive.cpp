@@ -151,11 +151,11 @@ namespace KeysDive
 	double HoldChance(double ImpactSpeed) { const double F = DClamp(ImpactSpeed / SpearSpeed, 0, 1); return DClamp((F - .25) / .6, 0, 1) * .95; }
 	double DrawRateFor(double Speed) { const double K = DClamp(Speed / SpearDrawSwimSpeed, 0, 1); return 1 - (1 - SpearDrawMinRate) * K; }
 
-	void StepReload(FGun& G, double Dt, bool bDrawing, double Speed)
+	void StepReload(FGun& G, double Dt, bool bDrawing, double Speed, double DrawMul)
 	{
 		if (G.Draw >= 1 && G.ReloadT <= 0) return;
 		if (G.ReloadT > 0) { G.ReloadT = FMath::Max(0.0, G.ReloadT - Dt); return; }
-		if (bDrawing) G.Draw = FMath::Min(1.0, G.Draw + (Dt / SpearDrawTime) * DrawRateFor(Speed));
+		if (bDrawing) G.Draw = FMath::Min(1.0, G.Draw + (Dt / (SpearDrawTime * DClamp(DrawMul, .3, 1.5))) * DrawRateFor(Speed));
 		else
 		{
 			const double Notch = FMath::FloorToDouble(G.Draw * SpearDrawNotches + 1e-9) / SpearDrawNotches;

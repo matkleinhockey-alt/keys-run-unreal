@@ -897,6 +897,23 @@ void AKeysBoatPawn::ToggleDive()
 		bFillCharged = false;
 		if (HasGear(TEXT("dive.tank")) && !bTankLive) ShowToast(TEXT("The pony bottle is empty - an air fill at Scuba Steve's makes it live again."), 4);
 		D->AirMul = (bTankLive ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1) * (BuffOn(TEXT("diner.mahi")) ? 1.05 : 1);
+		// the rest of the kit (web sim/shop.ts): fins swim faster, the wide mask sees further, the band gun reaches and
+		// draws quicker, the reel conversion shortens a speared fish's run; every shot spends a shaft
+		D->SwimMul = HasGear(TEXT("dive.fins")) ? 1.28 : 1;
+		D->ViewBonusM = HasGear(TEXT("dive.mask")) ? 6 : 0;
+		D->SpearRangeBonusM = HasGear(TEXT("spear.long")) ? 6 : 0;
+		D->SpearDrawMul = (HasGear(TEXT("spear.long")) ? .65 : 1) * (HasGear(TEXT("spear.reel")) ? .85 : 1);
+		D->SpearTetherMul = HasGear(TEXT("spear.reel")) ? .6 : 1;
+		D->TakeShaft = [this]() -> int32
+		{
+			if (CountOf(TEXT("spear.shafts")) <= 0) { ShowToast(TEXT("Out of shafts - firing the bent spare (short range). Buy more at the gun counter."), 4); return -1; }
+			AddCount(TEXT("spear.shafts"), -1);
+			const int32 Left = CountOf(TEXT("spear.shafts"));
+			UE_LOG(LogTemp, Log, TEXT("KRDive shaft spent: %d left"), Left);
+			if (Left == 0) ShowToast(TEXT("Last shaft spent. Next shot is the bent spare (short range)."), 3.5);
+			else if (Left == 1) ShowToast(TEXT("1 shaft left."), 2.5);
+			return Left;
+		};
 		D->EnterWater(X, Z, H);
 		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
 	}

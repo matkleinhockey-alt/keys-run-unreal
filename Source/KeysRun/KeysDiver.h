@@ -80,6 +80,12 @@ public:
 	double UnderwaterHaze = 1;   // the haze brightness
 	// ---- the dive shop's gear (set by the pawn before going over): the pony bottle, wetsuit and fins stretch the breath hold
 	double AirMul = 1;
+	// the dive shop's and gun counter's gear (web sim/shop.ts modifiers), set by the boat as you go in
+	double SwimMul = 1, ViewBonusM = 0, SpearRangeBonusM = 0, SpearDrawMul = 1, SpearTetherMul = 1;
+	// spends a shaft for a shot: how many are left after it, or -1 when there were none (the bent spare flies)
+	TFunction<int32()> TakeShaft;
+	double NextShotRange() const;
+	double ShotRange = KeysDive::SpearRange;
 
 private:
 	struct FSpeared

@@ -337,7 +337,7 @@ void AKeysDiver::FixedStep(double Dt, double T)
 		WakingT += Dt;
 		FInput In;
 		In.LookYaw = CamYaw; In.LookPitch = CamPitch;
-		Step(S, In, T, Dt);
+		Step(S, In, T, Dt, SwimMul);
 		FrameEvents.Append(S.Events);
 		if (WakingT >= BlackoutWakeDelay)
 		{
@@ -350,7 +350,7 @@ void AKeysDiver::FixedStep(double Dt, double T)
 	In.bFwd = Btn.bFwd || bDebugSwim; In.bBack = Btn.bBack; In.bLeft = Btn.bLeft; In.bRight = Btn.bRight;
 	In.bAscend = Btn.bAscend; In.bDescend = Btn.bDescend; In.bSprint = Btn.bSprint;
 	In.LookYaw = CamYaw; In.LookPitch = CamPitch;
-	Step(S, In, T, Dt);
+	Step(S, In, T, Dt, SwimMul);
 	if (DebugHoldDepth >= 0) { S.Y = FMath::Max(-DebugHoldDepth, KeysSea::SeafloorHeightAt(S.X, S.Z) + .6); S.VY = 0; }
 	FrameEvents.Append(S.Events);
 	bCanReboard = S.Depth() < 1.5 && FVector2D(S.X - BX, S.Z - BZ).Size() < 6;
@@ -361,7 +361,7 @@ void AKeysDiver::FixedStep(double Dt, double T)
 void AKeysDiver::GetTargets(TArray<FTarget>& Out) const
 {
 	Out.Reset();
-	if (const AKeysLife* L = AKeysLife::Get(this)) L->SpearTargetsNear(S.X, S.Y, S.Z, SpearRange + 12, Out);
+	if (const AKeysLife* L = AKeysLife::Get(this)) L->SpearTargetsNear(S.X, S.Y, S.Z, KeysDive::SpearRange + 6 + 12, Out);
 }
 
 FVector AKeysDiver::EyeWorld() const { return U2G(CamPosUE); }
@@ -384,8 +384,16 @@ bool AKeysDiver::TryFire()
 	TArray<FTarget> Tg;
 	GetTargets(Tg);
 	int32 Lock;
-	const FVector Dir = AssistAim(Origin, Aim, Tg, Lock, AssistStrength, SpearRange, &Eye);
-	Shot = Fire(Origin, Dir, SpearRange);
+	// spend the shaft first, so the lead is solved for the range of the one that actually flies (a spare is short)
+	bool bSpare = false;
+	if (TakeShaft)
+	{
+		const int32 Left = TakeShaft();
+		bSpare = Left < 0;
+	}
+	ShotRange = FMath::Clamp((SpearRange + FMath::Max(0.0, SpearRangeBonusM)) * (bSpare ? .6 : 1.0), SpearRange * .6, SpearRange + 6);
+	const FVector Dir = AssistAim(Origin, Aim, Tg, Lock, AssistStrength, ShotRange, &Eye);
+	Shot = Fire(Origin, Dir, ShotRange);
 	Gun = StartReload();
 	KickT = 1;
 	KickYaw = (FMath::FRand() - .5) * .05;
@@ -429,7 +437,7 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 	}
 	// the latch lets go by itself once the gun is seated, or when the hands are busy
 	if (bDrawLatched && (CanFire(Gun) || !HandsFree())) { bDrawLatched = false; bDrawing = false; }
-	StepReload(Gun, Dt, bDrawing && HandsFree(), KickSpeed);
+	StepReload(Gun, Dt, bDrawing && HandsFree(), KickSpeed, SpearDrawMul);
 	if (Nudge > 0) Nudge = FMath::Max(0.0, Nudge - Dt);
 
 	if (Shot.bAlive)
@@ -445,6 +453,7 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 				Speared.bOn = true;
 				Speared.Target = *Target;
 				Speared.P = FightParamsFor(Target->Key, Target->Weight);
+				Speared.P.TetherMax = FMath::Max(4.0, Speared.P.TetherMax * SpearTetherMul);   // the reel conversion: it runs less far
 				Speared.F = StartFight(Hit.Point.X, Hit.Point.Z);
 				const KeysData::FSpecies* Sp = KeysData::Species(Target->Key);
 				const double SizeT = Sp ? DvClamp((Target->Weight - Sp->Min) / FMath::Max(1e-6, Sp->Max - Sp->Min), 0, 1) : .5;
@@ -508,8 +517,8 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 		if (AKeysLife* L = AKeysLife::Get(this))
 		{
 			TArray<FTarget> Tg;
-			L->SpearTargetsNear(ShotO.X, ShotO.Y, ShotO.Z, SpearRange + 1.1, Tg);
-			const FVector P2 = ShotO + ShotD * SpearRange;
+			L->SpearTargetsNear(ShotO.X, ShotO.Y, ShotO.Z, ShotRange + 1.1, Tg);
+			const FVector P2 = ShotO + ShotD * ShotRange;
 			for (const FTarget& F : Tg)
 			{
 				double Sx;
@@ -569,7 +578,7 @@ void AKeysDiver::Tick(float DeltaSeconds)
 			const double Cp = FMath::Cos(CamPitch);
 			const FVector Aim(-FMath::Sin(CamYaw) * Cp, FMath::Sin(CamPitch), -FMath::Cos(CamYaw) * Cp);
 			const FVector Eye = EyeWorld();
-			AssistAim(MuzzleWorld(), Aim, Tg, AimTarget, 0, SpearRange, &Eye);
+			AssistAim(MuzzleWorld(), Aim, Tg, AimTarget, 0, NextShotRange(), &Eye);
 		}
 	}
 	UpdateShaftAndLine(T);
@@ -798,6 +807,7 @@ void AKeysDiver::UpdateUnderwaterLook(double Dt)
 		PostMID->SetScalarParameterValue(TEXT("Under"), float(UnderAmt));
 		PostMID->SetScalarParameterValue(TEXT("Wet"), float(Wet));
 		PostMID->SetScalarParameterValue(TEXT("Haze"), float(UnderwaterHaze));
+		PostMID->SetScalarParameterValue(TEXT("Bonus"), float(ViewBonusM));   // the wide mask sees further
 		if (const AKeysWorld* Wd = AKeysWorld::Get(this)) { const FVector Sd = Wd->SunDir(); PostMID->SetVectorParameterValue(TEXT("SunDir"), FLinearColor(Sd.X, Sd.Y, Sd.Z, 0)); }
 		PostMID->SetScalarParameterValue(TEXT("Time"), float(GetWorld()->GetTimeSeconds()));
 	}
@@ -1082,4 +1092,9 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 	else if (Cmd == TEXT("chase")) { if (CamMode == 0) CycleView(); }
 	else if (Cmd == TEXT("mask")) { if (CamMode == 1) CycleView(); }
 	UE_LOG(LogTemp, Log, TEXT("KRDive %s %s: pos %.1f %.1f %.1f air %.0f%% floor %.1f"), *Cmd, *Arg, S.X, S.Y, S.Z, AirFrac() * 100, KeysSea::SeafloorHeightAt(S.X, S.Z));
+}
+
+double AKeysDiver::NextShotRange() const
+{
+	return FMath::Clamp(KeysDive::SpearRange + FMath::Max(0.0, SpearRangeBonusM), KeysDive::SpearRange * .6, KeysDive::SpearRange + 6);
 }
