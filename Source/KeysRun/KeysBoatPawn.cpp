@@ -1693,6 +1693,14 @@ void AKeysBoatPawn::Slam(double V)
 	if (AKeysAudio* A = AKeysAudio::Get(this)) A->Slam(K);
 	Shake = FMath::Max(Shake, K);
 	Speed *= 1 - .06 * K;
+	// sheets of spray thrown off both bow chines, bigger the harder she hit
+	if (AKeysLife* L = AKeysLife::Get(this); L && K > .12)
+	{
+		const FBoatSpec& S = Spec();
+		const double Fx = -FMath::Sin(H), Fz = -FMath::Cos(H), Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
+		for (const double Sd : {-1.0, 1.0})
+			L->Splash(X + Fx * S.Len * .3 + Rx * Sd * S.Beam * .55, Z + Fz * S.Len * .3 + Rz * Sd * S.Beam * .55, 5 + int32(K * 16), .5 + K * 1.1);
+	}
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (K > .6 && Now - SlamT > 6)
 	{
@@ -1800,18 +1808,23 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	X += DVX * Dt;
 	Z += DVZ * Dt;
 
-	// buoyancy: 15 points under the hull each push up by how deep they sit in the water.
+	// buoyancy: points under the hull (bow to stern, along the keel and both chines - or down each of a catamaran's two
+	// hulls) each push up by how deep they sit in the water, sampling the same WaveH the water mesh is drawn from.
 	// Their sum lifts the boat (heave), their front/back imbalance pitches it, and their side-to-side imbalance rolls it.
 	const double Dk = (.45 + S.Len * .035) * (S.bCat ? .85 : 1);
 	const double Ride = Dk * (1 - .55 * FMath::Min(1.0, F * 1.6) * (.8 + .4 * TrimV));
-	static const double NXs[3] = {-.42, 0, .42};
+	static const double NXMono[3] = {-.42, 0, .42}, NXCat[2] = {-.37, .37};
+	const TArrayView<const double> NXs = S.bCat ? TArrayView<const double>(NXCat, 2) : TArrayView<const double>(NXMono, 3);
 	static const double NZs[5] = {-.46, -.22, .02, .26, .46};
-	const double K = 9.8 / (15 * Dk), Ip = S.Len * S.Len / 12 * 1.15, Ir = S.Beam * S.Beam / 12 * (S.bCat ? 2.4 : 1.7);
+	const double NPts = NXs.Num() * 5;
+	const double K = 9.8 / (NPts * Dk), Ip = S.Len * S.Len / 12 * 1.15, Ir = S.Beam * S.Beam / 12 * (S.bCat ? 2.4 : 1.7);
 	double Sz2 = 0, Sx2 = 0;
-	for (double A : NZs) Sz2 += 3 * FMath::Square(A * S.Len);
+	for (double A : NZs) Sz2 += NXs.Num() * FMath::Square(A * S.Len);
 	for (double A : NXs) Sx2 += 5 * FMath::Square(A * S.Beam);
-	const double WH = FMath::Sqrt(9.8 / Dk), WP = FMath::Sqrt(K * Sz2 / Ip), WR = FMath::Sqrt(K * Sx2 / Ir), Zeta = .3;
+	// a catamaran's two wide-set hulls damp roll harder: she rides chop flatter than a monohull
+	const double WH = FMath::Sqrt(9.8 / Dk), WP = FMath::Sqrt(K * Sz2 / Ip), WR = FMath::Sqrt(K * Sx2 / Ir), Zeta = .3, ZetaR = S.bCat ? .5 : .3;
 	int32 Wet = 0;
+	double BowSub = 0, BowRise = 0;
 	const int32 Sub = 3;
 	const double HDt = Dt / Sub;
 	for (int32 It = 0; It < Sub; It++)
@@ -1825,8 +1838,16 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 				const double Px = Ax * S.Beam, Pz = Az * S.Len;
 				const double Wx = X + Fx * (-Pz) + Rx * Px, Wz = Z + Fz * (-Pz) + Rz * Px;
 				const double Yb = Y + (-Pz) * Spn + Px * Srn - Ride;
-				const double Sbm = Clamp(WaveH(Wx, Wz, Tt, Amp) - Yb, 0, Dk * 2.4);
+				const double Sea = WaveH(Wx, Wz, Tt, Amp);
+				const double Sbm = Clamp(Sea - Yb, 0, Dk * 2.4);
 				if (Sbm > 0) Wet++;
+				if (Az < -.4 && It == Sub - 1)
+				{
+					// the bow points: how hard the next wave face is coming up at them (for slamming in a head sea)
+					BowSub = FMath::Max(BowSub, Sbm);
+					const double Rise = (Sea - WaveH(Wx, Wz, Tt - .05, Amp)) / .05 - (VY + VP * (-Pz) * FMath::Cos(Pitch));
+					BowRise = FMath::Max(BowRise, Rise);
+				}
 				const double Fi = K * Sbm;
 				Fy += Fi;
 				Tp += Fi * (-Pz);
@@ -1837,7 +1858,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 		Y += VY * HDt;
 		VP += (Tp / Ip + Plane * WP * WP * (Wet ? 1 : 0) - (Wet ? 0 : .5) - 2 * Zeta * WP * VP * InW) * HDt;
 		Pitch += VP * HDt;
-		VR += (Tr / Ir + Steer * F * (S.bCat ? .05 : .16) * WR * WR * (Wet ? 1 : 0) - 2 * Zeta * WR * VR * InW) * HDt;
+		VR += (Tr / Ir + Steer * F * (S.bCat ? .05 : .16) * WR * WR * (Wet ? 1 : 0) - 2 * ZetaR * WR * VR * InW) * HDt;
 		Roll += VR * HDt;
 	}
 	Pitch = Clamp(Pitch, -.6, .75);
@@ -1845,6 +1866,12 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	const bool bWasAir = bAir;
 	bAir = Wet == 0;
 	if (bWasAir && !bAir && VY < -2.2) Slam(VY);
+	// running fast into a steep face: the bow buries and slams without ever leaving the water (stuffing it into chop)
+	else if (!bAir && F > .35 && BowSub > Dk * .9 && BowRise > 2.0 && T - BowSlamT > .45)
+	{
+		BowSlamT = T;
+		Slam(-(BowRise - 1.2) * (.8 + .6 * F) * (S.bCat ? .75 : 1));
+	}
 	if (D < S.Draft && Y < -.15) { Y = -.15; VY = FMath::Max(0.0, VY); }
 	RideNow = Ride;
 	DkNow = Dk;

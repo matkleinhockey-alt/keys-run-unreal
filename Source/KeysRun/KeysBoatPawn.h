@@ -388,7 +388,7 @@ private:
 	int32 BaitCasts = 0;                            // live shrimp left: quicker bites
 	double PinX = 0, PinZ = 0, PinH = 0;            // where the boat is tied up while you are ashore
 	bool bAir = false;
-	double TrimVent = 0, TrimMsgT = -99, CollideMsgT = -99, SlamT = -99, AcMsgT = -99;
+	double TrimVent = 0, TrimMsgT = -99, CollideMsgT = -99, SlamT = -99, AcMsgT = -99, BowSlamT = -99, SprayT = 0;
 	bool bTrimUp = false, bTrimDn = false;
 	bool bFwd = false, bBack = false, bLeft = false, bRight = false, bAction = false;
 
