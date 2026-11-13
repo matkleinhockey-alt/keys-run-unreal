@@ -493,3 +493,9 @@ best times and the species list (B) a word for each. Spearfishing isn't affected
   same folder; dance-02 was imported through `Tools/unmeshopt.py` and then `Tools/fixglb.py` (one mesh under one skin whose
   bind matrices match the skeleton). dance-03 (Annie) is not used yet: Unreal's glTF import still parts her head and hair
   from her body under the clip.
+- The girls everyone sees now (Content/KeysRun/Crew/Girl): "Bikini girl" by doublesob
+  (https://sketchfab.com/3d-models/bikini-girl-95aba54a1796409ea85285c5a841b9a5, CC-BY-4.0), the undecimated source mesh
+  from the web repo's packages/assets-pipeline/raw put back under dance-01's Mixamo rig and clip by `Tools/girlglb.py`
+  (`python3 Tools/girlglb.py raw/bikini_girl.glb dance-01.decoded.glb girl.glb`, dance-01 decoded with
+  `Tools/unmeshopt.py`), then imported with four generated LODs. Each girl's skin tone, hair, eyes and swimsuit are
+  material parameters (KeysDancers.cpp).
