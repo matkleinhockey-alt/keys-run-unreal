@@ -1726,5 +1726,7 @@ def _setup(_delta):
 # only in the editor itself: a -game launch or a commandlet has no asset tools, and touching them there crashes
 _cmd = unreal.SystemLibrary.get_command_line().lower()
 _handle = None
-if " -game" not in _cmd and "-run=" not in _cmd:
+_args = _cmd.split()
+# (the command line may start with -game itself: the project path isn't always passed through)
+if "-game" not in _args and "-server" not in _args and not any(a.startswith("-run=") for a in _args):
     _handle = unreal.register_slate_post_tick_callback(_setup)

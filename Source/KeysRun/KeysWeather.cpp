@@ -669,12 +669,18 @@ void AKeysWeather::UpdateLook(double Dt)
 		if (!Base || !Res) { bCloudsOn = true; UE_LOG(LogTemp, Warning, TEXT("Keys weather: no M_KR_Cloud (%d) or no resource for this platform - keeping the engine's clouds"), Base ? 1 : 0); }
 		else
 		{
+#if WITH_EDITOR
 			for (const FString& E : Res->GetCompileErrors()) { UE_LOG(LogTemp, Warning, TEXT("Keys weather: M_KR_Cloud: %s"), *E); }
 			if (Res->GetCompileErrors().Num() || Base->MaterialDomain != MD_Volume || CloudWaitT > 300) bCloudsOn = true;
 			else if (Res->IsCompilationFinished()) { bReady = true; bCloudsOn = true; }
 			if (bLog || bCloudsOn)
 				UE_LOG(LogTemp, Log, TEXT("Keys weather: M_KR_Cloud after %.0f s: finished %d, errors %d, complete %d -> %s"), CloudWaitT, Res->IsCompilationFinished() ? 1 : 0,
 					Res->GetCompileErrors().Num(), Res->IsGameThreadShaderMapComplete() ? 1 : 0, bReady ? TEXT("on") : bCloudsOn ? TEXT("gave up") : TEXT("waiting"));
+#else
+			// a packaged game has the cloud shaders cooked in: on once its shader map is in
+			if (Base->MaterialDomain != MD_Volume || CloudWaitT > 300) bCloudsOn = true;
+			else if (Res->IsGameThreadShaderMapComplete()) { bReady = true; bCloudsOn = true; }
+#endif
 		}
 		if (bReady)
 		if (AKeysWorld* W = AKeysWorld::Get(this))

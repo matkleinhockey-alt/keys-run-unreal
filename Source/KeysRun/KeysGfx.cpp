@@ -23,7 +23,10 @@ namespace
 	int32 GFrames = 0;
 
 	// render height Auto aims for per preset: TSR fills in the rest of a Retina panel's pixels
-	const double TargetH[4] = {900, 1200, 1440, 1e9};   // Medium was 1000: too coarse for the sea's fine sparkle once upscaled
+	// (now the game renders to the display's real pixels, a 4K screen upscales from 800 lines at Medium: about 28 fps on a
+	// base M4 where 1200 lines ran at 16; TSR's output at 4K still reads sharper than the old 1080p stretched 2x by macOS)
+	const double TargetH[4] = {640, 800, 1200, 1e9};
+	bool GPaced = false;   // capped at 30 fps: steadier than a frame rate that wanders between 25 and 40
 
 	bool Scripted() { return FString(FCommandLine::Get()).Contains(TEXT("KRScript=")); }
 
@@ -61,9 +64,9 @@ namespace
 
 	int32 PercentFor(const FIntPoint& Size)
 	{
-		if (GResScale > 0) return FMath::Clamp(GResScale, 50, 100);
+		if (GResScale > 0) return FMath::Clamp(GResScale, 33, 100);
 		if (Size.Y <= 0 || GQuality >= KeysGfx::Epic) return 100;
-		return FMath::Clamp(FMath::RoundToInt(100 * TargetH[GQuality] / Size.Y), 50, 100);
+		return FMath::Clamp(FMath::RoundToInt(100 * TargetH[GQuality] / Size.Y), 33, 100);
 	}
 
 	void ApplyResolution()
@@ -101,6 +104,9 @@ namespace
 		SetCVarInt(TEXT("r.Lumen.Reflections.DownsampleFactor"), Q >= KeysGfx::High ? 1 : 2);
 		SetCVarInt(TEXT("r.Lumen.ScreenProbeGather.DownsampleFactor"), Q >= KeysGfx::Epic ? 16 : Q >= KeysGfx::High ? 16 : 32);
 		// contact shadows and screen space AO
+		// virtual shadow maps cost a base M4 about 8 ms a frame: regular cascades below High
+		// (by code: the project's renderer setting turns them on, and that outranks a game setting)
+		if (IConsoleVariable* C = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Shadow.Virtual.Enable"))) C->Set(Q >= KeysGfx::High ? 1 : 0, ECVF_SetByCode);
 		SetCVarInt(TEXT("r.ContactShadows"), Q >= KeysGfx::Medium ? 1 : 0);
 		SetCVarInt(TEXT("r.AmbientOcclusion.Method"), 0);
 		// the clouds: half the ray-march steps below High
@@ -150,7 +156,12 @@ namespace KeysGfx
 		{
 			const double GpuMs = FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles());
 			const FIntPoint S = ViewportSize();
-			UE_LOG(LogTemp, Log, TEXT("KRGFX frame %.1f ms (gpu %.1f ms), %s, window %dx%d at %d%%"), GAccMs / GFrames, GpuMs, *QualityLabel(), S.X, S.Y, GAppliedPct);
+			const double FrameMs = GAccMs / GFrames;
+			// frame pacing: a frame rate that can't hold 45 is held at an even 30 instead (no judder); let go again when
+			// the GPU has room for well over 40
+			const bool bPace = GPaced ? !(GpuMs > 0 && GpuMs < 20) : FrameMs > 24;
+			if (bPace != GPaced) { GPaced = bPace; SetCVar(TEXT("t.MaxFPS"), bPace ? 30.f : 0.f); }
+			UE_LOG(LogTemp, Log, TEXT("KRGFX frame %.1f ms (gpu %.1f ms), %s, window %dx%d at %d%%%s"), FrameMs, GpuMs, *QualityLabel(), S.X, S.Y, GAppliedPct, GPaced ? TEXT(", paced 30") : TEXT(""));
 			GLogT = 0; GAccMs = 0; GFrames = 0;
 		}
 	}
@@ -158,7 +169,7 @@ namespace KeysGfx
 	int32 Quality() { return GQuality; }
 	void SetQuality(int32 Q) { GQuality = (Q + 4) % 4; ApplyQuality(); Save(); }
 	int32 ResScale() { return GResScale; }
-	void SetResScale(int32 Pct) { GResScale = Pct <= 0 ? 0 : FMath::Clamp(Pct, 50, 100); ApplyResolution(); Save(); }
+	void SetResScale(int32 Pct) { GResScale = Pct <= 0 ? 0 : FMath::Clamp(Pct, 33, 100); ApplyResolution(); Save(); }
 	int32 EffectiveScreenPercent() { return GAppliedPct; }
 
 	bool IsFullscreen()
@@ -203,8 +214,8 @@ namespace KeysGfx
 		switch (GQuality)
 		{
 		case Low: return TEXT("Low: for a MacBook Air on battery. Simpler global illumination and shadows, screen-space reflections, light clouds, and a lower render resolution that TSR sharpens up to the screen's.");
-		case Medium: return TEXT("Medium: the MacBook Air's default. Lumen lighting and reflections at medium quality, contact shadows, and about 1000 lines rendered and upscaled to the full Retina resolution.");
-		case High: return TEXT("High: Lumen lighting and reflections, soft virtual shadows, full volumetric clouds and about 1250 lines rendered. The default on Pro, Max and Ultra chips.");
+		case Medium: return TEXT("Medium: the MacBook Air's default. Lumen lighting and reflections at medium quality, contact shadows, and about 800 lines rendered and upscaled to the full Retina resolution.");
+		case High: return TEXT("High: Lumen lighting and reflections, soft virtual shadows, full volumetric clouds and about 1200 lines rendered. The default on Pro, Max and Ultra chips.");
 		default: return TEXT("Epic: everything at full quality at the screen's native resolution. For a desktop Mac or an external display.");
 		}
 	}
