@@ -2,6 +2,7 @@
 // the town's services (shared/sim/services.ts, game/services/index.ts), the pony bottle's air fills
 // (shared/sim/dive-gear.ts), the run's best fish on the dock, and the test hooks for all of it.
 #include "KeysBoatPawn.h"
+#include "KeysSpeech.h"
 #include "KeysGeo.h"
 #include "KeysSea.h"
 #include "KeysData.h"
@@ -493,6 +494,8 @@ void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 		const int32 N = FCString::Atoi(*A);
 		if (L.IsValidIndex(N)) UE_LOG(LogTemp, Log, TEXT("KRScript lot %d of %d: %s"), N, L.Num(), KeysPlat::Parcels[L[N]].Id);
 	}
+	else if (C == TEXT("say")) KeysSpeech::Speak(A, 1.08f, 1.9f);   // say=text: Caelen's voice
+	else if (C == TEXT("caelensay")) { if (AKeysExtras* Ex = AKeysExtras::Get(this)) Ex->CaelenShot(false); }
 	else if (C == TEXT("wrecksreset")) WrecksFound.Reset();
 	else if (C == TEXT("shorecast"))
 	{

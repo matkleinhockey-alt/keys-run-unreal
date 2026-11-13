@@ -1,4 +1,6 @@
 #include "KeysExtras.h"
+#include "KeysAudio.h"
+#include "KeysSpeech.h"
 #include "KeysDiver.h"
 #include "EngineUtils.h"
 #include "KeysBoatPawn.h"
@@ -618,7 +620,8 @@ void AKeysExtras::CaelenSay(const FString& Line, double Hold)
 	CBubble = Hold;
 	Toast(TEXT("Caelen: ") + Line, 3.2);
 	Sound(TEXT("CaelenSquawk"), CPos);
-	Sound(TEXT("CaelenVoice"), CPos);
+	// and he says it out loud, high and fast (web dj.ts sayCaelenLine: rate 1.08, pitch 1.9)
+	if (const AKeysAudio* Au = AKeysAudio::Get(this); Au && Au->IsSoundOn()) KeysSpeech::Speak(Line, 1.08f, 1.9f, .9f, .35f);
 }
 
 bool AKeysExtras::CaelenHitbox(FVector& OutA, FVector& OutB, double& OutR) const

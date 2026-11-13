@@ -7,5 +7,7 @@ public class KeysRun : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		bUseUnity = false;   // each .cpp keeps its own file-local helpers (Clamp, Lerp, ...)
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "ProceduralMeshComponent", "AudioMixer", "SignalProcessing", "WebSockets", "Json", "MeshDescription", "StaticMeshDescription", "RHI", "RenderCore" });
+		// the voices (KeysSpeech.cpp): the system speech synthesizer, like the web game's speechSynthesis
+		if (Target.Platform == UnrealTargetPlatform.Mac) PublicFrameworks.Add("AVFoundation");
 	}
 }

@@ -250,16 +250,21 @@ window notices; the sunset glow is soft halos rather than bloom); the dancers ar
 glTF dancers are not ported); the estates registry is local (the web game's server-held registry, other players' lots and the
 #1 angler's party at their estate are not ported).
 
-Not ported: spray particles (splashes are simple shapes), text-to-speech (the DJ, Luigi and Caelen speak in on-screen text),
-engine sounds for other boats, quilted upholstery details, playing your own music files on the radio, the shop windows'
-painted notices, the god rays and the underwater breathing loop, the web game's ReefWall / DeepWall sight tables (this
-port's zones stop at the reef and offshore; the humps have their own list), and Caelen coming down to orbit a diver (he is a
-target for the pistol, not the speargun). The tag registry is this computer's (the web game's offline registry); the
-web game's shared server registry, where you can hook a fish someone else tagged, is not ported.
+Not ported: quilted upholstery details, playing your own music files on the radio, the shop windows' painted notices,
+and the web game's resident / roaming underwater fish layers (this port's own population and near-field reef schools stand
+in). The tag registry is this computer's (the web game's offline registry); the web game's shared server registry, where
+you can hook a fish someone else tagged, is not ported.
 
-Diving differs from the web game in a few places: the dive shop's pony bottle (with an air fill in hand), wetsuit and fins
-only lengthen the breath hold (the wide mask and the gun shop's long gun are for show), and the speargun is the stock gun with unlimited shafts; the god rays (the web game's high/ultra quality
-setting), and the breathing loop in the underwater sound are not ported; the near-field reef schools are
+Since ported: the fish cam (a 2.3 s underwater cut on the hookset), other boats' engine sounds (traffic, racers, the
+working fleet and friends online, with Doppler), the underwater breathing loop and the sun's light shafts below the surface
+(High and up), the reef wall and deep wall life tables (from 12 m and 20 m on the reef), Caelen coming down to circle a
+diver (and being speared), and the voices: the DJ, the Luigi-mode hype man and Caelen speak through the Mac's own speech
+synthesizer (KeysSpeech.cpp; an enhanced Siri voice is used when one is installed).
+
+Diving: the dive gear does what the shops say (web sim/shop.ts): the pony bottle (with an air fill in hand) and wetsuit
+lengthen the breath hold, fins swim 28% faster, the wide mask sees 6 m further, the long band gun reaches 24 m and draws
+quicker, the reel conversion shortens a speared fish's run, and every shot spends a shaft (out of them, the bent spare
+flies 60%). The near-field reef schools are
 ported on top of this port's existing fish population (the web game's resident and roaming layers are not); the diver
 dives with J, so the shower moved to Z; and the underwater fog is a post-process rather than a per-material fog.
 

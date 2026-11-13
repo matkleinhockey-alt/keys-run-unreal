@@ -1,4 +1,5 @@
 #include "KeysAudio.h"
+#include "KeysSpeech.h"
 #include "KeysOnline.h"
 #include "KeysLocals.h"
 #include "KeysTraffic.h"
@@ -544,7 +545,11 @@ void AKeysAudio::UpdateMusic(double Dt, double Now)
 			DJText = TEXT("Margaritaville - easy music to get hammered to.");
 			DJUntil = Now + 6;
 			AddToast(TEXT("DJ: ") + DJText);
-			if (bSoundOn) { Music->SetOutGain(.3f, .2f); DuckUntil = Now + 4; }   // talk-over duck (the JS speaks the line with speechSynthesis)
+			if (bSoundOn)
+			{
+				Music->SetOutGain(.3f, .2f); DuckUntil = Now + 4;   // talk-over duck
+				KeysSpeech::Speak(TEXT("Margaritaville. Easy music to get hammered to."), .92f, .85f, .9f);
+			}
 		}
 	}
 	if (DuckUntil > 0 && Now >= DuckUntil)
@@ -584,6 +589,16 @@ void AKeysAudio::PlayExtra(FName Id, const FVector& GamePos, float Power)
 			FKeysBurst B; B.Filter = KeysDSP::EFilter::Bandpass; B.Freq = 1100; B.Q = .6f;
 			B.Gain = Gains[i]; B.Att = i == 0 ? .4f : .1f; B.Dur = 1.f; B.Delay = Steps[i];
 			Burst(B);
+		}
+	}
+	else if (Id == TEXT("HypeVoice"))
+	{
+		// the Luigi-mode hype man, shouting over the horn and the crowd (web dj.ts hypeCallout)
+		if (bSoundOn)
+		{
+			KeysSpeech::Speak(TEXT("Luigi mode!"), 1.05f, 1.05f, 1.f, .7f);
+			KeysSpeech::Speak(TEXT("Neeeeeck!"), .7f, .85f, 1.f, .71f);
+			KeysSpeech::Speak(TEXT("Fuck!"), 1.15f, .7f, 1.f, .72f);
 		}
 	}
 	else if (Id == TEXT("MusicDuck"))
