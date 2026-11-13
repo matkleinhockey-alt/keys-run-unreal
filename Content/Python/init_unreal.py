@@ -23,14 +23,18 @@ def _const(mat, value, x, y):
     return c
 
 
+PLAIN = {"M_KR_Cloud"}   # volume-domain materials: no mesh usage flags
+
+
 def _make_material(name, build):
     path = MAT_DIR + "/" + name
     if eal.does_asset_exist(path):
         return False
     tools = unreal.AssetToolsHelpers.get_asset_tools()
     mat = tools.create_asset(name, MAT_DIR, unreal.Material, unreal.MaterialFactoryNew())
-    mat.set_editor_property("two_sided", True)
-    mat.set_editor_property("used_with_instanced_static_meshes", True)
+    if name not in PLAIN:
+        mat.set_editor_property("two_sided", True)
+        mat.set_editor_property("used_with_instanced_static_meshes", True)
     build(mat)
     mel.recompile_material(mat)
     eal.save_loaded_asset(mat)
@@ -1236,11 +1240,211 @@ def _girl(part):
     return build
 
 
+# The sky's clouds (the volumetric cloud layer, ray-marched by the engine): fair-weather cumulus with flat bases near
+# 700 m and rounded tops, drifting with the wind, and up to four storm cells - towering cumulonimbus with a dark flat
+# base, a column swelling in turrets and an anvil sheared downwind - placed and grown by KeysWeather. Lightning lights
+# the cloud from inside (Flash, FlashI). Density is per meter; out: x density, y flash glow, z how storm-dark.
+CLOUD = """
+struct KCN {
+  float h(float3 p) { p = frac(p * 0.3183099 + 0.1); p *= 17.0; return frac(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float n(float3 x) {
+    float3 i = floor(x); float3 f = frac(x); f = f * f * (3.0 - 2.0 * f);
+    return lerp(lerp(lerp(h(i), h(i + float3(1, 0, 0)), f.x), lerp(h(i + float3(0, 1, 0)), h(i + float3(1, 1, 0)), f.x), f.y),
+                lerp(lerp(h(i + float3(0, 0, 1)), h(i + float3(1, 0, 1)), f.x), lerp(h(i + float3(0, 1, 1)), h(i + float3(1, 1, 1)), f.x), f.y), f.z);
+  }
+};
+KCN K;
+float3 p = WP / 100.0;
+// height above the curved sea (the planet's top is at the origin)
+float alt = p.z + dot(p.xy, p.xy) / 12742000.0;
+float dens = 0.0, dark = 0.0;
+// ---- fair-weather cumulus
+float cbase = 700.0;
+if (alt > cbase && alt < cbase + 2500.0) {
+  float2 q = (p.xy + Drift.xy) / 1700.0;
+  float cv = K.n(float3(q, 0.5)) * 0.65 + K.n(float3(q * 2.7, 3.7)) * 0.35;
+  cv = saturate((cv - (1.0 - Cov)) * 3.2);
+  if (cv > 0.0) {
+    float hc = 250.0 + 2200.0 * cv * cv;
+    float u = (alt - cbase) / hc;
+    float3 r3 = float3(p.xy + Drift.xy, alt);
+    float det = K.n(r3 / 190.0) * 0.62 + K.n(r3 / 70.0) * 0.38;
+    float body = cv * 1.15 - u * u - 0.12 - (det - 0.5) * 0.55;
+    dens = saturate(body * 4.0) * saturate(u * 12.0);
+  }
+}
+// ---- storm cells
+float3 Cs[4] = {C0, C1, C2, C3};
+float Ps[4] = {P0, P1, P2, P3};
+for (int i = 0; i < 4; i++) {
+  float pw = Ps[i];
+  if (pw < 0.01) continue;
+  float R = Cs[i].z;
+  float top = 1400.0 + 10500.0 * saturate(pw);
+  float u = (alt - 550.0) / (top - 550.0);
+  if (u < 0.0 || u > 1.1) continue;
+  float2 dv = p.xy - Cs[i].xy;
+  float2 dva = dv - Shear.xy * u * u * R * 1.4;
+  float r = length(dv), ra = length(dva);
+  if (min(r, ra) > R * 4.5) continue;
+  float3 r3 = float3(p.xy, alt) + float3(Cs[i].xy * 0.37, 0.0);
+  float nz = K.n(r3 / 650.0) * 0.6 + K.n(r3 / 230.0) * 0.4 - 0.5;
+  float colR = R * (0.55 + 0.3 * sin(saturate(u) * 3.1416)) * (0.6 + 0.4 * saturate(pw));
+  float col = saturate((colR - r) / (0.3 * R) + nz * 2.2) * saturate((1.0 - u) * 9.0);
+  float an = smoothstep(0.72, 0.9, u) * saturate((1.04 - u) * 12.0) * saturate((pw - 0.45) * 3.0);
+  float anvil = saturate((R * (1.2 + 2.0 * saturate(pw)) - ra) / (0.5 * R) + nz * 1.6) * an;
+  float d = max(col, anvil) * saturate(u * 25.0);
+  dens = max(dens, d * 1.7);
+  dark = max(dark, d * saturate(pw));
+}
+float glow = 0.0;
+if (FlI > 0.001) glow = FlI * exp(-length(float3(p.xy, alt) - Fl) / 1800.0);
+return float4(dens, glow, dark, 0.0);
+"""
+
+
+def _cloud(mat):
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_VOLUME)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    F4 = unreal.CustomMaterialOutputType.CMOT_FLOAT4
+    wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1400, 0)
+    ins = [("WP", wp)]
+    y = 100
+    for nm, dv in (("Drift", (0, 0, 0)), ("Shear", (1, 0, 0)), ("Cell0", (0, 0, 1000)), ("Cell1", (0, 0, 1000)),
+                   ("Cell2", (0, 0, 1000)), ("Cell3", (0, 0, 1000)), ("Flash", (0, 0, 0))):
+        e = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1400, y)
+        e.set_editor_property("parameter_name", nm)
+        e.set_editor_property("default_value", unreal.LinearColor(dv[0], dv[1], dv[2], 0))
+        ins.append(({"Cell0": "C0", "Cell1": "C1", "Cell2": "C2", "Cell3": "C3", "Flash": "Fl"}.get(nm, nm), e))
+        y += 120
+    for nm, dv in (("Cov", 0.4), ("P0", 0.0), ("P1", 0.0), ("P2", 0.0), ("P3", 0.0), ("FlashI", 0.0)):
+        e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1400, y)
+        e.set_editor_property("parameter_name", nm)
+        e.set_editor_property("default_value", dv)
+        ins.append(("FlI" if nm == "FlashI" else nm, e))
+        y += 100
+    d = _custom(mat, -900, 0, CLOUD, F4, [n for n, _ in ins], "Cloud density")
+    for n, e in ins:
+        _link(e, "", d, n)
+    ext = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -900, 400)
+    ext.set_editor_property("parameter_name", "Ext")
+    ext.set_editor_property("default_value", 0.045)
+    alb = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 500)
+    alb.set_editor_property("parameter_name", "Albedo")
+    alb.set_editor_property("default_value", unreal.LinearColor(0.93, 0.95, 1.0, 1))
+    fc = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 650)
+    fc.set_editor_property("parameter_name", "FlashCol")
+    fc.set_editor_property("default_value", unreal.LinearColor(4.0, 4.2, 5.0, 1))
+    e_ext = _custom(mat, -500, 0, "return D.x * Ext;", F3, ["D", "Ext"], "Extinction")
+    _link(d, "", e_ext, "D")
+    _link(ext, "", e_ext, "Ext")
+    e_alb = _custom(mat, -500, 150, "return Alb * lerp(1.0, 0.82, saturate(D.z));", F3, ["D", "Alb"], "Albedo")
+    _link(d, "", e_alb, "D")
+    _link(alb, "", e_alb, "Alb")
+    e_em = _custom(mat, -500, 300, "return FC * D.y * saturate(D.x);", F3, ["D", "FC"], "Lightning")
+    _link(d, "", e_em, "D")
+    _link(fc, "", e_em, "FC")
+    mel.connect_material_property(e_alb, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(e_ext, "", unreal.MaterialProperty.MP_SUBSURFACE_COLOR)
+    mel.connect_material_property(e_em, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+# Rain and the things made of water in the air, translucent and unlit, one material in modes (KeysWeather):
+# 0 falling streaks on the cylinders around the camera (UV in meters), 1 a rain shaft / spray curtain (soft, streaky,
+# thinner at grazing angles), 2 a waterspout's twisting funnel, 3 a lightning bolt's ribbon (UV.y across it).
+# Vertex alpha and Amount scale the opacity; Fade softens where it meets the scene (cm).
+RAIN = """
+struct KRN {
+  float h(float2 p) { float3 p3 = frac(float3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return frac((p3.x + p3.y) * p3.z); }
+  float n(float2 x) { float2 i = floor(x); float2 f = frac(x); f = f * f * (3.0 - 2.0 * f);
+    return lerp(lerp(h(i), h(i + float2(1, 0)), f.x), lerp(h(i + float2(0, 1)), h(i + float2(1, 1)), f.x), f.y); }
+};
+KRN K;
+int mode = (int)round(Mode);
+float a = 0.0;
+float3 c = Tint;
+float facing = saturate(abs(dot(normalize(N), normalize(CV))));
+if (mode == 0) {
+  float cw = 7.0;
+  float col = floor(UV.x * cw);
+  float h1 = K.h(float2(col, 1.7)), h2 = K.h(float2(col, 9.3));
+  float y = UV.y * 0.55 + T * (4.2 + 1.8 * h1) + h1 * 10.0;
+  float f = frac(y);
+  float streak = smoothstep(0.0, 0.03, f) * (1.0 - smoothstep(0.1, 0.18, f));
+  float xf = frac(UV.x * cw);
+  float w = 1.0 - smoothstep(0.02, 0.09, abs(xf - 0.5 - (h2 - 0.5) * 0.7));
+  a = streak * w * step(h2, Amount * 1.2) * 0.55;
+} else if (mode == 1) {
+  float n1 = K.n(float2(UV.x * 5.0, UV.y * 2.5 - T * 0.05));
+  float n2 = K.n(float2(UV.x * 70.0, UV.y * 3.0 + T * 0.6));
+  a = (0.5 + 0.5 * n1) * (0.82 + 0.18 * n2) * pow(facing, 0.8);
+} else if (mode == 2) {
+  float sw = K.n(float2(UV.x * 7.0 + T * 1.6 + UV.y * 4.0, UV.y * 16.0 - T * 0.9));
+  float sw2 = K.n(float2(UV.x * 23.0 + T * 2.4, UV.y * 40.0));
+  a = (0.45 + 0.4 * sw + 0.15 * sw2) * pow(facing, 0.5);
+  c *= 0.8 + 0.35 * sw;
+} else {
+  float q = abs(UV.y - 0.5) * 2.0;
+  float core = exp(-q * q * 5.0);
+  a = core;
+  c = lerp(c, float3(1.0, 1.0, 1.0), core * core);
+}
+a *= VA * Amount;
+float fade = saturate((SD - PD) / max(Fade, 1.0));
+return float4(c * Bright / max(Ex, 1e-6), saturate(a * fade));
+"""
+
+
+def _rain(mat):
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    F4 = unreal.CustomMaterialOutputType.CMOT_FLOAT4
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -1200, 0)
+    uv = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1200, 120)
+    tm = mel.create_material_expression(mat, unreal.MaterialExpressionTime, -1200, 240)
+    ex = mel.create_material_expression(mat, unreal.MaterialExpressionEyeAdaptation, -1200, 360)
+    vn = mel.create_material_expression(mat, unreal.MaterialExpressionVertexNormalWS, -1200, 480)
+    cv = mel.create_material_expression(mat, unreal.MaterialExpressionCameraVectorWS, -1200, 600)
+    sd = mel.create_material_expression(mat, unreal.MaterialExpressionSceneDepth, -1200, 720)
+    pd = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -1200, 840)
+    sdm = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1000, 720)
+    sdm.set_editor_property("r", True); sdm.set_editor_property("g", False)
+    sdm.set_editor_property("b", False); sdm.set_editor_property("a", False)
+    _link(sd, "", sdm, "")
+    tint = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1200, 960)
+    tint.set_editor_property("parameter_name", "Tint")
+    tint.set_editor_property("default_value", unreal.LinearColor(0.7, 0.73, 0.78, 1))
+    pins = [("VA", vc), ("UV", uv), ("T", tm), ("Ex", ex), ("N", vn), ("CV", cv), ("SD", sdm), ("PD", pd), ("Tint", tint)]
+    y = 1080
+    for nm, dv in (("Mode", 0.0), ("Amount", 0.0), ("Bright", 0.5), ("Fade", 100.0)):
+        e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1200, y)
+        e.set_editor_property("parameter_name", nm)
+        e.set_editor_property("default_value", dv)
+        pins.append((nm, e))
+        y += 100
+    c = _custom(mat, -600, 0, RAIN, F4, [n for n, _ in pins], "Rain")
+    for n, e in pins:
+        if n == "VA":
+            _link(e, "A", c, n)
+        else:
+            _link(e, "", c, n)
+    rgb = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -300, 0)
+    rgb.set_editor_property("r", True); rgb.set_editor_property("g", True); rgb.set_editor_property("b", True); rgb.set_editor_property("a", False)
+    _link(c, "", rgb, "")
+    al = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -300, 150)
+    al.set_editor_property("r", False); al.set_editor_property("g", False); al.set_editor_property("b", False); al.set_editor_property("a", True)
+    _link(c, "", al, "")
+    mel.connect_material_property(rgb, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.connect_material_property(al, "", unreal.MaterialProperty.MP_OPACITY)
+
+
 BUILDERS = {
     "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
     "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
     "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble, "M_KR_Dash": _dash, "M_KR_Glass": _glass,
     "M_KR_GirlSkin": _girl(0), "M_KR_GirlHair": _girl(1), "M_KR_GirlSuit": _girl(2),
+    "M_KR_Cloud": _cloud, "M_KR_Rain": _rain,
 }
 
 

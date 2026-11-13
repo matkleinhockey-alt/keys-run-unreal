@@ -22,6 +22,7 @@
 #include "KeysKit.h"
 #include "KeysHandgun.h"
 #include "KeysTourneyShow.h"
+#include "KeysWeather.h"
 #include "EngineUtils.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -130,6 +131,47 @@ void AKeysHUD::BuildChart()
 FVector2D AKeysHUD::ChartXY(double GX, double GZ, float X, float Y, float Size) const
 {
 	return FVector2D(X + (GX - WorldX0) / WorldSize * Size, Y + (GZ - WorldZ0) / WorldSize * Size);
+}
+
+void AKeysHUD::DrawWxBlobs(TFunctionRef<FVector2D(double, double)> Pt, double PxPerM, float X0, float Y0, float X1, float Y1)
+{
+	TArray<KeysWx::FCellView> Cs;
+	KeysWx::Cells(Cs);
+	for (const KeysWx::FCellView& C : Cs)
+	{
+		const double Heavy = FMath::Max(C.Rain, C.Build * .25);
+		if (Heavy < .03) continue;
+		const FVector2D Ctr = Pt(C.X, C.Z);
+		const float R = float(C.R * PxPerM);
+		if (Ctr.X + R < X0 || Ctr.X - R > X1 || Ctr.Y + R < Y0 || Ctr.Y - R > Y1) continue;
+		// three bands, each a stack of scanlines with ragged edges (the radar's noisy returns)
+		const struct { double F; FLinearColor Col; } Bands[3] = {
+			{1.0, FLinearColor(.15f, .75f, .2f, .45f)}, {.62, FLinearColor(.95f, .85f, .1f, .55f)}, {.3, FLinearColor(.9f, .15f, .1f, .65f)}};
+		for (int32 b = 0; b < 3; b++)
+		{
+			if (b > 0 && C.Rain < .25 * b) break;
+			const float BR = float(R * Bands[b].F * (.6 + .4 * FMath::Min(1.0, Heavy * 1.5)));
+			const int32 Rows = FMath::Clamp(int32(BR / 2.f), 3, 60);
+			const float RowH = BR * 2 / Rows;
+			for (int32 j = 0; j < Rows; j++)
+			{
+				const float Yc = Ctr.Y - BR + (j + .5f) * RowH;
+				const float Q = (Yc - Ctr.Y) / BR;
+				const float Half = BR * FMath::Sqrt(FMath::Max(0.f, 1 - Q * Q)) * float(.82 + .18 * FMath::Sin(j * 1.7 + C.Seed * 3 + b));
+				const float Off = BR * .08f * float(FMath::Sin(j * .9 + C.Seed));
+				const float A = FMath::Max(X0, Ctr.X - Half + Off), Bx = FMath::Min(X1, Ctr.X + Half + Off);
+				const float Ya = FMath::Max(Y0, Yc - RowH * .5f), Yb = FMath::Min(Y1, Yc + RowH * .5f);
+				if (Bx > A && Yb > Ya) DrawRect(Bands[b].Col, A, Ya, Bx - A, Yb - Ya);
+			}
+		}
+		// a waterspout: a magenta diamond
+		if (C.bSpout)
+		{
+			const FVector2D S = Pt(C.SX, C.SZ);
+			if (S.X > X0 && S.X < X1 && S.Y > Y0 && S.Y < Y1)
+				for (int32 k = 0; k < 4; k++) DrawRect(FLinearColor(.95f, .2f, .9f, .95f), float(S.X) - (4 - k) * U, float(S.Y) - 4 * U + 2 * k * U, 2 * (4 - k) * U, 2 * U);
+		}
+	}
 }
 
 void AKeysHUD::DrawHUD()
@@ -508,7 +550,7 @@ void AKeysHUD::DrawGauges(AKeysBoatPawn* P)
 	Text(TEXT("Throttle"), X + 18 * U, GY + 124 * U, .8f, Dim);
 	Bar(X + 100 * U, GY + 130 * U, 220 * U, 10 * U, float(FMath::Max(0.0, P->Throttle())), Teal);
 	Text(P->ZoneName() + TEXT("  -  ") + P->NearName(), X + 18 * U, GY + 150 * U, .8f, FLinearColor::White);
-	Text(TEXT("Sea: ") + SeaStates()[SeaIndex()].Name, X + 18 * U, GY - 26 * U, .85f, Dim);
+	Text(TEXT("Sea: ") + SeaStates()[SeaIndex()].Name + TEXT("  -  ") + KeysWx::HudLine(P->BoatX(), P->BoatZ()), X + 18 * U, GY - 26 * U, .85f, Dim);
 
 	const FString Warn = P->Warning();
 	if (!Warn.IsEmpty()) Text(Warn, X, GY - 56 * U, 1.0f, Red);
@@ -522,6 +564,7 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 	const float Y = P->bBigMap ? Canvas->SizeY * .5f - Size * .5f : 24 * U;
 	DrawRect(FLinearColor(0, 0, 0, .5f), X - 4 * U, Y - 4 * U, Size + 8 * U, Size + 8 * U);
 	DrawTexture(Chart, X, Y, Size, Size, 0, 0, 1, 1, FLinearColor::White, BLEND_Opaque);
+	DrawWxBlobs([&](double GX, double GZ) { return ChartXY(GX, GZ, X, Y, Size); }, Size / WorldSize, X, Y, X + Size, Y + Size);
 	// marinas
 	for (const FMarina& M : Marinas())
 	{
@@ -1108,6 +1151,8 @@ void AKeysHUD::DrawGps(AKeysBoatPawn* P, float X, float Y, float W, float H)
 		const float V0 = FMath::Clamp(float((Bz - WinHH - (GpsCZ - TexHH)) / (2 * TexHH)), 0.f, FMath::Max(0.f, 1 - VH));
 		DrawTexture(GpsTex, X, Y, W, H, U0, V0, UW, VH, FLinearColor::White, BLEND_Opaque);
 	}
+	// rain from the storm cells, as the radar overlay shows it
+	DrawWxBlobs(Pt, 1 / Mpp, X, Y, X + W, Y + H);
 	// track
 	for (int32 i = 1; i < Trail.Num(); i++)
 	{

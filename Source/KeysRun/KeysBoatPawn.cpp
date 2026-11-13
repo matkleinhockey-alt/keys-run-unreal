@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "KeysWeather.h"
 #include "Components/PointLightComponent.h"
 #include "KeysGeo.h"
 #include "KeysMesh.h"
@@ -824,6 +825,14 @@ void AKeysBoatPawn::RunTestScript(double T)
 			}
 		}
 		else if (Cmd.StartsWith(TEXT("fin:"))) DebugFinal(Cmd.Mid(4));
+		else if (Cmd.StartsWith(TEXT("storm=")) || Cmd.StartsWith(TEXT("weather=")) || Cmd.StartsWith(TEXT("spout")) || Cmd.StartsWith(TEXT("bolt")) || Cmd.StartsWith(TEXT("wxskip=")))
+		{
+			// the weather's test hooks (KeysWeather.h DebugCmd)
+			if (AKeysWeather* Wx = AKeysWeather::Get(this)) UE_LOG(LogTemp, Log, TEXT("KRScript %s -> %s"), *Cmd, *Wx->DebugCmd(Cmd));
+		}
+		else if (Cmd == TEXT("seasnap")) SnapSea();
+		else if (Cmd.StartsWith(TEXT("chart="))) ChartRange = Clamp(FCString::Atod(*Cmd.Mid(6)), 120, 2400);   // chart=2400: the plotter's half-range, m   // the sea jumps to what the wind would raise (no easing)
+		else if (Cmd.StartsWith(TEXT("gps="))) bElectronics = FCString::Atoi(*Cmd.Mid(4)) != 0;   // gps=1: the chartplotter (G) on
 		else if (Cmd == TEXT("quit")) { if (APlayerController* PC = Cast<APlayerController>(GetController())) PC->ConsoleCommand(TEXT("quit")); }
 		else MenuActivate(FName(*Cmd));
 	}

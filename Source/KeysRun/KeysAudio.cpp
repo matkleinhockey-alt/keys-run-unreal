@@ -361,8 +361,9 @@ void AKeysAudio::UpdateLoops(double Dt, double T)
 	// water and wind
 	Loops.RushGain = (float)(S.bAir ? .02 : .04 + F * .32);
 	Loops.RushFreq = (float)(400 + F * 900);
-	Loops.HissGain = (float)(S.bAir ? 0 : F * F * .12);
-	Loops.WindGain = (float)(.015 + F * .09 + Sea * .015);
+	// rain hisses on the water and drums on the boat; a blow howls
+	Loops.HissGain = (float)((S.bAir ? 0 : F * F * .12) + WxRain * .2);
+	Loops.WindGain = (float)(.015 + F * .09 + Sea * .015 + FMath::Clamp((WxWind - 8) / 14, 0.0, 1.0) * .12);
 	Loops.WindFreq = (float)(400 + F * 700);
 	Loops.WashGain = (float)((.05 + .05 * Sea) * (.6 + .4 * FMath::Sin(T * .7) * FMath::Sin(T * .31)));
 	// waves slapping the hull when you sit still

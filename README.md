@@ -67,7 +67,7 @@ so there are no hand-made assets. The editor script creates the materials and th
   The speargun has a hauled reload (R), a drag-limited shaft with aim assist that leads moving fish, and a float-line fight (hold S to
   haul, ease off before the shaft tears free); a landed fish goes on the same catch card, cooler and score as a rod catch.
   Fish stand off a diver who is finning hard, bolt from a near-miss, and fill in around you in schools on the reef.
-  Planing boats leave a white prop-wash trail that spreads, breaks up and fades to pale green churned water. H cycles the four sea states.
+  Planing boats leave a white prop-wash trail that spreads, breaks up and fades to pale green churned water. H cycles the four sea states (see Weather).
 - **Boats:** all eight (Robalo R230, Grady-White Canyon 306, Freeman 42LR, Midnight Express 43, MTI V42, Yellowfin 36 CC,
   Contender 32ST and Nor-Tech 390 Sport) with their real specs (length, beam, engines, top speed, acceleration, turning, draft,
   cooler). Each hull is the web game's loft (`entities/boat/hull.ts`, `KeysHull.cpp`) from its own `HULLS` row: deadrise that
@@ -294,7 +294,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Esc, Fishing tournament | start / quit a fishing tournament |
 | E | weigh in at a marina dock |
 | F | auto-chase on/off |
-| H | sea state |
+| H | sea state: sets the base wind the sea builds from (Calm, Choppy, Haulover, Big swell) |
 | O | sunset |
 | M | big chart |
 | 1 | third person / first person from the helm |
@@ -454,7 +454,32 @@ You can also launch straight into a crew: `-KRLogin=Name,crew` on the command li
   `fin:spear=hogfish` (a speared catch card), `fin:shorecast=0.6` (cast from where the walker stands), `fin:caelen` /
   `fin:caelen=2.2` (fire the pistol at Caelen / beside him), `fin:spawn=mako,mola` (schools of those round the boat),
   `fin:lot=N` (log the Nth plat parcel with scenery on it), `fin:fills=N`, `fin:wrecksreset`.
+  Weather: `storm=spawn[:dist,bearing[,age]]` (a storm cell that far and on that compass bearing from the boat, 6 km
+  upwind by default; age 0..1 of its life, 0.45 is its peak), `storm=clear`, `weather=calm|breezy|storm` (storm: a mature
+  cell right on top of you), `spout[=dist,bearing]`, `bolt[=dist,bearing]` (a cloud-to-water strike), `wxskip=seconds`
+  (run the storm lifecycle clock ahead), `seasnap` (the sea jumps to what the wind would raise), `gps=1` (the chartplotter
+  on) and `chart=meters` (its half-range). `-KRWxSeed=N` repeats one session's weather.
   Test runs never write the leaderboard. Add `-RenderOffscreen` to run with no window at all.
+
+## Weather
+
+- One wind drives the sea. The sea state (H) sets the base trade wind: Calm 1.5 m/s (glassy), Choppy 7, Haulover 11
+  (whitecaps), Big swell 6.5 with long rollers. Storms add their outflow on top. The wind eases in seconds, the sea it raises
+  builds over about half a minute and lies down over minutes, and while the wind swings the old and new seas cross.
+- The sea is a fixed spectrum: four long swell trains plus 72 wind-sea trains (6 lengths x 12 directions) whose heights are
+  reweighted from the wind (peak length, steepness, spread, confusion) - so nothing ever snaps. The water mesh and every hull
+  sample the same height function (`KeysGeo::WaveH`), so what you see is what the boat rides: bow, stern and both chines on a
+  monohull, down both hulls on a catamaran (which rolls less in chop). Driving fast into a steep face slams the bow and
+  throws spray. Whitecaps, wind-streaked foam and rain rings come from the material (`M_KR_Ocean`).
+- Storm cells (`KeysWeather.cpp`) come in real time, seeded from the real clock: one every few minutes, sometimes two at
+  once, sometimes a long calm. They spawn upwind, drift with the steering wind, build into towering cumulonimbus (the
+  volumetric cloud material `M_KR_Cloud`, which also draws the fair-weather cumulus), rain out and decay over 10-25 minutes.
+  Under and near one: a rain shaft visible from far off, rain around the camera, rain rings on the water, darker light,
+  thicker haze, a gusty outflow that swings and drives short, steep, confused seas and blowing spray, lightning (in-cloud
+  flashes and strikes to the water) with thunder about 3 s per km later. Big cells sometimes drop a waterspout: get close
+  and it drags the boat round. The VHF warns of building cells, approaching rain and spouts; the HUD's sea line gives the
+  wind and the nearest storm; the chartplotter (G, also on the helm screens) and the big chart (M) show the rain as
+  radar blobs, spouts as magenta diamonds.
 
 ## Graphics
 

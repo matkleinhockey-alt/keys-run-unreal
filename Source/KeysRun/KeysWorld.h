@@ -54,11 +54,19 @@ public:
 
 	FVector SunDir() const { return SunDirUE; }
 
+	// the weather's say over the light (KeysWeather): Gloom 0..1 under a storm's shadow, Rain 0..1 at the camera, Flash
+	// the lightning right now (0 none, ~1 a bolt nearby)
+	void SetWeatherLight(double InGloom, double InRain, double InFlash) { WxGloom = InGloom; WxRain = InRain; WxFlash = InFlash; }
+	UVolumetricCloudComponent* CloudComponent() const { return Clouds; }
+	UDirectionalLightComponent* SunLight() const { return Sun; }
+
 private:
 	void BuildTerrain();
 	void BuildScenery();
 	void UpdateWater();
 	void ApplySun(double K);
+	void ApplyWeather();
+	double WxGloom = 0, WxRain = 0, WxFlash = 0;
 	UInstancedStaticMeshComponent* MakeISM(const TCHAR* Name, UStaticMesh* Mesh, const FLinearColor& Color, double Roughness = .8);
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;

@@ -139,6 +139,8 @@ public:
 	double GetY() const { return Y; }                // hull heave
 	double GetVY() const { return VY; }
 	double GetPitch() const { return Pitch; }        // radians, bow up positive
+	// the weather shoving the boat (a waterspout, a gust front): an acceleration in game x/z (m/s^2) for this frame
+	void WeatherPush(double AX, double AZ, double Dt, double ShakeK) { DVX += AX * Dt; DVZ += AZ * Dt; Shake = FMath::Max(Shake, ShakeK); }
 	double GetRoll() const { return Roll; }          // radians, starboard up positive
 	bool IsAir() const { return bAir; }
 	int32 GetGear() const { return Gear; }           // 0 drive, 1 neutral, 2 reverse

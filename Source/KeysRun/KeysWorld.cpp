@@ -156,6 +156,9 @@ void AKeysWorld::BeginPlay()
 	Fog->SetDirectionalInscatteringColor(FLinearColor(.55f, .45f, .32f));
 	// contact shadows tuck the small things (cleats, feet, rod butts) into what they stand on
 	Sun->ContactShadowLength = KeysGfx::ContactShadowsOn() ? .04f : 0.f;
+	// the clouds (and the storm towers) shade the sea and the islands
+	Sun->bCastCloudShadows = true;
+	Sun->CloudShadowOnSurfaceStrength = 1.f;
 	Sun->MarkRenderStateDirty();
 	if (UMaterialInterface* CloudMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineSky/VolumetricClouds/m_SimpleVolumetricCloud_Inst.m_SimpleVolumetricCloud_Inst")))
 		Clouds->SetMaterial(CloudMat);
@@ -682,6 +685,21 @@ void AKeysWorld::ApplySun(double K)
 	Fog->SetDirectionalInscatteringColor(FMath::Lerp(FLinearColor(.55f, .45f, .32f), FLinearColor(1.4f, .7f, .32f), float(K)));
 }
 
+void AKeysWorld::ApplyWeather()
+{
+	// under a storm: the sun dims behind the cell (its own volumetric shadow does the rest), the sky light drops, the
+	// haze thickens and greys toward a rain-curtain wall; lightning lights the whole sky for an instant
+	const float K = float(DuskK()), G = float(FMath::Clamp(WxGloom, 0.0, 1.0)), R = float(FMath::Clamp(WxRain, 0.0, 1.0)), Fl = float(FMath::Max(0.0, WxFlash));
+	Sun->SetIntensity(9.f * (1.f - .8f * G));
+	SkyLight->SetIntensity(1.f - .45f * G + 2.5f * Fl);
+	Fog->SetFogDensity(.004f + .008f * G + .03f * R);
+	Fog->SetFogHeightFalloff(.15f + .1f * R);
+	const FLinearColor Clear = FMath::Lerp(FLinearColor(.45f, .62f, .75f), FLinearColor(.75f, .5f, .38f), K);
+	const FLinearColor Storm = FLinearColor(.3f, .34f, .38f) * (1.f - .45f * K);
+	Fog->SetFogInscatteringColor(FMath::Lerp(Clear, Storm, FMath::Min(1.f, .75f * G + .4f * R)) + FLinearColor(.5f, .5f, .6f) * Fl * .6f);
+	Fog->SetDirectionalInscatteringColor(FMath::Lerp(FLinearColor(.55f, .45f, .32f), FLinearColor(1.4f, .7f, .32f), K) * (1.f - .9f * G));
+}
+
 void AKeysWorld::ToggleSunset() { SunsetTarget = SunsetTarget > .5 ? 0 : 1; }
 void AKeysWorld::SetClearedParcels(const TSet<int32>& Parcels)
 {
@@ -714,6 +732,7 @@ void AKeysWorld::Tick(float DeltaSeconds)
 		SunK = SunK < SunsetTarget ? FMath::Min(SunsetTarget, SunK + DeltaSeconds * .25) : FMath::Max(SunsetTarget, SunK - DeltaSeconds * .25);
 		ApplySun(SStep(0, 1, SunK));
 	}
+	ApplyWeather();
 	KeysGeo::TickSea(DeltaSeconds);
 	UpdateWater();
 }

@@ -61,6 +61,8 @@ public:
 	void Land();                                             // AUD.land(): fish landed chime
 	void GearShift();                                        // the clunk in shiftGear()
 	void Gull(double X, double Z);
+	// the weather around the listener: rain 0..1 (a hiss on the water and the boat) and the wind, m/s
+	void SetWeather(double Rain, double Wind) { WxRain = Rain; WxWind = Wind; }
 	// sounds from AKeysExtras: AirHorn, CrowdRoar, MusicDuck, CaelenSquawk (others are ignored)
 	void PlayExtra(FName Id, const FVector& GamePos, float Power);
 	// the second port pass's sounds (KeysAudioMore.cpp): Bark, PartyBeat, Bell, Gunshot, DryClick, Reload, Flare, Ricochet,
@@ -114,6 +116,7 @@ private:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UKeysSfxSynth> Sfx;
+	double WxRain = 0, WxWind = 7;
 	// the drag screaming as a fish takes line: a real recording (Content/KeysRun/Sounds, audiopapkin via Pixabay). The
 	// strike plays its strongest surge at full level the instant a fish is on; the fight loop then follows the line
 	// going out. Empty if the assets are missing, and the synth's chopped tone takes over again.

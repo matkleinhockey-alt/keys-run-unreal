@@ -71,6 +71,9 @@ private:
 	float Wrapped(const FString& S, float X, float Y, float W, float Scale, const FLinearColor& C = FLinearColor::White);
 	void Bar(float X, float Y, float W, float H, float Fill, const FLinearColor& C);
 	FVector2D ChartXY(double GX, double GZ, float X, float Y, float Size) const;
+	// the storm cells as weather-radar rain blobs (green - yellow - red toward the core), clipped to a box; Pt maps game
+	// meters to the screen, PxPerM is its scale
+	void DrawWxBlobs(TFunctionRef<FVector2D(double, double)> Pt, double PxPerM, float X0, float Y0, float X1, float Y1);
 
 	UPROPERTY() TObjectPtr<UTexture2D> Chart;
 	UPROPERTY() TObjectPtr<UTexture2D> GpsTex;

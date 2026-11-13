@@ -24,6 +24,7 @@
 #include "KeysWalker.h"
 #include "KeysLandmarks.h"
 #include "KeysEvents.h"
+#include "KeysWeather.h"
 #include "EngineUtils.h"
 #include "GameFramework/Controller.h"
 
@@ -74,6 +75,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	SpawnOnce<AKeysTourneyShow>(W);
 	SpawnOnce<AKeysSlots>(W);
 	SpawnOnce<AKeysFinal>(W);
+	SpawnOnce<AKeysWeather>(W);
 	AKeysExtras* Ex = SpawnOnce<AKeysExtras>(W);
 	AKeysAudio* Au = SpawnOnce<AKeysAudio>(W);
 	if (Ex && Au)
