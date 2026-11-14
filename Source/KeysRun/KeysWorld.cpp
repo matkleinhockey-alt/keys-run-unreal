@@ -578,6 +578,9 @@ void AKeysWorld::UpdateWater()
 			WaterMID->SetScalarParameterValue(TEXT("TrackDir"), float(TrackDirS));
 		}
 		PushOceanTextures();
+		// the sun glitter: where the sun is, and how strong (full in daylight, softer through cloud and rain)
+		WaterMID->SetVectorParameterValue(TEXT("SunDir"), FLinearColor(SunDirUE.X, SunDirUE.Y, SunDirUE.Z, 0));
+		WaterMID->SetScalarParameterValue(TEXT("Glint"), float(1.0 - .7 * KeysWx::RainAt(FocusX, FocusZ)));
 	}
 	constexpr double NearR = 450;
 	GatherWakes(FX, FZ, NearR, T, LiveWakes);

@@ -1822,10 +1822,28 @@ void AKeysLife::UpdateRigs(double Dt, double T)
 // ---------------------------------------------------------------- spray
 void AKeysLife::SpawnDrop(const FVector& P, const FVector& V, double Life, double Size, bool bGrav)
 {
-	if (Drops.Num() >= 600) return;
+	if (Drops.Num() >= 1400) return;
 	FKeysDrop D;
 	D.P = P; D.Vel = V; D.Life = Life; D.Size = Size; D.bGrav = bGrav;
 	Drops.Add(D);
+}
+
+void AKeysLife::BowSpray(const FVector& P, const FVector2D& Out, const FVector2D& BoatV, int32 N, double Power)
+{
+	if (LHyp(P.X - CamX, P.Z - CamZ) > 400) return;
+	const double Wd = KeysGeo::WindDir(), Ws = KeysGeo::WindSpeed();
+	const FVector2D Wind(FMath::Cos(Wd) * Ws, FMath::Sin(Wd) * Ws);
+	for (int32 i = 0; i < N; i++)
+	{
+		// thrown out and up off the chine, a little fore-and-aft scatter; the drops keep most of the boat's speed
+		// (so they hang beside the hull and stream aft) and the wind carries them downwind
+		const double Side = LRand(1.5, 4.5) * Power, Up = LRand(1.2, 3.6) * FMath::Sqrt(Power), Fore = LRand(-.6, .6);
+		const FVector2D H = Out * Side + BoatV * LRand(.72, .92) + Wind * LRand(.08, .2) + FVector2D(-Out.Y, Out.X) * Fore;
+		const FVector Pos = P + FVector(Out.X * LRand(0, .3), LRand(-.05, .15), Out.Y * LRand(0, .3));
+		// fine: a mist of small drops, a few bigger ones among them
+		const double Sz = (FMath::FRand() < .15 ? LRand(.05, .08) : LRand(.018, .04)) * FMath::Pow(FMath::Max(Power, .3), .5);
+		SpawnDrop(Pos, FVector(H.X, Up, H.Y), LRand(.5, 1.1) * (.7 + .3 * Power), Sz, true);
+	}
 }
 
 void AKeysLife::Splash(double X, double Z, int32 N, double Power)
@@ -1897,10 +1915,15 @@ void AKeysLife::UpdateDrops(double Dt, double T)
 			const FVector Vel = D.Vel.GetSafeNormal(UE_SMALL_NUMBER, Up);
 			const FVector Along = (Vel - ToCam * FVector::DotProduct(Vel, ToCam)).GetSafeNormal(UE_SMALL_NUMBER, V);
 			const FVector Side = FVector::CrossProduct(ToCam, Along).GetSafeNormal(UE_SMALL_NUMBER, R);
-			const FVector T0 = P + Along * S * 1.6, B0 = P - Along * S * .9, L0 = P - Side * S * .6, R0 = P + Side * S * .6;
+			// a rounded oval (six-sided), not a diamond: a diamond's points read as flying shards up close
 			const FVector N = (Up + ToCam * .5).GetSafeNormal();
-			LifeBufTriN(DropBuf, T0, L0, B0, N, Col);
-			LifeBufTriN(DropBuf, T0, B0, R0, N, Col);
+			FVector Rim[6];
+			for (int32 k = 0; k < 6; k++)
+			{
+				const double A = k * PI / 3;
+				Rim[k] = P + Along * (FMath::Cos(A) * S * (FMath::Cos(A) > 0 ? 1.5 : 1.0)) + Side * (FMath::Sin(A) * S * .62);
+			}
+			for (int32 k = 0; k < 6; k++) LifeBufTriN(DropBuf, P, Rim[k], Rim[(k + 1) % 6], N, Col);
 		}
 		else
 		{

@@ -1783,8 +1783,12 @@ void AKeysBoatPawn::Slam(double V)
 	{
 		const FBoatSpec& S = Spec();
 		const double Fx = -FMath::Sin(H), Fz = -FMath::Cos(H), Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
+		const FVector2D BV(Fx * Speed, Fz * Speed);
 		for (const double Sd : {-1.0, 1.0})
-			L->Splash(X + Fx * S.Len * .3 + Rx * Sd * S.Beam * .55, Z + Fz * S.Len * .3 + Rz * Sd * S.Beam * .55, 5 + int32(K * 16), .5 + K * 1.1);
+		{
+			const double BX = X + Fx * S.Len * .3 + Rx * Sd * S.Beam * .5, BZ = Z + Fz * S.Len * .3 + Rz * Sd * S.Beam * .5;
+			L->BowSpray(FVector(BX, WaveH(BX, BZ, GetWorld()->GetTimeSeconds(), AmpAt(BX, BZ)) + .1, BZ), FVector2D(Rx * Sd, Rz * Sd), BV, 30 + int32(K * 70), .8 + K * 1.4);
+		}
 	}
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (K > .6 && Now - SlamT > 6)
@@ -1964,6 +1968,25 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	WakeT += Dt;
 	// rings every 0.08 s instead of 0.35 s: the same wake height, but a smooth V instead of scalloped rings
 	if (WakeT > .08 && FMath::Abs(Speed) > 2) { EmitWake(X - Fx * S.Len * .5, Z - Fz * S.Len * .5, FMath::Abs(Speed), S.Len, T, WakeT); WakeT = 0; }
+	// spray off the bow chines on plane in a chop: the hull meeting each wave throws a sheet out to the sides, more as
+	// the sea builds and the faster she goes (none when airborne or idling)
+	SprayT += Dt;
+	if (SprayT > .06)
+	{
+		SprayT = 0;
+		const double Vs = FMath::Abs(Speed);
+		const double Sk = bAir ? 0 : FMath::SmoothStep(7.0, 22.0, Vs) * Clamp(WaveRms() * 3.2 + .15, 0, 1.4) * (.6 + .4 * FMath::Abs(FMath::Sin(T * 2.7)));
+		if (Sk > .08)
+			if (AKeysLife* L = AKeysLife::Get(this))
+			{
+				const FVector2D BV(Fx * Speed, Fz * Speed);
+				for (const double Sd : {-1.0, 1.0})
+				{
+					const double BX = X + Fx * S.Len * .22 + Rx * Sd * S.Beam * .48, BZ = Z + Fz * S.Len * .22 + Rz * Sd * S.Beam * .48;
+					L->BowSpray(FVector(BX, WaveH(BX, BZ, T, AmpAt(BX, BZ)) + .05, BZ), FVector2D(Rx * Sd, Rz * Sd), BV, 3 + int32(Sk * 12), .3 + .5 * Sk);
+				}
+			}
+	}
 	// the white prop wash: wider and whiter as she gets on plane, none while the hull is airborne
 	TrailT += Dt;
 	if (TrailT > .07)

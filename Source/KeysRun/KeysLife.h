@@ -202,6 +202,9 @@ public:
 	void PredatorsNear(double X, double Z, double R, TArray<FVector4>& Out) const;
 	// a burst of spray at a point on the water
 	void Splash(double X, double Z, int32 N, double Power);
+	// a sheet of bow spray off one chine: N drops at P (game meters, Y up) fanning out along Out (unit, sideways) and up,
+	// carrying BoatV (the boat's velocity, x/z) so they stream aft, drifting downwind; Power ~0.3 (light) .. 2 (a slam)
+	void BowSpray(const FVector& P, const FVector2D& Out, const FVector2D& BoatV, int32 N, double Power);
 	// water streaming off a leaping fish: N drops at P (game meters, Y up) flung with the fish's velocity V
 	void Shed(const FVector& P, const FVector& V, int32 N, double Size);
 

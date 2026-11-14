@@ -197,6 +197,26 @@ if (rain > 0.01 && foot < 0.04) {
 return normalize(VN + float3(-g.x, -g.y, 0.0));
 """
 
+OCEAN_GLINT = """
+// sun glitter: the sun's reflection off the facets of the sea. Up close it breaks into points that twinkle as the
+// facets tilt through the angle (cells of the water that catch it for a moment); farther out they blur into the
+// broad bright path toward the sun. Soft on purpose: a hard one shimmers as single pixels.
+float3 L = normalize(SunDir);
+float3 V = normalize(CamV);
+float3 R = reflect(-V, normalize(N));
+float s = saturate(dot(R, L));
+float far = saturate(D / 30000.0);
+float e = lerp(700.0, 90.0, far);
+float spec = pow(s, e);
+float2 cp = WP.xy / lerp(35.0, 400.0, far);
+float2 ci = floor(cp);
+float h = frac(sin(dot(ci, float2(127.1, 311.7))) * 43758.5453);
+float tw = smoothstep(0.35, 1.0, 0.5 + 0.5 * sin(T * (2.0 + 3.0 * h) + h * 40.0));
+float spark = lerp(0.25 + 2.2 * tw, 1.0, far);
+float day = saturate(L.z * 5.0);
+return float3(1.0, 0.94, 0.82) * (spec * spark * lerp(1.6, 0.7, far) * day * (1.0 - saturate(F * 1.5)) * Glint);
+"""
+
 OCEAN_ROUGH = """
 // glassy up close, rougher with distance as the ripples there are too small to draw but still blur the reflection
 // (a mirror-smooth sea throws the sun back as single-pixel glints that shimmer and read as pixelated); rain and a
@@ -883,6 +903,18 @@ def _ocean(mat):
     mel.connect_material_property(_const(mat, 0.255, -500, 800), "", unreal.MaterialProperty.MP_SPECULAR)
     mel.connect_material_property(nrm, "", unreal.MaterialProperty.MP_NORMAL)
     mel.connect_material_property(foam, "", unreal.MaterialProperty.MP_OPACITY)
+    # the sun glitter (KeysWorld sets SunDir and Glint every frame)
+    sundir = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 1900)
+    sundir.set_editor_property("parameter_name", "SunDir")
+    sundir.set_editor_property("default_value", unreal.LinearColor(0.5, -0.6, 0.6, 0.0))
+    glintk = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -900, 2050)
+    glintk.set_editor_property("parameter_name", "Glint")
+    glintk.set_editor_property("default_value", 1.0)
+    camv = mel.create_material_expression(mat, unreal.MaterialExpressionCameraVectorWS, -900, 2150)
+    gl = _custom(mat, -500, 1900, OCEAN_GLINT, F3, ["SunDir", "CamV", "N", "WP", "D", "T", "F", "Glint"], "Glitter")
+    for src, pin in ((sundir, "SunDir"), (camv, "CamV"), (nrm, "N"), (wp, "WP"), (dp, "D"), (tm, "T"), (foam, "F"), (glintk, "Glint")):
+        _link(src, "", gl, pin)
+    mel.connect_material_property(gl, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
 
 def _solid(mat):
