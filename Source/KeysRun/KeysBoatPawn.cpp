@@ -1566,7 +1566,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::Q)) { ToggleAshore(); return; }
 
 	bFwd = Down(EKeys::W) || (!bTrimMode && Down(EKeys::Up));
-	if (bScriptReelAuto) bAutoReelOn = FState == EKeysFish::Fight && (bAutoReelOn ? Tension < .86 : Tension < .62);   // ease off in the red, wind again once it drops
+	if (bScriptReelAuto) bAutoReelOn = FState == EKeysFish::Fight && (bAutoReelOn ? Tension < .84 : Tension < .55);   // ease off in the red, wind again once it drops
 	// reel on the down arrow (it backs the boat down only with no line out); S is the throttle astern
 	bReelKey = (IsLineOut() && Down(EKeys::Down)) || bScriptReel || bAutoReelOn;
 	bBack = Down(EKeys::S) || (!bTrimMode && !IsLineOut() && Down(EKeys::Down));
@@ -2468,7 +2468,7 @@ void AKeysBoatPawn::SetHook()
 	FState = EKeysFish::Fight;
 	if (RaiseCamT <= 0) TriggerFishCam();
 	FightLabel = SizeT > .7 ? TEXT("Something heavy is on") : SizeT > .35 ? TEXT("Solid fish on") : TEXT("Fish on");
-	FightSub = TEXT("It's running! Hold the down arrow (or Space) to reel, ease off when the bar runs red.");
+	FightSub = TEXT("It's running! Hold the down arrow (or Space) to wind up tension - more tension gains more line. Ease off before the red.");
 	Shake = FMath::Max(Shake, .3);
 	ShowFishMesh(true);
 	// the hit itself: the jumpers go airborne straight away (a tarpon always, a billfish nearly always, greyhounding)
@@ -2886,16 +2886,21 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 		// reeling pulls the line toward what the fish is doing, it doesn't just climb: on a resting fish it holds a working
 		// tension and gains line fast; into a running fish it climbs into the red (ease off, let the drag work, reel
 		// again when it turns); with the fish in the air it's the quickest way to snap it. Pump and wind.
+		// Holding the reel BUILDS tension, steadily: slowly on a resting fish, faster into a run, fastest with it in the
+		// air. Let go and it bleeds back to what the fish's own pull holds on the line. Past the drag setting the drag
+		// starts slipping line, which slows the climb (more drag = it holds more before it slips). So you pump: wind it
+		// up into the yellow, ease off before the red, wind again. (It used to settle on a fixed level while you held,
+		// so on a resting fish holding the reel could never take the bar past the middle.)
+		const double Base = bInAir ? .05 : bRunningFish ? Clamp(.24 + .1 * Dg + .17 * Pull * (DeepT > 0 ? 1.2 : 1), 0, .9) : .1;
 		if (bReel)
 		{
-			const double Tgt = bInAir ? 1.12 : bRunningFish ? Clamp(.66 + .34 * Pull * PullK + .03 * Dg, 0, 1.15) : .44 + .04 * Dg;
-			Tension = Clamp(Tension + (Tgt - Tension) * FMath::Min(1.0, Dt * (Tgt > Tension ? 1.5 : 1.8)), 0, 1.15);   // time to see the bar go red
+			double Up = bInAir ? 1.6 : bRunningFish ? .38 + .5 * Pull * PullK : .3;
+			const double SlipAt = .62 + .08 * Dg;   // the drag's setting
+			if (Tension > SlipAt && !bInAir) Up *= .45;   // the drag slips line
+			Tension = Clamp(Tension + Up * Dt, 0, 1.15);
+			if (Tension < Base) Tension += (Base - Tension) * FMath::Min(1.0, Dt * 3);
 		}
-		else
-		{
-			const double Tgt = bInAir ? .05 : bRunningFish ? Clamp(.28 + .11 * Dg + .17 * Pull * (DeepT > 0 ? 1.2 : 1), 0, .97) : .08;
-			Tension += (Tgt - Tension) * FMath::Min(1.0, Dt * 1.6);
-		}
+		else Tension += (Base - Tension) * FMath::Min(1.0, Dt * 1.4);
 		double DX = FX - X, DZ = FZ - Z;
 		const double Dist = FMath::Max(1e-3, Hyp(DX, DZ));
 		DX /= Dist; DZ /= Dist;
@@ -2908,7 +2913,9 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 		}
 		if (bReel)
 		{
-			const double R = FMath::Max(4.0, 10.5 * (1 - .22 * S)) * (bRunningFish ? .3 : 1) * (.75 + .35 * (1 - Stamina)) * (.7 + .1 * Dg) * (HasGear(TEXT("reel.lever")) ? 1.3 : 1);
+			// more tension on the line = more line gained per turn (a slack line just spins the spool)
+			const double R = FMath::Max(4.0, 10.5 * (1 - .22 * S)) * (bRunningFish ? .3 : 1) * (.75 + .35 * (1 - Stamina)) * (.7 + .1 * Dg) * (HasGear(TEXT("reel.lever")) ? 1.3 : 1)
+				* (.35 + 1.0 * Clamp(Tension, 0, 1));
 			FX -= DX * R * Dt;
 			FZ -= DZ * R * Dt;
 		}
