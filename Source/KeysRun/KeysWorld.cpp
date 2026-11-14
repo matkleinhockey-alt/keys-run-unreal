@@ -1,4 +1,6 @@
 #include "KeysWorld.h"
+#include "KeysOcean.h"
+#include "Engine/Texture2D.h"
 #include "KeysEstates.h"
 #include "KeysGeo.h"
 #include "KeysTownData.h"
@@ -575,6 +577,7 @@ void AKeysWorld::UpdateWater()
 			TrackPX = FocusX; TrackPZ = FocusZ;
 			WaterMID->SetScalarParameterValue(TEXT("TrackDir"), float(TrackDirS));
 		}
+		PushOceanTextures();
 	}
 	constexpr double NearR = 450;
 	GatherWakes(FX, FZ, NearR, T, LiveWakes);
@@ -653,7 +656,8 @@ void AKeysWorld::UpdateWater()
 			const double Wk = bNear ? WakeHFrom(LiveWakes, WakeCells[Ck], X, Z) : 0;
 			const FVector2D Tr = bNear ? TrailFrom(LiveTrails, TrailCells[Ck], X, Z) : FVector2D::ZeroVector;
 			// wave trains shorter than ~3 grid cells here would only alias on the coarse outer grid
-			const double Sea = WaveHLod(X, Z, T, Amp, 2.6 * FMath::Max(WSp[i], WSp[j]));
+			const double MinLen = 2.6 * FMath::Max(WSp[i], WSp[j]);
+			const double Sea = WaveHLod(X, Z, T, Amp, MinLen);
 			// the prop wash knocks down the chop a little, so the trail reads as a smoother, glassier lane
 			// and right behind the motors the wash heaps up into a boiling white mound before it settles
 			double Boil = Tr.X > .6 ? FMath::Square((Tr.X - .6) / .4) * .32 : 0;
@@ -665,12 +669,19 @@ void AKeysWorld::UpdateWater()
 			}
 			const double H = KeepOut(X, Z, Sea * (1 - .25 * Tr.Y) + Wk + Boil);
 			WH[K] = H;
-			WV[K] = ToUE(X, H, Z);
+			// the simulated sea pulls each point sideways toward the crests: sharp crests, broad troughs
+			FVector2D Side = FVector2D::ZeroVector;
+			if (KeysOcean::Enabled()) { const FVector Dp = KeysOcean::Displacement(X, Z, MinLen) * ChopScale(Amp); Side = FVector2D(Dp.X, Dp.Z); }
+			WV[K] = ToUE(X + Side.X, H, Z + Side.Y);
 			// foam on breaking crests (whitecaps, with the wind), on the crests of fresh wakes, in the prop wash and along
 			// the beach, where it comes and goes with the swell. Vertex alpha carries the amount; the material breaks it up.
 			const double Crest = Sea / (Amp * 2.4 * Rms + .001);
 			const double D = DepthFast(X, Z);
-			double F = SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
+			// whitecaps: on the simulated sea, where crests have actually folded over (and linger a few seconds after);
+			// on the classic waves, on the tallest crests
+			double F = KeysOcean::Enabled()
+				? FMath::Max(KeysOcean::Foam(X, Z) * (.3 + .7 * Caps) * (1 - SStep(8, 40, MinLen)), SStep(.75, 1.3, Crest) * .12 * Caps)
+				: SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
 			// white lines along the arms of a fresh wake, where the crests are tallest
 			F = FMath::Max(F, SStep(.025, .16, Wk) * .92);
 			F = FMath::Max(F, Tr.X);
@@ -690,9 +701,10 @@ void AKeysWorld::UpdateWater()
 		for (int32 i = 0; i < S; i++)
 		{
 			const int32 i0 = FMath::Max(i - 1, 0), i1 = FMath::Min(i + 1, WN), j0 = FMath::Max(j - 1, 0), j1 = FMath::Min(j + 1, WN);
-			const double DX = (WH[j * S + i1] - WH[j * S + i0]) / FMath::Max(.01, WGrid[i1] - WGrid[i0]);
-			const double DZ = (WH[j1 * S + i] - WH[j0 * S + i]) / FMath::Max(.01, WGrid[j1] - WGrid[j0]);
-			WN_[j * S + i] = FVector(-DX, -DZ, 1).GetSafeNormal();
+			// from the displaced surface itself (the points moved sideways as well as up)
+			const FVector A = WV[j * S + i1] - WV[j * S + i0], B = WV[j1 * S + i] - WV[j0 * S + i];
+			const FVector Nn = FVector::CrossProduct(A, B).GetSafeNormal();
+			WN_[j * S + i] = Nn.Z > .05 ? Nn : FVector::UpVector;
 		}
 	});
 	Water->UpdateMeshSection_LinearColor(0, WV, WN_, WUV, WUV1, WUV2, TArray<FVector2D>(), WC, TArray<FProcMeshTangent>());
@@ -771,4 +783,37 @@ void AKeysWorld::Tick(float DeltaSeconds)
 	ApplyWeather();
 	KeysGeo::TickSea(DeltaSeconds);
 	UpdateWater();
+}
+
+// ---------------------------------------------------------------- the simulated sea's textures for the water material
+// Two 64 x 64 float textures (slope x, slope z, foam, height per grid point), refilled every frame from KeysOcean so
+// the material's fine normals and whitecaps follow the same waves the boat rides.
+void AKeysWorld::PushOceanTextures()
+{
+	if (!WaterMID) return;
+	const bool bOn = KeysOcean::Enabled();
+	WaterMID->SetScalarParameterValue(TEXT("SimOn"), bOn ? 1.f : 0.f);
+	if (!bOn) return;
+	const int32 Nn = KeysOcean::GridN();
+	for (int32 t = 0; t < 2; t++)
+	{
+		if (!SimTex[t])
+		{
+			SimTex[t] = UTexture2D::CreateTransient(Nn, Nn, PF_A32B32G32R32F);
+			if (!SimTex[t]) return;
+			SimTex[t]->SRGB = false;
+			SimTex[t]->Filter = TF_Bilinear;
+			SimTex[t]->AddressX = TA_Wrap;
+			SimTex[t]->AddressY = TA_Wrap;
+			SimTex[t]->CompressionSettings = TC_HDR;
+			SimTex[t]->UpdateResource();
+			WaterMID->SetTextureParameterValue(t ? TEXT("Sim1") : TEXT("Sim0"), SimTex[t]);
+			WaterMID->SetScalarParameterValue(t ? TEXT("SimL1") : TEXT("SimL0"), float(KeysOcean::TileLen(t)));
+		}
+		TArray<FLinearColor>* Data = new TArray<FLinearColor>();
+		KeysOcean::FillTexels(t, *Data);
+		FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, Nn, Nn);
+		SimTex[t]->UpdateTextureRegions(0, 1, Region, Nn * sizeof(FLinearColor), sizeof(FLinearColor), reinterpret_cast<uint8*>(Data->GetData()),
+			[Data](uint8*, const FUpdateTextureRegion2D* R) { delete Data; delete R; });
+	}
 }

@@ -73,6 +73,8 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Terrain;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Water;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> WaterMID;
+	UPROPERTY() TObjectPtr<class UTexture2D> SimTex[2];
+	void PushOceanTextures();
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> UnderMID;
 	bool bUnderside = false;
 	TArray<FVector> WNU;

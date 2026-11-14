@@ -118,6 +118,7 @@ namespace KeysGeo
 	double WaveHLod(double X, double Z, double T, double Amp, double MinLen);
 	double AmpFor(double D);
 	double AmpAt(double X, double Z);
+	double ChopScale(double Amp);   // how much of the wind sea reaches water of that Amp
 	double WaveH(double X, double Z, double T, double Amp, bool bWithWake = true);
 	FVector2D WaveSlope(double X, double Z, double T, double Amp);
 	// Interval: seconds since this boat's last EmitWake. Rings dropped more often are made weaker, so the wake's height

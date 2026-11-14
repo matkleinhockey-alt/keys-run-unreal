@@ -58,6 +58,11 @@ def _water(mat):
 OCEAN_FOAM = """
 float2 p = WP.xy / 100.0;
 float cover = saturate(A);
+// whitecaps from the simulated sea, sharp to the pixel (the mesh carries them too, but only at its vertices)
+if (On > 0.5) {
+  float sf = max(Sim0.SampleLevel(Sim0Sampler, p / L0 + 0.5 / 64.0, 0).b, 0.55 * Sim1.SampleLevel(Sim1Sampler, p / L1 + 0.5 / 64.0, 0).b);
+  cover = max(cover, sf * (0.3 + 0.7 * saturate(Caps)) * saturate(1.0 - D / 300000.0));
+}
 // in the prop wash the foam is dragged out into streaks along the boat's track (TD, radians in the sea's own x/y)
 float2 td = float2(cos(TD), sin(TD));
 float2 tp = float2(dot(p, td) * 0.3, dot(p, float2(-td.y, td.x)));
@@ -136,7 +141,22 @@ float2 g = float2(0, 0);
 // around the wind so they never line up into a visible grid
 float wind = WD;
 float foot = max(D, 1.0) / 100.0 * 0.0012;   // meters per pixel at this distance
-for (int i = 0; i < 18; i++) {
+// with the simulated sea on (KeysOcean, On = 1) the 1-8 m chop and, out past where the mesh can show them, the 8-130 m
+// waves come from its slope textures (R,G = slope, B = foam, A = height; one texel per grid point); only the tiny
+// sub-metre ripples stay procedural
+int nTrains = On > 0.5 ? 11 : 18;   // (keep the ripples up to ~2.5 m: they overlap the small tile, which gives sparkle)
+float2 gs = float2(0, 0);
+if (On > 0.5) {
+  float kChop = 0.35 + 0.65 * saturate(Deep);   // KeysGeo ChopAmp: the wind sea is smaller over the flats
+  float2 uv1 = p / L1 + 0.5 / 64.0, uv0 = p / L0 + 0.5 / 64.0;
+  float aa1 = saturate(1.6 / (foot * 14.0) - 1.0);          // the shortest chop needs pixels to show
+  float far0 = saturate((D / 100.0 - 120.0) / 160.0);        // the mesh carries the big tile near the camera
+  // the chop's slopes are real-world gentle; on a screen they read as glassy, so they are drawn steeper (like the
+  // classic ripples were), the big tile less so
+  gs += Sim1.SampleLevel(Sim1Sampler, uv1, 0).rg * (kChop * aa1 * 2.6);
+  gs += Sim0.SampleLevel(Sim0Sampler, uv0, 0).rg * (kChop * far0 * 1.6);
+}
+for (int i = 0; i < nTrains; i++) {
   float fi = (float)i;
   float r1 = frac(sin(fi * 12.9898) * 43758.5453);
   float r2 = frac(sin(fi * 78.233) * 12543.123);
@@ -154,6 +174,7 @@ for (int i = 0; i < 18; i++) {
 }
 float s = Strength * (1.0 - 0.75 * saturate(F)) * (1.0 - 0.5 * saturate(Aer));
 g *= s;
+g += gs * (1.0 - 0.75 * saturate(F)) * (1.0 - 0.5 * saturate(Aer));   // (true slopes: not scaled by the ripple strength)
 // rain: every drop leaves a little ring spreading out and fading; two staggered layers of drop cells
 float rain = saturate(Rain);
 if (rain > 0.01 && foot < 0.04) {
@@ -794,7 +815,24 @@ def _ocean(mat):
     trackdir = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, 1600)
     trackdir.set_editor_property("parameter_name", "TrackDir")
     trackdir.set_editor_property("default_value", 0.0)
-    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D", "WD", "Caps", "Rain", "Aer", "TD"], "Foam")
+    # the simulated sea's textures (KeysOcean, filled every frame by AKeysWorld) and its tile sizes
+    black = eal.load_asset("/Engine/EngineResources/Black")
+    sims = []
+    for i, nm in enumerate(("Sim0", "Sim1")):
+        t = mel.create_material_expression(mat, unreal.MaterialExpressionTextureObjectParameter, -1400, 1800 + i * 150)
+        t.set_editor_property("parameter_name", nm)
+        if black: t.set_editor_property("texture", black)
+        t.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+        sims.append(t)
+    def _sp(name, dv, y):
+        e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, y)
+        e.set_editor_property("parameter_name", name)
+        e.set_editor_property("default_value", dv)
+        return e
+    sim_l0 = _sp("SimL0", 133.0, 2100); sim_l1 = _sp("SimL1", 31.0, 2160); sim_on = _sp("SimOn", 0.0, 2220)
+    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D", "WD", "Caps", "Rain", "Aer", "TD", "Sim0", "Sim1", "L0", "L1", "On"], "Foam")
+    for src, pin in ((sims[0], "Sim0"), (sims[1], "Sim1"), (sim_l0, "L0"), (sim_l1, "L1"), (sim_on, "On")):
+        _link(src, "", foam, pin)
     _link(aer, "", foam, "Aer")
     _link(trackdir, "", foam, "TD")
     _link(wp, "", foam, "WP")
@@ -805,8 +843,9 @@ def _ocean(mat):
     _link(caps, "", foam, "Caps")
     _link(rain, "", foam, "Rain")
 
-    nrm = _custom(mat, -500, 300, OCEAN_NORMAL, F3, ["WP", "T", "VN", "D", "F", "Aer", "Strength", "WD", "Rain"], "Ripples")
-    for src, pin in ((wp, "WP"), (tm, "T"), (vn, "VN"), (dp, "D"), (foam, "F"), (aer, "Aer"), (strength, "Strength"), (wdir, "WD"), (rain, "Rain")):
+    nrm = _custom(mat, -500, 300, OCEAN_NORMAL, F3, ["WP", "T", "VN", "D", "F", "Aer", "Strength", "WD", "Rain", "Sim0", "Sim1", "L0", "L1", "On", "Deep"], "Ripples")
+    for src, pin in ((wp, "WP"), (tm, "T"), (vn, "VN"), (dp, "D"), (foam, "F"), (aer, "Aer"), (strength, "Strength"), (wdir, "WD"), (rain, "Rain"),
+                     (sims[0], "Sim0"), (sims[1], "Sim1"), (sim_l0, "L0"), (sim_l1, "L1"), (sim_on, "On"), (deep, "Deep")):
         _link(src, "", nrm, pin)
 
     rough = _custom(mat, -500, 150, OCEAN_ROUGH, F1, ["F", "D", "Rain", "Caps"], "Roughness")

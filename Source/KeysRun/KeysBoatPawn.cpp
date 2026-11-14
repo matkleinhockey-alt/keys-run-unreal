@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "KeysOcean.h"
 #include "KeysSchools.h"
 #include "KeysWeather.h"
 #include "Components/PointLightComponent.h"
@@ -685,6 +686,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd.StartsWith(TEXT("res="))) KeysGfx::SetResScale(FCString::Atoi(*Cmd.Mid(4)));
 		else if (Cmd.StartsWith(TEXT("fishcam"))) { FishCamT = -1; TriggerFishCam(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 0); }
+		else if (Cmd.StartsWith(TEXT("ocean="))) { KeysOcean::SetEnabled(Cmd.Mid(6) != TEXT("0")); KeysGeo::SnapSea(); }
+		else if (Cmd == TEXT("oceanstats")) { UE_LOG(LogTemp, Log, TEXT("KROcean%s"), *KeysOcean::Stats()); }
 		else if (Cmd == TEXT("sunset")) { if (AKeysWorld* Wd = World()) Wd->ToggleSunset(); }
 		else if (Cmd.StartsWith(TEXT("con=")))
 		{

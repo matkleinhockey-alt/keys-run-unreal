@@ -1,4 +1,5 @@
 #include "KeysGeo.h"
+#include "KeysOcean.h"
 #include "Async/ParallelFor.h"
 #include "KeysCoastData.h"
 
@@ -763,6 +764,12 @@ namespace KeysGeo
 		// the old four chop trains' rms height per unit of CH, so the sea states keep their size
 		const double Rms = .126 * CH, Norm = WSum2 > 1e-9 ? Rms * FMath::Sqrt(2.0) / FMath::Sqrt(WSum2) : 0;
 		double ChopSum2 = 0;
+		if (KeysOcean::Enabled())
+		{
+			// the simulated sea (KeysOcean) carries the wind sea at the same rms
+			RmsNow = FMath::Sqrt(Sum2 + Rms * Rms);
+			return;
+		}
 		for (int32 i = 0; i < ChopL * ChopD; i++)
 		{
 			const double A = Wt[i] * Norm;
@@ -776,6 +783,16 @@ namespace KeysGeo
 			ChopSum2 += A * A * .5;
 		}
 		RmsNow = FMath::Sqrt(Sum2 + ChopSum2);
+	}
+
+	// the simulated wind sea follows the same driver: rms height from the sea state, the peak length from the wind,
+	// the direction the sea runs, its confusion and steepness
+	static double GOceanT = 0;
+	static void DriveOcean(double Dt)
+	{
+		if (!KeysOcean::Enabled()) return;
+		GOceanT += Dt;
+		KeysOcean::Update(GOceanT, .126 * CH, PeakLen(WindNow), SeaDirNow, ConfNow, Clamp((WindNow - 3) / 12, 0, 1));
 	}
 
 	void TickSea(double Dt)
@@ -799,6 +816,7 @@ namespace KeysGeo
 		CapsNow = SS(4.5, 12, WindNow) * Clamp(CH / ChopFor(WindNow) * 1.2, 0, 1) + .25 * ConfNow * SS(6, 14, WindNow);
 		CapsNow = Clamp(CapsNow, 0, 1);
 		Reweight();
+		DriveOcean(Dt);
 	}
 
 	void SnapSea()
@@ -811,6 +829,7 @@ namespace KeysGeo
 		SW = BaseSwell + StormSwell;
 		CapsNow = Clamp(SS(4.5, 12, WindNow) + .25 * ConfNow * SS(6, 14, WindNow), 0, 1);
 		Reweight();
+		DriveOcean(0);
 	}
 
 	// small inshore, big rollers in deep blue water
@@ -819,6 +838,8 @@ namespace KeysGeo
 
 	// The swell scales with Amp (depth and inlets); the wind sea much less, so a blow still chops up the flats.
 	static FORCEINLINE double ChopAmp(double Amp) { return FMath::Min(1.3, .3 + .7 * Amp); }
+
+	double ChopScale(double Amp) { return ChopAmp(Amp); }
 
 	double WaveHLod(double X, double Z, double T, double Amp, double MinLen)
 	{
@@ -832,6 +853,7 @@ namespace KeysGeo
 			const double V = W.A * (FMath::Sin(P) - W.S * FMath::Cos(2 * P));
 			if (i < 4) HS += V; else HC += V;
 		}
+		if (KeysOcean::Enabled()) HC += KeysOcean::Height(X, Z, MinLen);
 		return Amp * HS + ChopAmp(Amp) * HC;
 	}
 
@@ -853,6 +875,7 @@ namespace KeysGeo
 			HX += W.KX * D;
 			HZ += W.KZ * D;
 		}
+		if (KeysOcean::Enabled()) return FVector2D(HX, HZ) + KeysOcean::Slope(X, Z) * CA;
 		return FVector2D(HX, HZ);
 	}
 
