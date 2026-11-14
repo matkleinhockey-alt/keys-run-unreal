@@ -53,6 +53,7 @@ public:
 	double KnotsNow() const;
 	double DepthHere() const;
 	FString ZoneName() const;
+	FString ZoneNameAt(double PX, double PZ) const;   // the same label for any spot (where a cast lands)
 	FString NearName() const;
 	double BoatX() const { return X; }
 	double BoatZ() const { return Z; }

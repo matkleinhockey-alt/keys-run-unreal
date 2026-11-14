@@ -227,16 +227,18 @@ double AKeysBoatPawn::DepthHere() const { return DepthAt(X, Z); }
 FString AKeysBoatPawn::NearName() const { return NearestName(X, Z); }
 double AKeysBoatPawn::CoolerLb() const { double S = 0; for (const FKeysCooler& C : Cooler) S += C.Weight; return S; }
 
-FString AKeysBoatPawn::ZoneName() const
+FString AKeysBoatPawn::ZoneName() const { return ZoneNameAt(X, Z); }
+
+FString AKeysBoatPawn::ZoneNameAt(double PX, double PZ) const
 {
 	if (const AKeysLife* L = AKeysLife::Get(this))
 	{
-		const FString Area = L->AreaLabel(X, Z);
+		const FString Area = L->AreaLabel(PX, PZ);
 		if (!Area.IsEmpty()) return Area;
 	}
-	const FString Zn = ZoneAt(X, Z);
-	if (Zn == TEXT("Offshore") && OffshoreF(X, Z) > .5) return TEXT("Deep blue water");
-	if (InMiami(X, Z) && Zn != TEXT("Creek")) return TEXT("Biscayne Bay");
+	const FString Zn = ZoneAt(PX, PZ);
+	if (Zn == TEXT("Offshore") && OffshoreF(PX, PZ) > .5) return TEXT("Deep blue water");
+	if (InMiami(PX, PZ) && Zn != TEXT("Creek")) return TEXT("Biscayne Bay");
 	return ZoneDesc(Zn);
 }
 
@@ -561,6 +563,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("login")) { bLoginOpen = true; LoginField = 0; LoginName = TEXT("Mat"); LoginCrew = TEXT("keys"); }
 		else if (Cmd == TEXT("closeall")) { bLoginOpen = bBoardOpen = false; }
 		else if (Cmd == TEXT("cast")) CastLine(.55);
+		else if (Cmd == TEXT("charge")) StartCharge();                                    // Space held, as a player would
+		else if (Cmd == TEXT("release")) { if (bCharging) { bCharging = false; CastLine(Charge); } }
 		else if (Cmd == TEXT("autostrike")) bScriptAutoStrike = true;   // strike on the bite, as a player would
 		else if (Cmd.StartsWith(TEXT("hook=")))
 		{
@@ -2419,6 +2423,19 @@ void AKeysBoatPawn::CastLine(double Power)
 	FVector2D Dir(CF.X, CF.Y);
 	Dir = Dir.GetSafeNormal();
 	if (Dir.IsNearlyZero()) Dir = FVector2D(-FMath::Sin(H), -FMath::Cos(H));
+	// never over the bow: from the cockpit that throws the line through the console and the T-top, and hides the float
+	// behind the boat. Anything within 70 degrees of dead ahead goes out over the side the angler stands on instead.
+	if (!bShoreSwap)
+	{
+		const FVector2D Fw(-FMath::Sin(H), -FMath::Cos(H)), Rt(FMath::Cos(H), -FMath::Sin(H));
+		if (FVector2D::DotProduct(Dir, Fw) > FMath::Cos(FMath::DegreesToRadians(70.0)))
+		{
+			const FVector SpotU = GetActorTransform().TransformPosition(FishSpotLocal() * 100.0) / 100.0;   // Unreal X/Y = game X/Z
+			const double Side = (SpotU.X - X) * Rt.X + (SpotU.Y - Z) * Rt.Y >= 0 ? 1 : -1;
+			const double A = FMath::DegreesToRadians(80.0);
+			Dir = Fw * FMath::Cos(A) + Rt * (Side * FMath::Sin(A));
+		}
+	}
 	double Dist = 12 + Power * 73;
 	for (int32 k = 0; k < 8 && LandH(X + Dir.X * Dist, Z + Dir.Y * Dist) > -.4; k++) Dist *= .8;
 	CastTo = FVector(X + Dir.X * Dist, 0, Z + Dir.Y * Dist);
@@ -2834,7 +2851,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 			Key.Reset();
 			Sp = nullptr;
 			if (L) L->OnCastLanded(Spot, Bob.X, Bob.Z);
-			ShowToast(FString::Printf(TEXT("%s%d m cast into the %s."), Spot.bHot ? TEXT("Right in the school - ") : TEXT(""), FMath::RoundToInt(Hyp(Bob.X - X, Bob.Z - Z)), *ZoneDesc(Zone).ToLower()));
+			ShowToast(FString::Printf(TEXT("%s%d m cast - %s."), Spot.bHot ? TEXT("Right in the school - ") : TEXT(""), FMath::RoundToInt(Hyp(Bob.X - X, Bob.Z - Z)), *ZoneNameAt(Bob.X, Bob.Z)));
 		}
 	}
 	else if (FState == EKeysFish::Waiting || FState == EKeysFish::Nibble || FState == EKeysFish::Bite)
