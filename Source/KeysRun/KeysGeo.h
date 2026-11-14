@@ -129,6 +129,7 @@ namespace KeysGeo
 	struct FLiveWake { double X, Z, R, WD, Amp, Reach; };
 	void GatherWakes(double CX, double CZ, double Radius, double T, TArray<FLiveWake>& Out);
 	double WakeHFrom(const TArray<FLiveWake>& Live, double X, double Z);
+	double WakeHFrom(const TArray<FLiveWake>& Live, const TArray<int32>& Only, double X, double Z);   // just those wakes (a grid cell's)
 
 	// The white prop wash behind a planing hull: a trail of stern points that spreads and fades.
 	// Source tells boats apart so their trails don't join up. Strength is 0..1.
@@ -137,6 +138,10 @@ namespace KeysGeo
 	void GatherTrails(double CX, double CZ, double Radius, double T, TArray<FLiveTrail>& Out);
 	// foam amount (0..1) and how aerated the water is (0..1) at a point
 	FVector2D TrailFrom(const TArray<FLiveTrail>& Live, double X, double Z);
+	FVector2D TrailFrom(const TArray<FLiveTrail>& Live, const TArray<int32>& Only, double X, double Z);
+	// buckets the live wakes / trails on a square grid around (CX, CZ) so a water vertex only tests its own cell's
+	void BucketWakes(const TArray<FLiveWake>& Live, double CX, double CZ, double Radius, double Cell, int32 N, TArray<TArray<int32>>& Out);
+	void BucketTrails(const TArray<FLiveTrail>& Live, double CX, double CZ, double Radius, double Cell, int32 N, TArray<TArray<int32>>& Out);
 
 	// bridge pilings, for boat collisions
 	struct FPillar { double X, Z, R; bool bOld; };

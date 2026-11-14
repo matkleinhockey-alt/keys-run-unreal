@@ -921,6 +921,56 @@ namespace KeysGeo
 		}
 	}
 
+	double WakeHFrom(const TArray<FLiveWake>& Live, const TArray<int32>& Only, double X, double Z)
+	{
+		double H = 0;
+		for (const int32 I : Only)
+		{
+			const FLiveWake& W = Live[I];
+			const double DX = X - W.X, DZ = Z - W.Z;
+			if (FMath::Abs(DX) > W.Reach || FMath::Abs(DZ) > W.Reach) continue;
+			const double DR = FMath::Sqrt(DX * DX + DZ * DZ) - W.R;
+			if (FMath::Abs(DR) > W.WD * 3) continue;
+			H += RingH(DR, W.WD, W.Amp);
+		}
+		return H;
+	}
+
+	void BucketWakes(const TArray<FLiveWake>& Live, double CX, double CZ, double Radius, double Cell, int32 N, TArray<TArray<int32>>& Out)
+	{
+		Out.SetNum(N * N);
+		for (TArray<int32>& C : Out) C.Reset();
+		const double X0 = CX - Radius, Z0 = CZ - Radius, Half = Cell * .7072;
+		for (int32 I = 0; I < Live.Num(); I++)
+		{
+			const FLiveWake& W = Live[I];
+			const double Band = W.WD * 3 + Half;
+			const int32 A0 = FMath::Clamp(int32((W.X - W.R - Band - X0) / Cell), 0, N - 1), A1 = FMath::Clamp(int32((W.X + W.R + Band - X0) / Cell), 0, N - 1);
+			const int32 B0 = FMath::Clamp(int32((W.Z - W.R - Band - Z0) / Cell), 0, N - 1), B1 = FMath::Clamp(int32((W.Z + W.R + Band - Z0) / Cell), 0, N - 1);
+			for (int32 b = B0; b <= B1; b++)
+				for (int32 a = A0; a <= A1; a++)
+				{
+					// only the cells the ring's band passes through
+					const double Dx = X0 + (a + .5) * Cell - W.X, Dz = Z0 + (b + .5) * Cell - W.Z;
+					if (FMath::Abs(FMath::Sqrt(Dx * Dx + Dz * Dz) - W.R) <= Band) Out[b * N + a].Add(I);
+				}
+		}
+	}
+
+	void BucketTrails(const TArray<FLiveTrail>& Live, double CX, double CZ, double Radius, double Cell, int32 N, TArray<TArray<int32>>& Out)
+	{
+		Out.SetNum(N * N);
+		for (TArray<int32>& C : Out) C.Reset();
+		const double X0 = CX - Radius, Z0 = CZ - Radius;
+		for (int32 I = 0; I < Live.Num(); I++)
+		{
+			const FLiveTrail& L = Live[I];
+			const int32 A0 = FMath::Clamp(int32((L.MinX - X0) / Cell), 0, N - 1), A1 = FMath::Clamp(int32((L.MaxX - X0) / Cell), 0, N - 1);
+			const int32 B0 = FMath::Clamp(int32((L.MinZ - Z0) / Cell), 0, N - 1), B1 = FMath::Clamp(int32((L.MaxZ - Z0) / Cell), 0, N - 1);
+			for (int32 b = B0; b <= B1; b++) for (int32 a = A0; a <= A1; a++) Out[b * N + a].Add(I);
+		}
+	}
+
 	double WakeHFrom(const TArray<FLiveWake>& Live, double X, double Z)
 	{
 		double H = 0;
@@ -980,9 +1030,17 @@ namespace KeysGeo
 
 	FVector2D TrailFrom(const TArray<FLiveTrail>& Live, double X, double Z)
 	{
+		TArray<int32> All; All.SetNumUninitialized(Live.Num());
+		for (int32 I = 0; I < Live.Num(); I++) All[I] = I;
+		return TrailFrom(Live, All, X, Z);
+	}
+
+	FVector2D TrailFrom(const TArray<FLiveTrail>& Live, const TArray<int32>& Only, double X, double Z)
+	{
 		double Foam = 0, Aer = 0;
-		for (const FLiveTrail& L : Live)
+		for (const int32 LI : Only)
 		{
+			const FLiveTrail& L = Live[LI];
 			if (X < L.MinX || X > L.MaxX || Z < L.MinZ || Z > L.MaxZ) continue;
 			const double SX = L.BX - L.AX, SZ = L.BZ - L.AZ, SL = SX * SX + SZ * SZ;
 			const double U = SL > 1e-6 ? FMath::Clamp(((X - L.AX) * SX + (Z - L.AZ) * SZ) / SL, 0.0, 1.0) : 0;

@@ -827,6 +827,64 @@ namespace
 		return *Slot;
 	}
 
+	// A light stand-in for a fish seen from more than a few body lengths off: the swimming model with its vertices merged
+	// on a coarse grid (vertex clustering), a few hundred triangles instead of thousands. The generated fish models made
+	// the whole sea's mesh ~335k triangles rebuilt and re-uploaded every frame - most of the fishing frame's time.
+	const FLifeTpl& LifeFarTpl(const FKeysVis* V)
+	{
+		static TMap<const FKeysVis*, TUniquePtr<FLifeTpl>> Cache;
+		TUniquePtr<FLifeTpl>& Slot = Cache.FindOrAdd(V);
+		if (Slot) return *Slot;
+		const FLifeTpl& Src = LifeCreatureTpl(V);
+		Slot = MakeUnique<FLifeTpl>();
+		FLifeTpl& D = *Slot;
+		if (Src.T.Num() / 3 <= 700) { D = Src; return D; }   // already light (the built-in fish)
+		FBox B(ForceInit);
+		for (const FVector& Q : Src.P) B += Q;
+		const double Cell = FMath::Max(1e-4, B.GetSize().GetMax() / 15);
+		TMap<FIntVector, int32> Map;
+		TArray<int32> Remap; Remap.SetNum(Src.P.Num());
+		TArray<int32> Cnt;
+		for (int32 i = 0; i < Src.P.Num(); i++)
+		{
+			const FVector Q = (Src.P[i] - B.Min) / Cell;
+			// fins and eyes keep their own clusters, so a fin doesn't melt into the body
+			const FIntVector K(FMath::FloorToInt(Q.X), FMath::FloorToInt(Q.Y), FMath::FloorToInt(Q.Z) * 4 + (Src.Kd.IsValidIndex(i) ? Src.Kd[i] % 4 : 0));
+			int32* Found = Map.Find(K);
+			int32 J;
+			if (!Found)
+			{
+				J = D.P.Num(); Map.Add(K, J);
+				D.P.Add(FVector::ZeroVector); D.N.Add(FVector::ZeroVector); D.C.Add(FLinearColor(0, 0, 0, 0));
+				D.Wig.Add(0); D.WigY.Add(0); D.Wph.Add(0); D.Kd.Add(Src.Kd.IsValidIndex(i) ? Src.Kd[i] : SurfFish); Cnt.Add(0);
+			}
+			else J = *Found;
+			Remap[i] = J;
+			D.P[J] += Src.P[i]; D.N[J] += Src.N.IsValidIndex(i) ? Src.N[i] : FVector::UpVector; D.C[J] += Src.C[i];
+			D.Wig[J] += Src.Wig.IsValidIndex(i) ? Src.Wig[i] : 0; D.WigY[J] += Src.WigY.IsValidIndex(i) ? Src.WigY[i] : 0; D.Wph[J] += Src.Wph.IsValidIndex(i) ? Src.Wph[i] : 0;
+			Cnt[J]++;
+		}
+		for (int32 j = 0; j < D.P.Num(); j++)
+		{
+			const float K = 1.f / Cnt[j];
+			D.P[j] *= K; D.N[j] = D.N[j].GetSafeNormal(); D.C[j] *= K; D.C[j].A = 1; D.Wig[j] *= K; D.WigY[j] *= K; D.Wph[j] *= K;
+		}
+		TSet<FIntVector> Seen;
+		for (int32 t = 0; t + 2 < Src.T.Num(); t += 3)
+		{
+			const int32 A = Remap[Src.T[t]], Bb = Remap[Src.T[t + 1]], C = Remap[Src.T[t + 2]];
+			if (A == Bb || Bb == C || A == C) continue;
+			// the same triangle either way round is only kept once (a double-sided fin keeps both faces)
+			FIntVector Key(A, Bb, C);
+			if (Bb < A && Bb < C) Key = FIntVector(Bb, C, A); else if (C < A && C < Bb) Key = FIntVector(C, A, Bb);
+			if (Seen.Contains(Key)) continue;
+			Seen.Add(Key);
+			D.T.Append({A, Bb, C});
+		}
+		UE_LOG(LogTemp, Log, TEXT("KeysLife: %s far model %d -> %d tris"), *V->Key, Src.T.Num() / 3, D.T.Num() / 3);
+		return D;
+	}
+
 	// ---------------------------------------------------------------- seabirds (JS BIRD_KINDS / birdGeos, 1990)
 	struct FLifeBirdTpl
 	{
@@ -1037,6 +1095,12 @@ void AKeysLife::Tick(float DeltaSeconds)
 	Flush(SeaMesh, SeaBuf, SurfFish);
 	Flush(WeedMesh, WeedBuf);
 	Flush(DropMesh, DropBuf);
+	static double LogT = 0; LogT += Dt;
+	if (LogT > 3 && FString(FCommandLine::Get()).Contains(TEXT("KRScript=")))
+	{
+		LogT = 0;
+		UE_LOG(LogTemp, Log, TEXT("KRLife verts: sea %d (%d tris), birds %d, weed %d, drops %d; schools %d"), SeaBuf.V.Num(), SeaBuf.T.Num() / 3, BirdBuf.V.Num(), WeedBuf.V.Num(), DropBuf.V.Num(), Schools.Num());
+	}
 }
 
 void AKeysLife::Flush(UProceduralMeshComponent* M, FKeysLifeBuf& B, uint8 Kind)
@@ -2105,7 +2169,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 		const bool bOld = V->Kind == EKeysKind::Ray || V->Kind == EKeysKind::Turtle || V->Kind == EKeysKind::Manatee;
 		const double Wf = 4 + Sp * 3, Wa = bOld ? .03 : (V->Kind == EKeysKind::Fish ? .04 : .03);
 		const bool bDraw = LHyp(G.CX - CamX, G.CZ - CamZ) < 350;
-		const FLifeTpl& Tpl = LifeCreatureTpl(V);
+		const FLifeTpl& TplNear = LifeCreatureTpl(V);
 		for (FKeysSwimmer& M : G.Members)
 		{
 			const double Ox = M.OX + FMath::Sin(T * .6 + M.Ph) * .3, Oz = M.OZ + FMath::Cos(T * .5 + M.Ph) * .3;
@@ -2159,6 +2223,9 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 
 			// CPU swim: the JS vertex shader's tail beat (addSwimShader, 2436), plus the deep-water haze
 			const FLifeR3 R = FLifeR3::YXZ(Pitch, M.Yaw, Roll);
+			// a few body lengths off (and anything well out from an eye above the water), the light model
+			const double CamD = FMath::Sqrt(FMath::Square(Mx - CamX) + FMath::Square(Y - CamY) + FMath::Square(Mz - CamZ));
+			const FLifeTpl& Tpl = CamD > FMath::Max(14.0, V->Len * M.S * 9) ? LifeFarTpl(V) : TplNear;
 			const FVector Pos(Mx, Y, Mz);
 			const double S = M.S, Swp0 = T * 7.5 + Mx * .37 + Mz * .23;
 			// the see-through sea (and the underwater post-process) absorb with depth now, so no painted-in haze

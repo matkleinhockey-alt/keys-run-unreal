@@ -579,6 +579,13 @@ void AKeysWorld::UpdateWater()
 	constexpr double NearR = 450;
 	GatherWakes(FX, FZ, NearR, T, LiveWakes);
 	GatherTrails(FX, FZ, NearR, T, LiveTrails);
+	// 15 m buckets, so each water vertex tests only the wake rings and trail pieces that can reach it (it used to test
+	// every one: hundreds per vertex, the bulk of the water's frame time with a long white wash out)
+	constexpr double BkCell = 15;
+	constexpr int32 BkN = int32(2 * NearR / BkCell) + 1;
+	BucketWakes(LiveWakes, FX, FZ, NearR, BkCell, BkN, WakeCells);
+	BucketTrails(LiveTrails, FX, FZ, NearR, BkCell, BkN, TrailCells);
+	auto CellOf = [&](double X, double Z) { return FMath::Clamp(int32((Z - (FZ - NearR)) / BkCell), 0, BkN - 1) * BkN + FMath::Clamp(int32((X - (FX - NearR)) / BkCell), 0, BkN - 1); };
 
 	// Keep the sea out of your own boat: inside the gunwales the surface never rises above the cockpit sole, so a
 	// swell that lifts over a low cockpit (the Freeman's, offshore) doesn't show through the deck. Sampled once per
@@ -642,8 +649,9 @@ void AKeysWorld::UpdateWater()
 			const int32 K = j * S + i;
 			const double Amp = AmpAt(X, Z);
 			const bool bNear = FMath::Square(X - FX) + FMath::Square(Z - FZ) < NearR * NearR;
-			const double Wk = bNear ? WakeHFrom(LiveWakes, X, Z) : 0;
-			const FVector2D Tr = bNear ? TrailFrom(LiveTrails, X, Z) : FVector2D::ZeroVector;
+			const int32 Ck = bNear ? CellOf(X, Z) : 0;
+			const double Wk = bNear ? WakeHFrom(LiveWakes, WakeCells[Ck], X, Z) : 0;
+			const FVector2D Tr = bNear ? TrailFrom(LiveTrails, TrailCells[Ck], X, Z) : FVector2D::ZeroVector;
 			// wave trains shorter than ~3 grid cells here would only alias on the coarse outer grid
 			const double Sea = WaveHLod(X, Z, T, Amp, 2.6 * FMath::Max(WSp[i], WSp[j]));
 			// the prop wash knocks down the chop a little, so the trail reads as a smoother, glassier lane

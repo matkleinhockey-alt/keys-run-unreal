@@ -98,6 +98,7 @@ private:
 	bool bWaterBuilt = false;
 	TArray<KeysGeo::FLiveWake> LiveWakes;
 	TArray<KeysGeo::FLiveTrail> LiveTrails;
+	TArray<TArray<int32>> WakeCells, TrailCells;
 
 	double SunK = 0, SunsetTarget = 0;
 	UPROPERTY() TMap<int32, TObjectPtr<class UProceduralMeshComponent>> ParcelScenery;
