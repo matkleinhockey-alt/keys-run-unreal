@@ -104,7 +104,11 @@ for (int s2 = 0; s2 < 2; s2++) {
 // fresh, thick foam (high cover) is nearly solid; thin, old foam is mostly lace with water showing through
 float thick = smoothstep(0.55, 1.0, cover) * smoothstep(th + 0.1, th + 0.35, n);
 m *= lerp(0.25 + 0.75 * lace, 0.85 + 0.15 * lace, thick);
-m = min(m, 0.92);
+// the prop wash itself (heavy cover over aerated water): a solid white column, its texture in the bubbles, not holes
+// ragged edges (the cover threshold wanders with the noise) and a churned brightness, not a flat white road
+float wash = smoothstep(0.35, 0.75, Aer) * smoothstep(0.42 + 0.45 * (n - 0.5), 0.88 + 0.2 * (n - 0.5), cover);
+m = max(m, wash * (0.66 + 0.24 * n + 0.1 * lace));
+m = min(m, lerp(0.92, 0.97, wash));
 // a windy day: long streaks of old foam lying down the wind, and scattered breaking whitecaps between the crests
 float2 wd = float2(cos(WD), sin(WD));
 float2 sq = float2(dot(p, wd) * 0.045, dot(p, float2(-wd.y, wd.x)) * 0.6) + float2(-T * 0.08, 0.0);

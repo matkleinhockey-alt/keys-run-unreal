@@ -949,7 +949,7 @@ namespace KeysGeo
 	void GatherTrails(double CX, double CZ, double Radius, double T, TArray<FLiveTrail>& Out)
 	{
 		Out.Reset();
-		auto Spread = [](const FTrailPt& P, double Age) { return P.W * (1 + Age * .05) + Age * .12; };
+		auto Spread = [](const FTrailPt& P, double Age) { return P.W * (1 + Age * .07) + Age * .3; };
 		for (int32 i = 0; i < TrailN; i++)
 		{
 			const FTrailPt& B = TrailP[i];
@@ -965,10 +965,14 @@ namespace KeysGeo
 			L.AX = A.X; L.AZ = A.Z; L.BX = B.X; L.BZ = B.Z; L.W0 = WA; L.W1 = WB;
 			// the white wash breaks up within seconds; the pale green aerated water under it lasts much longer
 			const double FadeEnd = 1 - WSStep(TrailLife - 6, TrailLife, AgeA);
-			L.F0 = A.S * FMath::Exp(-AgeA / 5.5) * FadeEnd; L.F1 = B.S * FMath::Exp(-AgeB / 5.5);
+			// (a boat on plane leaves a solid white column that stays white for a good 150 m)
+			L.F0 = A.S * FMath::Exp(-AgeA / 8.0) * FadeEnd; L.F1 = B.S * FMath::Exp(-AgeB / 8.0);
 			L.A0 = A.S * FMath::Exp(-AgeA / 13) * FadeEnd; L.A1 = B.S * FMath::Exp(-AgeB / 13);
-			L.MinX = FMath::Min(A.X, B.X) - WM * 1.5; L.MaxX = FMath::Max(A.X, B.X) + WM * 1.5;
-			L.MinZ = FMath::Min(A.Z, B.Z) - WM * 1.5; L.MaxZ = FMath::Max(A.Z, B.Z) + WM * 1.5;
+			L.G0 = AgeA; L.G1 = AgeB; L.S0 = A.S; L.S1 = B.S;
+			// (room for the crest lines peeling off either side, which spread faster than the wash)
+			const double Reach = WM * 1.5 + FMath::Max(AgeA, AgeB) * 2.6 + 2;
+			L.MinX = FMath::Min(A.X, B.X) - Reach; L.MaxX = FMath::Max(A.X, B.X) + Reach;
+			L.MinZ = FMath::Min(A.Z, B.Z) - Reach; L.MaxZ = FMath::Max(A.Z, B.Z) + Reach;
 			if (L.MaxX < CX - Radius || L.MinX > CX + Radius || L.MaxZ < CZ - Radius || L.MinZ > CZ + Radius) continue;
 			Out.Add(L);
 		}
@@ -987,9 +991,19 @@ namespace KeysGeo
 			// solid in the middle, ragged at the edges (the material breaks the edges up further)
 			// fresh wash comes off twin motors as two white streams with a darker lane between; they merge as it ages
 			const double Fr = FMath::Lerp(L.F0, L.F1, U), Young = FMath::Clamp((Fr - .35) / .5, 0.0, 1.0);
-			const double Twin = 1 - .7 * Young * FMath::Exp(-Q * Q / .025);
-			Foam = FMath::Max(Foam, Fr * Twin * (1 - WSStep(.25, 1.0, Q)));
+			// (only a hint of it: at speed the motors' wash boils together into one solid white column)
+			const double Twin = 1 - .18 * Young * FMath::Exp(-Q * Q / .025);
+			Foam = FMath::Max(Foam, Fr * Twin * (1 - WSStep(.45, 1.05, Q)));
 			Aer = FMath::Max(Aer, FMath::Lerp(L.A0, L.A1, U) * (1 - WSStep(.5, 1.5, Q)));
+			// the two white crest lines that peel off either side of the wash and spread wider behind (a planing hull's
+			// own breaking wake): only off a fast boat (strong wash), fading over ~6 s
+			const double Age = FMath::Lerp(L.G0, L.G1, U), St = FMath::Lerp(L.S0, L.S1, U);
+			if (St > .55)
+			{
+				const double Rl = W * 1.02 + Age * 2.4, Hw = .4 + Age * .1;
+				const double Line = FMath::Exp(-FMath::Square((D - Rl) / Hw)) * FMath::Exp(-Age / 6) * FMath::Clamp((St - .55) / .35, 0.0, 1.0);
+				Foam = FMath::Max(Foam, .97 * Line);
+			}
 		}
 		return FVector2D(Foam, Aer);
 	}

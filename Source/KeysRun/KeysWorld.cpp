@@ -647,7 +647,15 @@ void AKeysWorld::UpdateWater()
 			// wave trains shorter than ~3 grid cells here would only alias on the coarse outer grid
 			const double Sea = WaveHLod(X, Z, T, Amp, 2.6 * FMath::Max(WSp[i], WSp[j]));
 			// the prop wash knocks down the chop a little, so the trail reads as a smoother, glassier lane
-			const double H = KeepOut(X, Z, Sea * (1 - .25 * Tr.Y) + Wk);
+			// and right behind the motors the wash heaps up into a boiling white mound before it settles
+			double Boil = Tr.X > .6 ? FMath::Square((Tr.X - .6) / .4) * .32 : 0;
+			// churned, lumpy water all through the fresh wash, rolling as it goes (so the light catches it like real wash)
+			if (Tr.X > .25)
+			{
+				const double Lump = FMath::Sin(X * 1.9 + T * 3.1) * FMath::Sin(Z * 1.6 - T * 2.4) + .6 * FMath::Sin(X * 3.7 - Z * 2.9 + T * 4.3);
+				Boil += (Tr.X - .25) * .16 * Lump;
+			}
+			const double H = KeepOut(X, Z, Sea * (1 - .25 * Tr.Y) + Wk + Boil);
 			WH[K] = H;
 			WV[K] = ToUE(X, H, Z);
 			// foam on breaking crests (whitecaps, with the wind), on the crests of fresh wakes, in the prop wash and along
@@ -656,7 +664,7 @@ void AKeysWorld::UpdateWater()
 			const double D = DepthFast(X, Z);
 			double F = SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
 			// white lines along the arms of a fresh wake, where the crests are tallest
-			F = FMath::Max(F, SStep(.03, .22, Wk) * .7);
+			F = FMath::Max(F, SStep(.025, .16, Wk) * .92);
 			F = FMath::Max(F, Tr.X);
 			F = FMath::Max(F, SStep(.9, .25, D) * (.3 + .3 * FMath::Clamp(Crest + .5, 0.0, 1.0)));
 			// UV0: x = how high on a crest (light glows through thin crests), y = aerated wash under the foam

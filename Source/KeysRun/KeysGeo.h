@@ -133,7 +133,7 @@ namespace KeysGeo
 	// The white prop wash behind a planing hull: a trail of stern points that spreads and fades.
 	// Source tells boats apart so their trails don't join up. Strength is 0..1.
 	void EmitTrail(int32 Source, double X, double Z, double Width, double Strength, double T);
-	struct FLiveTrail { double AX, AZ, BX, BZ, W0, W1, F0, F1, A0, A1, MinX, MinZ, MaxX, MaxZ; };
+	struct FLiveTrail { double AX, AZ, BX, BZ, W0, W1, F0, F1, A0, A1, MinX, MinZ, MaxX, MaxZ, G0 = 0, G1 = 0, S0 = 0, S1 = 0; };   // G: age (s), S: strength
 	void GatherTrails(double CX, double CZ, double Radius, double T, TArray<FLiveTrail>& Out);
 	// foam amount (0..1) and how aerated the water is (0..1) at a point
 	FVector2D TrailFrom(const TArray<FLiveTrail>& Live, double X, double Z);

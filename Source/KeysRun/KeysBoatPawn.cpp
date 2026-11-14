@@ -1949,7 +1949,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 		const double V = FMath::Abs(Speed);
 		double Wash = bAir ? 0 : FMath::SmoothStep(2.0, 9.0, V) * (.55 + .45 * FMath::Min(1.0, F * 1.5));   // little white water off a displacement-speed hull (trolling)
 		if (Speed < -.2 && !bAir) Wash = FMath::Max(Wash, .45 * BackK + .15 * FMath::SmoothStep(.2, 1.0, -Speed));   // backing down: the props churn white water up against the transom
-		EmitTrail(0, X - Fx * S.Len * .48, Z - Fz * S.Len * .48, S.Beam * (.32 + .3 * FMath::Min(1.0, F * 1.4)), Wash, T);
+		EmitTrail(0, X - Fx * S.Len * .48, Z - Fz * S.Len * .48, S.Beam * (.32 + .46 * FMath::Min(1.0, F * 1.4)), Wash, T);   // on plane the wash is wider than the transom
 	}
 
 	// pose the hull: bow up for positive pitch, starboard up for positive roll, lifted as she gets on plane

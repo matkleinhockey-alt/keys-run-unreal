@@ -335,7 +335,7 @@ void AKeysAudio::PushEngine(double InRpm, double Load, double Vol, double PitchM
 		const double Det = 1 + C.Off + .0012 * FMath::Sin(T * (.17 + I * .05) + C.Ph) * (1 - .6 * R1);
 		const double Hunt = 1 + .035 * Lo * FMath::Sin(T * (2.1 + I * .37) + C.Ph) + .02 * Lo * FMath::Sin(T * 5.3 + C.Ph * 2);   // a racing V8 never idles perfectly steady
 		P.OscFreq[I] = (float)(Crank * Det * Hunt * C.Mul);
-		P.OscGain[I] = (float)(C.Base * C.Gate);
+		P.OscGain[I] = (float)(C.Base * C.Gate * (1 - .62 * R1 * R1));   // at speed the crank note gives way to the firing harmonics
 		P.LfoFreq[I] = (float)(Crank * .5 * Det * C.Mul * (1 + .04 * FMath::Sin(T * 1.3 + C.Ph)));   // cam-speed lope
 		P.LfoDepth[I] = (float)(.62 * Lo + .06);
 		GateSum += C.Gate;
@@ -343,17 +343,22 @@ void AKeysAudio::PushEngine(double InRpm, double Load, double Vol, double PitchM
 	}
 	const double AvgGate = GateSum / N, AvgGateMul = GateMulSum / N;
 	P.SubFreq = (float)(Crank * 2);
-	P.SubGain = (float)(.24 * (1 + .6 * Load) * (1 - .45 * R1) * AvgGate);
-	P.MuffleFreq = (float)((300 + R * 2600) * EngTone * (.8 + .35 * Load));
-	P.ReliefGain = (float)(.17 * Lo + .09 + .13 * R + .08 * Load);
+	// tuned against a recording of quad Mercury Racing 500Rs at speed: the weight is in the 2nd and 4th harmonics of
+	// the crank (the V8's firing pulse), the 250-500 Hz body is full, 500 Hz-1 kHz is dark, and the supercharger
+	// breathes in at 2-4 kHz
+	P.SubGain = (float)(.24 * (1 + .6 * Load) * (1 + 1.1 * R1) * AvgGate);
+	P.MuffleFreq = (float)((260 + R * 1250) * EngTone * (.8 + .35 * Load));
+	P.FireFreq = (float)(Crank * 4);
+	P.FireGain = (float)((.04 + .48 * R1 * R1) * (.7 + .3 * Load) * AvgGate);
+	P.ReliefGain = (float)(.17 * Lo + .09 + .05 * R + .06 * Load);
 	P.BubGain = (float)(.035 * Lo * FMath::Sqrt((double)N));
 	P.BubEnvDepth = (float)(.5 * Lo);
-	P.InsGain = (float)(.015 + .12 * Load * R);
-	P.InsFreq = (float)(800 + R * 900);
+	P.InsGain = (float)(.015 + .55 * Load * R);
+	P.InsFreq = (float)(1400 + R * 1600);
 	P.GwFreq = (float)(InRpm * .21 * PitchMul);
 	P.GwGain = (float)(.003 + .01 * R * R);
 	P.WhineFreq = (float)(InRpm / 60 * 27 * PitchMul);
-	P.WhineGain = (float)(EngWhine * (.0075 + .024 * R * R) * AvgGateMul);
+	P.WhineGain = (float)(EngWhine * (.0075 + .14 * R * R) * AvgGateMul);
 	P.OutGain = (float)(EngineVol * Vol * EngVol * (.36 + .45 * R + .3 * Load) * (1 + .12 * (N - 1)) * (1 - .8 * EngDuck));
 	Sfx->SetEngineParams(P);
 }

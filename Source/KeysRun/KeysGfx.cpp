@@ -109,6 +109,9 @@ namespace
 		if (IConsoleVariable* C = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Shadow.Virtual.Enable"))) C->Set(Q >= KeysGfx::High ? 1 : 0, ECVF_SetByCode);
 		SetCVarInt(TEXT("r.ContactShadows"), Q >= KeysGfx::Medium ? 1 : 0);
 		SetCVarInt(TEXT("r.AmbientOcclusion.Method"), 0);
+		// no motion blur: with the camera riding the boat at 60 knots it smeared the whole sea, wake and all, into streaks
+		// (by code: the scalability presets set its quality and would turn it back on)
+		if (IConsoleVariable* Mb = IConsoleManager::Get().FindConsoleVariable(TEXT("r.MotionBlurQuality"))) Mb->Set(0, ECVF_SetByCode);
 		// the clouds: half the ray-march steps below High
 		SetCVar(TEXT("r.VolumetricCloud.ViewRaySampleMaxCount"), Q >= KeysGfx::High ? 768.f : Q >= KeysGfx::Medium ? 512.f : 256.f);
 		SetCVar(TEXT("r.VolumetricCloud.ReflectionRaySampleMaxCount"), Q >= KeysGfx::High ? 80.f : 24.f);

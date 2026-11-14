@@ -62,6 +62,7 @@ bool UKeysSfxSynth::Init(int32& SampleRate)
 	Gw.Wave = KeysDSP::EWave::Sine; GwF.Init(147.f, .06f); GwG.Init(0, .08f);
 	Wh1.Wave = Wh2.Wave = KeysDSP::EWave::Sine; WhF.Init(315.f, .06f); WhG.Init(0, .08f);
 	EngOut.Init(0, .07f);
+	Fire1.Wave = KeysDSP::EWave::Triangle; Fire2.Wave = KeysDSP::EWave::Triangle; FireF.Init(400.f, .06f); FireG.Init(0, .08f);
 
 	RushN.Seed(Rng); HissN.Seed(Rng); WindN.Seed(Rng); WashN.Seed(Rng); BreathN.Seed(Rng);
 	for (FRemoteVoice& V : Rv) { V.A.Wave = KeysDSP::EWave::Saw; V.B.Wave = KeysDSP::EWave::Square; V.Fr.Init(40.f, .25f); V.G.Init(0, .25f); V.L.Init(.7f, .15f); V.R.Init(.7f, .15f); V.Cut.Init(700.f, .3f); } BreathG.Init(0, .3f); BreathD.Init(0, .3f); BreathFr.Init(480.f, .3f);
@@ -153,7 +154,8 @@ void UKeysSfxSynth::RenderBlock(float* Out, int32 Frames)
 	SubF.Target = Eng.SubFreq; SubG.Target = Eng.SubGain; MuffleF.Target = Eng.MuffleFreq; Relief.Target = Eng.ReliefGain;
 	BubG.Target = Eng.BubGain; BubEd.Target = Eng.BubEnvDepth; InsG.Target = Eng.InsGain; InsF.Target = Eng.InsFreq;
 	GwF.Target = Eng.GwFreq; GwG.Target = Eng.GwGain; WhF.Target = Eng.WhineFreq; WhG.Target = Eng.WhineGain; EngOut.Target = Eng.OutGain;
-	for (KeysDSP::FSmooth* S : {&SubF, &SubG, &MuffleF, &Relief, &BubG, &BubEd, &InsG, &InsF, &GwF, &GwG, &WhF, &WhG, &EngOut}) S->Step(Dt);
+	FireF.Target = Eng.FireFreq; FireG.Target = Eng.FireGain;
+	for (KeysDSP::FSmooth* S : {&SubF, &SubG, &MuffleF, &Relief, &BubG, &BubEd, &InsG, &InsF, &GwF, &GwG, &WhF, &WhG, &EngOut, &FireF, &FireG}) S->Step(Dt);
 
 	RushG.Target = Loops.RushGain; RushFr.Target = Loops.RushFreq; HissG.Target = Loops.HissGain; WindG.Target = Loops.WindGain;
 	WindFr.Target = Loops.WindFreq; WashG.Target = Loops.WashGain;
@@ -208,6 +210,8 @@ void UKeysSfxSynth::RenderBlock(float* Out, int32 Frames)
 			M += InsBP.Tick(InsN.Tick()) * InsG.V;
 			M += Gw.Tick(GwF.V * InvRate) * GwG.V;
 			M += (Wh1.Tick(WhF.V * InvRate) + Wh2.Tick(WhF.V * 1.0015f * InvRate)) * WhG.V;
+			// the firing pulse: two slightly apart (the motors never quite agree), which beats like a quad at speed
+			M += (Fire1.Tick(FireF.V * InvRate) + Fire2.Tick(FireF.V * 1.006f * InvRate)) * FireG.V;
 			L += (EL + M) * EngOut.V;
 			R += (ER + M) * EngOut.V;
 		}

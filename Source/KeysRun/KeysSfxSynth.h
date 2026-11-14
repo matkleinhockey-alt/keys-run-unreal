@@ -20,6 +20,7 @@ struct FKeysEngineParams
 	float InsGain = 0, InsFreq = 800.f;
 	float GwFreq = 147.f, GwGain = 0;
 	float WhineFreq = 315.f, WhineGain = 0;
+	float FireFreq = 400.f, FireGain = 0;   // the V8 firing pulse (4 x crank), the note a quad of 500Rs sings at
 	float OutGain = 0;
 };
 
@@ -118,6 +119,7 @@ private:
 	KeysDSP::FOsc Gw; KeysDSP::FSmooth GwF, GwG;
 	KeysDSP::FOsc Wh1, Wh2; KeysDSP::FSmooth WhF, WhG;
 	KeysDSP::FSmooth EngOut;
+	KeysDSP::FOsc Fire1, Fire2; KeysDSP::FSmooth FireF, FireG;
 
 	KeysDSP::FNoise RushN, HissN, WindN, WashN, BreathN;
 	KeysDSP::FBiquad BreathF;
