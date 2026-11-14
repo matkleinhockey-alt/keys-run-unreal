@@ -57,7 +57,10 @@ private:
 	// ---- the working fleet
 	struct FWorkBoat { FString Name; int32 Kind; double L, B, S, Speed, H, Ph; FKeysRoute R; double X = 0, Z = 0; };
 	TArray<FWorkBoat> Fleet;
-	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> FleetMeshes;
+	// each boat's root: the generated fishing boat model (Content/KeysRun/Props/work_<n>.krfish, painted per boat by
+	// Tools/boatglb.py) under it, or the hand-built hull when the model is missing
+	UPROPERTY() TArray<TObjectPtr<USceneComponent>> FleetMeshes;
+	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> FleetModels;
 	UPROPERTY() TArray<TObjectPtr<UTextRenderComponent>> FleetNames;
 
 	// ---- Larry

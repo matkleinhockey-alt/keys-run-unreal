@@ -447,6 +447,13 @@ void AKeysLandmarks::BuildEstates(FTownBatch& B)
 // ---------------------------------------------------------------- a prop model (KRF1, one lod: unit height, base at 0, game axes)
 UStaticMesh* AKeysLandmarks::LoadProp(const TCHAR* Key)
 {
+	UStaticMesh* SM = LoadPropMesh(this, Key);
+	if (SM) PropMeshes.Add(SM);
+	return SM;
+}
+
+UStaticMesh* AKeysLandmarks::LoadPropMesh(UObject* Outer, const TCHAR* Key)
+{
 	TArray<uint8> B;
 	const FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Props") / (FString(Key) + TEXT(".krfish"));
 	if (!FFileHelper::LoadFileToArray(B, *Path) || B.Num() < 16 || FMemory::Memcmp(B.GetData(), "KRF1", 4)) return nullptr;
@@ -494,12 +501,11 @@ UStaticMesh* AKeysLandmarks::LoadProp(const TCHAR* Key)
 		const bool bFlip = FVector::DotProduct(Fn, N[A] + N[Bb] + N[Cc]) > 0;
 		MD.CreateTriangle(Grp, {Inst[A], Inst[bFlip ? Cc : Bb], Inst[bFlip ? Bb : Cc]});
 	}
-	UStaticMesh* SM = NewObject<UStaticMesh>(this, *FString::Printf(TEXT("Prop_%s"), Key));
+	UStaticMesh* SM = NewObject<UStaticMesh>(Outer, *FString::Printf(TEXT("Prop_%s"), Key));
 	SM->GetStaticMaterials().Add(FStaticMaterial(AKeysWorld::VertexColorMaterial(), FName(TEXT("Mat"))));
 	UStaticMesh::FBuildMeshDescriptionsParams Bp;
 	Bp.bFastBuild = true; Bp.bMarkPackageDirty = false; Bp.bBuildSimpleCollision = false;
 	SM->BuildFromMeshDescriptions({&MD}, Bp);
-	PropMeshes.Add(SM);
 	UE_LOG(LogTemp, Log, TEXT("KRProps: %s, %u verts, %u tris"), Key, NV, NT);
 	return SM;
 }

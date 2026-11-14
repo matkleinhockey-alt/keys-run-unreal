@@ -55,6 +55,10 @@ private:
 	TArray<FPot> Pots;
 	bool bBuoyModels = false;
 	UStaticMesh* LoadProp(const TCHAR* Key);
+public:
+	// a prop model from Content/KeysRun/Props/<Key>.krfish as a static mesh owned by Outer (keep a UPROPERTY to it), or null
+	static UStaticMesh* LoadPropMesh(UObject* Outer, const TCHAR* Key);
+private:
 	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> PropMeshes;
 	double BobT = 0;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> BeamMID;

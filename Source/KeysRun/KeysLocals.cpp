@@ -6,6 +6,8 @@
 #include "KeysMesh.h"
 #include "KeysData.h"
 #include "KeysWorld.h"
+#include "KeysLandmarks.h"
+#include "Components/StaticMeshComponent.h"
 #include "KeysAudio.h"
 #include "KeysBoatPawn.h"
 #include "KeysDancers.h"
@@ -167,6 +169,46 @@ void AKeysLocals::BuildFleet()
 	const FLinearColor Steel = Hex(0x8d949b), Rust = Hex(0x7a4a2a), Timber = Hex(0x8a6b45), Net = Hex(0x3d4a3a), Buoy = Hex(0xe4572e);
 	for (const FDef& D : Defs)
 	{
+		// the generated boat, if it is there: one hull for the whole fleet, each in her own paint, at her own length
+		const int32 Idx = FleetMeshes.Num();
+		if (UStaticMesh* SM = AKeysLandmarks::LoadPropMesh(this, *FString::Printf(TEXT("work_%d"), Idx)))
+		{
+			const double ML[5] = {13, 12, 15, 11.5, 17};
+			const double L = ML[FMath::Min(Idx, 4)];
+			FleetModels.Add(SM);
+			USceneComponent* Rt = NewObject<USceneComponent>(this, *FString::Printf(TEXT("Work_%s"), D.Name));
+			Rt->SetupAttachment(Root);
+			Rt->RegisterComponent();
+			UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+			C->SetStaticMesh(SM);
+			C->SetMaterial(0, VC);
+			C->SetupAttachment(Rt);
+			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			// the model's keel is its origin; she floats with about 0.9 m of her under (WATERLINE in boatglb.py)
+			C->SetRelativeLocation(FVector(0, 0, -.062 * L * 100));
+			C->SetRelativeScale3D(FVector(L));   // the prop loader is already in centimetres per unit
+			C->SetCastShadow(true);
+			C->RegisterComponent();
+			Rt->SetVisibility(false, true);
+			FleetMeshes.Add(Rt);
+			// her name across the transom, between the boot stripe and the deck
+			UTextRenderComponent* Tx = NewObject<UTextRenderComponent>(this);
+			Tx->SetupAttachment(Rt);
+			Tx->RegisterComponent();
+			Tx->SetText(FText::FromString(FString(D.Name).ToUpper() + TEXT("\nMARATHON, FL")));
+			Tx->SetHorizontalAlignment(EHTA_Center);
+			Tx->SetVerticalAlignment(EVRTA_TextCenter);
+			Tx->SetTextRenderColor(FColor(0x10, 0x16, 0x1c));
+			Tx->SetWorldSize(L * 100 * .015);
+			Tx->SetRelativeLocationAndRotation(FVector(-L / 2 * 100 - 3, 0, (.094 - .062) * L * 100), FRotator(0, 180, 0));
+			Tx->SetCastShadow(false);
+			FleetNames.Add(Tx);
+			FWorkBoat W;
+			W.Name = D.Name; W.Kind = D.Kind; W.L = L; W.B = .42 * L; W.R = D.R; W.Speed = D.Speed;
+			W.S = FMath::FRand() * FMath::Max(1.0, W.R.Total); W.H = 0; W.Ph = FMath::FRand() * 6.28;
+			Fleet.Add(W);
+			continue;
+		}
 		FKeysMesh M;
 		double L = 14, B = 4.4, F = 1.3, Board = 3.4, BoardY = 1.35;
 		uint32 HullC = 0xe9e6dc, BootC = 0x1f4f8c, CoveC = 0x1f4f8c, DeckC = 0xcdc7b6;
@@ -837,7 +879,7 @@ FString AKeysLocals::DebugCmd(const FString& Cmd)
 		const FWorkBoat& W = Fleet[I];
 		double X, Z, TX, TZ;
 		AKeysTraffic::RouteAt(W.R, W.S - 30, X, Z, TX, TZ);
-		const double PX = X - TZ * 60, PZ = Z + TX * 60;
+		const double PX = X - TZ * 38, PZ = Z + TX * 38;
 		P->DebugPlace(PX, PZ, HeadingOf(W.X - PX, W.Z - PZ));
 		return W.Name;
 	}
