@@ -161,7 +161,7 @@ void AKeysLocals::BuildFleet()
 	struct FDef { const TCHAR* Name; int32 Kind; FKeysRoute R; double Speed; };
 	const TArray<FDef> Defs = {
 		{TEXT("Hot Tuna"), 0, AKeysTraffic::MakeRoute(1250, 1420), 3.5},
-		{TEXT("Dog Pound"), 1, AKeysTraffic::RouteFrom({FVector2D(-2400, ChainZ(-2400) + 620), FVector2D(-900, ChainZ(-900) + 540), FVector2D(200, ChainZ(200) + 700), FVector2D(-1400, ChainZ(-1400) + 820)}), 2.4},
+		{TEXT("Dog Pound"), 1, AKeysTraffic::RouteFrom({FVector2D(-2400, ChainZ(-2400) + 700), FVector2D(-1050, ChainZ(-1050) + 920), FVector2D(200, ChainZ(200) + 880), FVector2D(-1400, ChainZ(-1400) + 1020)}), 2.4},
 		{TEXT("Pin Wheel"), 2, AKeysTraffic::MakeRoute(2050, 2400), 2.2},
 		{TEXT("No Limits"), 3, AKeysTraffic::RouteFrom({FVector2D(900, ChainZ(900) + 560), FVector2D(2300, ChainZ(2300) + 700), FVector2D(3200, ChainZ(3200) + 520), FVector2D(1700, ChainZ(1700) + 460)}), 2.6},
 		{TEXT("Fat Tuna"), 4, AKeysTraffic::MakeRoute(2650, 3050), 2.0}};
