@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "KeysHUD.h"
 #include "KeysWrecks.h"
 #include "KeysOcean.h"
 #include "KeysSchools.h"
@@ -620,6 +621,16 @@ void AKeysBoatPawn::RunTestScript(double T)
 				Speed = Thr = 0; bCamInit = false;
 			}
 		}
+		else if (Cmd == TEXT("goweed"))
+		{
+			// beside the nearest sargassum weedline, looking along it
+			if (const AKeysLife* Lf = AKeysLife::Get(this))
+			{
+				const FKeysWeedline* Best = nullptr;
+				for (const FKeysWeedline& Wd : Lf->AllWeeds()) if (!Best || Hyp(Wd.X - X, Wd.Z - Z) < Hyp(Best->X - X, Best->Z - Z)) Best = &Wd;
+				if (Best) { X = Best->X - FMath::Sin(Best->Ang) * 14; Z = Best->Z + FMath::Cos(Best->Ang) * 14; H = Best->Ang; Speed = Thr = 0; bCamInit = false; }
+			}
+		}
 		else if (Cmd.StartsWith(TEXT("goto=")))
 		{
 			// goto=flats|bay|hawk|reef|wall|offshore: the nearest open water of that kind, searched in a spiral
@@ -910,6 +921,13 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("seasnap")) SnapSea();
 		else if (Cmd.StartsWith(TEXT("chart="))) ChartRange = Clamp(FCString::Atod(*Cmd.Mid(6)), 120, 2400);   // chart=2400: the plotter's half-range, m   // the sea jumps to what the wind would raise (no easing)
 		else if (Cmd.StartsWith(TEXT("gps="))) bElectronics = FCString::Atoi(*Cmd.Mid(4)) != 0;   // gps=1: the chartplotter (G) on
+		else if (Cmd.StartsWith(TEXT("touch="))) AKeysHUD::ScriptTouch(Cmd.Mid(6));   // hold an on-screen control (-KRTouch)
+		else if (Cmd == TEXT("untouch")) AKeysHUD::ScriptTouchRelease();
+		else if (Cmd.StartsWith(TEXT("look=")))
+		{
+			FString A, B;
+			if (Cmd.Mid(5).Split(TEXT(","), &A, &B)) AKeysHUD::ScriptLook(FCString::Atof(*A), FCString::Atof(*B));
+		}
 		else if (Cmd == TEXT("quit")) { if (APlayerController* PC = Cast<APlayerController>(GetController())) PC->ConsoleCommand(TEXT("quit")); }
 		else MenuActivate(FName(*Cmd));
 	}
@@ -1459,6 +1477,7 @@ void AKeysBoatPawn::UpdateCursor()
 	PC->bShowMouseCursor = bWant;
 	PC->bEnableClickEvents = bWant;
 	PC->bEnableMouseOverEvents = bWant;
+	PC->bEnableTouchEvents = bWant;   // a tap on a menu row (phones and tablets)
 	if (bWant)
 	{
 		FInputModeGameAndUI Mode;
@@ -2151,13 +2170,21 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		if (Age0 < .05 || LandLB.BoxExtent.IsNearlyZero()) LandLB = FishMesh->CalcBounds(FTransform::Identity);
 		const FBoxSphereBounds LB = LandLB;   // nose along +X
 		const double Lv = FMath::Max(.4, LB.BoxExtent.X * 2 / 100);
-		const double Aft = -BS.Len * .5 + .75, Fore = .05 * BS.Len - 1.05;    // the clear cockpit sole, boat meters
-		const bool bDoor = Lv > (Fore - Aft) * .95;
+		// where it lands: the open deck aft, in front of the stern bench, clear of the seats, the wet bar, the hardtop
+		// and the fighting chair, so the camera has it in plain view
+		double Aft, Fore;
+		KeysMesh::ClearSole(BS, Aft, Fore);
+		if (KeysMesh::HasFightChair(BS))
+		{
+			const double CX = KeysMesh::FightChairBase(BS).X, AftRoom = CX - .8 - Aft, ForeRoom = Fore - (CX + .8);
+			if (AftRoom >= Lv + .05 || AftRoom >= ForeRoom) Fore = FMath::Min(Fore, CX - .8); else Aft = FMath::Max(Aft, CX + .8);
+		}
+		const bool bDoor = Lv > (Fore - Aft) * .95 + .35;   // a little overhang is fine on the open deck
 		const double Sd = ShowSgn >= 0 ? 1 : -1, HB = BS.Beam * .5;
 		double LX, LY, LYaw = 0;
-		const double DoorX = (Aft + Fore) * .5 - .3;            // the side door in the gunwale, mid-cockpit
+		const double DoorX = FMath::Max(Aft + .4, (Aft + Fore) * .5 - .3);   // the side door in the gunwale, by that deck
 		if (bDoor) { LX = DoorX; LY = 0; }
-		else { LX = (Aft + Fore) * .5; LY = -Sd * BS.Beam * .06; LYaw = .22 * Sd; }           // a little askew
+		else { LX = FMath::Min((Aft + Fore) * .5, Aft + Lv * .5 + .1); LY = -Sd * BS.Beam * .06; LYaw = .22 * Sd; }   // aft, a little askew
 		const double SoleZ = KeysMesh::SoleAt(BS, FMath::Max(LX, -BS.Len * .5 + .3));
 		double Haul = 0, Done = 2.3, Land = 0;
 		FVector PosL;
@@ -2251,7 +2278,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		// cockpit once the fish is in; it arcs a little all the while
 		const double Crane = Ease((Age0 - Done + .6) / 1.2);
 		const double Arc = FMath::Lerp(-.15, .12, Ease(Age0 / (Done + 4))) + FMath::Max(0.0, Age0 - Done - 4) * .01;
-		const FVector D0 = bDoor ? FVector(-.3, Sd, .7) : FVector(-.35, Sd, .85), D1 = bDoor ? FVector(-.55, Sd * .8, .5) : FVector(-.5, Sd * .3, 1.25);
+		const FVector D0 = bDoor ? FVector(-.3, Sd, .7) : FVector(-.35, Sd, .85), D1 = bDoor ? FVector(-.5, -Sd * .55, 1.0) : FVector(-.4, -Sd * .62, .95);   // in: a three-quarter view from the far rail, the crew behind it
 		const FVector DirL = FQuat(FVector::UpVector, Arc).RotateVector(FMath::Lerp(D0.GetSafeNormal(), D1.GetSafeNormal(), Crane).GetSafeNormal());
 		const FVector DirU = HullT.GetRotation().RotateVector(DirL).GetSafeNormal();
 		const double Span = FMath::Max(Lv, FMath::Lerp(3.2, 2.4, Land));   // the fish and the two of you
@@ -2321,13 +2348,20 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		WantLook = FVector(LX, Y + 1.8, LZ);
 		if (RaiseCamT > 0 && bRunning && !bDragging)
 		{
-			// a fish coming up on the spread: the camera swings round over the console to look back down the wake at it
-			const FVector Tgt = !PendKey.IsEmpty() ? RaisePos : FVector(FX, 0, FZ);
-			const double DX = Tgt.X - X, DZ = Tgt.Z - Z, DL = FMath::Max(1.0, Hyp(DX, DZ));
-			FVector TowerEye;
-			const double Up = KeysMesh::TowerEye(S, TowerEye) ? TowerEye.Z + 3.5 : 7.5;   // clear of the tower and the top
-			WantPos = FVector(X - DX / DL * (S.Len * .5 + 9), Y + Up, Z - DZ / DL * (S.Len * .5 + 9));
-			WantLook = FVector(Lerp(X, Tgt.X, .75), 0, Lerp(Z, Tgt.Z, .75));
+			// a fish coming up on the spread: the camera drops down beside that lure, low over the water and a little
+			// toward the boat, to watch the fish come up the wake behind it, track it, and take it
+			FVector Lr(FX, 0, FZ);
+			if (!PendKey.IsEmpty()) { FVector LP; if (LurePos(PendStation, LP)) Lr = LP; }
+			double TX = X - Lr.X, TZ = Z - Lr.Z;
+			const double TL = FMath::Max(1.0, Hyp(TX, TZ));
+			TX /= TL; TZ /= TL;                                   // along the line, toward the boat
+			double PX = -TZ, PZ = TX;                             // across it, outboard of the wake
+			if ((Lr.X - X) * PX + (Lr.Z - Z) * PZ < 0) { PX = -PX; PZ = -PZ; }
+			const double Wl = WaveH(Lr.X, Lr.Z, T, AmpAt(Lr.X, Lr.Z));
+			const double Fl = KeysMesh::FishLength(!PendKey.IsEmpty() ? PendWeight : Weight);   // closer for a small fish
+			const double Off = FMath::Clamp(2.2 + Fl * 2.6, 3.2, 8.0);
+			WantPos = FVector(Lr.X + PX * Off + TX * Off * .45, Wl + Off * .38, Lr.Z + PZ * Off + TZ * Off * .45);
+			WantLook = FVector(Lr.X - TX * 1.2, Wl - .35, Lr.Z - TZ * 1.2);
 		}
 	}
 	if (!bCamInit) { CamPos = WantPos; CamLook = WantLook; bCamInit = true; }

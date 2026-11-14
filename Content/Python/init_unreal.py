@@ -1769,8 +1769,21 @@ def _rain(mat):
     mel.connect_material_property(al, "", unreal.MaterialProperty.MP_OPACITY)
 
 
+# The sky on phones and tablets: the mobile renderer draws the atmosphere only on a mesh whose material is tagged
+# as sky, so a dome carries it there (the Mac's renderer draws it on its own and never uses this).
+def _sky(mat):
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("is_sky", True)
+    lum = mel.create_material_expression(mat, unreal.MaterialExpressionSkyAtmosphereViewLuminance, -600, 0)
+    disk = mel.create_material_expression(mat, unreal.MaterialExpressionSkyAtmosphereLightDiskLuminance, -600, 200)
+    add = mel.create_material_expression(mat, unreal.MaterialExpressionAdd, -300, 100)
+    _link(lum, "", add, "A")
+    _link(disk, "", add, "B")
+    mel.connect_material_property(add, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
 BUILDERS = {
-    "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
+    "M_KR_Sky": _sky, "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
     "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
     "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble, "M_KR_Dash": _dash, "M_KR_Glass": _glass,
     "M_KR_GirlSkin": _girl(0), "M_KR_GirlHair": _girl(1), "M_KR_GirlSuit": _girl(2),

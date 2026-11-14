@@ -30,7 +30,7 @@ namespace
 	// trolling.ts / troll-raise.ts / troll-spread.ts
 	constexpr double RigSwing = 2.4;           // seconds for the poles to swing out or stow
 	constexpr double ResumePause = 7;          // after a fish, before the boat goes back on the troll
-	constexpr double RaiseS = 1.6;             // from the fish showing to the eat
+	constexpr double RaiseS = 3.6;             // from the fish showing to the eat: up the wake, on the lure, then the lunge
 	constexpr double RaiseDepth = 9, RaiseBack = 7;
 	constexpr double PullS = 1.1, PullDepth = 1.5;
 	constexpr double TrackStep = .6;
@@ -231,20 +231,33 @@ void AKeysBoatPawn::UpdateTroll(double Dt, double T)
 			FVector L;
 			if (LurePos(PendStation, L))
 			{
-				const double U = FMath::Clamp(1 - RaiseLeft / RaiseS, 0.0, 1.0), Kc = U * U * U;
-				const double Depth = RaiseDepth * (1 - Kc), Back = RaiseBack * (1 - Kc);
+				// three beats (troll-raise.ts, slowed for the camera): up out of the blue from deep astern of the bait;
+				// tracking it just under the surface, lit up and weaving, a body length back; then the lunge, head out,
+				// through the lure
+				const double U = FMath::Clamp(1 - RaiseLeft / RaiseS, 0.0, 1.0);
+				auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };
+				const double Len = FMath::Max(.6, KeysMesh::FishLength(PendWeight));
+				double Depth, Back;
+				if (U < .42) { const double E = 1 - FMath::Square(1 - U / .42); Depth = FMath::Lerp(RaiseDepth * .45, .7, E); Back = FMath::Lerp(RaiseBack * 1.6, Len * 1.3, E); }
+				else if (U < .84) { const double E = Ease((U - .42) / .42); Depth = FMath::Lerp(.7, .38, E); Back = FMath::Lerp(Len * 1.3, Len * .85, E); }
+				else { const double E = Ease((U - .84) / .16); Depth = FMath::Lerp(.38, -.18, E); Back = FMath::Lerp(Len * .85, -Len * .15, E); }
 				double UX = RaisePos.X - L.X, UZ = RaisePos.Z - L.Z;
 				const double D = FMath::Sqrt(UX * UX + UZ * UZ);
 				if (D > .05) { UX /= D; UZ /= D; } else { UX = FMath::Sin(H); UZ = FMath::Cos(H); }
+				// tracking, it swings from side to side behind the bait
+				const double Weave = U > .3 && U < .86 ? FMath::Sin(T * 3.1) * Len * .25 : 0;
 				const double Water = WaveH(L.X, L.Z, T, AmpAt(L.X, L.Z));
-				RaisePos = FVector(L.X + UX * Back, Water - Depth - .25, L.Z + UZ * Back);
+				RaisePos = FVector(L.X + UX * Back - UZ * Weave, Water - Depth - .1, L.Z + UZ * Back + UX * Weave);
 				const double Yaw = FMath::Atan2(L.Z - RaisePos.Z, L.X - RaisePos.X);
-				const double Climb = FMath::Atan2(Depth, FMath::Max(.5, Back)) * .8;
+				const double Climb = U < .42 ? .35 : U < .84 ? .05 : .45;
 				FishMesh->SetWorldLocationAndRotation(ToUE(RaisePos.X, RaisePos.Y, RaisePos.Z),
-					FRotator(FMath::RadiansToDegrees(Climb), FMath::RadiansToDegrees(Yaw), FMath::Sin(T * 9) * 7 * U));
+					FRotator(FMath::RadiansToDegrees(Climb), FMath::RadiansToDegrees(Yaw), FMath::Sin(T * 9) * 9));
+				// the lunge: white water as it breaks the surface on the bait
+				if (U >= .84 && !bRaiseBurst) { bRaiseBurst = true; if (AKeysLife* Lf = AKeysLife::Get(this)) Lf->Splash(L.X, L.Z, 26, 1.6); }
+				if (U < .84) bRaiseBurst = false;
 				// the boil: water pushed up over the fish once it is shallow enough to move it
-				const double Shallow = FMath::Clamp(1 - Depth / 3.2, 0.0, 1.0);
-				if (Shallow > .05 && FMath::FRand() < Dt * 18 * Shallow)
+				const double Shallow = FMath::Clamp(1 - Depth / 1.6, 0.0, 1.0);
+				if (Shallow > .05 && FMath::FRand() < Dt * 14 * Shallow)
 					if (AKeysLife* Lf = AKeysLife::Get(this)) Lf->Splash(RaisePos.X, RaisePos.Z, 4, .5 + Shallow * .6);
 			}
 		}

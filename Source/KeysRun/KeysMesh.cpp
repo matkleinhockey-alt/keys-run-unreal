@@ -240,6 +240,18 @@ namespace KeysMesh
 		return {D.MidX, D.DeckZ, D.ConL, D.ConW, D.ConFwd, D.TC, D.TopL, D.TopW, D.TopZ};
 	}
 
+	void ClearSole(const KeysData::FBoatSpec& S, double& Lo, double& Hi)
+	{
+		const FDims D = Dims(S);
+		const double Cap = .14 + S.Beam * .02;
+		Lo = -D.L * .5 + Cap + .3 + .25 + .12;                         // just forward of the stern bench's front
+		Hi = .05 * D.L - 1.05;
+		if (S.bLeaning && !D.bMid && !D.bFree) Hi = FMath::Min(Hi, D.MidX - 1.15 - .4 - .12);   // the leaning post's back
+		if (D.bMid) Hi = FMath::Min(Hi, D.MidX - 3.7 - .35 - .12);      // the wet bar behind the two rows of buckets
+		if (D.bFree) Hi = FMath::Min(Hi, D.TC - D.TopL * .5);           // out from under the long hardtop
+		Hi = FMath::Max(Hi, Lo + .5);
+	}
+
 	bool TowerEye(const KeysData::FBoatSpec& S, FVector& OutEye)
 	{
 		const FDims D = Dims(S);

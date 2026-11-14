@@ -47,6 +47,9 @@ namespace
 
 	int32 DefaultQuality()
 	{
+#if PLATFORM_IOS || PLATFORM_ANDROID
+		return KeysGfx::Low;   // phones and tablets: the mobile renderer, kept cool
+#endif
 		// Apple: the base chips (MacBook Air, the 13" Pro, the mini) get Medium; Pro / Max / Ultra get High
 		const FString Gpu = GRHIAdapterName.IsEmpty() ? FPlatformMisc::GetPrimaryGPUBrand() : GRHIAdapterName;
 		if (Gpu.Contains(TEXT("Apple")))
@@ -162,7 +165,11 @@ namespace KeysGfx
 			const double FrameMs = GAccMs / GFrames;
 			// frame pacing: a frame rate that can't hold 45 is held at an even 30 instead (no judder); let go again when
 			// the GPU has room for well over 40
+#if PLATFORM_IOS || PLATFORM_ANDROID
+			const bool bPace = true;   // a phone always holds 30: smooth, and the battery lasts the trip
+#else
 			const bool bPace = GPaced ? !(GpuMs > 0 && GpuMs < 20) : FrameMs > 24;
+#endif
 			if (bPace != GPaced) { GPaced = bPace; SetCVar(TEXT("t.MaxFPS"), bPace ? 30.f : 0.f); }
 			UE_LOG(LogTemp, Log, TEXT("KRGFX frame %.1f ms (gpu %.1f ms), %s, window %dx%d at %d%%%s"), FrameMs, GpuMs, *QualityLabel(), S.X, S.Y, GAppliedPct, GPaced ? TEXT(", paced 30") : TEXT(""));
 			GLogT = 0; GAccMs = 0; GFrames = 0;

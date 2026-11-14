@@ -1463,13 +1463,46 @@ void AKeysLife::BuildWeeds()
 		W.X = S.X; W.Z = S.Y;
 		W.Len = LRand(50, 170); W.Wid = LRand(3, 9); W.Ang = FMath::FRand() * PI;
 		W.Amp = AmpFor(DepthAt(W.X, W.Z));
-		const int32 N = FMath::RoundToInt(W.Len / 2.2);
-		const double CA = FMath::Cos(W.Ang), SA = FMath::Sin(W.Ang);
+		// a windrow, the way the wind lays sargassum out: a dense meandering core along the line, thinning to loose
+		// clumps strung out either side and off the ends
+		const int32 N = FMath::RoundToInt(W.Len / 1.05);
+		const double CA = FMath::Cos(W.Ang), SA = FMath::Sin(W.Ang), Ph = FMath::FRand() * 6.28, Wl = LRand(.03, .07);
 		for (int32 i = 0; i < N; i++)
 		{
-			const double U = (double(i) / N - .5) * W.Len, V = (FMath::FRand() - .5) * W.Wid * (1 - FMath::Abs(U / W.Len) * 1.2);
+			const bool bLoose = FMath::FRand() < .3;
+			const double U = (double(i) / N - .5) * W.Len * (bLoose ? 1.25 : 1.0) + LRand(-.8, .8);
+			const double Taper = FMath::Max(.15, 1 - FMath::Square(U / (W.Len * .5)));
+			const double Mean = FMath::Sin(U * Wl + Ph) * W.Wid * .7 + FMath::Sin(U * Wl * 2.7 + Ph * 2) * W.Wid * .2;
+			const double V = Mean + (FMath::FRand() - .5) * W.Wid * (bLoose ? 2.6 : .9) * Taper;
 			FKeysWeedBit Bit;
-			Bit.OX = CA * U - SA * V; Bit.OZ = SA * U + CA * V; Bit.S = LRand(.7, 2.2); Bit.Rot = FMath::FRand() * 6; Bit.Col = i % 6;
+			Bit.OX = CA * U - SA * V; Bit.OZ = SA * U + CA * V;
+			Bit.S = (bLoose ? LRand(.25, .7) : LRand(.6, 1.5)) * (.55 + .45 * Taper);
+			Bit.Rot = FMath::FRand() * 6.28; Bit.Col = i % 6;
+			Bit.P0 = W.Parts.Num();
+			auto Part = [&](double R, double A, double Y, double Rot, const FVector3f& Rad, uint8 Col)
+			{ W.Parts.Add({float(FMath::Cos(A) * R), float(FMath::Sin(A) * R), float(Y), float(Rot), Rad, Col}); };
+			const float Sz = float(Bit.S);
+			// the mat: a few overlapping lobes riding the surface, and a darker olive layer of it just under
+			const int32 Lobes = bLoose ? 3 : 7;
+			for (int32 k = 0; k < Lobes; k++)
+				Part(LRand(0, Bit.S * .55), FMath::FRand() * 6.28, LRand(.01, .05), FMath::FRand() * 6.28,
+					FVector3f(Sz * LRand(.22, .42), .03f, Sz * LRand(.16, .3)), uint8(k % 3));
+			if (!bLoose) Part(LRand(0, Bit.S * .2), FMath::FRand() * 6.28, -.09, FMath::FRand() * 6.28, FVector3f(Sz * .7f, .04f, Sz * .5f), 6);
+			// fronds: narrow branching blades poking out past the mat's edge
+			const int32 Fronds = bLoose ? 3 : 6;
+			for (int32 k = 0; k < Fronds; k++)
+			{
+				const double A = FMath::FRand() * 6.28, R = Bit.S * LRand(.45, .85);
+				Part(R, A, LRand(.03, .09), -A + LRand(-.4, .4), FVector3f(Sz * LRand(.22, .38), .025f, float(LRand(.035, .06))), uint8(3 + k % 2));
+			}
+			// the air bladders that float it: little round berries clustered on top
+			const int32 Berries = bLoose ? 3 : 7;
+			for (int32 k = 0; k < Berries; k++)
+			{
+				const float Br = float(LRand(.03, .055));
+				Part(LRand(0, Bit.S * .7), FMath::FRand() * 6.28, LRand(.06, .11), 0, FVector3f(Br, Br, Br), 5);
+			}
+			Bit.PN = W.Parts.Num() - Bit.P0;
 			W.Bits.Add(Bit);
 		}
 		for (int32 i = 0; i < 3; i++)
@@ -1487,9 +1520,10 @@ void AKeysLife::BuildWeeds()
 
 void AKeysLife::UpdateWeeds(double Dt, double T)
 {
-	static const uint32 WC[] = {0xc69a33, 0xb4862a, 0xd8b04a, 0x9c7424, 0xe0bf5a, 0xa98a3a};
-	FLinearColor Cols[6];
-	for (int32 i = 0; i < 6; i++) Cols[i] = LLin(LHex(WC[i]));
+	// sargassum's own colours: golden-brown mats, olive-amber fronds, yellow air bladders, dark olive under water
+	static const uint32 WC[] = {0x5a3e12, 0x4a3410, 0x684a16, 0x3e3a12, 0x4d4416, 0x82621a, 0x262710};
+	FLinearColor Cols[7];
+	for (int32 i = 0; i < 7; i++) Cols[i] = LLin(LHex(WC[i]));
 	for (FKeysWeedline& W : Weeds)
 	{
 		W.X += .22 * Dt;   // drifting with the current
@@ -1499,7 +1533,17 @@ void AKeysLife::UpdateWeeds(double Dt, double T)
 			for (const FKeysWeedBit& Bit : W.Bits)
 			{
 				const double X = W.X + Bit.OX, Z = W.Z + Bit.OZ;
-				LifeBufOcta(WeedBuf, FVector(X, WaveH(X, Z, T, W.Amp, false) + .04, Z), FVector(Bit.S, .18, Bit.S * .8), FLifeR3::RY(Bit.Rot), Cols[Bit.Col % 6]);
+				const double Y = WaveH(X, Z, T, W.Amp, false);
+				// close up every piece; further off just the mats (the berries and fronds are lost at that range)
+				const bool bNear = D < 260;
+				const double CR = FMath::Cos(Bit.Rot), SR = FMath::Sin(Bit.Rot);
+				for (int32 p = Bit.P0; p < Bit.P0 + Bit.PN; p++)
+				{
+					const FKeysWeedPart& Pt = W.Parts[p];
+					if (!bNear && Pt.Col >= 3 && Pt.Col != 6) continue;
+					const double PX = X + CR * Pt.OX - SR * Pt.OZ, PZ = Z + SR * Pt.OX + CR * Pt.OZ;
+					LifeBufOcta(WeedBuf, FVector(PX, Y + Pt.OY, PZ), FVector(Pt.R), FLifeR3::RY(Bit.Rot + Pt.Rot), Cols[Pt.Col]);
+				}
 			}
 		if (D < 1100)
 			for (FKeysBird& B : W.Birds)

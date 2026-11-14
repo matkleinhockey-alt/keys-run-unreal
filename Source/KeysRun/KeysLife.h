@@ -64,7 +64,10 @@ struct FKeysBird
 // a bird the boat pistol can see (web life.shootableBirds)
 struct FKeysBirdTarget { FKeysBird* Ref = nullptr; FVector Pos = FVector::ZeroVector; uint8 Kind = 0; };
 
-struct FKeysWeedBit { double OX, OZ, S, Rot; int32 Col; };
+// a clump of sargassum: its centre on the line, and the run of parts (mat, fronds, air bladders) it is drawn from
+struct FKeysWeedBit { double OX, OZ, S, Rot; int32 Col; int32 P0 = 0, PN = 0; };
+// one piece of a clump, relative to the clump's centre: OY is above (or below) the water, R the half-sizes
+struct FKeysWeedPart { float OX, OZ, OY, Rot; FVector3f R; uint8 Col; };
 
 struct FKeysHotspot
 {
@@ -84,6 +87,7 @@ struct FKeysWeedline
 {
 	double X = 0, Z = 0, Ang = 0, Len = 0, Wid = 0, Amp = 1;
 	TArray<FKeysWeedBit> Bits;
+	TArray<FKeysWeedPart> Parts;
 	TArray<FKeysBird> Birds;
 	bool bTold = false;
 	int32 GrpId = -1;
@@ -270,6 +274,7 @@ private:
 	TArray<FKeysWeedline> Weeds;
 	TArray<FKeysRig> Rigs;
 public:
+	const TArray<FKeysWeedline>& AllWeeds() const { return Weeds; }
 	// the I-th rig (not counting the twins), game meters
 	bool RigAt(int32 I, double& OutX, double& OutZ) const { int32 N = 0; for (const FKeysRig& R : Rigs) if (!R.bTwin && N++ == I) { OutX = R.X; OutZ = R.Z; return true; } return false; }
 private:

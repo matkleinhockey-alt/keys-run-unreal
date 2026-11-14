@@ -26,6 +26,7 @@
 #include "GameFramework/Pawn.h"
 #include "Async/ParallelFor.h"
 #include "EngineUtils.h"
+#include "Components/StaticMeshComponent.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 
@@ -156,6 +157,25 @@ void AKeysWorld::BeginPlay()
 
 	Sun->SetAtmosphereSunLight(true);
 	Sun->SetIntensity(9.f);
+	// the mobile renderer (phones, tablets) draws the atmosphere only on a mesh with a sky material: a big dome
+	if (GetWorld()->GetFeatureLevel() < ERHIFeatureLevel::SM5)
+	{
+		UStaticMesh* DomeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/EngineSky/SM_SkySphere.SM_SkySphere"));
+		UMaterialInterface* SkyMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Sky.M_KR_Sky"));
+		if (DomeMesh && SkyMat)
+		{
+			UStaticMeshComponent* Dome = NewObject<UStaticMeshComponent>(this, TEXT("SkyDome"));
+			Dome->SetStaticMesh(DomeMesh);
+			Dome->SetMaterial(0, SkyMat);
+			Dome->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Dome->SetCastShadow(false);
+			Dome->bNeverDistanceCull = true;
+			Dome->SetupAttachment(Root);
+			Dome->RegisterComponent();
+			Dome->SetWorldScale3D(FVector(2.0e6 / FMath::Max(1.0, DomeMesh->GetBounds().SphereRadius)));   // 20 km out
+		}
+		else UE_LOG(LogTemp, Warning, TEXT("KeysWorld: no sky dome for the mobile renderer (M_KR_Sky is made when the editor opens)"));
+	}
 	Sun->SetDynamicShadowCascades(4);
 	SkyLight->SetIntensity(1.f);
 	Fog->SetFogDensity(.004f);

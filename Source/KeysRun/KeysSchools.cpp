@@ -26,7 +26,7 @@ namespace
 {
 	// ---- the leader track texture (M_KR_Fish reads it)
 	constexpr int32 SchRows = 512;       // leaders alive at once
-	constexpr int32 SchHist = 48;        // samples of history per leader
+	constexpr int32 SchHist = 96;        // samples of history per leader (4.8 s: the whole school strung out on the leader's path)
 	constexpr double SchStep = .05;      // seconds between samples
 	constexpr double SchMaxDelay = (SchHist - 4) * SchStep;
 	constexpr double PhaseWrap = 512 * 2 * PI;
@@ -500,9 +500,12 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 			// sub-leaders sit around and behind the main leader
 			const double A = 2 * PI * (k - 1) / FMath::Max(1, NL - 1) + S.Rng.FRandRange(-.3, .3);
 			const double Rr = GroupR * (bBall ? 1.25 : 1.6);
+			// a bait ball packs round its leader; everything else strings out behind it, each sub-leader swimming
+			// the main leader's own path a little later than the one ahead of it, only just off to one side
 			Ld.Slot = bBall ? FVector(FMath::Cos(A) * Rr * .8, FMath::Sin(A) * Rr, FMath::Sin(A * 2 + 1) * Rr * .6)
-				: FVector(-Rr * S.Rng.FRandRange(.6, 1.3), FMath::Cos(A) * Rr * 1.2, FMath::Sin(A) * Rr * .45);
-			Ld.Delay = FMath::Min(SchMaxDelay * .5, (bBall ? .15 : .35) + .12 * k);
+				: FVector(0, FMath::Cos(A) * Rr * .4, FMath::Sin(A) * Rr * .25);
+			Ld.Delay = bBall ? FMath::Min(SchMaxDelay * .5, .15 + .12 * k)
+				: FMath::Min(SchMaxDelay * .8, k * FMath::Max(.5, GroupR * 2.2 / FMath::Max(.3, Sc.Cruise)));
 		}
 		FVector Rt, Up;
 		Frame(S.L[0].Fwd, Rt, Up);
@@ -715,8 +718,23 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 		break;
 	}
 	default:
-		if (S.GoalT <= 0 || Flat(S.Goal - M.P).Size() < 2) { S.GoalT = S.Rng.FRandRange(8, 16); S.Goal = PickGoal(S); }
+	{
+		// the main leader picks its own way: a heading that drifts and swings from side to side, followed by a goal a
+		// few body lengths out along it; it leans back toward home when it has roamed far, and turns away from water
+		// it doesn't belong in. Its depth changes now and then. The rest of the school swims the path it leaves.
+		if (!S.bWander) { S.bWander = true; S.WanderYaw = FMath::Atan2(M.Fwd.Z, M.Fwd.X); S.WanderTurn = 0; }
+		S.WanderTurn = FMath::Clamp(S.WanderTurn * (1 - Dt * .35) + S.Rng.FRandRange(-1.0, 1.0) * Dt * 1.1, -.55, .55);
+		S.WanderYaw += S.WanderTurn * Dt;
+		const FVector ToHome = Flat(S.Home - M.P);
+		const double Far = ToHome.Size() / FMath::Max(5.0, Sc.Roam);
+		if (Far > .65) S.WanderYaw += FMath::FindDeltaAngleRadians(S.WanderYaw, FMath::Atan2(ToHome.Z, ToHome.X)) * FMath::Min(1.0, Dt * .9 * Far);
+		const double Ahead = FMath::Max(4.0, Sc.Cruise * 4);
+		double GX = M.P.X + FMath::Cos(S.WanderYaw) * Ahead, GZ = M.P.Z + FMath::Sin(S.WanderYaw) * Ahead;
+		if (!ValidWater(S.Sp, GX, GZ)) { S.WanderTurn = S.WanderTurn >= 0 ? .55 : -.55; S.WanderYaw += S.WanderTurn * Dt * 2; }
+		if (S.GoalT <= 0) { S.GoalT = S.Rng.FRandRange(7, 14); S.Goal.Y = PickGoal(S).Y; }
+		S.Goal = FVector(GX, S.Goal.Y, GZ);
 		break;
+	}
 	}
 	// predators go hunting: pick a school within reach, charge through it and out the far side
 	if (Sc.bPredator)
@@ -773,7 +791,7 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	const double Dist = To.Size();
 	const double Arrive = bMain ? FMath::Min(1.0, Dist / 2.5) : FMath::Min(1.6, Dist / 1.2);
 	FVector Desired = Dist > 1e-3 ? To / Dist * Speed * Arrive : FVector::ZeroVector;
-	if (!bMain && Ld.LooseT <= 0) Desired += S.L[0].V * .6;   // match the main leader's way
+	if (!bMain && Ld.LooseT <= 0) Desired += S.L[0].V * .2;   // a little of the main leader's way (mostly its path)
 	// separation from the school's other leaders
 	for (int32 j = 0; j < S.L.Num(); j++)
 	{

@@ -383,6 +383,7 @@ private:
 	double PendWeight = 0, RaiseLeft = 0, RaiseCamT = 0;
 	int32 PendStation = -1, HookedStation = -1;
 	FVector RaisePos = FVector::ZeroVector;
+	bool bRaiseBurst = false;   // the lunge's splash has gone up
 	static constexpr int32 NumStations = 5;
 	FVector Lures[NumStations];      // game meters, as of the last spread update
 	double Pulled[NumStations] = {0, 0, 0, 0, 0};

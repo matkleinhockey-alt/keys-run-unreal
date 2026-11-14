@@ -25,6 +25,8 @@
 #include "KeysWeather.h"
 #include "EngineUtils.h"
 #include "Engine/Canvas.h"
+#include "Misc/Parse.h"
+#include "Misc/CommandLine.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "Engine/Texture2D.h"
@@ -174,11 +176,26 @@ void AKeysHUD::DrawWxBlobs(TFunctionRef<FVector2D(double, double)> Pt, double Px
 	}
 }
 
-void AKeysHUD::DrawHUD()
+// a phone's screen is a third the height of a laptop's: everything on the HUD is drawn bigger so it can be read
+// (-KRUiBoost=1.4 tries it on the Mac)
+float AKeysHUD::UiBoost() const
+{
+	static float Cmd = -1;
+	static bool bParsed = false;
+	if (!bParsed) { bParsed = true; FParse::Value(FCommandLine::Get(), TEXT("KRUiBoost="), Cmd); }
+	if (Cmd > 0) return Cmd;
+#if PLATFORM_IOS || PLATFORM_ANDROID
+	return Canvas && Canvas->SizeX > Canvas->SizeY * 1.8f ? 1.4f : 1.12f;   // phone : tablet
+#else
+	return 1.f;
+#endif
+}
+
+void AKeysHUD::DrawGame()
 {
 	Super::DrawHUD();
 	if (!Canvas) return;
-	U = Canvas->SizeY / 1080.f;
+	U = Canvas->SizeY / 1080.f * UiBoost();
 	AKeysBoatPawn* P = Cast<AKeysBoatPawn>(GetOwningPawn());
 	if (!P) return;
 	if (!Chart) BuildChart();
@@ -270,8 +287,9 @@ void AKeysHUD::DrawHUD()
 		float W = 0, H = 0;
 		GetTextSize(P->Toast, W, H, GEngine->GetMediumFont(), 1.05f * U);
 		const float Cx = Canvas->SizeX * .5f;
-		Panel(Cx - W * .5f - 18 * U, 28 * U, W + 36 * U, H + 16 * U, .55f);
-		Text(P->Toast, Cx, 36 * U, 1.05f, FLinearColor::White, nullptr, true);
+		const float Ty = 28 * U + (TouchMode() ? Canvas->SizeY * .11f : 0.f);   // under the touch buttons' top row
+		Panel(Cx - W * .5f - 18 * U, Ty, W + 36 * U, H + 16 * U, .55f);
+		Text(P->Toast, Cx, Ty + 8 * U, 1.05f, FLinearColor::White, nullptr, true);
 	}
 	const FString Hint = bDive || bAshore || bGun ? FString() : P->Hint();
 	if (!Hint.IsEmpty()) Text(Hint, Canvas->SizeX * .5f, Canvas->SizeY - 44 * U, .95f, Dim, nullptr, true);

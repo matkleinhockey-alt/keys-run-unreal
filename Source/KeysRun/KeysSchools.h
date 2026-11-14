@@ -57,6 +57,8 @@ public:
 	{
 		int32 Id = 0, Sp = 0, Lod = -1, Pool = -1, First = 0, NFish = 0;
 		double Len = .3, Radius = 1, Ball = 0, GoalT = 0, Step = 0, HuntT = 0, HuntLeft = 0;
+		double WanderYaw = 0, WanderTurn = 0;   // the main leader's own way: its heading, and how it is swinging
+		bool bWander = false;
 		FVector Home = FVector::ZeroVector, Goal = FVector::ZeroVector, HuntDir = FVector::ZeroVector;
 		double HomeTop = 0;
 		int64 Cell = 0;

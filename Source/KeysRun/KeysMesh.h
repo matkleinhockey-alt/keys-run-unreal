@@ -201,6 +201,9 @@ namespace KeysMesh
 	// swivel base are part of the hull (BuildBoat); the chair itself swivels, so it is built each frame by AKeysExtras:
 	// varnished teak seat, back and arms, the gimbal socket between the knees, the footrest bar, rod holders on the arms.
 	// Yaw 0 faces the bow (the chair faces aft at rest, Yaw PI). ChairGimbal is the rod butt's socket, boat frame.
+	// the open stretch of cockpit sole, boat meters along X: from the stern bench forward to the first seat, bar,
+	// leaning post or hardtop (a fighting chair stands in it: see FightChairBase)
+	void ClearSole(const KeysData::FBoatSpec& S, double& Lo, double& Hi);
 	bool HasFightChair(const KeysData::FBoatSpec& S);
 	FVector FightChairBase(const KeysData::FBoatSpec& S);   // the top of the swivel, boat-local meters
 	void BuildFightChairPedestal(FKeysMesh& M, const FVector& Base, double Sole);

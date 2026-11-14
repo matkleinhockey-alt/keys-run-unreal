@@ -20,7 +20,14 @@ class KEYSRUN_API AKeysHUD : public AHUD
 	GENERATED_BODY()
 
 public:
-	virtual void DrawHUD() override;
+	virtual void DrawHUD() override;   // KeysTouch.cpp: the game's HUD (DrawGame), then the touch controls on top
+
+	// Touch controls (KeysTouch.cpp): on iOS / Android, or with -KRTouch on the Mac (the mouse is one finger).
+	static bool TouchMode();
+	// -KRScript hooks: hold the on-screen control with this label (case-insensitive) until TouchRelease; drag the look pad
+	static void ScriptTouch(const FString& Label) { ScriptHold = Label; }
+	static void ScriptTouchRelease() { ScriptHold.Reset(); }
+	static void ScriptLook(float DX, float DY) { ScriptLookDelta += FVector2D(DX, DY); }
 	virtual void NotifyHitBoxClick(FName BoxName) override;
 	virtual void NotifyHitBoxBeginCursorOver(FName BoxName) override;
 
@@ -32,6 +39,21 @@ public:
 	void DrawHelmScreens(UCanvas* Into, AKeysBoatPawn* P, float W, float H);
 
 private:
+	void DrawGame();
+	float UiBoost() const;
+	// ---- touch controls (KeysTouch.cpp)
+	struct FTouchCtl { FString Label; FBox2D R; TArray<FKey> Keys; bool bStick = false; bool bBig = false; FLinearColor Tint = FLinearColor(1, 1, 1, 1); };
+	struct FFinger { int32 Ctl = -1; bool bHud = false; bool bLook = false; FVector2D Start = FVector2D::ZeroVector, Last = FVector2D::ZeroVector; };
+	void BuildTouch(AKeysBoatPawn* P, TArray<FTouchCtl>& Out);
+	void DrawTouch(AKeysBoatPawn* P);
+	void SendKey(const FKey& K, bool bDown);
+	TMap<int32, FFinger> Fingers;
+	TSet<FKey> TouchHeld;
+	FString StickFor;            // the stick's mode last frame: a new mode lets go of its keys
+	FVector2D StickKnob = FVector2D::ZeroVector;
+	static FString ScriptHold;
+	static FVector2D ScriptLookDelta;
+
 	void BuildChart();
 	void DrawMenu(AKeysBoatPawn* P);
 	void DrawControlsTable(float X, float Y, float W);
