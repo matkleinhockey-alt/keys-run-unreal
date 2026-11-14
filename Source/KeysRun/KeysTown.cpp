@@ -555,6 +555,7 @@ void AKeysTown::BuildFacade(const FLot& L, FTownBatch& S, FTownBatch& G)
 	S.SpanC(DL - .12, DR + .12, P + DoorH, P + DoorH + .14, FZ + .06, FZ - WallT, TrimC);
 
 	// windows (paint.ts: store fronts, barred, small, diner bands)
+	TArray<FVector> Panes;   // (left, right, sill height) of each pane, for the notice taped inside one
 	if (Lk.Windows != 2)
 	{
 		const bool bSmall = Lk.Windows == 4;
@@ -570,6 +571,7 @@ void AKeysTown::BuildFacade(const FLot& L, FTownBatch& S, FTownBatch& G)
 			for (int32 i = 0; i < N; i++)
 			{
 				const double A = L.U0 + Sp[0] + i * (PW + .5), B = A + PW, Y = P + Y0;
+				Panes.Add(FVector(A, B, Y));
 				// frame, glass (a lighter reflection streak), sill
 				S.SpanC(A - .08, B + .08, Y - .08, Y + PaneH + .08, F + .03, F, TrimC);
 				S.Facade(A, B, Y, Y + PaneH, F + .035, true, Hex(0x27414f));
@@ -608,6 +610,8 @@ void AKeysTown::BuildFacade(const FLot& L, FTownBatch& S, FTownBatch& G)
 	}
 	if (L.Style == EStyle::Casino)
 		AddSign(TEXT("CASINO"), (SA + SB) / 2, SY + BH * .2, -(F + .15), BH * .3, Hex(0x35e0ff), 0, false, BW * .5);
+	BuildNotices(L, Panes, DR, F, S);
+
 	// the open sign by the door, lit day and night
 	if (L.Style != EStyle::Club && L.Style != EStyle::Casino)
 	{
@@ -617,6 +621,84 @@ void AKeysTown::BuildFacade(const FLot& L, FTownBatch& S, FTownBatch& G)
 			S.SpanC(OU - .45, OU + .45, P + 1.75, P + 2.1, F + .06, F + .03, Hex(0x15171a));
 			G.Facade(OU - .38, OU + .38, P + 1.8, P + 2.05, F + .065, true, Hex(0xff3b30));
 		}
+	}
+}
+
+// ---------------------------------------------------------------- the small print (web entities/town/notices.ts)
+// A hand-lettered notice taped inside the first window past the door, and the hours plate by the door: the kind of thing
+// on a real Keys storefront, a little rueful. Nothing here is a brand or a real business.
+void AKeysTown::BuildNotices(const FLot& L, const TArray<FVector>& Panes, double DR, double F, FTownBatch& S)
+{
+	using namespace KeysTown;
+	auto PaperOf = [](EStyle St) -> TArray<const TCHAR*>
+	{
+		switch (St)
+		{
+		case EStyle::Tackle: return {TEXT("LIVE"), TEXT("SHRIMP"), TEXT("$14 / DOZ")};
+		case EStyle::Liquor: return {TEXT("LOTTO"), TEXT("JACKPOT"), TEXT("$41 MILLION")};
+		case EStyle::Bar: return {TEXT("NO SHIRT"), TEXT("NO SHOES"), TEXT("NO PROBLEM")};
+		case EStyle::Gifts: return {TEXT("SHELLS"), TEXT("3 for $10"), TEXT("DO NOT TOUCH"), TEXT("THE CONCH")};
+		case EStyle::Pawn: return {TEXT("WE BUY"), TEXT("GOLD"), TEXT("& YOUR OLD"), TEXT("BOAT")};
+		case EStyle::Laundromat: return {TEXT("OUT OF"), TEXT("ORDER"), TEXT("(THE DRYERS)")};
+		case EStyle::IceCream: return {TEXT("CASH ONLY"), TEXT("SORRY")};
+		case EStyle::Convenience: return {TEXT("ATM INSIDE"), TEXT("$3.50 FEE"), TEXT("(WE KNOW)")};
+		case EStyle::Dive: return {TEXT("AIR FILLS"), TEXT("$8"), TEXT("PARROT DOES"), TEXT("NOT BITE")};
+		case EStyle::Motel: return {TEXT("NO"), TEXT("VACANCY"), TEXT("(WE LIED)")};
+		case EStyle::Diner: return {TEXT("HELP"), TEXT("WANTED"), TEXT("ASK FOR DEBBIE")};
+		default: return {};
+		}
+	};
+	auto PlateOf = [](EStyle St) -> TArray<const TCHAR*>
+	{
+		switch (St)
+		{
+		case EStyle::Tackle: return {TEXT("OPEN 5AM"), TEXT("BAIT FRESH")};
+		case EStyle::Guns: return {TEXT("OPEN"), TEXT("10 - 6")};
+		case EStyle::Liquor: return {TEXT("OPEN"), TEXT("9AM - 2AM")};
+		case EStyle::Bar: return {TEXT("OPEN"), TEXT("11AM - 2AM"), TEXT("21+")};
+		case EStyle::Gifts: return {TEXT("OPEN"), TEXT("9 - 9")};
+		case EStyle::Pawn: return {TEXT("OPEN"), TEXT("MON - SAT")};
+		case EStyle::Laundromat: return {TEXT("24 HRS"), TEXT("WASH DRY FOLD")};
+		case EStyle::IceCream: return {TEXT("OPEN"), TEXT("NOON - DUSK")};
+		case EStyle::Convenience: return {TEXT("OPEN 24"), TEXT("HOURS")};
+		case EStyle::Dive: return {TEXT("OPEN"), TEXT("7 - 5")};
+		case EStyle::Motel: return {TEXT("OFFICE"), TEXT("RING BELL")};
+		case EStyle::Diner: return {TEXT("OPEN"), TEXT("6AM - 3PM")};
+		default: return {};
+		}
+	};
+	if (L.Style == EStyle::Club || L.Style == EStyle::Casino) return;
+	const FLinearColor Ink = Hex(0x0a1430);   // (a touch darker than the web's #1d2a4a: TextRender lettering reads lighter)
+	// the hours plate: engraved white on dark blue, a grey rim, just past the door frame at hand height
+	const TArray<const TCHAR*> Pl = PlateOf(L.Style);
+	if (Pl.Num() && DR + .5 < L.U1)
+	{
+		const double CU = DR + .32, CY = P + 1.5, HW = .17, HH = .085 + .025 * (Pl.Num() - 2);
+		S.SpanC(CU - HW - .015, CU + HW + .015, CY - HH - .015, CY + HH + .015, F + .07, F + .055, Hex(0xd9dde0));
+		S.Facade(CU - HW, CU + HW, CY - HH, CY + HH, F + .072, true, Hex(0x122a47));
+		const double Step = HH * 2 * .86 / Pl.Num();
+		for (int32 i = 0; i < Pl.Num(); i++)
+			AddSign(Pl[i], CU, CY + HH * .86 - Step * (i + .5), -(F + .075), i == 0 ? .052 : .036, Hex(0xf4f1e8), 0, false, HW * 1.8);
+	}
+	// the notice: the first pane to the right of the door (the one you walk past going in), else the last
+	const TArray<const TCHAR*> Tx = PaperOf(L.Style);
+	if (!Tx.Num() || !Panes.Num()) return;
+	const FVector* Win = nullptr;
+	for (const FVector& Pn : Panes) if (Pn.X > DR) { Win = &Pn; break; }
+	if (!Win) Win = &Panes.Last();
+	const double CU = Win->X + .32, CY = Win->Z + .3, HW = .21, HH = .24;   // low in the pane, clear of the open sign
+	// paper, with a fold across the middle and two strips of tape at the top corners
+	S.Facade(CU - HW, CU + HW, CY - HH, CY + HH, F + .045, true, Hex(0xf1ead4));
+	S.Facade(CU - HW, CU + HW, CY - .004, CY + .004, F + .046, true, Hex(0xd8cfb4));
+	S.Facade(CU - HW - .03, CU - HW + .06, CY + HH - .02, CY + HH + .015, F + .047, true, Hex(0xe6dcae));
+	S.Facade(CU + HW - .06, CU + HW + .03, CY + HH - .02, CY + HH + .015, F + .047, true, Hex(0xe6dcae));
+	const int32 N = Tx.Num();
+	const double Step = HH * 2 * .86 / N;
+	for (int32 i = 0; i < N; i++)
+	{
+		const FString Ln(Tx[i]);
+		const bool bBig = i == 0 || (N > 3 && i == 1) || Ln.StartsWith(TEXT("$")) || Ln.StartsWith(TEXT("NO ")) || Ln.StartsWith(TEXT("OUT")) || Ln.StartsWith(TEXT("WE ")) || Ln.StartsWith(TEXT("HELP"));
+		AddSign(Ln, CU, CY + HH * .86 - Step * (i + .5), -(F + .05), bBig ? .085 : .058, Ink, 0, false, HW * 1.8);
 	}
 }
 

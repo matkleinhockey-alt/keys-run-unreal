@@ -84,6 +84,7 @@ private:
 	void BuildPadEdges(FTownBatch& S);
 	void BuildLot(const KeysTown::FLot& L, FTownBatch& S, FTownBatch& G);
 	void BuildFacade(const KeysTown::FLot& L, FTownBatch& S, FTownBatch& G);
+	void BuildNotices(const KeysTown::FLot& L, const TArray<FVector>& Panes, double DR, double F, FTownBatch& S);
 	void BuildInteriors(FTownBatch& I, FTownBatch& G);
 	void BuildCasinoInterior(FTownBatch& I, FTownBatch& G);
 	void BuildProps(FTownBatch& S, FTownBatch& G);
