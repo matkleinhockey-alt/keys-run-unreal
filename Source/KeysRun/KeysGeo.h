@@ -118,7 +118,11 @@ namespace KeysGeo
 	double WaveHLod(double X, double Z, double T, double Amp, double MinLen);
 	double AmpFor(double D);
 	double AmpAt(double X, double Z);
-	double ChopScale(double Amp);   // how much of the wind sea reaches water of that Amp
+	double ChopScale(double Amp);
+	// waves breaking on a beach or reef edge: (extra height, foam) at a point of depth D. The crests follow the depth
+	// contours (they slow in shallow water and swing round parallel to the shore), steepen as they shoal and break at
+	// about 0.78 x the depth, leaving a band of white water rolling in behind; only where the bottom actually shelves.
+	FVector2D SurfAt(double X, double Z, double T, double D);   // how much of the wind sea reaches water of that Amp
 	double WaveH(double X, double Z, double T, double Amp, bool bWithWake = true);
 	FVector2D WaveSlope(double X, double Z, double T, double Amp);
 	// Interval: seconds since this boat's last EmitWake. Rings dropped more often are made weaker, so the wake's height

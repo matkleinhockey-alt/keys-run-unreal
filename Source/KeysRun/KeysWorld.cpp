@@ -657,7 +657,10 @@ void AKeysWorld::UpdateWater()
 			const FVector2D Tr = bNear ? TrailFrom(LiveTrails, TrailCells[Ck], X, Z) : FVector2D::ZeroVector;
 			// wave trains shorter than ~3 grid cells here would only alias on the coarse outer grid
 			const double MinLen = 2.6 * FMath::Max(WSp[i], WSp[j]);
-			const double Sea = WaveHLod(X, Z, T, Amp, MinLen);
+			const double D = DepthFast(X, Z);
+			// surf on the beaches and reef edges (near the camera, where the mesh can draw it)
+			const FVector2D Surf = bNear ? SurfAt(X, Z, T, D) : FVector2D::ZeroVector;
+			const double Sea = WaveHLod(X, Z, T, Amp, MinLen) + Surf.X;
 			// the prop wash knocks down the chop a little, so the trail reads as a smoother, glassier lane
 			// and right behind the motors the wash heaps up into a boiling white mound before it settles
 			double Boil = Tr.X > .6 ? FMath::Square((Tr.X - .6) / .4) * .32 : 0;
@@ -676,7 +679,6 @@ void AKeysWorld::UpdateWater()
 			// foam on breaking crests (whitecaps, with the wind), on the crests of fresh wakes, in the prop wash and along
 			// the beach, where it comes and goes with the swell. Vertex alpha carries the amount; the material breaks it up.
 			const double Crest = Sea / (Amp * 2.4 * Rms + .001);
-			const double D = DepthFast(X, Z);
 			// whitecaps: on the simulated sea, where crests have actually folded over (and linger a few seconds after);
 			// on the classic waves, on the tallest crests
 			double F = KeysOcean::Enabled()
@@ -686,6 +688,7 @@ void AKeysWorld::UpdateWater()
 			F = FMath::Max(F, SStep(.025, .16, Wk) * .92);
 			F = FMath::Max(F, Tr.X);
 			F = FMath::Max(F, SStep(.9, .25, D) * (.3 + .3 * FMath::Clamp(Crest + .5, 0.0, 1.0)));
+			F = FMath::Max(F, Surf.Y);
 			// UV0: x = how high on a crest (light glows through thin crests), y = aerated wash under the foam
 			WUV[K] = FVector2D(FMath::Clamp(Crest * .8 + Wk * .8, 0.0, 1.0), FMath::Clamp(Tr.Y, 0.0, 1.0));
 			// UV1: x = rain on the water here, y = whitecap cover (wind-streaked foam); UV2: x = how deep (0 flats .. 1 blue water)

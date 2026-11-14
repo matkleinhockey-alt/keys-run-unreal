@@ -841,6 +841,34 @@ namespace KeysGeo
 
 	double ChopScale(double Amp) { return ChopAmp(Amp); }
 
+	FVector2D SurfAt(double X, double Z, double T, double D)
+	{
+		if (D <= .03 || D > 5) return FVector2D::ZeroVector;
+		const double GX = (DepthFast(X + 1.5, Z) - DepthFast(X - 1.5, Z)) / 3, GZ = (DepthFast(X, Z + 1.5) - DepthFast(X, Z - 1.5)) / 3;
+		const double Slope = FMath::Sqrt(GX * GX + GZ * GZ);
+		// a beach face or a reef edge, not the endless flat flats (and nothing out past 5 m)
+		const double Gate = SS(.006, .03, Slope) * (1 - SS(3.5, 5.0, D));
+		if (Gate <= 0) return FVector2D::ZeroVector;
+		// the swell that reaches the shore (the reef and the keys take most of it), shoaling up (Green's law) until it breaks
+		const double H0 = .14 + .22 * SW;
+		const double Hs = H0 * FMath::Pow(4.0 / FMath::Max(D, .15), .25), Hb = .78 * D;
+		const double H = FMath::Min(Hs, Hb);
+		const double Bk = SS(.6, .95, Hs / Hb);   // how broken it is
+		// phase from the travel time to the shoreline on this slope (shallow-water speed sqrt(g d)), so the crests run
+		// along the depth contours and arrive square to the beach; a little wobble so the lines aren't ruler-straight
+		const double Om = 2 * PI / 7.5;
+		const double Tau = 2 * FMath::Sqrt(D) / (FMath::Max(Slope, .006) * FMath::Sqrt(9.81));
+		double Ph = Om * (Tau + T) + .7 * FMath::Sin(X * .043 + Z * .021) + .5 * FMath::Sin(Z * .057 - X * .017);
+		Ph += .55 * Bk * FMath::Sin(Ph);   // a breaking wave's face steepens and its back lengthens
+		const double C = .5 + .5 * FMath::Cos(Ph);
+		const double Prof = FMath::Pow(C, FMath::Lerp(1.5, 5.0, Bk));
+		const double Height = H * (Prof - .22) * Gate;
+		// white water: the curl at the crest as it breaks, and the bore of foam rolling in behind it
+		const double U = FMath::Frac(Ph / (2 * PI) + .02);
+		const double Foam = Gate * FMath::Min(1.0, Bk * 1.3) * FMath::Max(SS(.66, .97, C), .9 * FMath::Exp(-U * 2.6));
+		return FVector2D(Height, Foam);
+	}
+
 	double WaveHLod(double X, double Z, double T, double Amp, double MinLen)
 	{
 		if (!GLive.Num()) Reweight();

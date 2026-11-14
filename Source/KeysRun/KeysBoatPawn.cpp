@@ -686,6 +686,26 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd.StartsWith(TEXT("res="))) KeysGfx::SetResScale(FCString::Atoi(*Cmd.Mid(4)));
 		else if (Cmd.StartsWith(TEXT("fishcam"))) { FishCamT = -1; TriggerFishCam(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 0); }
+		else if (Cmd == TEXT("gobeach"))
+		{
+			// gobeach: the nearest shelving beach (where the surf breaks), the boat 25 m off it facing the shore
+			for (double R = 50; R < 4000; R += 25)
+			{
+				bool bDone = false;
+				for (int32 a = 0; a < 48 && !bDone; a++)
+				{
+					const double PX = X + FMath::Cos(a * PI / 24) * R, PZ = Z + FMath::Sin(a * PI / 24) * R, D = DepthAt(PX, PZ);
+					if (D < 1.6 || D > 2.6) continue;
+					const double GX = (DepthAt(PX + 1.5, PZ) - DepthAt(PX - 1.5, PZ)) / 3, GZ = (DepthAt(PX, PZ + 1.5) - DepthAt(PX, PZ - 1.5)) / 3;
+					const double Gl = FMath::Sqrt(GX * GX + GZ * GZ);
+					if (Gl < .04) continue;
+					X = PX + GX / Gl * 18; Z = PZ + GZ / Gl * 18; H = FMath::Atan2(GX, GZ); Speed = 0;
+					UE_LOG(LogTemp, Log, TEXT("KRScript gobeach -> %.0f, %.0f slope %.3f depth %.1f"), X, Z, Gl, DepthAt(X, Z));
+					bDone = true;
+				}
+				if (bDone) break;
+			}
+		}
 		else if (Cmd.StartsWith(TEXT("ocean="))) { KeysOcean::SetEnabled(Cmd.Mid(6) != TEXT("0")); KeysGeo::SnapSea(); }
 		else if (Cmd == TEXT("oceanstats")) { UE_LOG(LogTemp, Log, TEXT("KROcean%s"), *KeysOcean::Stats()); }
 		else if (Cmd == TEXT("sunset")) { if (AKeysWorld* Wd = World()) Wd->ToggleSunset(); }
