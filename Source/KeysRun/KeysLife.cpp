@@ -2091,7 +2091,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			{
 				const double Dd = LHyp(G.CX - DiverX, G.CZ - DiverZ);
 				const double K = LClamp((DiverSpeed - .5) / (2 - .5), 0, 1);
-				if (Dd < 1.6 + (FP.DiverR - 1.6) * K) { BestD = Dd; TX = DiverX; TZ = DiverZ; }
+				if (Dd < 1.6 + (FP.DiverR * .7 - 1.6) * K) { BestD = Dd; TX = DiverX; TZ = DiverZ; }   // (a little bolder than the web's: within a speargun's reach)
 			}
 			for (const FVector2D& Sp : Spooks)
 			{
@@ -2131,7 +2131,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 				}
 			}
 		}
-		if (G.AnchorKind && G.Flee <= 0)
+		if (G.AnchorKind && G.Flee <= 0 && G.Cur < .25)   // (while it is looking a diver over, the diver wins; it goes home after)
 		{
 			double AX0, AZ0;
 			if (AnchorPos(G, AX0, AZ0))
@@ -2143,6 +2143,30 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			}
 			else G.AnchorKind = 0;
 		}
+		// curious about a calm diver: reef fish come in to have a look and hang a few meters off, circling slowly, so
+		// there's something within a speargun's reach (bold ones closer, shy schools a bit further out). Finning hard,
+		// or a shaft past them, still scatters them (above).
+		if (bDiver && G.Flee <= 0 && !G.bChased && V->Kind != EKeysKind::Shark && V->Act != EKeysAct::Blow)
+		{
+			const double Dx = DiverX - G.CX, Dz = DiverZ - G.CZ, Dd = LHyp(Dx, Dz);
+			const FLifeFlee FP = LifeFleeParams(G.Type, V);
+			const double Stand = FP.DiverR <= 3 ? 2.6 : FP.DiverR <= 5 ? 3.4 : 4.0;
+			if (Dd < 35 && Dd > .1)
+			{
+				const double Calm = 1 - LClamp((DiverSpeed - .6) / 1.2, 0, 1);
+				const double ToH = FMath::Atan2(-Dx, -Dz);
+				const double Side = FMath::Fmod(G.Ph, 2.0) < 1 ? 1 : -1;
+				// closing in from outside the stand-off ring, then round it (tangent), easing out if it got too close
+				const double Rc = LClamp((Dd - Stand) / Stand, -1, 1);
+				const double Vx = Dx / Dd * Rc - Dz / Dd * Side * (1 - FMath::Abs(Rc) * .6), Vz = Dz / Dd * Rc + Dx / Dd * Side * (1 - FMath::Abs(Rc) * .6);
+				const double WantH = FMath::Atan2(-Vx, -Vz);
+				G.H = LAngLerp(G.H, Dd > Stand * 2 ? ToH : WantH, Dt * (.9 + 1.2 * Calm) * Calm);
+				if (Dd < Stand * 2) Sp *= .55;   // and slow right down while they look you over
+				G.Cur = FMath::Min(1.0, G.Cur + Dt * .3 * Calm * (Dd < 25 ? 1 : 0));
+			}
+			else G.Cur = FMath::Max(0.0, G.Cur - Dt * .2);
+		}
+		else G.Cur = FMath::Max(0.0, G.Cur - Dt * (G.Flee > 0 ? 1.0 : .2));
 		if (G.Glide > 0)
 		{
 			G.Glide -= Dt;
@@ -2181,6 +2205,8 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			else if (V->Level == 2) Y = Floor + .25 + (M.OY + 1) * .05;
 			else Y = LClamp(LLerp(Floor + .35, Surf - .45, .55 + M.OY * .2), Floor + .2, Surf - .35);
 			if (G.Dv > 0 && V->Level != 2) Y = LLerp(Y, FMath::Max(Floor + .5, Surf - FMath::Min(14.0, (Surf - Floor) * .85)), G.Dv);
+			// a fish looking the diver over comes to the diver's depth (bottom fish only rise a little off the floor)
+			if (G.Cur > 0) Y = LLerp(Y, LClamp(DiverY + M.OY * .6, Floor + .3, Surf - .4), G.Cur * (V->Level == 2 ? .35 : .85));
 			double Pitch = 0, Roll = 0;
 			if (V->Act != EKeysAct::None && V->Act != EKeysAct::Glide)
 			{
@@ -2478,9 +2504,9 @@ void AKeysLife::PredatorsNear(double X, double Z, double R, TArray<FVector4>& Ou
 }
 
 // ================================================================ diving
-void AKeysLife::SetDiver(bool bOn, double X, double Z, double RelSpeed)
+void AKeysLife::SetDiver(bool bOn, double X, double Z, double RelSpeed, double Y)
 {
-	bDiver = bOn; DiverX = X; DiverZ = Z; DiverSpeed = RelSpeed;
+	bDiver = bOn; DiverX = X; DiverZ = Z; DiverSpeed = RelSpeed; DiverY = Y;
 }
 
 void AKeysLife::SpookAt(double X, double Z)

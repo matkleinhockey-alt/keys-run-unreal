@@ -122,6 +122,7 @@ struct FKeysSchool
 	double CX = 0, CZ = 0, H = 0, Ph = 0, Turn = 0, Flee = 0, FleeH = 0, Glide = 0, KeepT = 0, FleeMul = 0;
 	bool bChased = false;
 	double DvT = -1, DvTarget = 0, Dv = 0;
+	double Cur = 0;   // 0..1: how much it has come in to look at the diver (draws it toward the diver's depth)
 	uint8 AnchorKind = 0;   // 0 none, 1 rig, 2 bird pile, 3 weedline, 4 a fixed spot (the diver's near-field schools)
 	double AnchorX = 0, AnchorZ = 0;
 	int64 NearCell = 0;   // the 18 m cell a near-field school belongs to (0 for none)
@@ -206,7 +207,7 @@ public:
 
 	// ---- diving (web game entities/fish: the diver as a threat, the near-field schools around a diver, spear targets)
 	// the diver is in the water at (X, Z), moving RelSpeed m/s through it; schools near it fill in and stand off
-	void SetDiver(bool bOn, double X, double Z, double RelSpeed);
+	void SetDiver(bool bOn, double X, double Z, double RelSpeed, double Y = -3);
 	// every catchable fish within R of a point, as a capsule the spear can hit
 	void SpearTargetsNear(double X, double Y, double Z, double R, TArray<KeysDive::FTarget>& Out) const;
 	// a fish was speared: it leaves its school
@@ -286,7 +287,7 @@ private:
 	double BaitX = 0, BaitZ = 0;
 	FKeysTunaStrike Pending;
 	bool bDiver = false;
-	double DiverX = 0, DiverZ = 0, DiverSpeed = 0;
+	double DiverX = 0, DiverZ = 0, DiverSpeed = 0, DiverY = -3;
 	TArray<FVector2D> Spooks;
 	TMap<int64, int32> NearCells;   // 18 m cell -> school id
 	double NearT = 0;

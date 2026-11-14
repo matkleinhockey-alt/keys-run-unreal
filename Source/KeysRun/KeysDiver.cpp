@@ -472,6 +472,7 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 				const KeysData::FSpecies* Sp = KeysData::Species(Target->Key);
 				const double SizeT = Sp ? DvClamp((Target->Weight - Sp->Min) / FMath::Max(1e-6, Sp->Max - Sp->Min), 0, 1) : .5;
 				Speared.Label = SizeT > .7 ? TEXT("Something heavy is on the spear") : SizeT > .35 ? TEXT("Solid fish on the spear") : TEXT("Fish on the spear");
+				UE_LOG(LogTemp, Log, TEXT("KRDive speared %s %.1f lb at %.1f m"), *Speared.Target.Key, Speared.Target.Weight, Hit.AtDist);
 				if (AKeysLife* L = AKeysLife::Get(this)) L->TakeSpeared(Target->Id);
 				// the fish on the line (speared-fish-visual.ts)
 				FKeysMesh M;
@@ -575,7 +576,7 @@ void AKeysDiver::Tick(float DeltaSeconds)
 			if (bDiving)
 			{
 				const FVector2D W = WaterVelocity(S.X, S.Y, S.Z, T, KeysSea::SeafloorHeightAt(S.X, S.Z));
-				L->SetDiver(true, S.X, S.Z, FVector2D(S.VX - W.X, S.VZ - W.Y).Size());
+				L->SetDiver(true, S.X, S.Z, FVector2D(S.VX - W.X, S.VZ - W.Y).Size(), S.Y);
 			}
 		}
 	}
