@@ -49,6 +49,13 @@ private:
 	struct FMark { double X, Z; bool bRed; int32 N; };
 	TArray<FMark> Marks;
 	TArray<FVector2D> Balls;
+	// the buoy models (Content/KeysRun/Props, made from generated models by Tools/propglb.py): when they load, the marks,
+	// mooring balls and lobster-trap floats use them instead of the primitive shapes
+	struct FPot { double X, Z, Yaw, Tilt, Ph; };
+	TArray<FPot> Pots;
+	bool bBuoyModels = false;
+	UStaticMesh* LoadProp(const TCHAR* Key);
+	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> PropMeshes;
 	double BobT = 0;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> BeamMID;
 	FVector LightPos = FVector::ZeroVector;   // Sombrero Key Light's lantern, game meters

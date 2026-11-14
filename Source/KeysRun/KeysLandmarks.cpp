@@ -14,6 +14,10 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
+#include "MeshDescription.h"
+#include "StaticMeshAttributes.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 // Everything here is built in game world coordinates: an FTownBatch with its component at the origin takes the three.js world
 // frame (x east, y up, z south) straight to Unreal meters.
@@ -440,6 +444,66 @@ void AKeysLandmarks::BuildEstates(FTownBatch& B)
 	}
 }
 
+// ---------------------------------------------------------------- a prop model (KRF1, one lod: unit height, base at 0, game axes)
+UStaticMesh* AKeysLandmarks::LoadProp(const TCHAR* Key)
+{
+	TArray<uint8> B;
+	const FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Props") / (FString(Key) + TEXT(".krfish"));
+	if (!FFileHelper::LoadFileToArray(B, *Path) || B.Num() < 16 || FMemory::Memcmp(B.GetData(), "KRF1", 4)) return nullptr;
+	uint32 NV, NT;
+	FMemory::Memcpy(&NV, B.GetData() + 8, 4); FMemory::Memcpy(&NT, B.GetData() + 12, 4);
+	const int64 VBytes = int64(NV) * 28, TBytes = int64(NT) * 12;
+	if (16 + VBytes + TBytes > B.Num()) return nullptr;
+	TArray<FVector> P, N; TArray<FLinearColor> Col;
+	for (uint32 i = 0; i < NV; i++)
+	{
+		const uint8* R = B.GetData() + 16 + i * 28;
+		float F[6]; FMemory::Memcpy(F, R, 24);
+		P.Add(FVector(F[0], F[2], F[1]) * 100.0);   // game (x, y up, z) -> Unreal (x, z, y), centimetres
+		N.Add(FVector(F[3], F[5], F[4]));
+		Col.Add(FLinearColor(FColor(R[24], R[25], R[26], 255)));
+	}
+	TArray<int32> T; T.SetNumUninitialized(NT * 3);
+	FMemory::Memcpy(T.GetData(), B.GetData() + 16 + VBytes, TBytes);
+	FMeshDescription MD;
+	FStaticMeshAttributes Attr(MD);
+	Attr.Register();
+	TVertexAttributesRef<FVector3f> Pos = Attr.GetVertexPositions();
+	TVertexInstanceAttributesRef<FVector3f> Nrm = Attr.GetVertexInstanceNormals();
+	TVertexInstanceAttributesRef<FVector4f> VC = Attr.GetVertexInstanceColors();
+	TVertexInstanceAttributesRef<FVector2f> UVs = Attr.GetVertexInstanceUVs();
+	UVs.SetNumChannels(2);
+	const FPolygonGroupID Grp = MD.CreatePolygonGroup();
+	Attr.GetPolygonGroupMaterialSlotNames()[Grp] = FName(TEXT("Mat"));
+	TArray<FVertexInstanceID> Inst; Inst.SetNum(P.Num());
+	for (int32 i = 0; i < P.Num(); i++)
+	{
+		const FVertexID V = MD.CreateVertex();
+		Pos[V] = FVector3f(P[i]);
+		const FVertexInstanceID I = MD.CreateVertexInstance(V);
+		Nrm[I] = FVector3f(N[i]);
+		VC[I] = FVector4f(Col[i].R, Col[i].G, Col[i].B, 1);
+		UVs.Set(I, 0, FVector2f::ZeroVector); UVs.Set(I, 1, FVector2f::ZeroVector);
+		Inst[i] = I;
+	}
+	for (int32 i = 0; i + 2 < T.Num(); i += 3)
+	{
+		const int32 A = T[i], Bb = T[i + 1], Cc = T[i + 2];
+		if (A < 0 || Bb < 0 || Cc < 0 || A >= P.Num() || Bb >= P.Num() || Cc >= P.Num()) continue;
+		const FVector Fn = FVector::CrossProduct(P[Bb] - P[A], P[Cc] - P[A]);
+		const bool bFlip = FVector::DotProduct(Fn, N[A] + N[Bb] + N[Cc]) > 0;
+		MD.CreateTriangle(Grp, {Inst[A], Inst[bFlip ? Cc : Bb], Inst[bFlip ? Bb : Cc]});
+	}
+	UStaticMesh* SM = NewObject<UStaticMesh>(this, *FString::Printf(TEXT("Prop_%s"), Key));
+	SM->GetStaticMaterials().Add(FStaticMaterial(AKeysWorld::VertexColorMaterial(), FName(TEXT("Mat"))));
+	UStaticMesh::FBuildMeshDescriptionsParams Bp;
+	Bp.bFastBuild = true; Bp.bMarkPackageDirty = false; Bp.bBuildSimpleCollision = false;
+	SM->BuildFromMeshDescriptions({&MD}, Bp);
+	PropMeshes.Add(SM);
+	UE_LOG(LogTemp, Log, TEXT("KRProps: %s, %u verts, %u tris"), Key, NV, NT);
+	return SM;
+}
+
 // ---------------------------------------------------------------- channel marks and mooring balls (channel-marks.ts, channel-buoys.ts, landmarks.ts)
 void AKeysLandmarks::BuildBuoys()
 {
@@ -483,6 +547,30 @@ void AKeysLandmarks::BuildBuoys()
 	int32 Bi = 0;
 	for (double X = -3900; X < 3900; X += 260, Bi++) Balls.Add(FVector2D(X + (Hc(Bi, 1) - .5) * 60, KeysGeo::ChainZ(X) + FMath::Lerp(1360.0, 1440.0, Hc(Bi, 2))));
 
+	// lobster-trap floats: lines of them on the shallow banks either side of the keys, a float every 25-35 m, each
+	// line a different fisherman's (the Keys is thick with them from August to March)
+	{
+		FRandomStream R(0x10b5);
+		for (int32 L = 0; L < 70; L++)
+		{
+			const double X0 = R.FRandRange(-3800, 3800);
+			const double Off = R.FRand() < .6 ? R.FRandRange(320, 1250) : -R.FRandRange(380, 1500);
+			const double Dir = R.FRandRange(0, 2 * PI), Step = R.FRandRange(25, 35);
+			double X = X0, Z = KeysGeo::ChainZ(X0) + Off;
+			const double Tilt = R.FRandRange(6, 22);
+			for (int32 k = 0; k < 12; k++, X += FMath::Cos(Dir) * Step, Z += FMath::Sin(Dir) * Step)
+			{
+				const double D = KeysGeo::DepthAt(X, Z);
+				if (D < 2.2 || D > 14 || KeysGeo::LandH(X, Z) > -.5) continue;
+				bool bClear = true;
+				for (const FMark& K : Marks) if (FMath::Square(K.X - X) + FMath::Square(K.Z - Z) < 60 * 60) { bClear = false; break; }
+				if (bClear) Pots.Add({X, Z, R.FRandRange(0, 360), Tilt + R.FRandRange(-5, 5), R.FRandRange(0, 6.3)});
+			}
+		}
+	}
+	UStaticMesh* PRed = LoadProp(TEXT("buoy_red")), *PGreen = LoadProp(TEXT("buoy_green")), *PBall = LoadProp(TEXT("buoy_ball")), *PPot = LoadProp(TEXT("buoy_lobster"));
+	bBuoyModels = PRed && PGreen && PBall && PPot;
+
 	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
 	UStaticMesh* Sph = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -503,6 +591,41 @@ void AKeysLandmarks::BuildBuoys()
 		BuoyISMs.Add(I);
 		return I;
 	};
+	if (bBuoyModels)
+	{
+		// the models carry their own colours: same slots as the primitives (red, -, green, -, -, ball) plus the floats
+		auto MakeM = [&](UStaticMesh* Mesh)
+		{
+			UInstancedStaticMeshComponent* I = NewObject<UInstancedStaticMeshComponent>(this);
+			I->SetStaticMesh(Mesh);
+			I->SetupAttachment(Root);
+			I->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			I->SetMaterial(0, AKeysWorld::VertexColorMaterial());
+			I->RegisterComponent();
+			BuoyISMs.Add(I);
+			return I;
+		};
+		UInstancedStaticMeshComponent* RedM = MakeM(PRed);
+		MakeM(PRed);
+		UInstancedStaticMeshComponent* GreenM = MakeM(PGreen);
+		MakeM(PRed); MakeM(PRed);
+		UInstancedStaticMeshComponent* BallM = MakeM(PBall);
+		UInstancedStaticMeshComponent* PotM = MakeM(PPot);
+		PotM->SetCullDistances(0, 90000);   // a float is a speck past ~900 m
+		for (const FMark& K : Marks) (K.bRed ? RedM : GreenM)->AddInstance(FTransform::Identity);
+		for (int32 i = 0; i < Balls.Num(); i++) BallM->AddInstance(FTransform::Identity);
+		for (const FPot& Pt : Pots)   // placed at rest (only the ones near the camera are moved after)
+		{
+			const FQuat Lean = FRotator(Pt.Tilt, Pt.Yaw, 0).Quaternion();
+			PotM->AddInstance(FTransform(Lean, KeysGeo::ToUE(Pt.X, 0, Pt.Z) + Lean.RotateVector(FVector(0, 0, -.38 * 80)), FVector(.8)));
+		}
+		UE_LOG(LogTemp, Log, TEXT("KRProps: %d channel marks, %d mooring balls, %d trap floats"), Marks.Num(), Balls.Num(), Pots.Num());
+		for (int32 i = 0; i < FMath::Min(4, Pots.Num()); i++) UE_LOG(LogTemp, Log, TEXT("KRProps float %d at %.0f, %.0f"), i, Pots[i].X, Pots[i].Z);
+		if (Marks.Num()) UE_LOG(LogTemp, Log, TEXT("KRProps mark 0 at %.0f, %.0f (%s)"), Marks[0].X, Marks[0].Z, Marks[0].bRed ? TEXT("red") : TEXT("green"));
+		BobT = -1;
+		Tick(0);
+		return;
+	}
 	UInstancedStaticMeshComponent* RedBody = Make(Cyl, Hex(0xb8322a), .6);
 	UInstancedStaticMeshComponent* RedTop = Make(Cone, Hex(0xb8322a), .6);
 	UInstancedStaticMeshComponent* GreenBody = Make(Cyl, Hex(0x1f7a46), .6);
@@ -551,6 +674,49 @@ void AKeysLandmarks::Tick(float DeltaSeconds)
 	APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(this, 0);
 	const FVector CamP = Cam ? Cam->GetCameraLocation() / 100 : FVector::ZeroVector;
 	int32 RI = 0, RT = 0, GI = 0, MI = 0;
+	if (bBuoyModels && BuoyISMs.Num() >= 7)
+	{
+		// riding the swell and heeling off the slope, the real heights: a red nun 3 m, a green can 2.4 m, a mooring
+		// ball 0.95 m and a trap float 0.8 m, each sunk to its waterline (the green weed line on the models)
+		auto Ride = [&](double X, double Z, double& Y, FQuat& Q, double Heel)
+		{
+			const double Amp = KeysGeo::AmpAt(X, Z);
+			Y = KeysGeo::WaveH(X, Z, T, Amp, false);
+			const double SX = (KeysGeo::WaveH(X + 1.5, Z, T, Amp, false) - KeysGeo::WaveH(X - 1.5, Z, T, Amp, false)) / 3;
+			const double SZ = (KeysGeo::WaveH(X, Z + 1.5, T, Amp, false) - KeysGeo::WaveH(X, Z - 1.5, T, Amp, false)) / 3;
+			Q = FRotator(FMath::RadiansToDegrees(FMath::Atan(SX)) * Heel, 0, -FMath::RadiansToDegrees(FMath::Atan(SZ)) * Heel).Quaternion();
+		};
+		for (int32 k = 0; k < Marks.Num(); k++)
+		{
+			const FMark& K = Marks[k];
+			const bool bNear = FMath::Square(K.X - CamP.X) + FMath::Square(K.Z - CamP.Y) < 1500.0 * 1500.0;
+			double Y = 0; FQuat Q = FQuat::Identity;
+			if (bNear) Ride(K.X, K.Z, Y, Q, .8);
+			const double Hm = K.bRed ? 3.0 : 2.4, Sink = K.bRed ? .2 : .22;
+			const FQuat Yaw = FRotator(0, K.N * 47.0, 0).Quaternion();
+			const FVector Base = KeysGeo::ToUE(K.X, Y, K.Z) + Q.RotateVector(FVector(0, 0, -Sink * Hm * 100));
+			(K.bRed ? BuoyISMs[0] : BuoyISMs[2])->UpdateInstanceTransform(K.bRed ? RI++ : GI++, FTransform(Q * Yaw, Base, FVector(Hm)), true, false, true);
+		}
+		for (int32 i = 0; i < Balls.Num(); i++)
+		{
+			double Y; FQuat Q;
+			Ride(Balls[i].X, Balls[i].Y, Y, Q, .5);
+			BuoyISMs[5]->UpdateInstanceTransform(i, FTransform(Q, KeysGeo::ToUE(Balls[i].X, Y - .95 * .32, Balls[i].Y), FVector(.95)), true, false, true);
+		}
+		for (int32 i = 0; i < Pots.Num(); i++)
+		{
+			const FPot& Pt = Pots[i];
+			if (FMath::Square(Pt.X - CamP.X) + FMath::Square(Pt.Z - CamP.Y) > 900.0 * 900.0) continue;   // only the near ones bob
+			double Y; FQuat Q;
+			Ride(Pt.X, Pt.Z, Y, Q, 1.0);
+			// leaning down-current on its line, and nodding as the swell passes
+			const FQuat Lean = FRotator(Pt.Tilt + 6 * FMath::Sin(T * 1.3 + Pt.Ph), Pt.Yaw, 0).Quaternion();
+			BuoyISMs[6]->UpdateInstanceTransform(i, FTransform(Q * Lean, KeysGeo::ToUE(Pt.X, Y, Pt.Z) + (Q * Lean).RotateVector(FVector(0, 0, -.38 * 80)), FVector(.8)), true, false, true);
+		}
+		BobT = 1.0 / 20;
+		for (UInstancedStaticMeshComponent* I : BuoyISMs) I->MarkRenderStateDirty();
+		return;
+	}
 	for (int32 k = 0; k < Marks.Num(); k++)
 	{
 		const FMark& K = Marks[k];
