@@ -1,7 +1,6 @@
 // The helm's instrument panel. Every boat's dash carries two big flush-mounted screens (the chartplotter and the fish
-// finder, the same pages G puts over the view), a big round tachometer per engine with the speedometer and a compass
-// card beside them, a small trim gauge per engine and fuel, water temperature, oil pressure and volts gauges, all in
-// black bezels with chrome rings; and a throttle binnacle whose levers follow the throttle.
+// finder, the same pages G puts over the view) over three gauges, fuel, trim and engine temperature, in black bezels
+// with chrome rings; and a throttle binnacle whose levers follow the throttle.
 //
 // The fixed parts (the pod, the panel, the bezels, the rings, the binnacle) are built with the hull (KeysMesh). The faces
 // are flat discs and screens in their own mesh, UV-mapped onto two canvas render targets the pawn draws into: the gauges
@@ -40,12 +39,13 @@ namespace
 	{
 		switch (Kind)
 		{
-		case KeysMesh::DashSpeed: X = 0; Y = 0; Size = BigCell; return;
-		case KeysMesh::DashTach: X = (1 + Index) * BigCell; Y = 0; Size = BigCell; return;
-		case KeysMesh::DashCompass: X = 7 * BigCell; Y = 0; Size = BigCell; return;
-		case KeysMesh::DashTrim: X = Index * SmallCell; break;
-		case KeysMesh::DashFuel: X = 6 * SmallCell; break;
-		case KeysMesh::DashTemp: X = 7 * SmallCell; break;
+		// the three on the dash now (fuel, trim, engine temp) get big cells; the rest stay mapped for the test views
+		case KeysMesh::DashFuel: X = 0; Y = 0; Size = BigCell; return;
+		case KeysMesh::DashTrim: X = BigCell; Y = 0; Size = BigCell; return;
+		case KeysMesh::DashTemp: X = 2 * BigCell; Y = 0; Size = BigCell; return;
+		case KeysMesh::DashSpeed: X = 3 * BigCell; Y = 0; Size = BigCell; return;
+		case KeysMesh::DashTach: X = 0; break;
+		case KeysMesh::DashCompass: X = 4 * BigCell; Y = 0; Size = BigCell; return;
 		case KeysMesh::DashOil: X = 8 * SmallCell; break;
 		default: X = 9 * SmallCell; break;
 		}
@@ -68,14 +68,14 @@ namespace KeysMesh
 		const double Mg = .02, Gap = .014, Bz = D.Bezel;
 		// screens: 16" on the centre consoles, 19" on the Freeman, 21" on the Midnight (16:9 glass)
 		const double SW = bMid ? .47 : bFree ? .43 : .355, SH = SW * 9 / 16;
-		const double R1 = bBig ? .058 : .052, R2 = bBig ? .036 : .033;
+		const double R1 = bBig ? .058 : .052;
 		D.Levers = E == 1 ? 1 : 2;
 		D.Ux = FVector(0, 1, 0);
 		D.Uy = FVector(Sn, 0, Cs);
 		D.N = FVector(-Cs, 0, Sn);
 		const double ScreensW = 2 * (SW + 2 * Bz) + Gap;
 		D.W = bMid ? ScreensW + 2 * Mg + .03 : FMath::Max(ScreensW + 2 * Mg, B.ConW * .82);
-		D.H = Mg + 2.4 * R2 + Gap + 2.4 * R1 + Gap + SH + 2 * Bz + Mg;
+		D.H = Mg + 2.4 * R1 * 1.15 + Gap + SH + 2 * Bz + Mg;
 		// the binnacle stands to starboard of the wheel
 		const double Yb = bMid ? .66 : B.ConW * .3;
 		if (bMid)
@@ -95,7 +95,7 @@ namespace KeysMesh
 			D.Pivot = FVector(CA + .05, Yb, D.TopZ + .075);
 		}
 		// the screens across the top: the chart to port, the sonar to starboard
-		const double VS = Mg + 2.4 * R2 + Gap + 2.4 * R1 + Gap + Bz + SH * .5;
+		const double VS = Mg + 2.4 * R1 * 1.15 + Gap + Bz + SH * .5;
 		for (int32 k = 0; k < 2; k++)
 		{
 			FDashScreen Sc;
@@ -124,14 +124,8 @@ namespace KeysMesh
 				D.Gauges.Add(G);
 			}
 		};
-		TArray<TPair<uint8, int32>> Big, Small;
-		Big.Add({DashSpeed, 0});
-		for (int32 e = 0; e < E; e++) Big.Add({DashTach, e});
-		Big.Add({DashCompass, 0});
-		for (int32 e = 0; e < E; e++) Small.Add({DashTrim, e});
-		for (const uint8 K : {DashFuel, DashTemp, DashOil, DashVolt}) Small.Add({K, 0});
-		Row(Big, R1, Mg + 2.4 * R2 + Gap + 1.2 * R1);
-		Row(Small, R2, Mg + 1.2 * R2);
+		// just three gauges under the screens, and roomy: fuel, trim, engine temperature
+		Row({{DashFuel, 0}, {DashTrim, 0}, {DashTemp, 0}}, R1 * 1.15, Mg + 1.2 * R1 * 1.15);
 		// the driver stands at the wheel, his back to the leaning post or the helm seats, and looks down at the panel
 		const double EX = CA - .5;
 		D.Eye = FVector(EX, 0, SoleAt(S, EX) + 1.66);
@@ -522,14 +516,6 @@ namespace
 				P.Text(Label(Hi), Ct + FDashPaint::Dir(A1) * R * .52 + FVector2D(0, R * .1), R * .25, Mark);
 				if (In.Kind == DashFuel) P.Text(Label(TEXT("1/2")), Ct + FVector2D(0, -R * .5), R * .15, Dim);
 				P.Text(Label(Title), Ct + FVector2D(0, R * .44), R * .21, Mark);
-				if (In.Kind == DashTrim && In.Engines > 1)
-				{
-					static const TCHAR* Two[2] = {TEXT("P"), TEXT("S")};
-					static const TCHAR* Three[3] = {TEXT("P"), TEXT("C"), TEXT("S")};
-					static const TCHAR* Many[6] = {TEXT("1"), TEXT("2"), TEXT("3"), TEXT("4"), TEXT("5"), TEXT("6")};
-					const TCHAR* L = In.Engines == 2 ? Two[In.Index] : In.Engines == 3 ? Three[In.Index] : Many[FMath::Clamp(In.Index, 0, 5)];
-					P.Text(Label(L), Ct + FVector2D(0, R * .66), R * .15, Dim);
-				}
 				break;
 			}
 			}
@@ -724,7 +710,7 @@ void AKeysBoatPawn::UpdateDash(double Dt, double T)
 					case KeysMesh::DashTach: In.Value = TachRpm > 1 ? (TachRpm + (Gg.Index - (E - 1) * .5) * 15 + Wob * (10 + TachRpm * .004)) / 7000 : 0; break;
 					case KeysMesh::DashSpeed: In.Value = KnotsNow() / SpeedMax; break;
 					case KeysMesh::DashCompass: In.Value = -H * 180 / PI; break;
-					case KeysMesh::DashTrim: In.Value = TrimV + Gg.Index * .006 - (E - 1) * .003; break;
+					case KeysMesh::DashTrim: In.Value = TrimV; break;
 					case KeysMesh::DashFuel: In.Value = FuelK; break;
 					case KeysMesh::DashTemp: In.Value = WaterK + Wob * .003; break;
 					case KeysMesh::DashOil: In.Value = bOn ? .42 + .3 * FMath::Min(1.0, TachRpm / 6000) + Wob * .004 : 0; break;

@@ -505,7 +505,7 @@ void AKeysBoatPawn::StartRun(bool bDemo)
 	}
 	bRunning = true;
 	Menu = EMenu::None;
-	ShowToast(FString::Printf(TEXT("Welcome to Marathon. The %s %s is fueled up in Boot Key Harbor. Esc for the menu."), *Spec().Brand, *Spec().Name), 5);
+	ShowToast(FString::Printf(TEXT("Welcome to Marathon. The %s %s is fueled up and out in the Gulf Stream off Marathon. Esc for the menu."), *Spec().Brand, *Spec().Name), 5);
 }
 
 // -KRScript="8:shot;9:settings;11:shot;14:quit" runs menu actions and screenshots on a timer (seconds of game time),
