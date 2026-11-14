@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "KeysWrecks.h"
 #include "KeysOcean.h"
 #include "KeysSchools.h"
 #include "KeysWeather.h"
@@ -187,10 +188,27 @@ void AKeysBoatPawn::Rebuild()
 
 void AKeysBoatPawn::PlaceAtSpawn()
 {
-	// open water in Boot Key Harbor, clear of the marinas
+	// the nearest deep blue water to Boot Key (40 m and more, off the reef), pointed back toward the Keys
 	X = -1150;
 	Z = ChainZ(-1150) + 305;
 	H = PI / 2;
+	{
+		const double HX = X, HZ = Z;
+		bool bFound = false;
+		for (double R = 200; R < 8000 && !bFound; R += 40)
+		{
+			const int32 N = FMath::Max(8, int32(R / 15));
+			for (int32 k = 0; k < N && !bFound; k++)
+			{
+				const double A = k * 2 * PI / N, PX = HX + FMath::Cos(A) * R, PZ = HZ + FMath::Sin(A) * R;
+				if (DepthAt(PX, PZ) < 40 || DepthAt(PX + 60, PZ) < 40 || DepthAt(PX - 60, PZ) < 40 || DepthAt(PX, PZ + 60) < 40 || DepthAt(PX, PZ - 60) < 40) continue;
+				if (KeysWrecks::Near(PX, PZ, 250)) continue;   // not on top of a wreck: that would find it for free
+				X = PX; Z = PZ; bFound = true;
+				H = FMath::Atan2(-(HX - PX), -(HZ - PZ));   // KeysKit::HeadingOf
+			}
+		}
+		UE_LOG(LogTemp, Log, TEXT("KRSpawn %.0f, %.0f depth %.0f found %d"), X, Z, DepthAt(X, Z), bFound ? 1 : 0);
+	}
 	Y = VY = Pitch = Roll = VP = VR = DVX = DVZ = Speed = Thr = Steer = 0;
 	bAir = false;
 	bCamInit = false;
