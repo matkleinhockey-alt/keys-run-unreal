@@ -3,6 +3,7 @@
 #include "KeysSea.h"
 #include "KeysMesh.h"
 #include "KeysWorld.h"
+#include "KeysLandmarks.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "StaticMeshAttributes.h"
@@ -149,7 +150,10 @@ namespace
 	void PlaceSpecies(int32 S, int32 CX, int32 CZ, const TArray<AKeysReef::FInst>* Obstacles, TArray<AKeysReef::FInst>& Out)
 	{
 		const double X0 = CX * ChunkSize, Z0 = CZ * ChunkSize;
-		for (int32 Slot = 0; Slot < Sp[S].Candidates; Slot++)
+		// the species the Artlist models now cover grow less of the old hand-built kind
+		const bool bModelled = S == Elkhorn || S == Staghorn || S == Brain || S == Star || S == Barrel || S == SeaFan || S == SeaPlume;
+		const int32 NCand = bModelled ? Sp[S].Candidates * 2 / 5 : Sp[S].Candidates;
+		for (int32 Slot = 0; Slot < NCand; Slot++)
 		{
 			const double X = X0 + H(CX, CZ, Fold(S, OFFSET_X, Slot)) * ChunkSize;
 			const double Z = Z0 + H(CX, CZ, Fold(S, OFFSET_Z, Slot)) * ChunkSize;
@@ -481,6 +485,123 @@ namespace
 	bool IsCard(int32 S, int32 Lod) { return S == SeaFan || S == SeaPlume || S == Seagrass || (Lod == 2 && (S == Elkhorn || S == Staghorn)); }
 	float CardKind(int32 S) { return S == Seagrass ? 0.f : S == SeaFan ? 1.f : 2.f; }
 
+	// ---- the modelled species: real Florida Keys corals, gorgonians, sponges and algae (Artlist 3D models baked to
+	// Content/KeysRun/Props/reef_<key>.krfish, plus a light _lo copy for distance), zoned by depth the way the reef
+	// really is: elkhorn on the crest, staghorn and pillar just below, the big brain and boulder star heads through the
+	// middle depths with the fans and rods, then the plate corals, black coral and the big sponges down the deep reef.
+	// Kind: 0 the reef and its patch reefs, 1 the deep reef (hard bottom seaward of the reef line, down the slope),
+	// 2 hard bottom anywhere (the algae beds), 3 the seagrass flats.
+	struct FModelSp { const TCHAR* Key; double D[4]; double H0, H1; int32 Kind; int32 Candidates; double Footprint; };
+	const FModelSp MSp[] = {
+		{TEXT("elkhorn"),      {.6, 1.5, 5, 8},      1.4, 2.4, 0, 30, 2.2},
+		{TEXT("staghorn"),     {2, 4, 12, 16},       .9, 1.5, 0, 34, 1.6},
+		{TEXT("pillar"),       {2.5, 4, 14, 20},     1.2, 2.4, 0, 8, 1.0},
+		{TEXT("brain"),        {3, 6, 25, 35},       .7, 1.5, 0, 26, 1.8},
+		{TEXT("star"),         {4, 8, 30, 42},       1.0, 2.2, 0, 26, 2.2},
+		{TEXT("finger"),       {1, 2, 10, 15},       .3, .6, 0, 30, .7},
+		{TEXT("seafan"),       {1.5, 3, 18, 28},     .8, 1.6, 0, 36, .5},
+		{TEXT("searod"),       {1.5, 3, 22, 32},     .8, 1.6, 0, 36, .7},
+		{TEXT("lettuce"),      {12, 20, 50, 70},     .5, 1.1, 1, 60, 1.4},
+		{TEXT("blackcoral"),   {25, 35, 80, 100},    1.4, 2.8, 1, 34, 1.2},
+		{TEXT("barrel"),       {10, 18, 60, 90},     1.0, 2.0, 1, 36, 1.2},
+		{TEXT("azurevase"),    {8, 14, 40, 60},      .4, .8, 1, 44, .4},
+		{TEXT("elephantear"),  {15, 22, 60, 90},     .9, 1.8, 1, 30, 1.2},
+		{TEXT("algae"),        {.4, 1, 18, 26},      .18, .35, 2, 170, .4},
+		{TEXT("sargassum"),    {.5, 1.2, 10, 16},    .5, 1.1, 2, 110, .6},
+		{TEXT("turtlegrass"),  {.4, .8, 5, 8},       .25, .45, 3, 140, .5},
+	};
+	constexpr int32 NumModelSp = UE_ARRAY_COUNT(MSp);
+	constexpr int32 ModelSaltBase = 30000000;
+
+	// hard bottom vs sand away from the reef proper: big soft patches, so the deep reef and the algae grow in beds
+	double HardBottom(double X, double Z, double Freq, double Seed)
+	{
+		const double N = FMath::Sin(X * Freq + Seed) * FMath::Cos(Z * Freq * 1.3 - Seed * .7) * .5
+			+ FMath::Sin(X * Freq * 2.7 - Z * Freq * 1.9 + Seed * 3.1) * .35 + FMath::Sin(Z * Freq * 4.3 + X * Freq * .6) * .15;
+		return RSmooth(N, -.15, .3);
+	}
+
+	double ModelSuitability(int32 M, double X, double Z, int32 CX, int32 CZ)
+	{
+		const FModelSp& S = MSp[M];
+		const double D = DepthFast(X, Z);
+		const double DepthM = Trapezoid(D, S.D);
+		if (DepthM <= 0) return 0;
+		const double DZ = Z - ChainZ(X);
+		const EZ Zone = ReefZone(D, DZ);
+		const double Patch = PatchFactor(X, DZ);
+		switch (S.Kind)
+		{
+		case 0:
+		{
+			const double Micro = Zone == EZ::Hawk && H(CX, CZ, 20000001) < MicroPatchP ? 1 : 0;
+			// the reef line, its patch reefs, and on down the outer slope to where the deep reef takes over
+			const double Slope = (DZ > 1250 && D >= 45) ? HardBottom(X, Z, .011, 1.7) : 0;
+			const double Gate = Zone == EZ::Reef ? 1 : FMath::Max3(Patch, Micro, Slope);
+			if (Gate <= 0) return 0;
+			const double Sand = SandChannel(X, DZ);
+			if (Sand <= 0) return 0;
+			double T;
+			const int32 Site = DiveSite(X, DZ, T);
+			return RClamp(DepthM * Gate * Sand * (Site ? 1 + .3 * T : 1), 0, 1);
+		}
+		case 1:
+			// seaward of the reef line, ledges and hard bottom down the slope and out under the Gulf Stream
+			if (DZ < 900) return 0;
+			return DepthM * HardBottom(X, Z, .009, 4.2) * (Zone == EZ::Reef ? 1 : .8);
+		case 2:
+			// algae on the hard bottom of the flats, Hawk Channel and the back reef; not on the coral itself
+			if (Zone == EZ::Reef && Patch < .15) return DepthM * .25;
+			return DepthM * FMath::Max(.2, HardBottom(X, Z, .017, 7.9));
+		default:
+			// turtle grass carpets the shallow sand off the reef
+			if (Zone == EZ::Reef || Patch > .15) return 0;
+			return DepthM * (1 - .6 * HardBottom(X, Z, .017, 7.9));
+		}
+	}
+
+	void PlaceModel(int32 M, int32 CX, int32 CZ, const TArray<AKeysReef::FInst>& Obstacles, TArray<AKeysReef::FInst>& Out)
+	{
+		const FModelSp& S = MSp[M];
+		const double X0 = CX * ChunkSize, Z0 = CZ * ChunkSize;
+		const int32 Base = ModelSaltBase + M * 100000;
+		auto Hs = [&](int32 Attr, int32 Slot) { return H(CX, CZ, Base + Attr * 4000 + Slot); };
+		const int32 Start = Out.Num();
+		for (int32 Slot = 0; Slot < S.Candidates; Slot++)
+		{
+			const double X = X0 + Hs(OFFSET_X, Slot) * ChunkSize, Z = Z0 + Hs(OFFSET_Z, Slot) * ChunkSize;
+			const double Ht = RLerp(S.H0, S.H1, Hs(SCALE, Slot));
+			const double R = S.Footprint * .5 * Ht / S.H1;
+			bool bHit = false;
+			if (S.Kind != 3 && M != 13)
+			{
+				for (const AKeysReef::FInst& O : Obstacles)
+					if (FMath::Square(O.X - X) + FMath::Square(O.Z - Z) < FMath::Square((R + .6) * .6)) { bHit = true; break; }
+				for (int32 i = Start; i < Out.Num() && !bHit; i++)
+					if (FMath::Square(Out[i].X - X) + FMath::Square(Out[i].Z - Z) < FMath::Square(R * 1.1)) bHit = true;
+			}
+			if (bHit) continue;
+			const double Suit = ModelSuitability(M, X, Z, CX, CZ);
+			if (Suit <= 0 || Hs(PRESENCE, Slot) >= Suit) continue;
+			AKeysReef::FInst I;
+			I.Species = NumSp + M;
+			I.X = X; I.Z = Z; I.Y = KeysSea::SeafloorHeightAt(X, Z) - .05 * Ht;   // settled into the bottom a little
+			I.ColorT = Hs(COLOR, Slot);
+			I.TiltX = RLerp(-.1, .1, Hs(TILT_X, Slot));
+			I.TiltZ = RLerp(-.1, .1, Hs(TILT_Z, Slot));
+			I.RotY = Hs(ROT_Y, Slot) * PI * 2;
+			if (M == 6 || M == 12)
+			{
+				// fans and elephant ears stand broadside to the surge
+				const FVector2D N = KeysSea::ChainNormal(X);
+				I.RotY = FMath::Atan2(N.X, N.Y) + RLerp(-.35, .35, Hs(ROT_Y, Slot));
+			}
+			const double Wob = RLerp(.88, 1.12, Hs(SCALE_X, Slot));
+			I.SX = Ht * Wob; I.SZ = Ht / Wob * RLerp(.9, 1.1, Hs(SCALE_Z, Slot)); I.SY = Ht;
+			Out.Add(I);
+		}
+	}
+
 	// three.js frame -> Unreal local (x, z, y), meters, with smooth per-vertex normals from the faces
 	void ToMesh(const FGeo& G, FKeysMesh& M)
 	{
@@ -602,6 +723,31 @@ void AKeysReef::BeginPlay()
 			C->RegisterComponent();
 			Pools.Add(C);
 		}
+	// the modelled species: two pools each, the full model up close and the light one further out
+	UMaterialInterface* VC = AKeysWorld::VertexColorMaterial();
+	for (int32 M = 0; M < NumModelSp; M++)
+		for (int32 Lod = 0; Lod < 2; Lod++)
+		{
+			const FString Key = FString::Printf(TEXT("reef_%s%s"), MSp[M].Key, Lod ? TEXT("_lo") : TEXT(""));
+			UStaticMesh* SM = AKeysLandmarks::LoadPropMesh(this, *Key);
+			if (!SM && Lod) SM = AKeysLandmarks::LoadPropMesh(this, *FString::Printf(TEXT("reef_%s"), MSp[M].Key));
+			GeoH.Add(1.0);
+			UInstancedStaticMeshComponent* C = nullptr;
+			if (SM)
+			{
+				Meshes.Add(SM);
+				C = NewObject<UInstancedStaticMeshComponent>(this, *FString::Printf(TEXT("ReefModel_%d_%d"), M, Lod));
+				C->SetStaticMesh(SM);
+				C->SetupAttachment(Root);
+				C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				C->SetCastShadow(Lod == 0);
+				C->SetMaterial(0, VC);
+				C->SetCullDistances(0, Lod ? 9000 : 3000);
+				C->RegisterComponent();
+			}
+			else UE_LOG(LogTemp, Warning, TEXT("KeysReef: no model for %s"), *Key);
+			Pools.Add(C);
+		}
 }
 
 const TArray<AKeysReef::FInst>& AKeysReef::ChunkInstances(int32 CX, int32 CZ)
@@ -617,6 +763,8 @@ const TArray<AKeysReef::FInst>& AKeysReef::ChunkInstances(int32 CX, int32 CZ)
 	PlaceSpecies(SeaFan, CX, CZ, &Solids, Out);
 	PlaceSpecies(SeaPlume, CX, CZ, &Solids, Out);
 	PlaceSpecies(Seagrass, CX, CZ, nullptr, Out);
+	// the modelled species around and between them
+	for (int32 M = 0; M < NumModelSp; M++) PlaceModel(M, CX, CZ, Solids, Out);
 	CacheOrder.Add(K);
 	if (CacheOrder.Num() > 900) { Cache.Remove(CacheOrder[0]); CacheOrder.RemoveAt(0); }
 	return Cache.Add(K, MoveTemp(Out));
@@ -636,8 +784,10 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
 			for (const FInst& I : ChunkInstances(CCX + dx, CCZ + dz))
 			{
 				const double Dist = FVector2D(I.X - CamX, I.Z - CamZ).Size();
-				const int32 Lod = Dist < LodNearMax ? 0 : Dist < LodMidMax ? 1 : 2;
-				const int32 P = I.Species * 3 + Lod;
+				const bool bModel = I.Species >= NumSp;
+				const int32 Lod = bModel ? (Dist < 22 ? 0 : 1) : Dist < LodNearMax ? 0 : Dist < LodMidMax ? 1 : 2;
+				const int32 P = bModel ? NumSp * 3 + (I.Species - NumSp) * 2 + Lod : I.Species * 3 + Lod;
+				if (!Pools.IsValidIndex(P) || !Pools[P]) continue;
 				// three.js Euler XYZ: R = Rx(tiltX) * Ry(rotY) * Rz(tiltZ), column vectors, then into Unreal's axes (x, z, y)
 				const double cx = FMath::Cos(I.TiltX), sx = FMath::Sin(I.TiltX), cy = FMath::Cos(I.RotY), sy = FMath::Sin(I.RotY), cz = FMath::Cos(I.TiltZ), sz = FMath::Sin(I.TiltZ);
 				const double RxM[3][3] = {{1, 0, 0}, {0, cx, -sx}, {0, sx, cx}};
@@ -657,6 +807,7 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
 				if (GeoH.IsValidIndex(P) && GeoH[P] * SY > Room) SY = FMath::Max(.05, Room / GeoH[P]);
 				FTransform T(Q, ToUE(I.X, I.Y, I.Z), FVector(I.SX, I.SZ, SY));
 				Xf[P].Add(T);
+				if (bModel) continue;
 				const FLinearColor C = FMath::Lerp(Lo[I.Species], Hi[I.Species], float(I.ColorT));
 				Data[P].Append({C.R, C.G, C.B, CardKind(I.Species), float(Lod == 2 && (I.Species == Elkhorn || I.Species == Staghorn) ? 0 : Sp[I.Species].Flex)});
 			}
@@ -664,10 +815,12 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
 	for (int32 P = 0; P < Pools.Num(); P++)
 	{
 		UInstancedStaticMeshComponent* C = Pools[P];
+		if (!C) continue;
 		C->ClearInstances();
 		if (!Xf[P].Num()) continue;
 		C->AddInstances(Xf[P], false, true);
-		for (int32 i = 0; i < Xf[P].Num(); i++) C->SetCustomData(i, TArrayView<const float>(Data[P].GetData() + i * 5, 5), false);
+		if (Data[P].Num() >= Xf[P].Num() * 5)
+			for (int32 i = 0; i < Xf[P].Num(); i++) C->SetCustomData(i, TArrayView<const float>(Data[P].GetData() + i * 5, 5), false);
 		C->MarkRenderStateDirty();
 		Drawn += Xf[P].Num();
 	}
