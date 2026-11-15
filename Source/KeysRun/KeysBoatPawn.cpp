@@ -1351,7 +1351,6 @@ FVector AKeysBoatPawn::ChairEyeLocal() const
 
 bool AKeysBoatPawn::FpEyeLocal(FVector& Out) const
 {
-	if (InChair() && bFpPref) { Out = ChairEyeLocal(); return true; }
 	Out = FpEyeL;
 	return bFpOn && FishCamT < 0;   // (during the fish cam you are back in the shot, rod in hand)
 }
@@ -1372,14 +1371,8 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		const FVector Base = KeysMesh::FightChairBase(Spec());
 		const FQuat Q(FVector::UpVector, ChairYaw);
 		const FVector FishW = ToUE(FX, 0, FZ);
-		if (bFpPref)
-		{
-			// the angler's own eyes in the chair, down the rod at the fish
-			OutPos = BT.TransformPosition(ChairEyeLocal() * 100.0);
-			OutRot = (FishW - OutPos).Rotation();
-			OutFov = 75.f;
-			return true;
-		}
+		// in first person the chair fight is the same view as casting (UpdateCamera), from the angler's seat
+		if (bFpPref) return false;
 		// the chair fight from outside the boat: a drone's-eye view from well off the side and above the hull, behind
 		// the angler's shoulder as the chair faces the fish, so the angler, the bent rod and the line running out to the
 		// fish are all in frame. Of the two shoulders, the one that keeps the lens further aft (clear of the hardtop and
@@ -2107,6 +2100,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 
 	if (bFpOn)
 	{
+		// the same standing view for a cast fish and a trolled one (FishSpotLocal moves you to the transom for the latter)
 		FpEyeL = FMath::Lerp(FpEyeL, FishSpotLocal(), FMath::Min(1.0, Dt * 3));
 		const FVector EyeU = BT.TransformPosition((FpEyeL + FVector(0, 0, 1.62)) * 100.0);
 		const FVector Eye(EyeU.X / 100.0, EyeU.Z / 100.0, EyeU.Y / 100.0);   // game meters
@@ -3163,14 +3157,17 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 	const FTransform CT = Camera->GetComponentTransform();
 	auto W = [&CT](const FVector& V) { return CT.TransformPosition(FVector(-V.Z, V.X, V.Y) * 100.0) / 100.0; };
 	// Ry(.16) * Rx(Th): the rod base's yaw-pitch-roll ("YXZ") rotation
-	auto Rot = [](double Th, const FVector& V)
+	// while a fish is in the air the rod drops down and out to the right, so it isn't across the jump
+	const double Jl = JumpLook * JumpLook * (3 - 2 * JumpLook);
+	const double Yw = .16 + .42 * Jl;
+	auto Rot = [Yw](double Th, const FVector& V)
 	{
-		const double C = FMath::Cos(Th), Sn = FMath::Sin(Th), Cy = FMath::Cos(.16), Sy = FMath::Sin(.16);
+		const double C = FMath::Cos(Th), Sn = FMath::Sin(Th), Cy = FMath::Cos(Yw), Sy = FMath::Sin(Yw);
 		const FVector A(V.X, V.Y * C - V.Z * Sn, V.Y * Sn + V.Z * C);
 		return FVector(A.X * Cy + A.Z * Sy, A.Y, -A.X * Sy + A.Z * Cy);
 	};
-	const FVector Base(.27, -.35, -.62);
-	const double Rx = VmRx;
+	const FVector Base = FVector(.27, -.35, -.62) + FVector(.16, -.1, .05) * Jl;
+	const double Rx = VmRx - .3 * Jl;
 	auto S0 = [&](double A, double B, double C) { return Base + Rot(Rx, FVector(A, B, C)); };   // point in the butt section's frame
 	const FLinearColor RodC(FColor(0x1d, 0x21, 0x26)), Cork(FColor(0xb8, 0x92, 0x5e)), DarkC(FColor(0x22, 0x26, 0x2b)), GoldC(FColor(0xc9, 0xa2, 0x27)),
 		Skin(FColor(0xd9, 0xa2, 0x7f)), Sleeve(FColor(0x9c, 0xc8, 0xe0)), Guide(FColor(0xc9, 0xce, 0xd3));
@@ -3249,7 +3246,7 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 		const FVector F = FishMesh->GetComponentLocation(), C = Camera->GetComponentLocation();
 		const FQuat To = (F - C).Rotation().Quaternion(), From = Camera->GetComponentQuat();
 		const double A = JumpLook * JumpLook * (3 - 2 * JumpLook);
-		Camera->SetWorldRotation(FQuat::Slerp(From, To, float(A * (IsFirstPerson() ? .6 : 1.0))));
+		Camera->SetWorldRotation(FQuat::Slerp(From, To, float(A * (IsFirstPerson() ? .9 : 1.0))));
 	}
 }
 
@@ -3270,7 +3267,7 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 
 	FKeysMesh M;
 	FVector TipU;   // rod tip, Unreal axes, meters
-	if (bFpOn && !InChair() && FishCamT < 0) TipU = BuildViewModel(M);   // (the fish cam has the lens: the rod is back in your hands)
+	if (bFpOn && FishCamT < 0) TipU = BuildViewModel(M);   // (the fish cam has the lens: the rod is back in your hands)
 	else
 	{
 		const FVector Tip = RodTip(End);

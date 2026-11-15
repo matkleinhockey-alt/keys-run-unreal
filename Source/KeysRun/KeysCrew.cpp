@@ -905,7 +905,7 @@ void AKeysExtras::CommitCrew(double T)
 			const FTransform HX = ChairH.ToBoat();
 			const FVector Grip = HX.InverseTransformPosition((G + Dl * .8) * 100.0) / 100.0, Crank = HX.InverseTransformPosition((G + Dl * .42 + Q.RotateVector(FVector(0, .12, .1))) * 100.0) / 100.0;
 			ChairH.Pose(Grip + FVector(0, -.04, 0), Crank + FVector(0, 0, .03 * FMath::Sin(T * 6)));
-			ChairH.Build(M);
+			if (!CP->IsFirstPerson()) ChairH.Build(M);   // in first person you are him: the lens sits in his head
 			// just in front of his face, where his eyes are
 			ChairEyeL = ChairH.ToBoat().TransformPosition(XJ(0, ChairH.HipY + .8, .2));
 			bChairEyeOn = true;
