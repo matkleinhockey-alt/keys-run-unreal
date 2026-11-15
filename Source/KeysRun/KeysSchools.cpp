@@ -499,13 +499,13 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 		{
 			// sub-leaders sit around and behind the main leader
 			const double A = 2 * PI * (k - 1) / FMath::Max(1, NL - 1) + S.Rng.FRandRange(-.3, .3);
-			const double Rr = GroupR * (bBall ? 1.25 : 1.6);
-			// a bait ball packs round its leader; everything else strings out behind it, each sub-leader swimming
-			// the main leader's own path a little later than the one ahead of it, only just off to one side
-			Ld.Slot = bBall ? FVector(FMath::Cos(A) * Rr * .8, FMath::Sin(A) * Rr, FMath::Sin(A * 2 + 1) * Rr * .6)
-				: FVector(0, FMath::Cos(A) * Rr * .4, FMath::Sin(A) * Rr * .25);
-			Ld.Delay = bBall ? FMath::Min(SchMaxDelay * .5, .15 + .12 * k)
-				: FMath::Min(SchMaxDelay * .8, k * FMath::Max(.5, GroupR * 2.2 / FMath::Max(.3, Sc.Cruise)));
+			// one body: the sub-groups hold places all round the school's centre (ahead, behind, either side, a little
+			// above and below), a bait ball rounder. They track the centre a split second late, the ones at the back a
+			// touch later than the ones in front, so a turn sweeps through the whole school almost at once.
+			const double Rb = GroupR * (bBall ? 1.1 : 1.25);
+			Ld.Slot = bBall ? FVector(FMath::Cos(A) * Rb * .8, FMath::Sin(A) * Rb, FMath::Sin(A * 2 + 1) * Rb * .6)
+				: FVector(FMath::Cos(A) * Rb * 1.15, FMath::Sin(A) * Rb * .9, FMath::Sin(A * 2 + .7) * Rb * .3);
+			Ld.Delay = .05 + FMath::Max(0.0, -Ld.Slot.X) / FMath::Max(.3, Sc.Cruise) * .12;
 		}
 		FVector Rt, Up;
 		Frame(S.L[0].Fwd, Rt, Up);
@@ -529,7 +529,7 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 				FVector U;
 				do U = FVector(S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1)); while (U.SizeSquared() > 1);
 				Sl = bBall ? U * GroupR : FVector((U.X - .45) * GroupR * 1.5, U.Y * GroupR, U.Z * GroupR * .5);
-				Dl = .08 + FMath::Max(0.0, -Sl.X) / FMath::Max(.35, Sc.Cruise) * .3 + S.Rng.FRandRange(0, .2);
+				Dl = .03 + FMath::Max(0.0, -Sl.X) / FMath::Max(.35, Sc.Cruise) * .1 + S.Rng.FRandRange(0, .06);
 			}
 			float* D = S.Data.GetData() + Fi * 8;
 			D[0] = float(S.L[k].Row);
@@ -783,15 +783,17 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 		const FVector P0 = TrackAt(S, Ld.Delay, F);
 		FVector Rt, Up;
 		Frame(F, Rt, Up);
+		// the body tightens into a ball under attack, and draws out long when it swims hard
 		const double Sp = FMath::Lerp(1.0, .45, S.Ball);
-		Want = P0 + (F * Ld.Slot.X + Rt * Ld.Slot.Y + Up * Ld.Slot.Z) * Sp;
-		Speed = FMath::Max(Sc.Cruise, S.L[0].V.Size());
+		const double Str = FMath::Clamp(S.L[0].V.Size() / FMath::Max(.3, Sc.Cruise) - 1, 0.0, 1.5);
+		Want = P0 + (F * Ld.Slot.X * (1 + .35 * Str) + Rt * Ld.Slot.Y * (1 - .12 * Str) + Up * Ld.Slot.Z) * Sp;
+		Speed = FMath::Max(Sc.Cruise, S.L[0].V.Size()) * 1.3;
 	}
 	const FVector To = Want - Ld.P;
 	const double Dist = To.Size();
-	const double Arrive = bMain ? FMath::Min(1.0, Dist / 2.5) : FMath::Min(1.6, Dist / 1.2);
+	const double Arrive = bMain ? FMath::Min(1.0, Dist / 2.5) : FMath::Min(2.2, Dist / .5);
 	FVector Desired = Dist > 1e-3 ? To / Dist * Speed * Arrive : FVector::ZeroVector;
-	if (!bMain && Ld.LooseT <= 0) Desired += S.L[0].V * .2;   // a little of the main leader's way (mostly its path)
+	if (!bMain) Desired += S.L[0].V;   // moving with the body
 	// separation from the school's other leaders
 	for (int32 j = 0; j < S.L.Num(); j++)
 	{
@@ -816,6 +818,7 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 			R += Ld.Ext;
 		}
 		else R += Ld.Ext;
+		if (bMain) R += S.Radius - Ld.Ext;   // the school's centre feels a threat at the edge of the whole school
 		if (Sc.Role == ERole::Hanger && T.Kind == 0) R *= .5;   // a barracuda just backs off a little
 		FVector D = Ld.P - T.P;
 		const double Dd = D.Size();
@@ -838,6 +841,9 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 		if (Sc.Role == ERole::Bait && T.Kind == 2 && Dd < 22) S.Ball = FMath::Min(1.0, S.Ball + Dt * 2.5);
 	}
 	Ld.ThreatK = Best > Ld.ThreatK ? FMath::Min(1.0, Ld.ThreatK + Dt * 6) : FMath::Max(Best, Ld.ThreatK - Dt * .35);
+	// the school dodges as one: the whole body swerves on its centre's flight; a sub-group only gives way a little
+	// where the threat is right on it (the fish themselves part round it in the shader)
+	if (!bMain) Flee *= .35;
 	if (!Flee.IsNearlyZero())
 	{
 		const double Fk = FMath::Min(1.0, Flee.Size());
@@ -847,8 +853,8 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	}
 	Ld.Alarm = FMath::Max(0.0, Ld.Alarm - Dt * .3);
 	// cut off from the main leader by a scare: school on its own for a while, then come back
-	if (!bMain && Ld.LooseT <= 0 && Ld.Alarm > .5 && Dist > FMath::Max(4.0, S.Radius * 1.4)) { Ld.LooseT = S.Rng.FRandRange(4, 8); Ld.LooseDir = Flat(Ld.V).GetSafeNormal(); if (Ld.LooseDir.IsNearlyZero()) Ld.LooseDir = Ld.Fwd; }
-	if (Ld.LooseT > 0 && (Ld.P - S.L[0].P).Size() > 18) Ld.LooseT = 0;
+	// one body: no part of the school ever goes off on its own (it parts round a threat and closes up again)
+	Ld.LooseT = 0;
 	// the bottom, the coral and wrecks below; the surface above; the habitat around
 	const FVector Ahead = Ld.P + Ld.V * 1.2;
 	const double Top = FMath::Max(TopAt(Ld.P.X, Ld.P.Z), TopAt(Ahead.X, Ahead.Z));
@@ -863,7 +869,8 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 		if (bMain && S.GoalT > 1) S.GoalT = 0;
 	}
 	// integrate
-	const double Max = Flee.IsNearlyZero() && !bHunting ? FMath::Max(Sc.Cruise * 2.2, .6) : Sc.Burst;
+	double Max = Flee.IsNearlyZero() && !bHunting ? FMath::Max(Sc.Cruise * 2.2, .6) : Sc.Burst;
+	if (!bMain) Max = FMath::Max(Max, S.L[0].V.Size() * 1.4);   // the body keeps together when it bolts
 	Desired = ClampLen(Desired, Max);
 	Ld.V += ClampLen(Desired - Ld.V, Sc.Accel * (Flee.IsNearlyZero() ? 1 : 2) * Dt);
 	Ld.P += Ld.V * Dt;
@@ -1022,6 +1029,20 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 	FString C = Cmd, A;
 	Cmd.Split(TEXT("="), &C, &A);
 	if (C.IsEmpty()) C = Cmd;
+	if (C == TEXT("body"))
+	{
+		// how well each school holds together: the furthest sub-group from the centre, in school radii
+		int32 N = 0; double Worst = 0, Sum = 0;
+		for (const FSchool& S : Schools)
+		{
+			if (S.L.Num() < 2) continue;
+			double M = 0;
+			for (int32 k = 1; k < S.L.Num(); k++) M = FMath::Max(M, (S.L[k].P - S.L[0].P).Size() / FMath::Max(.1, S.Radius));
+			Worst = FMath::Max(Worst, M); Sum += M; N++;
+		}
+		UE_LOG(LogTemp, Log, TEXT("KRSchools body: %d schools, mean furthest sub-group %.2f radii, worst %.2f"), N, N ? Sum / N : 0.0, Worst);
+		return;
+	}
 	// the point in front of the camera (or the diver), a little way off
 	FVector Eye = Cam, Fw = FVector(1, 0, 0);
 	if (APlayerCameraManager* PC = UGameplayStatics::GetPlayerCameraManager(this, 0))
