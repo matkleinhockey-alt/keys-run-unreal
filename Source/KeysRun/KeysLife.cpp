@@ -1653,6 +1653,67 @@ void AKeysLife::BuildRigs()
 			Box(Ctr + P(0, Size.Y * .5, Size.Z * .5 + .5), P(Size.X, .08, .08), Yellow);
 			Box(Ctr + P(0, -Size.Y * .5, Size.Z * .5 + .5), P(Size.X, .08, .08), Yellow);
 		};
+		// ---- the finish: what years at sea do to steel and concrete, and the railings, stairs and steel you see up close
+		uint32 Hs = 2166136261u ^ uint32(Ri * 7919);
+		auto Rnd = [&Hs]() { Hs ^= Hs << 13; Hs ^= Hs >> 17; Hs ^= Hs << 5; return double(Hs % 10000) / 10000.0; };
+		const FLinearColor Growth = C(0x2e3a22), Algae = C(0x6f7a3a), Stain = C(0x3b2e22), Black = C(0x1a1c1e), RustD = C(0x553222);
+		auto Vary = [&](const FLinearColor& Col, double Amt) { const float K = float(1 + (Rnd() - .5) * 2 * Amt); return FLinearColor(Col.R * K, Col.G * K, Col.B * K, 1); };
+		// a guard rail from A to B (deck height): stanchions every ~1.8 m, a top rail and a knee rail
+		auto Rail = [&](const FVector& A, const FVector& B)
+		{
+			const double L = (B - A).Size();
+			const int32 N = FMath::Max(1, FMath::RoundToInt(L / 1.8));
+			for (int32 i = 0; i <= N; i++) { const FVector Q = FMath::Lerp(A, B, double(i) / N); Beam(Q, Q + P(0, 0, 1.1), .035, Yellow, 4); }
+			Beam(A + P(0, 0, 1.1), B + P(0, 0, 1.1), .04, Yellow, 4);
+			Beam(A + P(0, 0, .55), B + P(0, 0, .55), .03, Yellow, 4);
+		};
+		auto RailRect = [&](double Cx, double Cy, double Zd, double W, double H)
+		{
+			const FVector A = P(Cx - W * .5, Cy - H * .5, Zd), B = P(Cx + W * .5, Cy - H * .5, Zd), Cc2 = P(Cx + W * .5, Cy + H * .5, Zd), D = P(Cx - W * .5, Cy + H * .5, Zd);
+			Rail(A, B); Rail(B, Cc2); Rail(Cc2, D); Rail(D, A);
+		};
+		// yellow and black hazard striping along a deck edge
+		auto Hazard = [&](const FVector& A, const FVector& B, double Zd)
+		{
+			const double L = (FVector(B.X, B.Y, 0) - FVector(A.X, A.Y, 0)).Size();
+			const int32 N = FMath::Max(2, int32(L / .9));
+			const FVector Dir = (B - A).GetSafeNormal();
+			const FQuat Q = FRotationMatrix::MakeFromX(Dir).ToQuat();
+			for (int32 i = 0; i < N; i++) M.AddBox(FMath::Lerp(A, B, (i + .5) / N) + P(0, 0, Zd), FVector(L / N, .12, .35), i % 2 ? Black : Yellow, Q);
+		};
+		// a stair run from Bot up to Top: two stringers, treads and a hand rail each side
+		auto Stair = [&](const FVector& Bot, const FVector& Top2, double W)
+		{
+			const FVector Run = Top2 - Bot, Fl = FVector(Run.X, Run.Y, 0).GetSafeNormal(), Sd = FVector(-Fl.Y, Fl.X, 0) * (W * .5);
+			Beam(Bot + Sd, Top2 + Sd, .06, Grey, 4); Beam(Bot - Sd, Top2 - Sd, .06, Grey, 4);
+			const int32 N = FMath::Max(3, int32(Run.Z / .25));
+			for (int32 i = 1; i < N; i++) { const FVector Q = Bot + Run * (double(i) / N); M.AddBox(Q, FVector(.28, W, .05), Dark, FRotationMatrix::MakeFromX(Fl).ToQuat()); }
+			Beam(Bot + Sd + P(0, 0, 1), Top2 + Sd + P(0, 0, 1), .03, Yellow, 4); Beam(Bot - Sd + P(0, 0, 1), Top2 - Sd + P(0, 0, 1), .03, Yellow, 4);
+		};
+		// the steel under a deck: main girders one way, beams the other
+		auto Girders = [&](double Cx, double Cy, double Zd, double W, double H)
+		{
+			for (double X0 = Cx - W * .5 + 1; X0 <= Cx + W * .5 - 1; X0 += 4) M.AddBox(P(X0, Cy, Zd - 1.05), FVector(.4, H, 1.2), Dark);
+			for (double Y0 = Cy - H * .5 + 1.5; Y0 <= Cy + H * .5 - 1.5; Y0 += 3) M.AddBox(P(Cx, Y0, Zd - .75), FVector(W, .25, .6), Vary(Grey, .05));
+		};
+		// a leg at the waterline: weed and barnacles below, a band of green algae where the swell washes it, a dark
+		// salt-and-rust stain above fading up the splash zone
+		auto Fouling = [&](double Cx, double Cy, double R, double Below)
+		{
+			M.AddTube(P(Cx, Cy, -Below), P(Cx, Cy, -.6), R + .06, R + .05, 16, Growth);
+			M.AddTube(P(Cx, Cy, -.6), P(Cx, Cy, .5), R + .05, R + .04, 16, Algae);
+			M.AddTube(P(Cx, Cy, .5), P(Cx, Cy, 1.6), R + .035, R + .025, 16, Stain);
+			M.AddTube(P(Cx, Cy, 1.6), P(Cx, Cy, 2.8), R + .02, R + .012, 16, Vary(RustD, .1));
+		};
+		// rust weeping down a wall from its top edge: thin dark streaks of random length
+		auto Streaks = [&](const FVector& Ctr, const FVector& Along, const FVector& Out, double Len, double Hgt, int32 N)
+		{
+			for (int32 i = 0; i < N; i++)
+			{
+				const double U = (Rnd() - .5) * Len, H = Hgt * (.25 + .7 * Rnd());
+				M.AddBox(Ctr + Along * U + Out * .03 - P(0, 0, H * .5), FVector(.04, .04, H) + Along.GetAbs() * (.12 + .25 * Rnd()), Rnd() < .5 ? RustD : Stain);
+			}
+		};
 		TArray<FVector> LegsAt;   // collision columns at the waterline (x, y, radius)
 		FVector FlarePos;
 		if (Kind == 0)
@@ -1665,24 +1726,32 @@ void AKeysLife::BuildRigs()
 				const FVector B0 = P(Cols[i][0], Cols[i][1], Base), W = P(Cols[i][0], Cols[i][1], 0);
 				M.AddTube(B0, W - P(0, 0, 1.5), 6.2, 5.4, 16, Rust);
 				M.AddTube(W - P(0, 0, 1.5), W + P(0, 0, 1.5), 5.4, 5.3, 16, Dark);
-				M.AddTube(W + P(0, 0, 1.5), P(Cols[i][0], Cols[i][1], Top), 5.3, 4.8, 16, Concrete);
+				M.AddTube(W + P(0, 0, 1.5), P(Cols[i][0], Cols[i][1], Top), 5.3, 4.8, 16, Vary(Concrete, .04));
+				Fouling(Cols[i][0], Cols[i][1], 5.4, 6);
+				for (double Zr = 5; Zr < Top - 1; Zr += 4.5) { const double Rr = FMath::Lerp(5.3, 4.8, Zr / Top) + .04; M.AddTube(P(Cols[i][0], Cols[i][1], Zr), P(Cols[i][0], Cols[i][1], Zr + .25), Rr, Rr, 16, C(0x8f8d86)); }   // the pour joints
 				LegsAt.Add(P(Cols[i][0], Cols[i][1], 5.4));
 			}
 			// three decks of steel, girders and yellow rails
 			for (const double Zd : {Top, Top + 6.0, Top + 12.0})
 			{
 				Box(P(0, 0, Zd), P(40, 30, .9), Deck);
-				Box(P(0, 15.2, Zd + .9), P(40, .1, .1), Yellow); Box(P(0, -15.2, Zd + .9), P(40, .1, .1), Yellow);
-				Box(P(20.2, 0, Zd + .9), P(.1, 30, .1), Yellow); Box(P(-20.2, 0, Zd + .9), P(.1, 30, .1), Yellow);
+				RailRect(0, 0, Zd + .45, 39.6, 29.6);
+				Hazard(P(-20, -15.02, 0), P(20, -15.02, 0), Zd); Hazard(P(-20, 15.02, 0), P(20, 15.02, 0), Zd);
+				Girders(0, 0, Zd - .45, 38, 28);
+				Streaks(P(0, -15.1, Zd - .45), FVector(1, 0, 0), FVector(0, -1, 0), 38, 2.2, 14);
+				Streaks(P(0, 15.1, Zd - .45), FVector(1, 0, 0), FVector(0, 1, 0), 38, 2.2, 14);
 			}
 			for (const double Xc : {-19.5, -6.5, 6.5, 19.5}) for (const double Yc : {-14.5, 14.5}) Beam(P(Xc, Yc, Top), P(Xc, Yc, Top + 12), .35, Grey);
 			for (const double Xc : {-19.5, 19.5}) for (const double Yc : {-14.5, 14.5}) { Beam(P(Xc, Yc, Top), P(Xc * .5, Yc, Top + 6), .2, Yellow, 4); Beam(P(Xc * .5, Yc, Top + 6), P(Xc, Yc, Top + 12), .2, Yellow, 4); }
 			// process modules, tanks and pipe runs on the lower decks
-			Module(P(-12, -6, Top + 3), P(12, 12, 5), Grey, false);
-			Module(P(3, 7, Top + 3), P(16, 10, 5), White, true);
+			Module(P(-12, -6, Top + 3), P(12, 12, 5), Vary(Grey, .08), false);
+			Module(P(3, 7, Top + 3), P(16, 10, 5), Vary(White, .04), true);
+			Stair(P(17, -12, Top + .45), P(17, -3, Top + 6.45), 1.1);
+			Stair(P(-17, 12, Top + 6.45), P(-17, 3, Top + 12.45), 1.1);
+			Streaks(P(-12, -12.05, Top + 5.5), FVector(1, 0, 0), FVector(0, -1, 0), 11, 4, 8);
 			for (int32 i = 0; i < 6; i++) Beam(P(4 + (i % 3) * 3.2, -9 + (i / 3) * 3.2, Top + .5), P(4 + (i % 3) * 3.2, -9 + (i / 3) * 3.2, Top + 5.4), 1.3, i % 2 ? White : Grey, 10);
 			for (int32 i = 0; i < 4; i++) Beam(P(-19, -13 + i * .9, Top + 1.2 + i * .3), P(19, -13 + i * .9, Top + 1.2 + i * .3), .25, i % 2 ? Yellow : Grey, 5);
-			Module(P(-10, 4, Top + 9), P(14, 14, 5), Grey, false);
+			Module(P(-10, 4, Top + 9), P(14, 14, 5), Vary(Grey, .08), false);
 			Module(P(9, -4, Top + 9), P(14, 12, 5), White, true);
 			Module(P(9, 8, Top + 14.5), P(10, 8, 4), White, true);   // the accommodation on top
 			for (int32 i = 0; i < 3; i++) Beam(P(-14 + i * 2.5, -10, Top + 12), P(-14 + i * 2.5, -10, Top + 22), .9, Dark, 10);   // turbine exhausts
@@ -1725,7 +1794,16 @@ void AKeysLife::BuildRigs()
 				Box(P(Xs, 0, Top + HullH * .5), P(7.2, W, HullH), i % 2 ? Grey : Grey);
 				Box(P(Xs, 0, Top + .6), P(7.3, W + .1, 1.2), Rust);
 				Box(P(Xs, 0, Top + HullH + .05), P(7.2, W, .1), Deck);
+				// rails along the deck edge, hazard striping, and rust weeping down the hull sides
+				for (const double Sg : {-1.0, 1.0})
+				{
+					Rail(P(Xs - 3.6, Sg * W * .5 - Sg * .2, Top + HullH + .1), P(Xs + 3.6, Sg * W * .5 - Sg * .2, Top + HullH + .1));
+					Hazard(P(Xs - 3.6, Sg * (W * .5 + .02), 0), P(Xs + 3.6, Sg * (W * .5 + .02), 0), Top + HullH - .2);
+					Streaks(P(Xs, Sg * (W * .5 + .02), Top + HullH - .4), FVector(1, 0, 0), FVector(0, Sg, 0), 7, 4.5, 4);
+				}
+				Box(P(Xs, 0, Top - .4), P(7.4, W + .2, .5), Dark);   // the bottom plating's shadowed edge
 			}
+			for (int32 i = 0; i < 3; i++) { Fouling(Lg[i][0] - 2.6, Lg[i][1] - 2.6, .32, 5); Fouling(Lg[i][0] + 2.6, Lg[i][1] - 2.6, .32, 5); Fouling(Lg[i][0] + 2.6, Lg[i][1] + 2.6, .32, 5); Fouling(Lg[i][0] - 2.6, Lg[i][1] + 2.6, .32, 5); }
 			const double Dk = Top + HullH;
 			// derrick out on the cantilever over the stern, drill floor and pipe rack
 			Box(P(-27, 0, Dk + 1.5), P(10, 10, 3), Grey);
@@ -1759,15 +1837,25 @@ void AKeysLife::BuildRigs()
 				{
 					M.AddTube(P(Xc, Yc, -10), P(Xc, Yc, -1.5), 5, 5, 12, Rust);
 					for (int32 b = 0; b < 4; b++) M.AddTube(P(Xc, Yc, -1.5 + b * .9), P(Xc, Yc, -.6 + b * .9), 5.02, 5.02, 12, b % 2 ? Yellow : Red);   // the hazard bands
-					M.AddTube(P(Xc, Yc, 2.1), P(Xc, Yc, Top), 5, 4.8, 12, Grey);
+					M.AddTube(P(Xc, Yc, 2.1), P(Xc, Yc, Top), 5, 4.8, 12, Vary(Grey, .05));
+					M.AddTube(P(Xc, Yc, -10), P(Xc, Yc, -1.6), 5.06, 5.05, 12, Growth);
+					M.AddTube(P(Xc, Yc, 2.1), P(Xc, Yc, 3.4), 5.03, 5.02, 12, Stain);
+					for (int32 k = 0; k < 6; k++) { const double A = Rnd() * 2 * PI; const FVector Dd(FMath::Cos(A), FMath::Sin(A), 0); M.AddBox(P(Xc, Yc, Top - 2) + Dd * 4.92, FVector(.25, .25, 3 + 6 * Rnd()) , RustD, FRotationMatrix::MakeFromX(Dd).ToQuat()); }
 					LegsAt.Add(P(Xc, Yc, 5));
 				}
 			Beam(P(-22, -12, -6), P(-22, 12, -6), 1.2, Rust, 10); Beam(P(22, -12, -6), P(22, 12, -6), 1.2, Rust, 10);   // cross braces
 			Beam(P(-17, -17, 4), P(17, -17, 14), .8, Grey, 8); Beam(P(-17, 17, 4), P(17, 17, 14), .8, Grey, 8);
+			Beam(P(17, -17, 4), P(-17, -17, 14), .8, Grey, 8); Beam(P(17, 17, 4), P(-17, 17, 14), .8, Grey, 8);   // X-braced
 			// the deck box
 			Box(P(0, 0, Top + 3), P(56, 44, 6), Grey);
 			Box(P(0, 0, Top + .4), P(56.2, 44.2, .8), Rust);
 			Box(P(0, 0, Top + 6.05), P(56, 44, .1), Deck);
+			RailRect(0, 0, Top + 6.1, 55.6, 43.6);
+			Hazard(P(-28, -22.03, 0), P(28, -22.03, 0), Top + 5.8); Hazard(P(-28, 22.03, 0), P(28, 22.03, 0), Top + 5.8);
+			for (const double Sg : {-1.0, 1.0}) Streaks(P(0, Sg * 22.05, Top + 5.6), FVector(1, 0, 0), FVector(0, Sg, 0), 54, 5, 22);
+			for (const double Sg : {-1.0, 1.0}) Streaks(P(Sg * 28.05, 0, Top + 5.6), FVector(0, 1, 0), FVector(Sg, 0, 0), 42, 5, 16);
+			Girders(0, 0, Top, 54, 42);
+			Stair(P(-22 + 5.6, -17 + 1.2, 2.2), P(-22 + 5.6, -17 + 1.2 + 12, Top - .2), 1.1);   // up a column from the boat landing
 			Box(P(-12, 22.05, Top + 3), P(14, .1, 1.6), Yellow);   // the name board
 			const double Dk = Top + 6;
 			// twin derricks amidships
