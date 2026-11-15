@@ -1379,36 +1379,27 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		const FVector Base = KeysMesh::FightChairBase(Spec());
 		const FQuat Q(FVector::UpVector, ChairYaw);
 		const FVector FishW = ToUE(FX, 0, FZ);
-		// in first person the chair fight is the same view as casting (UpdateCamera), from the angler's seat
-		if (bFpPref) return false;
-		// the chair fight from outside the boat: a drone's-eye view from well off the side and above the hull, behind
-		// the angler's shoulder as the chair faces the fish, so the angler, the bent rod and the line running out to the
-		// fish are all in frame. Of the two shoulders, the one that keeps the lens further aft (clear of the hardtop and
-		// the console between it and the chair), holding its side until the other is clearly better.
+		// a trolled fish is always fought from the chair and shown from outside, first-person setting or not
+		// the chair fight from outside the boat, low off the stern quarter: side-on to the angler, so he, the chair and
+		// the bent rod fill the shot with the hull and the wake behind, and nothing (hardtop, tower, riggers) between.
+		// The lens sits on the side away from the fish, so the rod and line run off into the frame, holding that side
+		// until the fish has clearly crossed.
 		const FBoatSpec& S = Spec();
-		const double Sole = KeysMesh::SoleAt(S, Base.X), R = 13.5, Off = .62;
-		auto Cand = [&](double Sd) { const double A = ChairYaw + PI + Sd * Off; return FVector(Base.X + FMath::Cos(A) * R, Base.Y + FMath::Sin(A) * R, Sole + 5.0); };
-		if (ChairCamSide == 0) ChairCamSide = FMath::Sin(ChairYaw) < -.05 ? -1 : 1;
-		const FVector Mine = Cand(ChairCamSide), Other = Cand(-ChairCamSide);
-		if (Other.X < Mine.X - 1.5) ChairCamSide = -ChairCamSide;
-		FVector LocalCam = Cand(ChairCamSide);
-		// never inside the hull's footprint, and well clear of the outriggers however far they're swung out
-		LocalCam.Y = FMath::Sign(LocalCam.Y == 0 ? ChairCamSide : LocalCam.Y) * FMath::Max(FMath::Abs(LocalCam.Y), S.Beam * .5 + 2.5);
-		FVector Tip[2], RB[2];
-		if (KeysMesh::RiggerTips(S, RigOut(), Tip, RB))
-			for (int32 i = 0; i < 2; i++)
-			{
-				const FVector Cl = FMath::ClosestPointOnSegment(LocalCam, RB[i], Tip[i]);
-				if (FVector::Dist(Cl, LocalCam) < 2.5) LocalCam.Z = FMath::Max(LocalCam.Z, Cl.Z + 2.5);
-			}
+		const double Sole = KeysMesh::SoleAt(S, Base.X);
+		const FVector FishL = BT.InverseTransformPosition(FishW) / 100.0;
+		if (ChairCamSide == 0) ChairCamSide = FishL.Y > 0 ? 1 : -1;
+		else if (FishL.Y * ChairCamSide < -6) ChairCamSide = -ChairCamSide;
+		const double A = ChairYaw + ChairCamSide * 2.1, R = 8.0;
+		FVector LocalCam(Base.X + FMath::Cos(A) * R, Base.Y + FMath::Sin(A) * R, Sole + 3.0);
+		LocalCam.X = FMath::Min(LocalCam.X, Base.X + 2.6);   // never forward, toward the console and hardtop
+		LocalCam.Y = FMath::Sign(LocalCam.Y == 0 ? ChairCamSide : LocalCam.Y) * FMath::Max(FMath::Abs(LocalCam.Y), S.Beam * .5 + 3.0);
 		OutPos = BT.TransformPosition(LocalCam * 100.0);
-		// aim a little way out along the line from the angler, so the chair sits low in frame and the line runs up it
-		const FVector Head = BT.TransformPosition((Base + FVector(0, 0, .9)) * 100.0);
-		const FVector ToFish = FishW - Head;
-		const double Out = FMath::Min(ToFish.Size2D() * .15, 450.0);
-		const FVector Look = Head + ToFish.GetSafeNormal2D() * Out - FVector(0, 0, 60);
+		// aim at the angler's chest, nudged a little out toward the fish so the rod tip and the line stay in frame
+		const FVector Head = BT.TransformPosition((Base + FVector(0, 0, .75)) * 100.0);
+		const FVector ToFish = (FishW - Head).GetSafeNormal2D();
+		const FVector Look = Head + ToFish * 120.0;
 		OutRot = (Look - OutPos).Rotation();
-		OutFov = 54.f;
+		OutFov = 46.f;
 		return true;
 	}
 	ChairCamSide = 0;
@@ -2075,6 +2066,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 {
 	Stage.bOn = false;   // set again below while a landing is being shot
 	if (IsDiving() || IsAshore()) { bExtCam = false; return; }   // the diver / walker actor places the camera (ApplyDiveCamera)
+	if (InChair()) bFpOn = false;   // the chair fight is a third-person shot: the angler is in it, not behind the lens
 	{
 		FVector EP; FRotator ER; float EF;
 		bExtCam = ExternalCamera(EP, ER, EF);
@@ -3061,6 +3053,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 
 void AKeysBoatPawn::UpdateViewModel(double Dt)
 {
+	if (InChair() && bAction) VmCrank -= Dt * 22;   // the chair angler winds the same reel
 	if (!bFpOn) return;
 	const double Now = GetWorld()->GetTimeSeconds();
 	double Bend = .01;
@@ -3290,9 +3283,12 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 			RP.Butt = BT.TransformPosition(G * 100.0) / 100.0;
 			RP.Dir = BT.TransformVector(Dl).GetSafeNormal();
 			RP.Up = BT.TransformVector(FVector(0, 0, 1));
-			RP.Len = 2.1;
+			// the same rod and reel you cast with (BuildViewModel): full length, full detail, the crank turning
+			RP.Len = .52 * 5 + .115;
+			RP.Lod = 0;
+			RP.CrankA = PI / 4 + VmCrank;
 			const double Bend = FState == EKeysFish::Fight ? Clamp(Tension, 0, 1) : 0;
-			RP.Bend = (G2U(End) - (RP.Butt + RP.Dir * RP.Len)).GetSafeNormal() * Bend * .55;
+			RP.Bend = (G2U(End) - (RP.Butt + RP.Dir * RP.Len)).GetSafeNormal() * Bend * .7;
 			TipU = KeysMesh::BuildTunaRod(M, RP);
 		}
 		else

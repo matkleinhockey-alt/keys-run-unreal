@@ -192,7 +192,7 @@ namespace KeysMesh
 	static FLinearColor Srgb(double R, double G, double B) { return FLinearColor(FColor(uint8(R * 255), uint8(G * 255), uint8(B * 255))); }
 	static double SStepM(double A, double B, double X) { const double T = FMath::Clamp((X - A) / (B - A), 0.0, 1.0); return T * T * (3 - 2 * T); }
 
-	bool GFreemanTower = false;
+	bool GFreemanTower = true;   // the owner wants the tuna tower on (2026-11-15)
 	static bool FreemanTower()
 	{
 		static const bool bCmd = FParse::Param(FCommandLine::Get(), TEXT("KRFreemanTower"));
