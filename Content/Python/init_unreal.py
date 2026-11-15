@@ -577,7 +577,8 @@ def _vertex_color(mat):
 # and writes their recent track (20 samples a second, ~2.4 s of history) into a float texture, one row per leader,
 # five texels per sample: A = position (cm) + tail-beat phase, B = heading + the school's spread, C = the threat
 # (position + strength), D = floor top z, surface z, swim strength, alarm, E = the school's shape (scale along, across,
-# up: a bait ball flattened by shallow water or drawn out between coral heads). Every fish is an instance that never moves:
+# up: a school flattened by shallow water or drawn out between coral heads) + how lively its fish are (how often
+# and how far they dart). Every fish is an instance that never moves:
 # from its custom data (0 leader row, 1 delay s, 2-4 slot cm in the leader's frame, 5 seed, 6 length m, 7 shade) this
 # shader reads where its leader was Delay seconds ago, places the fish at its slot around that (so turns ripple back
 # through the school), adds an idle wander, pushes it away from the threat (the school splits around a predator and
@@ -606,7 +607,7 @@ float3 P = lerp(A0.xyz, A1.xyz, fr);
 float ph = lerp(A0.w, ph1, fr);
 float4 B = lerp(B0, B1, fr); float4 C = lerp(C0, C1, fr); float4 D = lerp(D0, D1, fr);
 // the shape the water leaves the school (along, across, up); a fresh row of zeros reads as round
-float3 E = lerp(E0.xyz, E1.xyz, fr); E = E.x + E.y + E.z < 0.1 ? float3(1, 1, 1) : E;
+float3 E = lerp(E0.xyz, E1.xyz, fr); float lively = E.x + E.y + E.z < 0.1 ? 1.0 : lerp(E0.w, E1.w, fr); E = E.x + E.y + E.z < 0.1 ? float3(1, 1, 1) : E;
 float3 Up = float3(0, 0, 1);
 float3 F = normalize(B.xyz + float3(1e-4, 0, 0));
 float3 R = cross(Up, F); float rl = length(R); R = rl > 1e-3 ? R / rl : float3(0, 1, 0);
@@ -620,14 +621,14 @@ float3 wv = float3(sin(T * f1 + a1), sin(T * f2 + a2), 0.5 * sin(T * f3 + a3)) *
 float3 wd = float3(f1 * cos(T * f1 + a1), f2 * cos(T * f2 + a2), 0.5 * f3 * cos(T * f3 + a3)) * sp;
 // its own spot round the leader: every so often (its own rhythm, 5-13 s) it picks a new one nearby and darts
 // there in a fraction of a second, then holds it while the leader moves and the spot moves with it
-float per = 5.0 + 8.0 * frac(Seed * 17.31);
+float per = (5.0 + 8.0 * frac(Seed * 17.31)) / max(lively, 0.15);
 float tt = T / per + Seed * 3.7;
 float ep = floor(tt); float tin = (tt - ep) * per;
-float sr = (0.45 * length(sl) + 60.0) * B.w;
+float sr = (0.45 * length(sl) + 60.0) * B.w * saturate(0.35 + 0.45 * lively);
 float3 hn = frac(sin(float3(ep * 12.9898 + Seed * 311.7, ep * 78.233 + Seed * 127.1, ep * 37.719 + Seed * 269.5)) * 43758.5453) * 2.0 - 1.0;
 float3 ho = frac(sin(float3((ep - 1.0) * 12.9898 + Seed * 311.7, (ep - 1.0) * 78.233 + Seed * 127.1, (ep - 1.0) * 37.719 + Seed * 269.5)) * 43758.5453) * 2.0 - 1.0;
 hn.z *= 0.4; ho.z *= 0.4;
-float dd = 0.6;
+float dd = 0.6 / clamp(lively, 0.7, 1.5);
 float dk = saturate(tin / dd); float dart = dk * dk * (3.0 - 2.0 * dk);
 float3 spot = lerp(ho, hn, dart) * sr * E;
 float3 dvel = (hn - ho) * E * sr * (6.0 * dk * (1.0 - dk) / dd);   // how fast it is darting, in the leader's frame

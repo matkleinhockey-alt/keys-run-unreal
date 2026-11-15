@@ -53,21 +53,48 @@ namespace
 	enum ESp { Silverside, Herring, Schoolmaster, Grunt, Lane, Yellowtail, Grouper, RedGrouper, Barracuda, Bonefish, Permit, Bluerunner, Jack, Blacktip, Bullshark, NumSpec };
 	const FSpec Specs[NumSpec] = {
 		// key              role           len         n          subs    cruise burst accel spacing diverR  dmin dmax  alt          roam  pred
-		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .45, 2.6, 3.0, 2.3, 4.5,  2.2, 45, 1.2, 3.5,  22, false},
-		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .6,  3.0, 3.0, 2.0, 5,    3,   45, 1.5, 4,    28, false},
-		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  14, 30,    2, 3,  .22, 2.0, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
-		{TEXT("grunt"),      ERole::Reef,   .22, .3,   16, 36,    2, 4,  .2,  2.0, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
-		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  10, 24,    2, 3,  .25, 2.0, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
-		{TEXT("yellowtail"), ERole::Reef,   .34, .42,  8, 18,     1, 2,  .5,  2.6, 2.0, 2.0, 4,    3,   40, 1.4, 4,    10, false},
+		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 45, 1.2, 3.5,  22, false},
+		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   45, 1.5, 4,    28, false},
+		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  14, 30,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
+		{TEXT("grunt"),      ERole::Reef,   .22, .3,   16, 36,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
+		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  10, 24,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
+		{TEXT("yellowtail"), ERole::Reef,   .34, .42,  8, 18,     1, 2,  .55, 3.0, 2.0, 2.0, 4,    3,   40, 1.4, 4,    10, false},
 		{TEXT("grouper"),    ERole::Hole,   .8, 1.1,   1, 1,      0, 0,  .08, 1.6, 1.0, 1,   2.5,  3,   40, .25, .6,   3, false},
 		{TEXT("redgrouper"), ERole::Hole,   .55, .75,  1, 1,      0, 0,  .08, 1.6, 1.0, 1,   2.5,  3,   40, .2, .5,    3, false},
 		{TEXT("barracuda"),  ERole::Hanger, .9, 1.3,   1, 2,      0, 0,  .05, 5.5, 4.0, 2.5, 2.5,  .9,  40, .8, 3.5,  12, true},
-		{TEXT("bonefish"),   ERole::Flats,  .45, .62,  4, 9,      0, 1,  .7,  4.5, 3.0, 2.2, 7,    .4,  2.8, .12, .3,  70, false},
-		{TEXT("permit"),     ERole::Flats,  .6, .8,    2, 5,      0, 1,  .6,  4.0, 2.5, 2.4, 6,    .5,  3.5, .15, .4,  70, false},
-		{TEXT("bluerunner"), ERole::Hunter, .4, .5,    5, 9,      0, 1,  1.1, 4.5, 3.0, 2.0, 3,    2,   45, 1.0, 4.5,  60, true},
-		{TEXT("jackcrevalle"), ERole::Hunter, .6, .85, 4, 7,      0, 1,  1.0, 4.5, 3.0, 2.0, 3,    1,   45, .8, 4.0,   60, true},
+		{TEXT("bonefish"),   ERole::Flats,  .45, .62,  4, 9,      0, 1,  .75, 5.0, 3.0, 2.2, 7,    .4,  2.8, .12, .3,  70, false},
+		{TEXT("permit"),     ERole::Flats,  .6, .8,    2, 5,      0, 1,  .55, 4.2, 2.5, 2.4, 6,    .5,  3.5, .15, .4,  70, false},
+		{TEXT("bluerunner"), ERole::Hunter, .4, .5,    5, 9,      0, 1,  1.15, 4.6, 3.0, 2.0, 3,    2,   45, 1.0, 4.5,  60, true},
+		{TEXT("jackcrevalle"), ERole::Hunter, .6, .85, 4, 7,      0, 1,  .95, 5.0, 3.0, 2.0, 3,    1,   45, .8, 4.0,   60, true},
 		{TEXT("blacktip"),   ERole::Patrol, 1.5, 1.9,  1, 1,      0, 0,  .9,  3.2, 1.4, 1,   1.5,  .8,  30, .4, 2.5,   90, true},
 		{TEXT("bullshark"),  ERole::Patrol, 2.0, 2.4,  1, 1,      0, 0,  .8,  3.0, 1.2, 1,   1.5,  4,   45, .6, 4,     90, true},
+	};
+	// how each species carries itself, on top of its speeds above:
+	//   Flex     how far the school gives to the water round it (0 holds its shape, 1 pours into whatever room there is)
+	//   Give, Back  how fast it squeezes in, and rounds out again (per s)
+	//   Slide    how hard it slips off a reef, wreck or edge it's pressed against
+	//   Stretch  its shape at ease: longer than wide (a travelling school) or rounder (a milling one)
+	//   Turn     how much its heading wanders and swings;  Agile  how sharply it comes round
+	//   PaceJ    how much one school's pace differs from the next
+	//   Dart     how often and how far single fish dart to a new spot in the school (the shader reads it)
+	struct FTemper { double Flex, Give, Back, Slide, Stretch, Turn, Agile, PaceJ, Dart; };
+	const FTemper Tempers[NumSpec] = {
+		//                Flex  Give Back  Slide Stretch Turn Agile PaceJ Dart
+		/* silverside */ {1.0,  3.0, .9,   1.2,  1.0,    1.4, 1.6,  .12,  1.6},   // nervous: quick turns, fish flicking everywhere
+		/* herring */    {1.0,  2.0, .6,   1.0,  1.15,   .9,  1.0,  .1,   1.0},   // a flowing river of fish, smooth sweeping turns
+		/* schoolmaster*/{.75,  1.4, .5,   .5,   1.1,    .6,  .7,   .15,  .5},    // hangs lazily by the coral, slow to move
+		/* grunt */      {.8,   1.2, .4,   .4,   .9,     .5,  .6,   .2,   .4},    // a loose milling crowd, hardly moving
+		/* lanesnapper */{.8,   1.8, .6,   .7,   1.1,    .8,  1.0,  .15,  .8},    // wary, keeps its distance, moves off sooner
+		/* yellowtail */ {.7,   2.2, .8,   .9,   1.25,   1.1, 1.3,  .12,  1.1},   // up in the water, quick and busy
+		/* grouper */    {0,    1,   1,    0,    1,      .4,  .5,   .1,   .2},
+		/* redgrouper */ {0,    1,   1,    0,    1,      .4,  .5,   .1,   .2},
+		/* barracuda */  {.4,   1,   .5,   .4,   1.2,    .3,  .8,   .1,   .1},    // hardly a school: a loose line hanging still
+		/* bonefish */   {.9,   2.5, .7,   1.0,  1.4,    1.2, 1.4,  .15,  .6},    // a strung-out wedge across the flat, spooky
+		/* permit */     {.85,  1.6, .5,   .8,   1.2,    .8,  1.0,  .15,  .5},    // a tighter, steadier little group
+		/* bluerunner */ {.55,  2.5, 1.2,  1.0,  1.3,    1.2, 1.5,  .1,   .7},    // a fast pack, sharp turns
+		/* jack */       {.45,  2.0, 1.0,  .8,   1.25,   .8,  1.2,  .1,   .4},    // a heavy, purposeful pack that keeps its shape
+		/* blacktip */   {0,    1,   1,    0,    1,      .7,  .9,   .1,   0},
+		/* bullshark */  {0,    1,   1,    0,    1,      .5,  .7,   .1,   0},
 	};
 	int32 SpecIndex(const FString& K) { for (int32 i = 0; i < NumSpec; i++) if (K == Specs[i].Key) return i; return -1; }
 
@@ -446,6 +473,9 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 	const FSpec& Sc = Specs[Sp];
 	FSchool S;
 	S.Rng.Initialize(int32(Seed));
+	S.Pace = S.Rng.FRandRange(1 - Tempers[Sp].PaceJ, 1 + Tempers[Sp].PaceJ);
+	S.Shape = FVector(Tempers[Sp].Stretch, 1 / FMath::Sqrt(Tempers[Sp].Stretch), 1 / FMath::Sqrt(Tempers[Sp].Stretch));
+	S.ShapeWant = S.Shape;
 	S.Id = NextId++;
 	S.Sp = Sp;
 	S.Cell = Cell;
@@ -749,12 +779,13 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 		// few body lengths out along it; it leans back toward home when it has roamed far, and turns away from water
 		// it doesn't belong in. Its depth changes now and then. The rest of the school swims the path it leaves.
 		if (!S.bWander) { S.bWander = true; S.WanderYaw = FMath::Atan2(M.Fwd.Z, M.Fwd.X); S.WanderTurn = 0; }
-		S.WanderTurn = FMath::Clamp(S.WanderTurn * (1 - Dt * .35) + S.Rng.FRandRange(-1.0, 1.0) * Dt * 1.1, -.55, .55);
+		const double Tn = Tempers[S.Sp].Turn;
+		S.WanderTurn = FMath::Clamp(S.WanderTurn * (1 - Dt * .35) + S.Rng.FRandRange(-1.0, 1.0) * Dt * 1.1 * Tn, -.55 * Tn, .55 * Tn);
 		S.WanderYaw += S.WanderTurn * Dt;
 		const FVector ToHome = Flat(S.Home - M.P);
 		const double Far = ToHome.Size() / FMath::Max(5.0, Sc.Roam);
 		if (Far > .65) S.WanderYaw += FMath::FindDeltaAngleRadians(S.WanderYaw, FMath::Atan2(ToHome.Z, ToHome.X)) * FMath::Min(1.0, Dt * .9 * Far);
-		const double Ahead = FMath::Max(4.0, Sc.Cruise * 4);
+		const double Ahead = FMath::Max(4.0, Sc.Cruise * S.Pace * 4);
 		double GX = M.P.X + FMath::Cos(S.WanderYaw) * Ahead, GZ = M.P.Z + FMath::Sin(S.WanderYaw) * Ahead;
 		if (!ValidWater(S.Sp, GX, GZ)) { S.WanderTurn = S.WanderTurn >= 0 ? .55 : -.55; S.WanderYaw += S.WanderTurn * Dt * 2; }
 		if (S.GoalT <= 0) { S.GoalT = S.Rng.FRandRange(7, 14); S.Goal.Y = PickGoal(S).Y; }
@@ -796,12 +827,13 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	const bool bHunting = Sc.bPredator && S.HuntLeft > 0;
 	// where it wants to be
 	FVector Want;
-	double Speed = Sc.Cruise;
+	const double Cruise = Sc.Cruise * S.Pace, Burst = Sc.Burst * FMath::Sqrt(S.Pace);
+	double Speed = Cruise;
 	if (bMain || Ld.LooseT > 0)
 	{
 		if (bMain) Want = S.Goal;
 		else { Ld.LooseT -= Dt; Want = Ld.P + Ld.LooseDir * 6; }
-		if (bHunting) Speed = Sc.Burst;
+		if (bHunting) Speed = Burst;
 	}
 	else
 	{
@@ -811,10 +843,10 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 		Frame(F, Rt, Up);
 		// the body tightens into a ball under attack, and draws out long when it swims hard
 		const double Sp = FMath::Lerp(1.0, .45, S.Ball);
-		const double Str = FMath::Clamp(S.L[0].V.Size() / FMath::Max(.3, Sc.Cruise) - 1, 0.0, 1.5);
+		const double Str = FMath::Clamp(S.L[0].V.Size() / FMath::Max(.3, Cruise) - 1, 0.0, 1.5);
 		const FVector& Sh = S.Shape;
 		Want = P0 + (F * Ld.Slot.X * Sh.X * (1 + .35 * Str) + Rt * Ld.Slot.Y * Sh.Y * (1 - .12 * Str) + Up * Ld.Slot.Z * Sh.Z) * Sp;
-		Speed = FMath::Max(Sc.Cruise, S.L[0].V.Size()) * 1.3;
+		Speed = FMath::Max(Cruise, S.L[0].V.Size()) * 1.3;
 	}
 	const FVector To = Want - Ld.P;
 	const double Dist = To.Size();
@@ -825,8 +857,8 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	{
 		// a bait ball crowded by the reef, a wreck or the edge of its water slides off it into the open, and in thin
 		// water keeps to the middle of what depth there is
-		Desired += S.Nudge;
-		Desired.Y += FMath::Clamp((S.MidY - Ld.P.Y) * 1.2, -.8, .8) * (1 - S.Shape.Z);
+		Desired += S.Nudge * Tempers[S.Sp].Slide;
+		if (Sc.Role == ERole::Bait || Sc.Role == ERole::Hunter) Desired.Y += FMath::Clamp((S.MidY - Ld.P.Y) * 1.2, -.8, .8) * FMath::Max(0.0, 1 - S.Shape.Z);
 	}
 	// separation from the school's other leaders
 	for (int32 j = 0; j < S.L.Num(); j++)
@@ -882,7 +914,7 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	{
 		const double Fk = FMath::Min(1.0, Flee.Size());
 		Ld.Alarm = FMath::Max(Ld.Alarm, Fk);
-		Desired = FMath::Lerp(Desired, Flee.GetSafeNormal() * Sc.Burst, FMath::Min(1.0, Fk * 1.8));
+		Desired = FMath::Lerp(Desired, Flee.GetSafeNormal() * Burst, FMath::Min(1.0, Fk * 1.8));
 		if (Sc.Role == ERole::Hole) Desired.Y = FMath::Min(Desired.Y, -.3);   // a grouper backs down into its hole
 	}
 	Ld.Alarm = FMath::Max(0.0, Ld.Alarm - Dt * .3);
@@ -892,18 +924,18 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	// the bottom, the coral and wrecks below; the surface above; the habitat around
 	const FVector Ahead = Ld.P + Ld.V * 1.2;
 	const double Top = FMath::Max(TopAt(Ld.P.X, Ld.P.Z), TopAt(Ahead.X, Ahead.Z));
-	const double Lo = Top + FMath::Max(.15, Sc.AltMin * .6) + Ld.Ext * (Sc.Role == ERole::Bait ? .7 * S.Shape.Z : .35);
-	const double Hi = -.35 - Ld.Ext * .45 * S.Shape.Z - S.Len * .2;
+	const double Lo = Top + FMath::Max(.15, Sc.AltMin * .6) + Ld.Ext * (Sc.Role == ERole::Bait ? .7 : .35) * FMath::Min(1.0, S.Shape.Z);
+	const double Hi = -.35 - Ld.Ext * .45 * FMath::Min(1.0, S.Shape.Z) - S.Len * .2;
 	if (Ld.P.Y < Lo) Desired.Y = FMath::Max(Desired.Y, (Lo - Ld.P.Y) * 2.5);
 	if (Ld.P.Y > Hi && Hi > Lo) Desired.Y = FMath::Min(Desired.Y, (Hi - Ld.P.Y) * 2.5);
 	if (!ValidWater(S.Sp, Ahead.X, Ahead.Z) || Flat(Ld.P - S.Home).Size() > Sc.Roam * 1.6 + 10)
 	{
-		const FVector Home = Flat(S.Home - Ld.P).GetSafeNormal() * FMath::Max(Sc.Cruise, Desired.Size());
+		const FVector Home = Flat(S.Home - Ld.P).GetSafeNormal() * FMath::Max(Cruise, Desired.Size());
 		Desired = FMath::Lerp(Desired, Home, .7);
 		if (bMain && S.GoalT > 1) S.GoalT = 0;
 	}
 	// integrate
-	double Max = Flee.IsNearlyZero() && !bHunting ? FMath::Max(Sc.Cruise * 2.2, .6) : Sc.Burst;
+	double Max = Flee.IsNearlyZero() && !bHunting ? FMath::Max(Cruise * 2.2, .6) : Burst;
 	if (!bMain) Max = FMath::Max(Max, S.L[0].V.Size() * 1.4);   // the body keeps together when it bolts
 	Desired = ClampLen(Desired, Max);
 	Ld.V += ClampLen(Desired - Ld.V, Sc.Accel * (Flee.IsNearlyZero() ? 1 : 2) * Dt);
@@ -915,7 +947,7 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	FVector Face = Spd > .06 ? Ld.V / Spd : Ld.Fwd;
 	if (Sc.Role == ERole::Hanger && Spd < .4) for (const FThreat& T : Threats) if (T.Kind == 0 && (T.P - Ld.P).Size() < 14) Face = (T.P - Ld.P).GetSafeNormal();
 	Face.Y = FMath::Clamp(Face.Y, -.45, .45);
-	Ld.Fwd = FMath::Lerp(Ld.Fwd, Face.GetSafeNormal(), FMath::Min(1.0, Dt * (Spd > .5 ? 5 : 1.2))).GetSafeNormal();
+	Ld.Fwd = FMath::Lerp(Ld.Fwd, Face.GetSafeNormal(), FMath::Min(1.0, Dt * (Spd > .5 ? 5 : 1.2) * Tempers[S.Sp].Agile)).GetSafeNormal();
 	// tail beat and how hard it swims
 	const double Rel = Spd / FMath::Max(.05, S.Len);
 	Ld.Phase = FMath::Fmod(Ld.Phase + Dt * 2 * PI * FMath::Min(9.0, .7 + .55 * Rel), PhaseWrap);
@@ -972,7 +1004,10 @@ void AKeysSchools::SenseShape(FSchool& S, double Dt)
 		const double Wide = (Free[0] + Free[1]) / (2 * R0);
 		const double SY = FMath::Clamp(FMath::Min(1 / FMath::Sqrt(SqZ), Wide), .3, 1.7);
 		const double SX = FMath::Clamp(1 / (SY * SqZ), .75, 3.2);
-		S.ShapeWant = FVector(SX, SY, SqZ);
+		// each species gives to it as far as its nature lets it, from its own shape at ease
+		const FTemper& Tm = Tempers[S.Sp];
+		const double Rs = 1 / FMath::Sqrt(Tm.Stretch);
+		S.ShapeWant = FVector(FMath::Lerp(1.0, SX, Tm.Flex) * Tm.Stretch, FMath::Lerp(1.0, SY, Tm.Flex) * Rs, FMath::Lerp(1.0, SqZ, Tm.Flex) * Rs);
 		// slide toward the middle of the gap, off whatever it's pressed against
 		const double Off = (Free[1] - Free[0]) * .5;
 		S.Nudge = FMath::Abs(Off) > R0 * .1 ? Rt * FMath::Clamp(Off, -R0, R0) * 1.1 : FVector::ZeroVector;
@@ -981,7 +1016,7 @@ void AKeysSchools::SenseShape(FSchool& S, double Dt)
 	// it gives way quickly and rounds out again slowly
 	for (int32 a = 0; a < 3; a++)
 	{
-		const double Rate = S.ShapeWant[a] < S.Shape[a] ? 2.2 : .7;
+		const double Rate = S.ShapeWant[a] < S.Shape[a] ? Tempers[S.Sp].Give : Tempers[S.Sp].Back;
 		S.Shape[a] = FMath::FInterpTo(S.Shape[a], S.ShapeWant[a], Dt, Rate);
 	}
 }
@@ -990,7 +1025,7 @@ void AKeysSchools::StepSchool(FSchool& S, double Dt, double T)
 {
 	MainGoal(S, Dt);
 	S.Ball = FMath::Max(0.0, S.Ball - Dt * .25);
-	if (Specs[S.Sp].Role == ERole::Bait) SenseShape(S, Dt);
+	if (S.NFish > 1 && Tempers[S.Sp].Flex > 0) SenseShape(S, Dt);
 	for (int32 k = 0; k < S.L.Num(); k++) SteerLeader(S, k, Dt);
 }
 
@@ -1016,7 +1051,7 @@ void AKeysSchools::WriteSample()
 			C[1] = FLinearColor(float(F.X), float(F.Y), float(F.Z), float(Spread));
 			C[2] = FLinearColor(float(Tp.X), float(Tp.Y), float(Tp.Z), float(Ld.ThreatK));
 			C[3] = FLinearColor(float(Top * 100), -15.f, float(Ld.Amp), float(Ld.Alarm));
-			C[4] = FLinearColor(float(S.Shape.X), float(S.Shape.Y), float(S.Shape.Z), 0.f);
+			C[4] = FLinearColor(float(S.Shape.X), float(S.Shape.Y), float(S.Shape.Z), float(Tempers[S.Sp].Dart));
 		}
 	}
 	{
@@ -1148,9 +1183,9 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		// how the bait balls are shaped by the water round them: along x across x up
 		for (const FSchool& S : Schools)
 		{
-			if (Specs[S.Sp].Role != ERole::Bait) continue;
+			if (S.NFish < 2) continue;
 			const double Top = TopAt(S.L[0].P.X, S.L[0].P.Z);
-			UE_LOG(LogTemp, Log, TEXT("KRSchools shape %s #%d at %.0f %.1f %.0f (bottom %.1f): %.2f x %.2f x %.2f%s"), Specs[S.Sp].Key, S.Id,
+			UE_LOG(LogTemp, Log, TEXT("KRSchools shape %s #%d pace %.2f at %.0f %.1f %.0f (bottom %.1f): %.2f x %.2f x %.2f%s"), Specs[S.Sp].Key, S.Id, S.Pace,
 				S.L[0].P.X, S.L[0].P.Y, S.L[0].P.Z, Top, S.Shape.X, S.Shape.Y, S.Shape.Z, S.Nudge.IsNearlyZero() ? TEXT("") : TEXT(", sliding off something"));
 		}
 		return;

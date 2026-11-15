@@ -64,6 +64,7 @@ public:
 		FVector Shape = FVector(1, 1, 1), ShapeWant = FVector(1, 1, 1), Nudge = FVector::ZeroVector;
 		double SenseT = 0, MidY = 0;
 		bool bSqueezed = false;
+		double Pace = 1;   // this school's own speed, round its species' (some schools are lazier, some keener)
 		FVector Home = FVector::ZeroVector, Goal = FVector::ZeroVector, HuntDir = FVector::ZeroVector;
 		double HomeTop = 0;
 		int64 Cell = 0;
