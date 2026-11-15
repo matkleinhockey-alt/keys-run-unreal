@@ -3309,6 +3309,7 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 		TipU = KeysMesh::BuildTunaRod(M, RP);
 		}
 	}
+	FKeysMesh LineM;   // the line alone, in its own see-through section
 	if (bLine)
 	{
 		const FVector EndU = G2U(End);
@@ -3319,7 +3320,8 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 		// the braid keeps about a pixel and a half of width however far out the fish is (a 1.3 cm tube is lost against
 		// the water at 60 m off the transom in a trolling fight)
 		const FVector CamU = Camera->GetComponentLocation() / 100.0;
-		auto Rad = [&CamU](const FVector& Q) { return FMath::Max(.013, (Q - CamU).Size() * .0011); };
+		// thin clear mono: a few millimetres up close, and just under a pixel far off so it reads as a faint thread
+	auto Rad = [&CamU](const FVector& Q) { return FMath::Max(.0035, (Q - CamU).Size() * .00055); };
 		FVector Prev = TipU;
 		for (int32 i = 1; i <= Segs; i++)
 		{
@@ -3331,12 +3333,23 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 				const double Surf = WaveH(P.X, P.Y, T, AmpAt(P.X, P.Y)) + .06;
 				if (P.Z < Surf) P.Z = Surf;
 			}
-			M.AddTube(Prev, P, Rad(Prev), Rad(P), 4, FLinearColor(.98f, .86f, .12f));   // hi-vis yellow braid
+			LineM.AddTube(Prev, P, Rad(Prev), Rad(P), 4, FLinearColor(.78f, .86f, .84f));   // clear mono, a faint blue-green glint
 			Prev = P;
 		}
 		Bobber->SetWorldLocation(ToUE(Bob.X, Bob.Y + .05, Bob.Z));
 	}
+	// the line is see-through: the windshield glass material at a higher opacity
+	static TWeakObjectPtr<UMaterialInstanceDynamic> LineMat;
+	if (!LineMat.IsValid())
+		if (UMaterialInterface* G = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Glass.M_KR_Glass")))
+		{
+			LineMat = UMaterialInstanceDynamic::Create(G, GetTransientPackage());
+			LineMat->SetScalarParameterValue(TEXT("Opacity"), .45f);
+			LineMat->AddToRoot();
+		}
 	M.Commit(LineMesh, 0, AKeysWorld::VertexColorMaterial());
+	if (LineM.T.Num()) LineM.Commit(LineMesh, 1, LineMat.IsValid() ? (UMaterialInterface*)LineMat.Get() : AKeysWorld::VertexColorMaterial());
+	else LineMesh->ClearMeshSection(1);
 }
 
 // ================================================================ HUD text
