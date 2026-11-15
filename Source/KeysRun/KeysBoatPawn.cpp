@@ -3080,7 +3080,7 @@ void AKeysBoatPawn::UpdateViewModel(double Dt)
 // palm. Four fingers stacked along the axis wrap round it joint by joint (Curl 1 is a full fist), the thumb comes round
 // the other way from the index side, and the wrist and forearm run back to the elbow, the sleeve over the forearm.
 // IndexLift lifts the index finger off the grip (feeling the line). Sc scales the whole hand (1 = an adult's).
-static void AddGripHand(FKeysMesh& M, const FVector& C, const FVector& A0, const FVector& N0, double R, double Curl, double IndexLift, bool bMirror,
+void AddGripHand(FKeysMesh& M, const FVector& C, const FVector& A0, const FVector& N0, double R, double Curl, double IndexLift, bool bMirror,
 	const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve, const FLinearColor& Nail)
 {
 	const FVector A = A0.GetSafeNormal();

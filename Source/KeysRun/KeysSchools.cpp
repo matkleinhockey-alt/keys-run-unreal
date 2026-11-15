@@ -536,7 +536,9 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 			const double Rb = GroupR * (bBall ? 1.1 : 1.25);
 			Ld.Slot = bBall ? FVector(FMath::Cos(A) * Rb * .8, FMath::Sin(A) * Rb, FMath::Sin(A * 2 + 1) * Rb * .6)
 				: FVector(FMath::Cos(A) * Rb * 1.15, FMath::Sin(A) * Rb * .9, FMath::Sin(A * 2 + .7) * Rb * .3);
-			Ld.Delay = .05 + FMath::Max(0.0, -Ld.Slot.X) / FMath::Max(.3, Sc.Cruise) * .12;
+			// the ones behind swim the leader's own path (most of the time it takes to get there), so a turn streams
+			// back through the school instead of swinging it round like a plank; SteerLeader takes the distance back off
+			Ld.Delay = FMath::Min(SchMaxDelay * .45, .05 + FMath::Max(0.0, -Ld.Slot.X) / FMath::Max(.3, Sc.Cruise) * .6);
 		}
 		FVector Rt, Up;
 		Frame(S.L[0].Fwd, Rt, Up);
@@ -560,7 +562,8 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 				FVector U;
 				do U = FVector(S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1)); while (U.SizeSquared() > 1);
 				Sl = bBall ? U * GroupR : FVector((U.X - .45) * GroupR * 1.5, U.Y * GroupR, U.Z * GroupR * .5);
-				Dl = .03 + FMath::Max(0.0, -Sl.X) / FMath::Max(.35, Sc.Cruise) * .1 + S.Rng.FRandRange(0, .06);
+				// follow the fish ahead down the same path: the shader takes back the ground the leader covered meanwhile
+				Dl = .03 + FMath::Max(0.0, -Sl.X) / FMath::Max(.35, Sc.Cruise) * .6 + S.Rng.FRandRange(0, .06);
 			}
 			float* D = S.Data.GetData() + Fi * 8;
 			D[0] = float(S.L[k].Row);
@@ -845,7 +848,8 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 		const double Sp = FMath::Lerp(1.0, .45, S.Ball);
 		const double Str = FMath::Clamp(S.L[0].V.Size() / FMath::Max(.3, Cruise) - 1, 0.0, 1.5);
 		const FVector& Sh = S.Shape;
-		Want = P0 + (F * Ld.Slot.X * Sh.X * (1 + .35 * Str) + Rt * Ld.Slot.Y * Sh.Y * (1 - .12 * Str) + Up * Ld.Slot.Z * Sh.Z) * Sp;
+		const double Trail = FMath::Min(S.L[0].V.Size(), Burst) * (Ld.Delay - .05);   // where it was then is this far back
+		Want = P0 + F * Trail + (F * Ld.Slot.X * Sh.X * (1 + .35 * Str) + Rt * Ld.Slot.Y * Sh.Y * (1 - .12 * Str) + Up * Ld.Slot.Z * Sh.Z) * Sp;
 		Speed = FMath::Max(Cruise, S.L[0].V.Size()) * 1.3;
 	}
 	const FVector To = Want - Ld.P;

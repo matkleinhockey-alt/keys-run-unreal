@@ -117,9 +117,12 @@ namespace
 	}
 
 	// the gun (gun-viewmodel.ts): a 78 cm reef gun, in its own frame (meters, +X out the muzzle, Z up)
-	constexpr double BarrelLen = .78, BarrelR = .014, ShaftR = .00325, BandR = .008, RailY = BarrelR + ShaftR, ShaftPoke = .3;
-	constexpr double BandAnchorX = BarrelLen - .06, BandShort = .3, BandLong = .74;
-	const FVector ReadyPos(.62, .26, -.32), LoadPos(.46, .1, -.22);   // camera frame, meters (forward, right, up)
+	// a black wooden reef gun after the user's reference photo: a tall stock with a muzzle block, two pairs of thick
+	// black bands, a full-length shaft with a flopper, a reel under the stock ahead of a raked pistol grip
+	constexpr double BarrelLen = .78, StockW = .03, StockH = .046, BarrelR = StockW * .5, ShaftR = .0035, BandR = .0075;
+	constexpr double RailY = StockH * .5 + ShaftR, ShaftPoke = .3, ShaftLen = 1.0;
+	constexpr double BandAnchorX = BarrelLen - .05, BandShort = .32, BandLong = .5;
+	const FVector ReadyPos(.6, .2, -.14), LoadPos(.5, .2, -.3);   // camera frame, meters (forward, right, up)
 
 	// view, camera-frame helper: a camera-relative offset (forward, right, up) in game meters
 	FVector CamOffset(const FRotator& Rot, const FVector& Off)
@@ -127,6 +130,10 @@ namespace
 		return U2G(Rot.RotateVector(Off * 100));
 	}
 }
+
+// the gloved hand closed round a grip (KeysBoatPawn.cpp)
+void AddGripHand(FKeysMesh& M, const FVector& C, const FVector& A0, const FVector& N0, double R, double Curl, double IndexLift, bool bMirror,
+	const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve, const FLinearColor& Nail);
 
 AKeysDiver* AKeysDiver::Get(const UObject* WorldContext)
 {
@@ -151,6 +158,7 @@ AKeysDiver::AKeysDiver()
 	GunBandR = MakePMC(this, GunBase, TEXT("GunBandR"));
 	GunShaft = MakePMC(this, GunBase, TEXT("GunShaft"));
 	GunGlove = MakePMC(this, GunBase, TEXT("GunGlove"));
+	GunHandL = MakePMC(this, GunBase, TEXT("GunHandL"));
 	Lines = MakePMC(this, Root, TEXT("Lines"));
 	FishOnLine = MakePMC(this, Root, TEXT("FishOnLine"));
 	Particles = MakePMC(this, Root, TEXT("Particles"));
@@ -190,29 +198,94 @@ void AKeysDiver::BeginPlay()
 		FinR->SetRelativeLocation(FVector(-55, 11, 0));
 		Body->SetVisibility(false, true);
 	}
-	// ---- the first-person speargun (gun-viewmodel.ts)
+	// ---- the first-person speargun and the gloved hands holding it
 	{
-		const FLinearColor Dark = Hex(0x3c4a54), Steel = Hex(0xc7ced4), Rubber = Hex(0x262b2f), Latex = Hex(0xc08a3e);
+		const FLinearColor Stock = Hex(0x17191b), Steel = Hex(0xc7ced4), Band = Hex(0x34383d), Glove = Hex(0x1c1e21),
+			Suit = Hex(0x2a2e2c), Mono = Hex(0xd9dde0), ReelC = Hex(0x222528), Grey = Hex(0x55595e);
 		FKeysMesh M;
-		Tube(M, FVector(0, 0, 0), FVector(BarrelLen, 0, 0), BarrelR, BarrelR, 10, Dark, true);
-		Tube(M, FVector(BarrelLen - .006, 0, RailY), FVector(BarrelLen + .006, 0, RailY), .0125, .0125, 10, Steel, true);
-		M.AddBox(FVector(-.08, 0, -.11), FVector(.08, .06, .16), Dark, FQuat(FVector::YAxisVector, -.25));
-		M.AddBox(FVector(-.1, 0, -.03), FVector(.02, .012, .05), Steel);
+		M.Surf = SurfWood;
+		// the stock, butt to muzzle, a little deeper at the back where it meets the grip
+		M.AddRoundBox(FVector((BarrelLen - .2) * .5, 0, 0), FVector(BarrelLen + .2, StockW, StockH), .008, Stock, FQuat::Identity, 2);
+		M.AddRoundBox(FVector(-.13, 0, -.006), FVector(.15, StockW + .004, StockH + .016), .01, Stock, FQuat::Identity, 2);
+		// the butt pad and the muzzle block with its band slots
+		M.Surf = SurfRubber;
+		M.AddRoundBox(FVector(-.205, 0, -.006), FVector(.012, StockW + .006, StockH + .02), .005, Band, FQuat::Identity, 2);
+		M.Surf = SurfMetalPaint;
+		M.AddRoundBox(FVector(BarrelLen - .02, 0, .004), FVector(.06, StockW + .016, StockH + .02), .008, Hex(0x101214), FQuat::Identity, 2);
+		M.Surf = SurfSteel;
+		Tube(M, FVector(BarrelLen - .055, 0, RailY - .002), FVector(BarrelLen + .012, 0, RailY - .002), .0055, .0055, 8, Steel, true);   // shaft guide
+		// the pistol grip, raked back, with its trigger and guard
+		M.Surf = SurfWood;
+		const FVector GripTop(-.07, 0, -.025), GripBot(-.115, 0, -.135);
+		M.AddRoundBox((GripTop + GripBot) * .5, FVector(.036, .028, (GripTop - GripBot).Size()), .011, Stock,
+			FRotationMatrix::MakeFromZ(GripTop - GripBot).ToQuat(), 2);
+		M.AddRoundBox(GripBot + FVector(-.004, 0, -.006), FVector(.044, .032, .014), .006, Stock, FRotationMatrix::MakeFromZ(GripTop - GripBot).ToQuat(), 2);
+		M.Surf = SurfSteel;
+		Tube(M, FVector(-.04, 0, -.024), FVector(-.046, 0, -.055), .0035, .003, 6, Grey);   // trigger
+		M.Surf = SurfMetalPaint;
+		Tube(M, FVector(-.005, 0, -.023), FVector(-.004, 0, -.07), .0035, .0035, 6, Stock, true);
+		Tube(M, FVector(-.004, 0, -.07), FVector(-.075, 0, -.08), .0035, .0035, 6, Stock, true);
+		// the reel under the stock ahead of the guard: a spool of white mono on a short stem
+		const FVector ReelC0(.05, 0, -.062);
+		M.Surf = SurfMetalPaint;
+		Tube(M, FVector(.05, 0, -.02), ReelC0, .006, .006, 6, ReelC);
+		Tube(M, ReelC0 + FVector(0, -.016, 0), ReelC0 + FVector(0, .016, 0), .036, .036, 18, ReelC, true);
+		M.Surf = SurfDefault;
+		Tube(M, ReelC0 + FVector(0, -.013, 0), ReelC0 + FVector(0, .0175, 0), .031, .031, 18, Mono, true);
+		M.Surf = SurfSteel;
+		Tube(M, ReelC0 + FVector(0, .018, 0), ReelC0 + FVector(0, .03, .0), .007, .007, 8, Grey, true);   // crank hub
+		// the line from the spool up to the muzzle, sagging a touch
+		M.Surf = SurfDefault;
+		{
+			FVector Prev = ReelC0 + FVector(.03, 0, .01);
+			const FVector End(BarrelLen - .03, -.012, -StockH * .5 - .004);
+			for (int32 i = 1; i <= 8; i++)
+			{
+				const double t = i / 8.0;
+				const FVector P = FMath::Lerp(ReelC0 + FVector(.03, 0, .01), End, t) + FVector(0, 0, -.018 * FMath::Sin(t * PI));
+				Tube(M, Prev, P, .0009, .0009, 4, Mono);
+				Prev = P;
+			}
+		}
+		// the hands, black gloves and a dark wetsuit: the right round the pistol grip, finger by the trigger
+		M.Surf = SurfDefault;
+		const int32 HandFrom = M.V.Num();
+		AddGripHand(M, FMath::Lerp(GripBot, GripTop, .5) + FVector(-.004, .002, 0), GripTop - GripBot, FVector(-.6, .8, 0), .017, .95, .25, true,
+			FVector(-.42, .2, -.42), Glove, Suit, Glove);
+		M.SetSurfFrom(HandFrom, SurfRubber);
 		M.Commit(GunBase, 0, VC);
-		FKeysMesh B;   // unit band along +X, scaled per frame
-		Tube(B, FVector(0, 0, 0), FVector(1, 0, 0), 1, 1, 6, Latex);
+		// the left hand, holding the stock ahead of the reel, back of the hand toward you (hidden while loading)
+		FKeysMesh L;
+		AddGripHand(L, FVector(.15, 0, -.004), FVector::XAxisVector, FVector(0, -.5, -.85), .024, .9, 0, true, FVector(-.2, -.42, -.42), Glove, Suit, Glove);
+		L.SetSurfFrom(0, SurfRubber);
+		L.Commit(GunHandL, 0, VC);
+		FKeysMesh B;   // a unit pair of bands along +X, one over the other, scaled per frame
+		B.Surf = SurfRubber;
+		Tube(B, FVector(0, 0, 0), FVector(1, 0, 0), 1, 1, 8, Band);
+		Tube(B, FVector(0, 0, -2.15), FVector(1, 0, -2.15), 1, 1, 8, Band);
 		B.Commit(GunBandL, 0, VC);
 		B.Commit(GunBandR, 0, VC);
+		// the shaft: polished steel the length of the gun, a cone tip with its flopper, shark fins where the bands hook
 		FKeysMesh Sh;
-		Tube(Sh, FVector(-ShaftPoke * .5, 0, 0), FVector(ShaftPoke * .5, 0, 0), ShaftR, ShaftR, 6, Steel, true);
+		Sh.Surf = SurfSteel;
+		const double Front = ShaftPoke * .5, Back = Front - ShaftLen;
+		Tube(Sh, FVector(Back, 0, 0), FVector(Front, 0, 0), ShaftR, ShaftR, 8, Steel, true);
+		Tube(Sh, FVector(Front, 0, 0), FVector(Front + .03, 0, 0), ShaftR * 1.1, .0004, 8, Steel);
+		Sh.AddRoundBox(FVector(Front - .022, 0, .006), FVector(.05, .0015, .006), .0007, Steel, FQuat(FVector::YAxisVector, .18), 1);
+		const double FinX = BandAnchorX - BandLong - (BarrelLen + Front);
+		for (int32 k = 0; k < 2; k++)
+			Sh.AddRoundBox(FVector(FinX - k * .06, 0, ShaftR + .003), FVector(.014, .0025, .007), .001, Steel, FQuat::Identity, 1);
 		Sh.Commit(GunShaft, 0, VC);
+		// the loading hand: a glove closed round the wishbone, pulling it back along the gun
 		FKeysMesh Gl;
-		Ellipsoid(Gl, FVector::ZeroVector, FVector(.038, .045, .034), 10, Rubber);
-		Capsule(Gl, FVector(.012, .026, .018), FVector(-.018, .026, .018), .012, 6, Rubber);
+		Gl.Surf = SurfSteel;
+		Tube(Gl, FVector(0, -.03, 0), FVector(0, .03, 0), .003, .003, 6, Grey);
+		AddGripHand(Gl, FVector::ZeroVector, FVector::YAxisVector, FVector(-1, 0, .4), .008, 1, 0, false, FVector(-.38, -.12, -.2), Glove, Suit, Glove);
+		Gl.SetSurfFrom(0, SurfRubber);
 		Gl.Commit(GunGlove, 0, VC);
 		GunBase->SetVisibility(false, true);
 		GunBase->SetCastShadow(false);
-		GunBandL->SetCastShadow(false); GunBandR->SetCastShadow(false); GunShaft->SetCastShadow(false); GunGlove->SetCastShadow(false);
+		GunBandL->SetCastShadow(false); GunBandR->SetCastShadow(false); GunShaft->SetCastShadow(false); GunGlove->SetCastShadow(false); GunHandL->SetCastShadow(false);
 	}
 	// ---- the underwater look: extinction, visibility, lens wetting (world/underwater)
 	if (UMaterialInterface* UW = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Underwater.M_KR_Underwater")))
@@ -674,7 +747,7 @@ void AKeysDiver::UpdateGun(double Dt)
 	for (int32 Side = -1; Side <= 1; Side += 2)
 	{
 		UProceduralMeshComponent* Bd = Side < 0 ? GunBandL : GunBandR;
-		Bd->SetRelativeLocation(FVector(BandAnchorX * 100, Side * (BarrelR + BandR + .002) * 100, RailY * 100));
+		Bd->SetRelativeLocation(FVector(BandAnchorX * 100, Side * (BarrelR * .55 + BandRad) * 100, (StockH * .5 + BandRad * 1.1) * 100));
 		Bd->SetRelativeRotation(FRotator(0, 180, 0));
 		Bd->SetRelativeScale3D(FVector(BandLen, BandRad, BandRad));
 	}
@@ -699,9 +772,9 @@ void AKeysDiver::UpdateGun(double Dt)
 	SwayV = FMath::Lerp(SwayV, FVector(0, FMath::Sin(SwayT * 1.1) * Amt, FMath::Sin(SwayT * 1.7 + 1.3) * Amt * .7), FMath::Min(1.0, Dt * 8));
 	// camera frame (forward, right, up); three.js +z back is -forward
 	const FVector Off(DvLerp(ReadyPos.X, LoadPos.X, PoseW) - .1 * Snap - Pull, DvLerp(ReadyPos.Y, LoadPos.Y, PoseW) + ShakeX, DvLerp(ReadyPos.Z, LoadPos.Z, PoseW) + ShakeY - SeatHop);
-	const double PitchR = DvLerp(-.04, .36, PoseW) - .16 * Snap + Pull * 1.5 + FMath::Sin(SwayT * 1.7 + 1.3) * Amt * .4;
-	const double YawR = DvLerp(.03, .2, PoseW) + KickYaw * Snap;
-	const double RollR = DvLerp(0, .42, PoseW) + KickRoll * Snap + (bDrawNow ? FMath::Sin(StrainT * 7.5) * .03 : 0) + FMath::Sin(SwayT * 1.1) * Amt * .6;
+	const double PitchR = DvLerp(.05, .3, PoseW) - .16 * Snap + Pull * 1.5 + FMath::Sin(SwayT * 1.7 + 1.3) * Amt * .4;
+	const double YawR = DvLerp(.3, .2, PoseW) + KickYaw * Snap;
+	const double RollR = DvLerp(-.12, .25, PoseW) + KickRoll * Snap + (bDrawNow ? FMath::Sin(StrainT * 7.5) * .03 : 0) + FMath::Sin(SwayT * 1.1) * Amt * .6;
 	// three.js rotations: +x pitches the muzzle up (Unreal +pitch), +y turns it left (Unreal -yaw)
 	const FQuat CamQ = CamRotUE.Quaternion();
 	const FVector PosUE = CamPosUE + CamQ.RotateVector((Off + SwayV) * 100);
@@ -715,6 +788,7 @@ void AKeysDiver::UpdateGun(double Dt)
 	GunBandR->SetVisibility(bShow);
 	GunShaft->SetVisibility(bShow && !Speared.bOn);
 	GunGlove->SetVisibility(bShow && bGlove);
+	GunHandL->SetVisibility(bShow && !bGlove);
 	MuzzleG = U2G(PosUE + Q.RotateVector(FVector(BarrelLen, 0, RailY) * 100));
 }
 

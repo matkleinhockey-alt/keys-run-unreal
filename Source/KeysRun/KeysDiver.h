@@ -133,6 +133,7 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunBandR;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunShaft;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunGlove;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunHandL;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Lines;     // flying shaft, its tether, the float line and float
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FishOnLine;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Particles;
