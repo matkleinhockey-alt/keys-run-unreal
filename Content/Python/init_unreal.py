@@ -613,7 +613,21 @@ float a1 = Seed * 40.0, a2 = Seed * 71.0, a3 = Seed * 13.0;
 float f1 = 0.31 + Seed * 0.2, f2 = 0.27 + frac(Seed * 7.0) * 0.2, f3 = 0.21;
 float3 wv = float3(sin(T * f1 + a1), sin(T * f2 + a2), 0.5 * sin(T * f3 + a3)) * sp;
 float3 wd = float3(f1 * cos(T * f1 + a1), f2 * cos(T * f2 + a2), 0.5 * f3 * cos(T * f3 + a3)) * sp;
-float3 pos = P + F * (sl.x + wv.x) + R * (sl.y + wv.y) + U * (sl.z + wv.z);
+// its own spot round the leader: every so often (its own rhythm, 5-13 s) it picks a new one nearby and darts
+// there in a fraction of a second, then holds it while the leader moves and the spot moves with it
+float per = 5.0 + 8.0 * frac(Seed * 17.31);
+float tt = T / per + Seed * 3.7;
+float ep = floor(tt); float tin = (tt - ep) * per;
+float sr = (0.45 * length(sl) + 60.0) * B.w;
+float3 hn = frac(sin(float3(ep * 12.9898 + Seed * 311.7, ep * 78.233 + Seed * 127.1, ep * 37.719 + Seed * 269.5)) * 43758.5453) * 2.0 - 1.0;
+float3 ho = frac(sin(float3((ep - 1.0) * 12.9898 + Seed * 311.7, (ep - 1.0) * 78.233 + Seed * 127.1, (ep - 1.0) * 37.719 + Seed * 269.5)) * 43758.5453) * 2.0 - 1.0;
+hn.z *= 0.4; ho.z *= 0.4;
+float dd = 0.6;
+float dk = saturate(tin / dd); float dart = dk * dk * (3.0 - 2.0 * dk);
+float3 spot = lerp(ho, hn, dart) * sr;
+float3 dvel = (hn - ho) * sr * (6.0 * dk * (1.0 - dk) / dd);   // how fast it is darting, in the leader's frame
+float dartK = saturate(length(dvel) / 150.0);
+float3 pos = P + F * (sl.x + wv.x + spot.x) + R * (sl.y + wv.y + spot.y) + U * (sl.z + wv.z + spot.z);
 // the threat: fish within ~10 m of it are pushed off its line and close in again behind it
 float3 dv = pos - C.xyz; float dist = length(dv) + 1.0;
 float k = C.w * saturate(1.6 - dist / 700.0);
@@ -621,7 +635,7 @@ float3 away = dv / dist; away.z *= 0.35;
 pos += away * k * 450.0;
 pos.z = clamp(pos.z, D.x + 15.0 + Size * 25.0, D.y - 20.0 - Size * 12.0);
 // face along the motion: the leader's heading, the wander and the dodge
-float3 Fh = F * 110.0 + (F * wd.x + R * wd.y + U * wd.z) * 1.4 + away * (k * 300.0);
+float3 Fh = F * 110.0 + (F * wd.x + R * wd.y + U * wd.z) * 1.4 + away * (k * 300.0) + (F * dvel.x + R * dvel.y + U * dvel.z) * 0.9;
 Fh.z = clamp(Fh.z, -0.5 * length(Fh.xy), 0.5 * length(Fh.xy));
 float3 F2 = normalize(Fh + float3(1e-4, 0, 0));
 float3 R2 = cross(Up, F2); float r2 = length(R2); R2 = r2 > 1e-3 ? R2 / r2 : float3(0, 1, 0);
@@ -629,7 +643,7 @@ float3 U2 = cross(F2, R2);
 // the body wave
 float u = saturate((50.0 - LP.x) / 100.0);
 float env = 0.05 + 0.95 * u * u;
-float amp = D.z * (1.0 + 1.2 * k);
+float amp = D.z * (1.0 + 1.2 * k + 1.3 * dartK);
 float lat = amp * 12.0 * env * sin(ph + Seed * 6.2831853 - u * 5.2);
 float3 lv = float3(LP.x - abs(lat) * 0.15 * u, LP.y + lat, LP.z) * Size;
 float3 world = pos + F2 * lv.x + R2 * lv.y + U2 * lv.z;

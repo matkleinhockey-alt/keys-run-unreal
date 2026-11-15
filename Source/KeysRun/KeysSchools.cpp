@@ -584,7 +584,32 @@ void AKeysSchools::Populate()
 {
 	// let go of schools far from the camera
 	for (int32 i = Schools.Num() - 1; i >= 0; i--)
-		if (!Schools[i].bPinned && Hyp(Schools[i].L[0].P.X - Cam.X, Schools[i].L[0].P.Z - Cam.Z) > KeepR) Despawn(i);
+	{
+		FSchool& S = Schools[i];
+		if (S.bPinned) continue;
+		const double DX = S.L[0].P.X - Cam.X, DZ = S.L[0].P.Z - Cam.Z, D = Hyp(DX, DZ);
+		if (D <= KeepR) continue;
+		// the bubble: an open-water school that swims out of it comes back in on the far side, just out of sight,
+		// still on its way (reef fish, grouper, barracuda and flats fish belong where they live, and are let go)
+		const ERole Role = Specs[S.Sp].Role;
+		if (Role == ERole::Bait || Role == ERole::Hunter || Role == ERole::Patrol)
+		{
+			const double NX = Cam.X - DX / D * KeepR * .9, NZ = Cam.Z - DZ / D * KeepR * .9;
+			if (ValidWater(S.Sp, NX, NZ))
+			{
+				const FVector Dl(NX - S.L[0].P.X, 0, NZ - S.L[0].P.Z);
+				const double Floor = TopAt(NX, NZ) + 1.0;
+				for (FLeader& Ld : S.L) { Ld.P += Dl; Ld.P.Y = FMath::Clamp(Ld.P.Y, FMath::Min(Floor, -.8), -.8); }
+				for (FVector& Tp : S.TrackP) { Tp += Dl; Tp.Y = FMath::Clamp(Tp.Y, FMath::Min(Floor, -.8), -.8); }
+				S.Home += Dl; S.Goal += Dl;
+				if (S.Cell) { Cells.Remove(S.Cell); S.Cell = 0; }   // the water it left can fill again
+				UE_LOG(LogTemp, Verbose, TEXT("KRSchools wrap %s to %.0f %.0f"), Specs[S.Sp].Key, NX, NZ);
+				WrapCount++;
+				continue;
+			}
+		}
+		Despawn(i);
+	}
 	for (auto It = Cells.CreateIterator(); It; ++It)
 	{
 		const int32 CX = int32(It.Key() >> 32), CZ = int32(uint32(It.Key() & 0xffffffff));
@@ -1040,7 +1065,7 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 			for (int32 k = 1; k < S.L.Num(); k++) M = FMath::Max(M, (S.L[k].P - S.L[0].P).Size() / FMath::Max(.1, S.Radius));
 			Worst = FMath::Max(Worst, M); Sum += M; N++;
 		}
-		UE_LOG(LogTemp, Log, TEXT("KRSchools body: %d schools, mean furthest sub-group %.2f radii, worst %.2f"), N, N ? Sum / N : 0.0, Worst);
+		UE_LOG(LogTemp, Log, TEXT("KRSchools body: %d schools, mean furthest sub-group %.2f radii, worst %.2f; %d wrapped round the bubble so far"), N, N ? Sum / N : 0.0, Worst, WrapCount);
 		return;
 	}
 	// the point in front of the camera (or the diver), a little way off

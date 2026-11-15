@@ -87,6 +87,7 @@ private:
 	void ReadWorld(double Dt);
 	void Populate();
 	FSchool* Spawn(int32 Sp, const FVector& Home, double HomeTop, int64 Cell, uint32 Seed, double NScale = 1);
+	int32 WrapCount = 0;   // schools that swam out of the bubble and came back in on the far side
 	void Despawn(int32 Index);
 	void StepSchool(FSchool& S, double Dt, double T);
 	void SteerLeader(FSchool& S, int32 K, double Dt);
