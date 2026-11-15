@@ -7,6 +7,7 @@
 // uses, so the fight, the jumps, the catch card, the cooler and the score are the existing machinery.
 
 #include "KeysBoatPawn.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "KeysFeed.h"
 #include "KeysGeo.h"
 #include "KeysMesh.h"
@@ -328,6 +329,76 @@ bool AKeysBoatPawn::TrackBack(double Back, double& OX, double& OZ, double& OH) c
 	return false;
 }
 
+// One skirted trolling lure, nose at Nose pointing along Fwd (Unreal meters). Opaque parts go in M, the clear acrylic
+// head in CM. Pal picks one of the six colourways in the user's photo; Ph keeps each skirt waving on its own beat.
+static void AddLure(FKeysMesh& M, FKeysMesh& CM, const FVector& Nose, const FVector& Fwd, const FVector& Up0, double Sc, int32 Pal, double Ph)
+{
+	auto C = [](uint32 X) { return FLinearColor(FColor(uint8(X >> 16), uint8(X >> 8), uint8(X))); };
+	// outer skirt, inner skirt, accent strands, collar
+	static const uint32 Pals[6][4] = {
+		{ 0x2f86e8, 0xdcecf8, 0xd41a1a, 0x1e5fd0 },   // blue and white with red
+		{ 0xff2d7c, 0x4b1ca6, 0x18183c, 0xff2d7c },   // hot pink and purple
+		{ 0xff6a10, 0xffc21e, 0x2a3c8a, 0xffb020 },   // orange and yellow
+		{ 0x15191d, 0xc4ccd4, 0x2c5cb4, 0x15191d },   // black and silver with blue
+		{ 0x34e234, 0xbaf222, 0x1a2c60, 0x9ae020 },   // green and chartreuse
+		{ 0xff5c12, 0x1c3c94, 0xff7c22, 0xff5c12 },   // orange and blue
+	};
+	const uint32* P = Pals[Pal % 6];
+	const FVector Up = (Up0 - Fwd * FVector::DotProduct(Up0, Fwd)).GetSafeNormal();
+	const FVector Side = FVector::CrossProduct(Up, Fwd);
+	const double HeadL = .15 * Sc, HeadR = .042 * Sc;
+	const FVector Back = Nose - Fwd * HeadL;
+	// the clear head: a bevelled face, then a straight bullet
+	CM.AddTube(Nose + Fwd * .012 * Sc, Nose, HeadR * .55, HeadR * .95, 10, FLinearColor(.85f, .92f, .95f));
+	CM.AddTube(Nose, Back, HeadR * .95, HeadR, 10, FLinearColor(.85f, .92f, .95f));
+	// inside it: the red insert at the nose, the leader through the middle, and the colour sleeve at the back
+	M.AddTube(Nose - Fwd * .008 * Sc, Nose - Fwd * .045 * Sc, HeadR * .42, HeadR * .42, 8, C(0xff3424));
+	M.AddTube(Nose + Fwd * .05, Back, .003, .003, 3, FLinearColor(.8f, .85f, .85f));
+	M.AddTube(Back + Fwd * .06 * Sc, Back - Fwd * .01 * Sc, HeadR * .78, HeadR * .82, 8, C(P[3]));
+	// the googly eyes, one each side, standing a little proud of the acrylic
+	for (int32 Sd = -1; Sd <= 1; Sd += 2)
+	{
+		const FVector E = Nose - Fwd * .055 * Sc + Side * Sd * HeadR * .88 + Up * HeadR * .1;
+		M.AddTube(E, E + Side * Sd * .012 * Sc, .024 * Sc, .022 * Sc, 12, FLinearColor(.96f, .96f, .94f));
+		const FVector Pu = E + Side * Sd * .0125 * Sc + Up * FMath::Sin(Ph * 3.1) * .005 - Fwd * .004;
+		M.AddTube(Pu, Pu + Side * Sd * .002, .012 * Sc, .011 * Sc, 10, FLinearColor(.02f, .02f, .02f));
+	}
+	// the skirt: strands from the collar, flaring and trailing, each one waving a little behind the one in front
+	const int32 NS = 18, NSeg = 4;
+	const double SkL = .42 * Sc;
+	for (int32 k = 0; k < NS; k++)
+	{
+		const double A = 2 * PI * k / NS + .17 * (k % 3);
+		const FVector Rad = Side * FMath::Cos(A) + Up * FMath::Sin(A);
+		const FLinearColor Col = (k % 6 == 5) ? C(P[2]) : (k % 2 ? C(P[1]) : C(P[0]));
+		const double Len = SkL * (.82 + .18 * FMath::Frac(k * .618));
+		FVector Prev = Back + Rad * HeadR * .8;
+		for (int32 s = 1; s <= NSeg; s++)
+		{
+			const double U = double(s) / NSeg;
+			const double Wv = FMath::Sin(Ph * 6.5 - U * 4.0 + k * .7) * .035 * Sc * U;
+			const FVector Q = Back - Fwd * Len * U + Rad * HeadR * (.8 + .9 * U) + Side * Wv + Up * Wv * .5 * FMath::Cos(k * 1.3);
+			M.AddTube(Prev, Q, .0065 * Sc * (1 - .4 * U), .0065 * Sc * (1 - .4 * (U + .25)), 3, Col);
+			Prev = Q;
+		}
+		// glitter flecks on every third strand
+		if (k % 3 == 0) M.AddTube(Back - Fwd * Len * .3 + Rad * HeadR * 1.15, Back - Fwd * Len * .32 + Rad * HeadR * 1.18, .005, .004, 3, FLinearColor(1.f, 1.f, .95f) * 1.5f);
+	}
+	// the hook: shank inside the skirt, the bend just showing at the back
+	const FLinearColor Steel(.7f, .72f, .75f);
+	const FVector H0 = Back - Fwd * .05 * Sc, H1 = Back - Fwd * SkL * .72;
+	M.AddTube(H0, H1, .004 * Sc, .004 * Sc, 4, Steel);
+	FVector Pv = H1;
+	for (int32 s = 1; s <= 5; s++)
+	{
+		const double A = PI * s / 5;
+		const FVector Q = H1 - Fwd * FMath::Sin(A) * .035 * Sc - Up * (1 - FMath::Cos(A)) * .035 * Sc;
+		M.AddTube(Pv, Q, .004 * Sc, .004 * Sc, 4, Steel);
+		Pv = Q;
+	}
+	M.AddTube(Pv, Pv + Fwd * .03 * Sc, .004 * Sc, .001, 4, Steel);
+}
+
 bool AKeysBoatPawn::LurePos(int32 Station, FVector& Out) const
 {
 	if (!bSpreadOut || Station < 0 || Station >= NumStations) return false;
@@ -340,23 +411,27 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 	PushTrack();
 	const double Out = RigK;
 	bSpreadOut = Out > .02;
-	if (!bSpreadOut) { if (TrollMesh->GetNumSections()) TrollMesh->ClearAllMeshSections(); return; }
+	if (!bSpreadOut) { for (double& C : Cleared) C = 0; if (TrollMesh->GetNumSections()) TrollMesh->ClearAllMeshSections(); return; }
 
 	const FBoatSpec& S = Spec();
 	const double Fx = -FMath::Sin(H), Fz = -FMath::Cos(H), Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
 	const FTransform BT = GetActorTransform();
 	const FVector Cam = Camera->GetComponentLocation() / 100.0;   // Unreal axes, meters
 	// lines are thin, so they get a radius that holds about a pixel at any distance
-	auto LineR = [&Cam](const FVector& PU) { return FMath::Max(.008, (PU - Cam).Size() * .0011); };
+	auto LineR = [&Cam](const FVector& PU) { return FMath::Max(.0035, (PU - Cam).Size() * .00055); };
 	FVector Tip[2], Base[2];
 	const bool bRiggers = KeysMesh::RiggerTips(S, FMath::SmoothStep(0.0, 1.0, RigK), Tip, Base);
 
-	FKeysMesh M;
-	const FLinearColor LineC(.86f, .9f, .92f), Mono(.55f, .75f, .62f);
+	FKeysMesh M, CM;   // CM: the see-through parts (the clear mono lines and the acrylic lure heads)
+	const FLinearColor LineC(.78f, .86f, .84f), Mono(.7f, .84f, .8f);
 	for (int32 i = 0; i < NumStations; i++)
 	{
 		const FStation& St = Stations[i];
-		const double Back = St.Back * Out, Side = St.Side * Out;
+		// once a fish is on, the crew clears every other line: wound in to the boat and stowed, back out after the fight
+		const bool bClear = HookedStation >= 0 && i != HookedStation;
+		Cleared[i] = FMath::Clamp(Cleared[i] + (bClear ? Dt / 7.0 : -Dt / 5.0), 0.0, 1.0);
+		const double Cl = FMath::SmoothStep(0.0, 1.0, Cleared[i]);
+		const double Back = St.Back * Out * (1 - .92 * Cl), Side = St.Side * Out * (1 - .8 * Cl);
 		double TX, TZ, LH = H;
 		double LX, LZ;
 		if (TrackBack(Back, TX, TZ, LH)) { LX = TX + FMath::Cos(LH) * Side; LZ = TZ - FMath::Sin(LH) * Side; }
@@ -372,28 +447,16 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 		const double Swim = FMath::Sin(SwPh) * .52 * Bite, Wag = FMath::Cos(SwPh) * .42 * Bite;
 		Lures[i] = FVector(LX + LRx * Swim, LY, LZ + LRz * Swim);
 		if (i == HookedStation) continue;   // that lure is in the fish's jaw now: the rod's own line runs to it
+		if (Cleared[i] > .85) continue;     // stowed
 
 		// the lure, nose toward the boat, in Unreal axes
 		const double Yaw = LH + Wag;
 		const FVector Fwd = G2U(FVector(-FMath::Sin(Yaw), 0, -FMath::Cos(Yaw))).GetSafeNormal();
 		const FVector Up = FVector(0, 0, 1);
 		const FVector Nose = G2U(Lures[i]) + Fwd * .2 + Up * (Air * .12);
-		const FVector Tail = G2U(Lures[i]) - Fwd * .25 - Up * (Air * .12 - .04);
-		if (i < 2)
-		{
-			// a rigged ballyhoo under a pink skirt on the rigger baits
-			M.AddTube(Nose + Fwd * .12, Nose, .012, .04, 6, FLinearColor(.75f, .8f, .86f));
-			M.AddTube(Nose, Tail - Fwd * .08, .04, .02, 6, FLinearColor(.45f, .55f, .7f));
-			M.AddTri(Tail - Fwd * .08, Tail - Fwd * .22 + Up * .07, Tail - Fwd * .22 - Up * .07, FLinearColor(.35f, .42f, .55f), FVector::CrossProduct(Fwd, Up));
-			M.AddTube(Nose + Fwd * .05, Nose - Fwd * .3, .045, .085, 8, FLinearColor(.95f, .25f, .55f));
-		}
-		else
-		{
-			// a skirted trolling lure: a chrome head and a skirt streaming off it (bigger on the shotgun)
-			const double Sc = i == 4 ? 1.4 : 1.15;
-			M.AddTube(Nose, Nose - Fwd * .22 * Sc, .07 * Sc, .11 * Sc, 8, FLinearColor(.95f, .76f, .3f));
-			M.AddTube(Nose - Fwd * .22 * Sc, Nose - Fwd * .58 * Sc, .12 * Sc, .02, 8, i == 4 ? FLinearColor(.1f, .55f, .3f) : FLinearColor(.88f, .29f, .16f));
-		}
+		// the skirted lures from the user's photo: a clear acrylic bullet head with a red insert at the nose, big
+		// googly eyes, a coloured collar and a long glittery skirt in two or three colours, the hook riding in it
+		AddLure(M, CM, Nose, Fwd, Up, i == 4 ? 1.25 : 1.0, i, T + i * 1.7);
 
 		// where the line leaves the boat: the rigger clip for the outside baits, the transom corners for the rest
 		FVector From;
@@ -415,7 +478,7 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 			P.Z -= FMath::Sin(PI * U) * Slack;
 			const double W = WaveH(P.X, P.Y, T, AmpAt(P.X, P.Y), false) - .02;
 			P.Z = FMath::Max(P.Z, W);
-			M.AddTube(Prev, P, LineR(Prev), LineR(P), 3, LineC);
+			CM.AddTube(Prev, P, LineR(Prev), LineR(P), 3, LineC);
 			Prev = P;
 		}
 		// on the rigger lines, the rod's own line from the gunwale holder up to the clip
@@ -423,15 +486,17 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 		{
 			const double Sx = St.Rigger == 0 ? -1 : 1;
 			const FVector Rod = BT.TransformPosition(FVector(-S.Len * .32 + .45 - .2, Sx * (S.Beam * .5 + .05), KeysMesh::SheerAt(S, -S.Len * .32) + 2.2) * 100.0) / 100.0;
-			M.AddTube(Rod, From, LineR(Rod), LineR(From), 3, LineC);
+			CM.AddTube(Rod, From, LineR(Rod), LineR(From), 3, LineC);
 		}
 	}
 
+	// the teasers come in with the other lines when a fish is on
+	const double TeaseIn = FMath::SmoothStep(0.0, 1.0, FMath::Max3(Cleared[0], Cleared[2], FMath::Max(Cleared[1], Cleared[3])));
 	// the teasers: a daisy chain of squid off each transom corner, splashing in the white water close astern
-	for (int32 Sd = -1; Sd <= 1; Sd += 2)
+	for (int32 Sd = -1; Sd <= 1 && TeaseIn < .85; Sd += 2)
 	{
 		const FVector From = BT.TransformPosition(FVector(-S.Len * .5 + .2, Sd * S.Beam * .38, KeysMesh::SheerAt(S, -S.Len * .5) + .5) * 100.0) / 100.0;
-		const double Back = 14 * Out;
+		const double Back = 14 * Out * (1 - .9 * TeaseIn);
 		double TX, TZ, LH = H;
 		if (!TrackBack(Back, TX, TZ, LH)) { TX = X - Fx * Back; TZ = Z - Fz * Back; }
 		const FVector Start(TX + FMath::Cos(LH) * Sd * 2.6 * Out, 0, TZ - FMath::Sin(LH) * Sd * 2.6 * Out);
@@ -442,11 +507,21 @@ void AKeysBoatPawn::UpdateSpread(double Dt, double T)
 			const double GX = Start.X - FMath::Sin(LH) * -k * .55, GZ = Start.Z - FMath::Cos(LH) * -k * .55;
 			const double Bob2 = FMath::Max(0.0, FMath::Sin(T * 4.2 + k * .9 + Sd)) * .14;
 			const FVector P = G2U(FVector(GX, WaveH(GX, GZ, T, AmpAt(GX, GZ)) + .02 + Bob2, GZ));
-			M.AddTube(PrevU, P, LineR(PrevU), LineR(P), 3, Mono);
+			CM.AddTube(PrevU, P, LineR(PrevU), LineR(P), 3, Mono);
 			const FLinearColor SquidC = k == 5 ? FLinearColor(.9f, .2f, .5f) : (k % 2 ? FLinearColor(.95f, .9f, .25f) : FLinearColor(.25f, .7f, .35f));
 			M.AddTube(P + Fwd * .08, P - Fwd * .22, .05, .07, 6, SquidC);
 			PrevU = P - Fwd * .22;
 		}
 	}
 	M.Commit(TrollMesh, 0, AKeysWorld::VertexColorMaterial());
+	static TWeakObjectPtr<UMaterialInstanceDynamic> ClearMat;
+	if (!ClearMat.IsValid())
+		if (UMaterialInterface* G = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Glass.M_KR_Glass")))
+		{
+			ClearMat = UMaterialInstanceDynamic::Create(G, GetTransientPackage());
+			ClearMat->SetScalarParameterValue(TEXT("Opacity"), .45f);
+			ClearMat->AddToRoot();
+		}
+	if (CM.T.Num()) CM.Commit(TrollMesh, 1, ClearMat.IsValid() ? (UMaterialInterface*)ClearMat.Get() : AKeysWorld::VertexColorMaterial());
+	else TrollMesh->ClearMeshSection(1);
 }

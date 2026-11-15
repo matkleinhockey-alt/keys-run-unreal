@@ -1,4 +1,5 @@
 #include "KeysHUD.h"
+#include "CanvasItem.h"
 #include "KeysFeed.h"
 #include "KeysGfx.h"
 #include "Engine/GameViewportClient.h"
@@ -691,9 +692,45 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 	}
 	const FVector2D B = ChartXY(P->BoatX(), P->BoatZ(), X, Y, Size);
 	const double Hh = P->Heading();
-	const FVector2D Tip = B + FVector2D(-FMath::Sin(Hh), -FMath::Cos(Hh)) * 14.0 * U;
-	DrawLine(B.X, B.Y, Tip.X, Tip.Y, FLinearColor(.95f, .1f, .1f), 3 * U);
-	DrawRect(FLinearColor(.95f, .1f, .1f), B.X - 4 * U, B.Y - 4 * U, 8 * U, 8 * U);
+	// your boat: a small white boat icon outlined in black, with a pulsing white ring and "YOU" beside it, so it never
+	// gets lost among the red marina and fish dots
+	{
+		const FVector2D F(-FMath::Sin(Hh), -FMath::Cos(Hh)), R(-F.Y, F.X);
+		const double Pulse = FMath::Frac(GetWorld()->GetTimeSeconds() * .8);
+		const double Rr = (14 + 12 * Pulse) * U;
+		const FLinearColor RingC(1.f, 1.f, 1.f, float(1 - Pulse));
+		for (int32 k = 0; k < 24; k++)
+		{
+			const double A0 = 2 * PI * k / 24, A1 = 2 * PI * (k + 1) / 24;
+			DrawLine(B.X + FMath::Cos(A0) * Rr, B.Y + FMath::Sin(A0) * Rr, B.X + FMath::Cos(A1) * Rr, B.Y + FMath::Sin(A1) * Rr, RingC, 2 * U);
+		}
+		// a little top-down boat: pointed bow, flat transom, a console amidships, bow pointing where you're headed
+		auto Hull = [&](double Sz, const FLinearColor& C)
+		{
+			const double Pf[7][2] = { {12, 0}, {6, 4.6}, {-6, 4.8}, {-8.5, 4.2}, {-8.5, -4.2}, {-6, -4.8}, {6, -4.6} };
+			auto Pt = [&](int32 k) { return B + (F * Pf[k][0] + R * Pf[k][1]) * Sz * U; };
+			for (int32 k = 1; k < 6; k++)
+			{
+				FCanvasTriangleItem Tr(Pt(0), Pt(k), Pt(k + 1), GWhiteTexture);
+				Tr.SetColor(C);
+				Canvas->DrawItem(Tr);
+			}
+		};
+		Hull(1.25, FLinearColor::Black);
+		Hull(1.0, FLinearColor(.97f, .97f, .95f));
+		{
+			// the console and T-top, and the wake trailing off the stern
+			const FVector2D C0 = B - F * 1.5 * U;
+			FCanvasTriangleItem T1(C0 + (F * 2.5 + R * 2.2) * U, C0 + (F * 2.5 - R * 2.2) * U, C0 + (-F * 2.5 - R * 2.2) * U, GWhiteTexture);
+			FCanvasTriangleItem T2(C0 + (F * 2.5 + R * 2.2) * U, C0 + (-F * 2.5 - R * 2.2) * U, C0 + (-F * 2.5 + R * 2.2) * U, GWhiteTexture);
+			T1.SetColor(FLinearColor(.12f, .2f, .32f)); T2.SetColor(FLinearColor(.12f, .2f, .32f));
+			Canvas->DrawItem(T1); Canvas->DrawItem(T2);
+			const FVector2D S0 = B - F * 11.0 * U;
+			DrawLine(S0.X + R.X * 3 * U, S0.Y + R.Y * 3 * U, S0.X - F.X * 9 * U + R.X * 6 * U, S0.Y - F.Y * 9 * U + R.Y * 6 * U, FLinearColor(1, 1, 1, .7f), 1.5f * U);
+			DrawLine(S0.X - R.X * 3 * U, S0.Y - R.Y * 3 * U, S0.X - F.X * 9 * U - R.X * 6 * U, S0.Y - F.Y * 9 * U - R.Y * 6 * U, FLinearColor(1, 1, 1, .7f), 1.5f * U);
+		}
+		Text(TEXT("YOU"), B.X + 15 * U, B.Y - 18 * U, .65f, FLinearColor(1.f, 1.f, 1.f));
+	}
 	Text(TEXT("N"), X + Size * .5f, Y + 4 * U, .7f, FLinearColor(.1f, .15f, .25f), nullptr, true);
 	if (!P->bBigMap) Text(TEXT("M - chart"), X + Size - 76 * U, Y + Size + 6 * U, .7f, Dim);
 }

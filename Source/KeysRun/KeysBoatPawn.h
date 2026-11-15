@@ -386,8 +386,10 @@ private:
 	bool bRaiseBurst = false;
 	double ScriptDescendUntil = 0;   // -KRScript sink=: hold the diver's descend until then (real time)   // the lunge's splash has gone up
 	static constexpr int32 NumStations = 5;
+	int32 LureCamN = -1; FVector LureCamOff = FVector(.9, .6, .45);   // test: lurecam=N
 	FVector Lures[NumStations];      // game meters, as of the last spread update
 	double Pulled[NumStations] = {0, 0, 0, 0, 0};
+	double Cleared[NumStations] = {0, 0, 0, 0, 0};   // 0 fishing .. 1 reeled in and stowed (the other lines, once a fish is on)
 	bool bSpreadOut = false;
 	TArray<FVector> Trk;             // the boat's track by distance: x, z, heading
 	int32 TrkHead = -1, TrkCount = 0;

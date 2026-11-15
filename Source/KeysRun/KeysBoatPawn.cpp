@@ -772,6 +772,14 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd == TEXT("jump")) { if (FState == EKeysFish::Fight) StartJump(false); }
 		else if (Cmd == TEXT("troll")) { if (!bTrolling) ToggleTroll(); }
+		else if (Cmd.StartsWith(TEXT("lurecam=")))
+		{
+			// lurecam=N[,dx,dy,dz]: hold the camera beside lure N (-1 to let go)
+			TArray<FString> P;
+			Cmd.Mid(8).ParseIntoArray(P, TEXT(","));
+			LureCamN = P.Num() ? FCString::Atoi(*P[0]) : -1;
+			if (P.Num() >= 4) LureCamOff = FVector(FCString::Atod(*P[1]), FCString::Atod(*P[2]), FCString::Atod(*P[3]));
+		}
 		else if (Cmd == TEXT("trollin")) { if (bTrolling) ToggleTroll(); }
 		else if (Cmd == TEXT("trollraise")) { if (bTrolling && PendKey.IsEmpty()) TrollRaise(.9); }   // a fish comes up on the spread now
 		else if (Cmd == TEXT("trollstrike") || Cmd.StartsWith(TEXT("trollstrike=")))
@@ -3470,4 +3478,11 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	DrawLineAndRod(T);
 	EndShoreSwap();
 	UpdateSpread(Dt, T);
+	if (LureCamN >= 0 && LureCamN < NumStations && bSpreadOut)
+	{
+		// test only (lurecam=N): sit just off the side of a trolled lure, looking at it
+		const FVector L(Lures[LureCamN].X, Lures[LureCamN].Z, Lures[LureCamN].Y);
+		const FVector Pu = (L + FVector(LureCamOff.X, LureCamOff.Y, LureCamOff.Z)) * 100.0;
+		Camera->SetWorldLocationAndRotation(Pu, (L * 100.0 - Pu).Rotation());
+	}
 }
