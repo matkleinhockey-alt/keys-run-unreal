@@ -28,6 +28,7 @@ namespace
 	constexpr int32 SchRows = 512;       // leaders alive at once
 	constexpr int32 SchHist = 96;        // samples of history per leader (4.8 s: the whole school strung out on the leader's path)
 	constexpr double SchStep = .05;      // seconds between samples
+	constexpr int32 SchTex = 5;          // texels per sample (position, heading, threat, floor, shape)
 	constexpr double SchMaxDelay = (SchHist - 4) * SchStep;
 	constexpr double PhaseWrap = 512 * 2 * PI;
 
@@ -132,8 +133,8 @@ void AKeysSchools::BeginPlay()
 void AKeysSchools::SetupTexture()
 {
 	TArray64<uint8> Zero;
-	Zero.SetNumZeroed(SchHist * 4 * SchRows * sizeof(FLinearColor));
-	Tex = UTexture2D::CreateTransient(SchHist * 4, SchRows, PF_A32B32G32R32F, TEXT("KeysFishTrack"), Zero);
+	Zero.SetNumZeroed(SchHist * SchTex * SchRows * sizeof(FLinearColor));
+	Tex = UTexture2D::CreateTransient(SchHist * SchTex, SchRows, PF_A32B32G32R32F, TEXT("KeysFishTrack"), Zero);
 	if (Tex)
 	{
 		Tex->Filter = TF_Nearest;
@@ -143,7 +144,7 @@ void AKeysSchools::SetupTexture()
 		Tex->NeverStream = true;
 		Tex->UpdateResource();
 	}
-	Column.SetNumZeroed(SchRows * 4);
+	Column.SetNumZeroed(SchRows * SchTex);
 	UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Fish.M_KR_Fish"));
 	if (!M) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: M_KR_Fish missing (open the editor once to create it); no school fish")); return; }
 	MID = UMaterialInstanceDynamic::Create(M, this);
@@ -811,7 +812,8 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 		// the body tightens into a ball under attack, and draws out long when it swims hard
 		const double Sp = FMath::Lerp(1.0, .45, S.Ball);
 		const double Str = FMath::Clamp(S.L[0].V.Size() / FMath::Max(.3, Sc.Cruise) - 1, 0.0, 1.5);
-		Want = P0 + (F * Ld.Slot.X * (1 + .35 * Str) + Rt * Ld.Slot.Y * (1 - .12 * Str) + Up * Ld.Slot.Z) * Sp;
+		const FVector& Sh = S.Shape;
+		Want = P0 + (F * Ld.Slot.X * Sh.X * (1 + .35 * Str) + Rt * Ld.Slot.Y * Sh.Y * (1 - .12 * Str) + Up * Ld.Slot.Z * Sh.Z) * Sp;
 		Speed = FMath::Max(Sc.Cruise, S.L[0].V.Size()) * 1.3;
 	}
 	const FVector To = Want - Ld.P;
@@ -819,12 +821,19 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	const double Arrive = bMain ? FMath::Min(1.0, Dist / 2.5) : FMath::Min(2.2, Dist / .5);
 	FVector Desired = Dist > 1e-3 ? To / Dist * Speed * Arrive : FVector::ZeroVector;
 	if (!bMain) Desired += S.L[0].V;   // moving with the body
+	else if (S.bSqueezed)
+	{
+		// a bait ball crowded by the reef, a wreck or the edge of its water slides off it into the open, and in thin
+		// water keeps to the middle of what depth there is
+		Desired += S.Nudge;
+		Desired.Y += FMath::Clamp((S.MidY - Ld.P.Y) * 1.2, -.8, .8) * (1 - S.Shape.Z);
+	}
 	// separation from the school's other leaders
 	for (int32 j = 0; j < S.L.Num(); j++)
 	{
 		if (j == K) continue;
 		const FVector D = Ld.P - S.L[j].P;
-		const double Dd = D.Size(), Want2 = (Ld.Ext + S.L[j].Ext) * .8;
+		const double Dd = D.Size(), Want2 = (Ld.Ext + S.L[j].Ext) * .8 * FMath::Min(1.0, FMath::Min(S.Shape.Y, S.Shape.Z) * 1.15);
 		if (Dd < Want2 && Dd > 1e-3) Desired += D / Dd * (Want2 - Dd) * 1.5;
 	}
 	// threats
@@ -883,8 +892,8 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	// the bottom, the coral and wrecks below; the surface above; the habitat around
 	const FVector Ahead = Ld.P + Ld.V * 1.2;
 	const double Top = FMath::Max(TopAt(Ld.P.X, Ld.P.Z), TopAt(Ahead.X, Ahead.Z));
-	const double Lo = Top + FMath::Max(.15, Sc.AltMin * .6) + Ld.Ext * (Sc.Role == ERole::Bait ? .7 : .35);
-	const double Hi = -.35 - Ld.Ext * .45 - S.Len * .2;
+	const double Lo = Top + FMath::Max(.15, Sc.AltMin * .6) + Ld.Ext * (Sc.Role == ERole::Bait ? .7 * S.Shape.Z : .35);
+	const double Hi = -.35 - Ld.Ext * .45 * S.Shape.Z - S.Len * .2;
 	if (Ld.P.Y < Lo) Desired.Y = FMath::Max(Desired.Y, (Lo - Ld.P.Y) * 2.5);
 	if (Ld.P.Y > Hi && Hi > Lo) Desired.Y = FMath::Min(Desired.Y, (Hi - Ld.P.Y) * 2.5);
 	if (!ValidWater(S.Sp, Ahead.X, Ahead.Z) || Flat(Ld.P - S.Home).Size() > Sc.Roam * 1.6 + 10)
@@ -913,10 +922,75 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	Ld.Amp = FMath::Lerp(Ld.Amp, FMath::Clamp(.18 + .2 * Rel, .18, 1.0), FMath::Min(1.0, Dt * 3));
 }
 
+// A bait ball takes the shape of the water it is in. It feels round itself (and a little ahead) for the bottom,
+// the surface, coral heads and wrecks rising into it and the edge of the water it lives in, and gives way: over a
+// shallow flat or a reef top it spreads into a low sheet; along a channel or between coral heads it narrows and
+// draws out into a ribbon; pressed against a wall it slides off it. The fish keep their room, so what it loses one
+// way it gains another, and when the water opens up again it rounds back out.
+void AKeysSchools::SenseShape(FSchool& S, double Dt)
+{
+	const FLeader& M = S.L[0];
+	S.SenseT -= Dt;
+	if (S.SenseT <= 0)
+	{
+		S.SenseT = .15;
+		const double Sp = FMath::Lerp(1.0, .45, S.Ball);
+		const double R0 = FMath::Max(.4, S.Radius * Sp);
+		FVector F = Flat(M.Fwd).GetSafeNormal();
+		if (F.IsNearlyZero()) F = FVector(1, 0, 0);
+		FVector Rt, Up;
+		Frame(F, Rt, Up);
+		Rt = Flat(Rt).GetSafeNormal();
+		// depth: the highest bottom under the ball and just ahead of it
+		const FVector C = M.P + Flat(M.V) * .6;
+		double Floor = TopAt(C.X, C.Z);
+		for (int32 q = 0; q < 8; q++)
+		{
+			const double A = q * PI / 4;
+			const FVector Q = C + (F * FMath::Cos(A) + Rt * FMath::Sin(A)) * R0 * .8;
+			Floor = FMath::Max(Floor, TopAt(Q.X, Q.Z));
+		}
+		const double Lo = Floor + .25 + S.Len, Hi = -.35 - S.Len * .3;
+		const double Room = Hi - Lo, Hn = 2 * R0 * .85;
+		const double SqZ = FMath::Clamp(Room / Hn, .22, 1.0);
+		S.MidY = (Lo + Hi) * .5;
+		// room either side: out from the centre until coral, a wreck or the edge of its water gets in the way
+		const double BallBot = M.P.Y - R0 * SqZ * .6;
+		double Free[2];
+		for (int32 Side = 0; Side < 2; Side++)
+		{
+			const double Sg = Side ? 1 : -1;
+			Free[Side] = R0 * 1.6;
+			for (int32 Stp = 1; Stp <= 6; Stp++)
+			{
+				const double D = R0 * 1.6 * Stp / 6;
+				const FVector Q = C + Rt * Sg * D;
+				if (!ValidWater(S.Sp, Q.X, Q.Z) || TopAt(Q.X, Q.Z) > BallBot) { Free[Side] = FMath::Max(.15, D - R0 * .2); break; }
+			}
+		}
+		// what it can't have upward it takes sideways and lengthways; what it can't have sideways, lengthways
+		const double Wide = (Free[0] + Free[1]) / (2 * R0);
+		const double SY = FMath::Clamp(FMath::Min(1 / FMath::Sqrt(SqZ), Wide), .3, 1.7);
+		const double SX = FMath::Clamp(1 / (SY * SqZ), .75, 3.2);
+		S.ShapeWant = FVector(SX, SY, SqZ);
+		// slide toward the middle of the gap, off whatever it's pressed against
+		const double Off = (Free[1] - Free[0]) * .5;
+		S.Nudge = FMath::Abs(Off) > R0 * .1 ? Rt * FMath::Clamp(Off, -R0, R0) * 1.1 : FVector::ZeroVector;
+		S.bSqueezed = SqZ < .98 || Wide < .98 || !S.Nudge.IsNearlyZero();
+	}
+	// it gives way quickly and rounds out again slowly
+	for (int32 a = 0; a < 3; a++)
+	{
+		const double Rate = S.ShapeWant[a] < S.Shape[a] ? 2.2 : .7;
+		S.Shape[a] = FMath::FInterpTo(S.Shape[a], S.ShapeWant[a], Dt, Rate);
+	}
+}
+
 void AKeysSchools::StepSchool(FSchool& S, double Dt, double T)
 {
 	MainGoal(S, Dt);
 	S.Ball = FMath::Max(0.0, S.Ball - Dt * .25);
+	if (Specs[S.Sp].Role == ERole::Bait) SenseShape(S, Dt);
 	for (int32 k = 0; k < S.L.Num(); k++) SteerLeader(S, k, Dt);
 }
 
@@ -935,29 +1009,30 @@ void AKeysSchools::WriteSample()
 		for (const FLeader& Ld : S.L)
 		{
 			if (Ld.Row < 0) continue;
-			FLinearColor* C = Column.GetData() + Ld.Row * 4;
+			FLinearColor* C = Column.GetData() + Ld.Row * SchTex;
 			const FVector P = G2U(Ld.P), F = D2U(Ld.Fwd), Tp = G2U(Ld.ThreatP);
 			const double Top = TopAt(Ld.P.X, Ld.P.Z);
 			C[0] = FLinearColor(float(P.X), float(P.Y), float(P.Z), float(Ld.Phase));
 			C[1] = FLinearColor(float(F.X), float(F.Y), float(F.Z), float(Spread));
 			C[2] = FLinearColor(float(Tp.X), float(Tp.Y), float(Tp.Z), float(Ld.ThreatK));
 			C[3] = FLinearColor(float(Top * 100), -15.f, float(Ld.Amp), float(Ld.Alarm));
+			C[4] = FLinearColor(float(S.Shape.X), float(S.Shape.Y), float(S.Shape.Z), 0.f);
 		}
 	}
 	{
-		FLinearColor* Buf = new FLinearColor[SchRows * 4];
-		FMemory::Memcpy(Buf, Column.GetData(), SchRows * 4 * sizeof(FLinearColor));
-		FUpdateTextureRegion2D* Rg = new FUpdateTextureRegion2D(Col * 4, 0, 0, 0, 4, SchRows);
-		Tex->UpdateTextureRegions(0, 1, Rg, 4 * sizeof(FLinearColor), sizeof(FLinearColor), (uint8*)Buf, [](uint8* D, const FUpdateTextureRegion2D* R) { delete[] (FLinearColor*)D; delete R; });
+		FLinearColor* Buf = new FLinearColor[SchRows * SchTex];
+		FMemory::Memcpy(Buf, Column.GetData(), SchRows * SchTex * sizeof(FLinearColor));
+		FUpdateTextureRegion2D* Rg = new FUpdateTextureRegion2D(Col * SchTex, 0, 0, 0, SchTex, SchRows);
+		Tex->UpdateTextureRegions(0, 1, Rg, SchTex * sizeof(FLinearColor), sizeof(FLinearColor), (uint8*)Buf, [](uint8* D, const FUpdateTextureRegion2D* R) { delete[] (FLinearColor*)D; delete R; });
 		Uploads++;
 	}
 	// a new leader's whole history starts where it is now, so its followers have something to read
 	for (const int32 Row : FreshRows)
 	{
-		FLinearColor* Buf = new FLinearColor[SchHist * 4];
-		for (int32 h = 0; h < SchHist; h++) FMemory::Memcpy(Buf + h * 4, Column.GetData() + Row * 4, 4 * sizeof(FLinearColor));
-		FUpdateTextureRegion2D* Rg = new FUpdateTextureRegion2D(0, Row, 0, 0, SchHist * 4, 1);
-		Tex->UpdateTextureRegions(0, 1, Rg, SchHist * 4 * sizeof(FLinearColor), sizeof(FLinearColor), (uint8*)Buf, [](uint8* D, const FUpdateTextureRegion2D* R) { delete[] (FLinearColor*)D; delete R; });
+		FLinearColor* Buf = new FLinearColor[SchHist * SchTex];
+		for (int32 h = 0; h < SchHist; h++) FMemory::Memcpy(Buf + h * SchTex, Column.GetData() + Row * SchTex, SchTex * sizeof(FLinearColor));
+		FUpdateTextureRegion2D* Rg = new FUpdateTextureRegion2D(0, Row, 0, 0, SchHist * SchTex, 1);
+		Tex->UpdateTextureRegions(0, 1, Rg, SchHist * SchTex * sizeof(FLinearColor), sizeof(FLinearColor), (uint8*)Buf, [](uint8* D, const FUpdateTextureRegion2D* R) { delete[] (FLinearColor*)D; delete R; });
 	}
 	FreshRows.Reset();
 	SampleIdx++;
@@ -1066,6 +1141,18 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 			Worst = FMath::Max(Worst, M); Sum += M; N++;
 		}
 		UE_LOG(LogTemp, Log, TEXT("KRSchools body: %d schools, mean furthest sub-group %.2f radii, worst %.2f; %d wrapped round the bubble so far"), N, N ? Sum / N : 0.0, Worst, WrapCount);
+		return;
+	}
+	if (C == TEXT("shape"))
+	{
+		// how the bait balls are shaped by the water round them: along x across x up
+		for (const FSchool& S : Schools)
+		{
+			if (Specs[S.Sp].Role != ERole::Bait) continue;
+			const double Top = TopAt(S.L[0].P.X, S.L[0].P.Z);
+			UE_LOG(LogTemp, Log, TEXT("KRSchools shape %s #%d at %.0f %.1f %.0f (bottom %.1f): %.2f x %.2f x %.2f%s"), Specs[S.Sp].Key, S.Id,
+				S.L[0].P.X, S.L[0].P.Y, S.L[0].P.Z, Top, S.Shape.X, S.Shape.Y, S.Shape.Z, S.Nudge.IsNearlyZero() ? TEXT("") : TEXT(", sliding off something"));
+		}
 		return;
 	}
 	// the point in front of the camera (or the diver), a little way off

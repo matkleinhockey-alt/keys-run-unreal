@@ -575,8 +575,9 @@ def _vertex_color(mat):
 
 # The schooling fish (KeysSchools.cpp). The motion lives here, on the GPU: the C++ only steers a few leaders per school
 # and writes their recent track (20 samples a second, ~2.4 s of history) into a float texture, one row per leader,
-# four texels per sample: A = position (cm) + tail-beat phase, B = heading + the school's spread, C = the threat
-# (position + strength), D = floor top z, surface z, swim strength, alarm. Every fish is an instance that never moves:
+# five texels per sample: A = position (cm) + tail-beat phase, B = heading + the school's spread, C = the threat
+# (position + strength), D = floor top z, surface z, swim strength, alarm, E = the school's shape (scale along, across,
+# up: a bait ball flattened by shallow water or drawn out between coral heads). Every fish is an instance that never moves:
 # from its custom data (0 leader row, 1 delay s, 2-4 slot cm in the leader's frame, 5 seed, 6 length m, 7 shade) this
 # shader reads where its leader was Delay seconds ago, places the fish at its slot around that (so turns ripple back
 # through the school), adds an idle wander, pushes it away from the threat (the school splits around a predator and
@@ -589,26 +590,30 @@ float i0 = floor(s); float fr = s - i0;
 i0 = i0 - floor(i0 / hist) * hist;
 float i1 = i0 + 1.0; i1 = i1 - floor(i1 / hist) * hist;
 float vv = (Row + 0.5) / Rows;
-float tw = hist * 4.0;
-float4 A0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 0.5) / tw, vv), 0);
-float4 A1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 0.5) / tw, vv), 0);
-float4 B0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 1.5) / tw, vv), 0);
-float4 B1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 1.5) / tw, vv), 0);
-float4 C0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 2.5) / tw, vv), 0);
-float4 C1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 2.5) / tw, vv), 0);
-float4 D0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 4.0 + 3.5) / tw, vv), 0);
-float4 D1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 4.0 + 3.5) / tw, vv), 0);
+float tw = hist * 5.0;
+float4 A0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 5.0 + 0.5) / tw, vv), 0);
+float4 A1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 5.0 + 0.5) / tw, vv), 0);
+float4 B0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 5.0 + 1.5) / tw, vv), 0);
+float4 B1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 5.0 + 1.5) / tw, vv), 0);
+float4 C0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 5.0 + 2.5) / tw, vv), 0);
+float4 C1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 5.0 + 2.5) / tw, vv), 0);
+float4 D0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 5.0 + 3.5) / tw, vv), 0);
+float4 D1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 5.0 + 3.5) / tw, vv), 0);
+float4 E0 = Texture2DSampleLevel(Tex, TexSampler, float2((i0 * 5.0 + 4.5) / tw, vv), 0);
+float4 E1 = Texture2DSampleLevel(Tex, TexSampler, float2((i1 * 5.0 + 4.5) / tw, vv), 0);
 float ph1 = A1.w; if (ph1 < A0.w - 100.0) ph1 += 3216.9908772;
 float3 P = lerp(A0.xyz, A1.xyz, fr);
 float ph = lerp(A0.w, ph1, fr);
 float4 B = lerp(B0, B1, fr); float4 C = lerp(C0, C1, fr); float4 D = lerp(D0, D1, fr);
+// the shape the water leaves the school (along, across, up); a fresh row of zeros reads as round
+float3 E = lerp(E0.xyz, E1.xyz, fr); E = E.x + E.y + E.z < 0.1 ? float3(1, 1, 1) : E;
 float3 Up = float3(0, 0, 1);
 float3 F = normalize(B.xyz + float3(1e-4, 0, 0));
 float3 R = cross(Up, F); float rl = length(R); R = rl > 1e-3 ? R / rl : float3(0, 1, 0);
 float3 U = cross(F, R);
 float3 sl = float3(SlotX, SlotY, SlotZ);
 float sp = 6.0 + 0.1 * length(sl);
-sl *= B.w;
+sl *= B.w * E;
 float a1 = Seed * 40.0, a2 = Seed * 71.0, a3 = Seed * 13.0;
 float f1 = 0.31 + Seed * 0.2, f2 = 0.27 + frac(Seed * 7.0) * 0.2, f3 = 0.21;
 float3 wv = float3(sin(T * f1 + a1), sin(T * f2 + a2), 0.5 * sin(T * f3 + a3)) * sp;
@@ -624,8 +629,8 @@ float3 ho = frac(sin(float3((ep - 1.0) * 12.9898 + Seed * 311.7, (ep - 1.0) * 78
 hn.z *= 0.4; ho.z *= 0.4;
 float dd = 0.6;
 float dk = saturate(tin / dd); float dart = dk * dk * (3.0 - 2.0 * dk);
-float3 spot = lerp(ho, hn, dart) * sr;
-float3 dvel = (hn - ho) * sr * (6.0 * dk * (1.0 - dk) / dd);   // how fast it is darting, in the leader's frame
+float3 spot = lerp(ho, hn, dart) * sr * E;
+float3 dvel = (hn - ho) * E * sr * (6.0 * dk * (1.0 - dk) / dd);   // how fast it is darting, in the leader's frame
 float dartK = saturate(length(dvel) / 150.0);
 float3 pos = P + F * (sl.x + wv.x + spot.x) + R * (sl.y + wv.y + spot.y) + U * (sl.z + wv.z + spot.z);
 // the threat: fish within ~10 m of it are pushed off its line and close in again behind it

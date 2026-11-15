@@ -59,6 +59,11 @@ public:
 		double Len = .3, Radius = 1, Ball = 0, GoalT = 0, Step = 0, HuntT = 0, HuntLeft = 0;
 		double WanderYaw = 0, WanderTurn = 0;   // the main leader's own way: its heading, and how it is swinging
 		bool bWander = false;
+		// the shape the water leaves it (bait balls): stretch along / across the heading and up, and a push off
+		// whatever crowds it, from the bottom, the surface, coral and wrecks and the edge of its water
+		FVector Shape = FVector(1, 1, 1), ShapeWant = FVector(1, 1, 1), Nudge = FVector::ZeroVector;
+		double SenseT = 0, MidY = 0;
+		bool bSqueezed = false;
 		FVector Home = FVector::ZeroVector, Goal = FVector::ZeroVector, HuntDir = FVector::ZeroVector;
 		double HomeTop = 0;
 		int64 Cell = 0;
@@ -92,6 +97,7 @@ private:
 	void StepSchool(FSchool& S, double Dt, double T);
 	void SteerLeader(FSchool& S, int32 K, double Dt);
 	void MainGoal(FSchool& S, double Dt);
+	void SenseShape(FSchool& S, double Dt);
 	FVector TrackAt(const FSchool& S, double Delay, FVector& OutFwd) const;
 	void WriteSample();
 	void FlushPools();
