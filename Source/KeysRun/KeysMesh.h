@@ -193,6 +193,9 @@ namespace KeysMesh
 		double Len = 1.9;
 		int32 Lod = 0;
 		bool bReel = true;
+		double CrankA = UE_PI / 4;   // the crank arm's angle round its hub (from straight up, toward the butt)
+		// filled in by BuildTunaRod: the crank knob's centre and axis, and the rod's own frame (for the hands)
+		mutable FVector OutKnob = FVector::ZeroVector, OutKnobAxis = FVector::YAxisVector, OutSide = FVector::YAxisVector, OutUp = FVector::UpVector;
 	};
 	FVector BuildTunaRod(FKeysMesh& M, const FRodPose& P);
 	// the level of detail BuildBoat gives the rods in its holders (0 for the player's boat, 1 for everyone else's)

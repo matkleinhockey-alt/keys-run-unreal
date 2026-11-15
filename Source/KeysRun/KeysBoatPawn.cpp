@@ -923,6 +923,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd.StartsWith(TEXT("gps="))) bElectronics = FCString::Atoi(*Cmd.Mid(4)) != 0;   // gps=1: the chartplotter (G) on
 		else if (Cmd.StartsWith(TEXT("touch="))) AKeysHUD::ScriptTouch(Cmd.Mid(6));   // hold an on-screen control (-KRTouch)
 		else if (Cmd == TEXT("untouch")) AKeysHUD::ScriptTouchRelease();
+		else if (Cmd.StartsWith(TEXT("sink="))) ScriptDescendUntil = T + FCString::Atod(*Cmd.Mid(5));   // sink=1.5: the diver swims down that many seconds
 		else if (Cmd.StartsWith(TEXT("look=")))
 		{
 			FString A, B;
@@ -1002,7 +1003,7 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 	B.bLeft = Down(EKeys::A) || Down(EKeys::Left);
 	B.bRight = Down(EKeys::D) || Down(EKeys::Right);
 	B.bAscend = Down(EKeys::SpaceBar);
-	B.bDescend = Down(EKeys::C) || Down(EKeys::LeftControl) || Down(EKeys::RightControl);
+	B.bDescend = Down(EKeys::C) || Down(EKeys::LeftControl) || Down(EKeys::RightControl) || GetWorld()->GetRealTimeSeconds() < ScriptDescendUntil;
 	B.bSprint = Down(EKeys::LeftShift) || Down(EKeys::RightShift);
 	B.bHaul = B.bBack;
 	B.bFire = Hit(EKeys::LeftMouseButton);
@@ -3067,8 +3068,92 @@ void AKeysBoatPawn::UpdateViewModel(double Dt)
 	VmBend = Lerp(VmBend, Bend, FMath::Min(1.0, Dt * 10));
 	double Rx = -1.15 + (bCharging ? Charge * .7 : 0);
 	if (VmWhip > 0) { VmWhip = FMath::Max(0.0, VmWhip - Dt / .35); Rx -= .45 * FMath::Sin(VmWhip * PI); }
+	// pumping a fish: the rod comes up as you hold against it, and drops as you wind down onto it
+	const double PumpWant = FState == EKeysFish::Fight ? (bAction ? -.1 : .12 + .14 * Clamp(Tension, 0, 1)) : 0;
+	VmPump = Lerp(VmPump, PumpWant, FMath::Min(1.0, Dt * (bAction ? 2.5 : 1.4)));
+	Rx += VmPump;
 	VmRx = Lerp(VmRx, Rx, FMath::Min(1.0, Dt * 14));
 	if ((bBack && IsLineOut()) || (FState == EKeysFish::Fight && bAction)) VmCrank -= Dt * 22;
+}
+
+// A hand closed round a cylinder (a rod grip, a reel knob): the axis A through C, radius R; N points from the axis to the
+// palm. Four fingers stacked along the axis wrap round it joint by joint (Curl 1 is a full fist), the thumb comes round
+// the other way from the index side, and the wrist and forearm run back to the elbow, the sleeve over the forearm.
+// IndexLift lifts the index finger off the grip (feeling the line). Sc scales the whole hand (1 = an adult's).
+static void AddGripHand(FKeysMesh& M, const FVector& C, const FVector& A0, const FVector& N0, double R, double Curl, double IndexLift, bool bMirror,
+	const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve, const FLinearColor& Nail)
+{
+	const FVector A = A0.GetSafeNormal();
+	const FVector N = (N0 - A * FVector::DotProduct(N0, A)).GetSafeNormal(UE_SMALL_NUMBER, FVector::CrossProduct(A, FVector::UpVector).GetSafeNormal());
+	const FVector B = bMirror ? FVector::CrossProduct(N, A) : FVector::CrossProduct(A, N);
+	auto Round = [&](double Th, double Rho, double Sx) { return C + A * Sx + (N * FMath::Cos(Th) + B * FMath::Sin(Th)) * Rho; };
+	const uint8 Keep = M.Surf;
+	M.Surf = SurfSkin;
+	// the palm: a thick pad lying along the grip, knuckles toward +B, the heel toward -B
+	const FVector PalmC = Round(0, R + .017, -.004) - B * .006;
+	M.AddRoundBox(PalmC, FVector(.082, .07, .026), .0125, Skin, FRotationMatrix::MakeFromXZ(A, N).ToQuat() * FQuat(FVector::XAxisVector, 0), 2);
+	// the fingers: index (toward +A, by the thumb) to little finger
+	const double Fw = .0215;
+	const double Len[4][3] = {{.044, .026, .021}, {.049, .029, .023}, {.046, .027, .022}, {.036, .021, .019}};
+	const double Rad[4] = {.0088, .0092, .0086, .0076};
+	const double Rho0 = R + .0095 + (1 - Curl) * .018;
+	for (int32 f = 0; f < 4; f++)
+	{
+		const double Sx = (1.5 - f) * Fw - .004;
+		double Th = .95;   // the knuckle, round on the +B side of the grip
+		double Rho = Rho0 + (f == 3 ? .002 : 0);
+		FVector Prev = Round(Th, Rho + .004, Sx);
+		KeysShapes::AddBlob(M, Prev, FVector(Rad[f] * 1.15), FQuat::Identity, Skin, 8, 4);
+		for (int32 j = 0; j < 3; j++)
+		{
+			const double L = Len[f][j];
+			double Step = 2 * FMath::Asin(FMath::Min(.99, L / (2 * Rho))) * (.55 + .45 * Curl);
+			double Out = 0;
+			if (f == 0 && IndexLift > 0) { Step *= 1 - .7 * IndexLift; Out = IndexLift * .012 * (j + 1); }
+			Th += Step;
+			const FVector Nx = Round(Th, Rho + Out, Sx - (f == 3 ? .002 * j : 0));
+			const double R0 = Rad[f] * (1 - .1 * j), R1 = Rad[f] * (1 - .1 * (j + 1));
+			M.AddTube(Prev, Nx, R0, R1, 8, Skin);
+			KeysShapes::AddBlob(M, Nx, FVector(R1), FQuat::Identity, Skin, 8, 4);
+			if (j == 2)
+			{
+				// the nail, on the back of the fingertip
+				const FVector Back = (Nx - (C + A * Sx)).GetSafeNormal();
+				M.Surf = SurfDefault;
+				KeysShapes::AddBlob(M, Nx + Back * R1 * .55 - (Nx - Prev).GetSafeNormal() * R1 * .3, FVector(R1 * .75, R1 * .75, R1 * .3), FRotationMatrix::MakeFromZ(Back).ToQuat(), Nail, 8, 3);
+				M.Surf = SurfSkin;
+			}
+			Prev = Nx;
+		}
+	}
+	// the thumb: from the heel of the hand on the index side, round the grip the other way to meet the index finger
+	{
+		double Th = -.55;
+		const double Rho = R + .011;
+		double Sx = 1.5 * Fw + .018;
+		FVector Prev = Round(Th, Rho + .012, Sx);
+		KeysShapes::AddBlob(M, Prev, FVector(.016, .014, .014), FQuat::Identity, Skin, 8, 4);
+		const double TL[3] = {.036, .032, .027};
+		for (int32 j = 0; j < 3; j++)
+		{
+			Th -= 2 * FMath::Asin(FMath::Min(.99, TL[j] / (2 * Rho))) * (.45 + .4 * Curl);
+			Sx -= .007;
+			const FVector Nx = Round(Th, Rho + (j == 0 ? .006 : 0), Sx);
+			const double R0 = .0115 - .0012 * j, R1 = .0115 - .0012 * (j + 1);
+			M.AddTube(Prev, Nx, R0, R1, 8, Skin);
+			KeysShapes::AddBlob(M, Nx, FVector(R1), FQuat::Identity, Skin, 8, 4);
+			Prev = Nx;
+		}
+	}
+	// the wrist behind the heel of the hand, and the forearm back to the elbow
+	const FVector Wrist = Round(-.35, R + .028, -.01) - B * .045;
+	const FVector ToE = (Elbow - Wrist).GetSafeNormal();
+	KeysShapes::AddBlob(M, Wrist, FVector(.026, .03, .022), FRotationMatrix::MakeFromXZ(ToE, N).ToQuat(), Skin, 10, 5);
+	M.AddTube(Wrist, Wrist + ToE * .075, .025, .029, 10, Skin);
+	M.Surf = SurfCloth;
+	M.AddTube(Wrist + ToE * .06, Elbow, .039, .046, 12, Sleeve);
+	M.AddTube(Wrist + ToE * .055, Wrist + ToE * .075, .036, .041, 12, Sleeve * .92f);   // the cuff
+	M.Surf = Keep;
 }
 
 // the first-person rod, reel and hands, held in front of the camera (the JS view model, in three.js camera space:
@@ -3084,7 +3169,7 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 		const FVector A(V.X, V.Y * C - V.Z * Sn, V.Y * Sn + V.Z * C);
 		return FVector(A.X * Cy + A.Z * Sy, A.Y, -A.X * Sy + A.Z * Cy);
 	};
-	const FVector Base(.3, -.42, -.55);
+	const FVector Base(.27, -.35, -.62);
 	const double Rx = VmRx;
 	auto S0 = [&](double A, double B, double C) { return Base + Rot(Rx, FVector(A, B, C)); };   // point in the butt section's frame
 	const FLinearColor RodC(FColor(0x1d, 0x21, 0x26)), Cork(FColor(0xb8, 0x92, 0x5e)), DarkC(FColor(0x22, 0x26, 0x2b)), GoldC(FColor(0xc9, 0xa2, 0x27)),
@@ -3104,20 +3189,24 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 	RP.Len = SegL * 5 + .115;
 	RP.Bend = W(P) - (RP.Butt + RP.Dir * RP.Len);
 	RP.Lod = 0;
+	RP.CrankA = PI / 4 + VmCrank;
 	const FVector TipW = KeysMesh::BuildTunaRod(M, RP);
-	const uint8 KeepSurf = M.Surf;
-	M.Surf = SurfSkin;
-	const double Cc = FMath::Cos(VmCrank), Sc = FMath::Sin(VmCrank);
-	KeysShapes::AddBlob(M, W(S0(.1, .3 + .04 * Cc, -.16 + .04 * Sc)), FVector(.05, .045, .055), CQ, Skin, 10, 5);
-	KeysShapes::AddBlob(M, W(S0(0, .62, -.02)), FVector(.06, .05, .055), CQ, Skin, 10, 5);
-	M.Surf = SurfCloth;
+	// the hands. The left closes round the fore grip ahead of the reel, squeezing harder the harder the fish pulls, its
+	// index finger lifting to feel the line when a fish is mouthing the bait; the right holds the crank knob and goes
+	// round with it, the wrist turning and the forearm swinging from the elbow as it winds.
+	const FLinearColor Nail(FColor(0xe8, 0xc4, 0xb4));
+	const double Squeeze = FState == EKeysFish::Fight ? Clamp(Tension, 0, 1) : 0;
+	const double Lift = (FState == EKeysFish::Nibble || FState == EKeysFish::Waiting) ? .5 + .5 * FMath::Sin(GetWorld()->GetTimeSeconds() * 1.3) * (FState == EKeysFish::Nibble ? 1 : .3) : 0;
 	{
-		const FVector C1(.02, .3, -.2), D1(0, FMath::Cos(1.1), FMath::Sin(1.1));
-		M.AddTube(W(S0(C1.X - D1.X * .225, C1.Y - D1.Y * .225, C1.Z - D1.Z * .225)), W(S0(C1.X + D1.X * .225, C1.Y + D1.Y * .225, C1.Z + D1.Z * .225)), .055, .05, 8, Sleeve);
-		const FVector D2 = FVector(.479, .546, .688).GetSafeNormal(), C2(.16, .16, -.22);
-		M.AddTube(W(S0(C2.X - D2.X * .2, C2.Y - D2.Y * .2, C2.Z - D2.Z * .2)), W(S0(C2.X + D2.X * .2, C2.Y + D2.Y * .2, C2.Z + D2.Z * .2)), .055, .05, 8, Sleeve);
+		const FVector GripC = RP.Butt + RP.Dir * .76;
+		const FVector ElbowL = W(FVector(-.12, -.78, -.12));
+		AddGripHand(M, GripC, RP.Dir, RP.OutUp + (ElbowL - GripC).GetSafeNormal() * .5, .025, .8 + .2 * Squeeze, Lift, false, ElbowL, Skin, Sleeve, Nail);
 	}
-	M.Surf = KeepSurf;
+	{
+		const double Cc = FMath::Cos(VmCrank), Sn = FMath::Sin(VmCrank);
+		const FVector ElbowR = W(FVector(.52 + .025 * Sn, -.74 + .03 * Cc, -.1 + .02 * Sn));
+		AddGripHand(M, RP.OutKnob, RP.OutKnobAxis, ElbowR - RP.OutKnob, .023, 1, 0, true, ElbowR, Skin, Sleeve, Nail);
+	}
 	return TipW;
 }
 

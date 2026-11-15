@@ -383,7 +383,8 @@ private:
 	double PendWeight = 0, RaiseLeft = 0, RaiseCamT = 0;
 	int32 PendStation = -1, HookedStation = -1;
 	FVector RaisePos = FVector::ZeroVector;
-	bool bRaiseBurst = false;   // the lunge's splash has gone up
+	bool bRaiseBurst = false;
+	double ScriptDescendUntil = 0;   // -KRScript sink=: hold the diver's descend until then (real time)   // the lunge's splash has gone up
 	static constexpr int32 NumStations = 5;
 	FVector Lures[NumStations];      // game meters, as of the last spread update
 	double Pulled[NumStations] = {0, 0, 0, 0, 0};
@@ -429,7 +430,7 @@ private:
 	FVector FpEyeL = FVector::ZeroVector;   // boat-local meters (x forward, y starboard, z up)
 	double FpYaw = 0, FpPitch = -.12, FpUserT = 0, DYaw = 0, DPitch = 0;
 	// first-person rod (view model)
-	double VmRx = -1.15, VmWhip = 0, VmBend = .01, VmCrank = 0;
+	double VmRx = -1.15, VmWhip = 0, VmBend = .01, VmCrank = 0, VmPump = 0;
 
 	// fishing state, mirrors the JS F object
 	FVector Bob = FVector::ZeroVector, CastFrom = FVector::ZeroVector, CastTo = FVector::ZeroVector;

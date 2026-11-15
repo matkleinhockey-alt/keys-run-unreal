@@ -76,6 +76,7 @@ namespace KeysMesh
 		const int32 RS = bNear ? 16 : 8;
 		const double L = P.Len;
 		auto At = [&](double S) { return P.Butt + D * S; };
+		P.OutSide = Side; P.OutUp = Up;
 
 		// ---- the aluminium gimbal butt, its cross-pin, and the reel seat with its clamp rings
 		M.Surf = SurfSteel;
@@ -225,7 +226,9 @@ namespace KeysMesh
 			// the crank: an arm from the hub out and up, and its big black oval knob
 			const FVector Hub = RP + Side * .012;
 			Puck(M, Hub, Side, D, .016, .018, .004, bNear ? 16 : 8, Alu, SurfSteel);
-			const FVector ArmEnd = Hub + Side * .012 + (Up * .7 - D * .7).GetSafeNormal() * .085 * LS;
+			const FVector ArmEnd = Hub + Side * .012 + (Up * FMath::Cos(P.CrankA) - D * FMath::Sin(P.CrankA)) * .085 * LS;
+			P.OutKnob = ArmEnd + Side * .05;
+			P.OutKnobAxis = Side;
 			M.AddRoundBox((Hub + ArmEnd) * .5 + Side * .006, FVector((ArmEnd - Hub).Size() + .02, .012, .02), .005, Alu, FRotationMatrix::MakeFromXZ((ArmEnd - Hub).GetSafeNormal(), Side).ToQuat(), 1);
 			M.Surf = SurfRubber;
 			KeysShapes::AddBlob(M, ArmEnd + Side * .05, FVector(.024, .055, .023), FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), Black, bNear ? 12 : 6, bNear ? 6 : 3);
