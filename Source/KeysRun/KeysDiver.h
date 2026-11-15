@@ -134,6 +134,7 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunShaft;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunGlove;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunHandL;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunWish;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Lines;     // flying shaft, its tether, the float line and float
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FishOnLine;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Particles;
@@ -179,7 +180,7 @@ private:
 	// particles
 	TArray<FBubble> Bubbles;
 	int32 BubCursor = 0;
-	double BubAcc = 0, LastEqDepth = 0;
+	double BubAcc = 0, LastEqDepth = 0, TopAcc = 0; bool bWasUnder = false;
 	TArray<FPuff> Muzzle;
 	int32 MuzCursor = 0;
 	TArray<FSnow> Snow;

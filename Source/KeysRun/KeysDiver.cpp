@@ -5,6 +5,7 @@
 #include "KeysGeo.h"
 #include "KeysSea.h"
 #include "KeysMesh.h"
+#include "KeysHuman.h"
 #include "KeysLife.h"
 #include "KeysWorld.h"
 #include "KeysData.h"
@@ -159,6 +160,7 @@ AKeysDiver::AKeysDiver()
 	GunShaft = MakePMC(this, GunBase, TEXT("GunShaft"));
 	GunGlove = MakePMC(this, GunBase, TEXT("GunGlove"));
 	GunHandL = MakePMC(this, GunBase, TEXT("GunHandL"));
+	GunWish = MakePMC(this, GunBase, TEXT("GunWish"));
 	Lines = MakePMC(this, Root, TEXT("Lines"));
 	FishOnLine = MakePMC(this, Root, TEXT("FishOnLine"));
 	Particles = MakePMC(this, Root, TEXT("Particles"));
@@ -214,13 +216,31 @@ void AKeysDiver::BeginPlay()
 		M.AddRoundBox(FVector(BarrelLen - .02, 0, .004), FVector(.06, StockW + .016, StockH + .02), .008, Hex(0x101214), FQuat::Identity, 2);
 		M.Surf = SurfSteel;
 		Tube(M, FVector(BarrelLen - .055, 0, RailY - .002), FVector(BarrelLen + .012, 0, RailY - .002), .0055, .0055, 8, Steel, true);   // shaft guide
+		// the closed track the shaft rides in along the top, the band holes in the back of the muzzle, the line
+		// hook under its nose and the rubber butt cap
+		M.Surf = SurfMetalPaint;
+		M.AddRoundBox(FVector((BarrelLen - .25) * .5, 0, StockH * .5 + .001), FVector(BarrelLen - .1, .011, .004), .0015, Hex(0x0c0d0e), FQuat::Identity, 1);
+		for (int32 Side = -1; Side <= 1; Side += 2)
+			for (int32 k = 0; k < 2; k++)
+				Tube(M, FVector(BarrelLen - .051, Side * (StockW * .275 + BandR), StockH * .5 + BandR * (1.1 - 2.15 * k)), FVector(BarrelLen - .049, Side * (StockW * .275 + BandR), StockH * .5 + BandR * (1.1 - 2.15 * k)), BandR * 1.25, BandR * 1.25, 10, Hex(0x050505), true);
+		M.Surf = SurfSteel;
+		Tube(M, FVector(BarrelLen + .005, 0, -StockH * .5 - .004), FVector(BarrelLen - .02, 0, -StockH * .5 - .012), .0025, .0025, 6, Steel, true);
+		M.Surf = SurfRubber;
+		KeysShapes::AddBlob(M, FVector(-.212, 0, -.008), FVector(.016, (StockW + .012) * .5, (StockH + .03) * .5), FQuat::Identity, Band, 12, 6);
 		// the pistol grip, raked back, with its trigger and guard
 		M.Surf = SurfWood;
 		const FVector GripTop(-.07, 0, -.025), GripBot(-.115, 0, -.135);
 		M.AddRoundBox((GripTop + GripBot) * .5, FVector(.036, .028, (GripTop - GripBot).Size()), .011, Stock,
 			FRotationMatrix::MakeFromZ(GripTop - GripBot).ToQuat(), 2);
 		M.AddRoundBox(GripBot + FVector(-.004, 0, -.006), FVector(.044, .032, .014), .006, Stock, FRotationMatrix::MakeFromZ(GripTop - GripBot).ToQuat(), 2);
+		M.Surf = SurfRubber;
+		for (int32 k = 0; k < 3; k++)
+		{
+			const FVector Q = FMath::Lerp(GripTop, GripBot, .3 + .22 * k) + FVector(.019, 0, 0);
+			KeysShapes::AddBlob(M, Q, FVector(.005, .0135, .008), FQuat::Identity, Hex(0x1a1c1e), 8, 4);   // finger ridges
+		}
 		M.Surf = SurfSteel;
+		M.AddRoundBox(FVector(-.055, -StockW * .5 - .004, -.002), FVector(.018, .004, .007), .0015, Steel, FQuat(FVector::YAxisVector, -.2), 1);   // safety
 		Tube(M, FVector(-.04, 0, -.024), FVector(-.046, 0, -.055), .0035, .003, 6, Grey);   // trigger
 		M.Surf = SurfMetalPaint;
 		Tube(M, FVector(-.005, 0, -.023), FVector(-.004, 0, -.07), .0035, .0035, 6, Stock, true);
@@ -233,7 +253,16 @@ void AKeysDiver::BeginPlay()
 		M.Surf = SurfDefault;
 		Tube(M, ReelC0 + FVector(0, -.013, 0), ReelC0 + FVector(0, .0175, 0), .031, .031, 18, Mono, true);
 		M.Surf = SurfSteel;
-		Tube(M, ReelC0 + FVector(0, .018, 0), ReelC0 + FVector(0, .03, .0), .007, .007, 8, Grey, true);   // crank hub
+		M.Surf = SurfMetalPaint;
+		for (int32 Side = -1; Side <= 1; Side += 2)
+			Tube(M, ReelC0 + FVector(0, Side * .0165, 0), ReelC0 + FVector(0, Side * .0185, 0), .039, .039, 20, ReelC, true);   // flanges
+		M.Surf = SurfSteel;
+		Tube(M, ReelC0 + FVector(0, -.018, 0), ReelC0 + FVector(0, -.027, 0), .008, .008, 10, Grey, true);   // hub
+		Tube(M, ReelC0 + FVector(0, -.025, 0), ReelC0 + FVector(-.012, -.025, -.024), .0035, .0035, 6, Grey, true);   // crank arm
+		M.Surf = SurfRubber;
+		Tube(M, ReelC0 + FVector(-.012, -.026, -.024), ReelC0 + FVector(-.012, -.042, -.024), .0055, .005, 8, Band, true);   // knob
+		M.Surf = SurfSteel;
+		Tube(M, FVector(.09, -.004, -StockH * .5 - .002), FVector(.09, -.004, -StockH * .5 - .014), .0022, .0022, 6, Grey, true);   // line guide
 		// the line from the spool up to the muzzle, sagging a touch
 		M.Surf = SurfDefault;
 		{
@@ -257,6 +286,16 @@ void AKeysDiver::BeginPlay()
 		// the left hand, holding the stock ahead of the reel, back of the hand toward you (hidden while loading)
 		FKeysMesh L;
 		AddGripHand(L, FVector(.15, 0, -.004), FVector::XAxisVector, FVector(0, -.5, -.85), .024, .9, 0, true, FVector(-.2, -.42, -.42), Glove, Suit, Glove);
+		{
+			// a dive computer on the wrist, just up the forearm from the hand
+			const FVector Hc(.15, 0, -.004), El(-.2, -.42, -.42);
+			const FVector Dw = (El - Hc).GetSafeNormal(), Wp = Hc + Dw * .155 + FVector(0, -.012, -.02);
+			const FVector Out = FVector::CrossProduct(Dw, FVector::XAxisVector).GetSafeNormal() * -1;
+			Tube(L, Wp - Dw * .011, Wp + Dw * .011, .037, .037, 14, Hex(0x0e0f10));
+			L.AddRoundBox(Wp + FVector(-.006, -.03, .008), FVector(.032, .014, .032), .006, Hex(0x2b2e31), FRotationMatrix::MakeFromXZ(Dw, FVector(0, -1, .3)).ToQuat(), 2);
+			L.AddRoundBox(Wp + FVector(-.006, -.0375, .009), FVector(.024, .002, .024), .004, Hex(0x3c5560), FRotationMatrix::MakeFromXZ(Dw, FVector(0, -1, .3)).ToQuat(), 1);
+			(void)Out;
+		}
 		L.SetSurfFrom(0, SurfRubber);
 		L.Commit(GunHandL, 0, VC);
 		FKeysMesh B;   // a unit pair of bands along +X, one over the other, scaled per frame
@@ -265,6 +304,22 @@ void AKeysDiver::BeginPlay()
 		Tube(B, FVector(0, 0, -2.15), FVector(1, 0, -2.15), 1, 1, 8, Band);
 		B.Commit(GunBandL, 0, VC);
 		B.Commit(GunBandR, 0, VC);
+		// the wishbone: a stiff loop of braided line joining the band pairs over the shaft, a steel bead at each end
+		FKeysMesh Wb;
+		Wb.Surf = SurfRubber;
+		const double Wr = StockW * .275 + BandR;
+		FVector Prev(0, -Wr, -BandR);
+		for (int32 i = 1; i <= 10; i++)
+		{
+			const double A = PI * i / 10;
+			const FVector P(0, -Wr * FMath::Cos(A), -BandR + (Wr + .004) * FMath::Sin(A));
+			Tube(Wb, Prev, P, .0022, .0022, 6, Hex(0x6d7277));
+			Prev = P;
+		}
+		Wb.Surf = SurfSteel;
+		for (int32 Side = -1; Side <= 1; Side += 2)
+			Ellipsoid(Wb, FVector(0, Side * Wr, -BandR * .2), FVector(BandR * 1.15), 8, Hex(0x9aa1a7));
+		Wb.Commit(GunWish, 0, VC);
 		// the shaft: polished steel the length of the gun, a cone tip with its flopper, shark fins where the bands hook
 		FKeysMesh Sh;
 		Sh.Surf = SurfSteel;
@@ -285,7 +340,7 @@ void AKeysDiver::BeginPlay()
 		Gl.Commit(GunGlove, 0, VC);
 		GunBase->SetVisibility(false, true);
 		GunBase->SetCastShadow(false);
-		GunBandL->SetCastShadow(false); GunBandR->SetCastShadow(false); GunShaft->SetCastShadow(false); GunGlove->SetCastShadow(false); GunHandL->SetCastShadow(false);
+		GunBandL->SetCastShadow(false); GunBandR->SetCastShadow(false); GunShaft->SetCastShadow(false); GunGlove->SetCastShadow(false); GunHandL->SetCastShadow(false); GunWish->SetCastShadow(false);
 	}
 	// ---- the underwater look: extinction, visibility, lens wetting (world/underwater)
 	if (UMaterialInterface* UW = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Underwater.M_KR_Underwater")))
@@ -789,6 +844,8 @@ void AKeysDiver::UpdateGun(double Dt)
 	GunShaft->SetVisibility(bShow && !Speared.bOn);
 	GunGlove->SetVisibility(bShow && bGlove);
 	GunHandL->SetVisibility(bShow && !bGlove);
+	GunWish->SetRelativeLocation(FVector((BandAnchorX - BandLen) * 100, 0, (StockH * .5 + BandRad * 1.1) * 100));
+	GunWish->SetVisibility(bShow);
 	MuzzleG = U2G(PosUE + Q.RotateVector(FVector(BarrelLen, 0, RailY) * 100));
 }
 
@@ -947,8 +1004,25 @@ void AKeysDiver::UpdateBubbles(double Dt, double T)
 			BubAcc += Rate * H;
 			while (BubAcc >= 1) { BubAcc -= 1; Puff(1, Mouth, .003, .009); }
 			if (BubAcc > 2) BubAcc = 2;
+			// air working out of the mask, the hood and the suit: little clusters wobbling up just in front of the
+			// face and off the top of the view, more while kicking and heading down (the air squeezes out)
+			const double Desc = FMath::Max(0.0, -S.VY);
+			TopAcc += (1.6 + 2.2 * S.Exertion + 3 * FMath::Min(1.0, Desc) + (S.bKicking ? 1.2 : 0)) * H;
+			while (TopAcc >= 1)
+			{
+				TopAcc -= 1;
+				const FVector Rt(FMath::Cos(S.Yaw), 0, -FMath::Sin(S.Yaw));
+				const FVector At = CamGame + FVector(Fw.X, 0, Fw.Z).GetSafeNormal() * DvRand(.35, .7) + Rt * DvRand(-.35, .35) + FVector(0, DvRand(-.05, .12), 0);
+				const int32 Nc = FMath::RandRange(1, 3);
+				for (int32 k = 0; k < Nc; k++)
+					SpawnBubble(At + FVector(DvRand(-.03, .03), DvRand(-.04, 0), DvRand(-.03, .03)), DvRand(.0035, .011));
+			}
+			if (TopAcc > 3) TopAcc = 3;
 		}
 		else LastEqDepth = 0;
+		// the duck dive: a rush of air off the suit and mask as the head goes under
+		if (Depth > .4 && !bWasUnder) Puff(22, CamGame + FVector(Fw.X, 0, Fw.Z).GetSafeNormal() * .5 + FVector(0, -.1, 0), .004, .016);
+		bWasUnder = Depth > .4;
 		for (const EEvent E : FrameEvents)
 		{
 			if (E == EEvent::Surfaced) Puff(24, Mouth - FVector(0, .1, 0), .006, .02);
