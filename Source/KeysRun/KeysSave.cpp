@@ -4,6 +4,9 @@
 UKeysSave* UKeysSave::LoadOrCreate()
 {
 	UKeysSave* S = nullptr;
+	// -KRTestSaveReset: start the test slot from nothing
+	if (FParse::Param(FCommandLine::Get(), TEXT("KRTestSave")) && FParse::Param(FCommandLine::Get(), TEXT("KRTestSaveReset")) && UGameplayStatics::DoesSaveGameExist(SlotName(), 0))
+		UGameplayStatics::DeleteGameInSlot(SlotName(), 0);
 	if (UGameplayStatics::DoesSaveGameExist(SlotName(), 0))
 		S = Cast<UKeysSave>(UGameplayStatics::LoadGameFromSlot(SlotName(), 0));
 	if (!S) S = Cast<UKeysSave>(UGameplayStatics::CreateSaveGameObject(UKeysSave::StaticClass()));

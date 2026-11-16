@@ -575,7 +575,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		{
 			TArray<FString> Parts;
 			Script.ParseIntoArray(Parts, TEXT(";"));
-			Save = nullptr;   // test runs never write your leaderboard
+			if (!FParse::Param(FCommandLine::Get(), TEXT("KRTestSave"))) Save = nullptr;   // test runs never write your leaderboard (unless given their own slot)
 			bScriptLog = true;
 			for (const FString& Pt : Parts)
 			{
@@ -684,6 +684,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("mode=free")) bFreeFish = true;
 		else if (Cmd == TEXT("ffstate"))
 		{
+			UE_LOG(LogTemp, Log, TEXT("KRSave slot %s, writing %s, money in the save file %lld"), UKeysSave::SlotName(), Save ? TEXT("yes") : TEXT("no"), Save ? Save->Cash : -1);
 			const AKeysCharter* Ch = AKeysCharter::Get(this);
 			const AKeysEvents* Ev = AKeysEvents::Get(this);
 			const double* Best = nullptr;

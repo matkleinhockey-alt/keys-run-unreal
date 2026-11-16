@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "GameFramework/SaveGame.h"
 #include "KeysSave.generated.h"
 
@@ -105,5 +107,6 @@ public:
 	void Write();
 
 	static UKeysSave* LoadOrCreate();
-	static const TCHAR* SlotName() { return TEXT("KeysRunBoard"); }
+	// -KRTestSave: test runs read and write their own slot, never your real one
+	static const TCHAR* SlotName() { return FParse::Param(FCommandLine::Get(), TEXT("KRTestSave")) ? TEXT("KeysRunTest") : TEXT("KeysRunBoard"); }
 };
