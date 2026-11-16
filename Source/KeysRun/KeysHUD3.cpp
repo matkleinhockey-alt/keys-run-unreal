@@ -131,6 +131,66 @@ void AKeysHUD::DrawCharter(AKeysBoatPawn* P)
 	if (!Ch || !P || P->IsDiving() || P->IsAshore()) return;
 	const FLinearColor Panel(.03f, .06f, .09f, .78f), Gold(1.f, .82f, .35f), White(.95f, .97f, 1.f);
 	const float W = Canvas->SizeX;
+	if (P->bFreeFish) return;
+	// the trip summary: the whole screen's attention until Enter
+	if (Ch->IsSummaryOpen())
+	{
+		const AKeysCharter::FTripSummary& S = Ch->GetSummary();
+		const float SW = 760 * U, Rows = float(FMath::Min(S.Fish.Num(), 8)), SH = (370 + Rows * 26 + (S.bLate || S.bFailed ? 26 : 0) + (S.Fish.Num() > 8 ? 24 : 0)) * U, X = (W - SW) * .5f, Y = (Canvas->SizeY - SH) * .5f;
+		DrawRect(FLinearColor(0, 0, 0, .55f), 0, 0, W, Canvas->SizeY);
+		DrawRect(FLinearColor(.03f, .06f, .09f, .95f), X, Y, SW, SH);
+		const FLinearColor Edge = S.bFailed ? FLinearColor(.95f, .35f, .3f) : S.bLate ? FLinearColor(1.f, .6f, .25f) : FLinearColor(.25f, .85f, .45f);
+		DrawRect(Edge, X, Y, SW, 5 * U);
+		float Yy = Y + 16 * U;
+		const FString Head = S.bFailed ? FString::Printf(TEXT("CHARTER FAILED - %s"), *S.FailReason) : S.bLate ? FString(TEXT("BACK LATE - TRIP OVER")) : FString(TEXT("TRIP SUMMARY"));
+		Text(Head, X + 22 * U, Yy, 1.15f, Edge); Yy += 34 * U;
+		Text(FString::Printf(TEXT("%s  -  %s"), *S.Client, *S.Target), X + 22 * U, Yy, .8f, White); Yy += 30 * U;
+		// stars
+		FString Stars;
+		for (int32 i = 0; i < 5; i++) Stars += i < S.Stars ? TEXT("\u2605") : TEXT("\u2606");
+		Text(Stars, X + SW - 22 * U - 150 * U, Y + 14 * U, 1.4f, Gold);
+		// the fish
+		Text(FString::Printf(TEXT("Fish (%d counted of %d asked for)"), S.Counted, S.Required), X + 22 * U, Yy, .8f, Gold); Yy += 26 * U;
+		if (!S.Fish.Num()) { Text(TEXT("No fish this trip."), X + 36 * U, Yy, .75f, FLinearColor(.7f, .75f, .8f)); Yy += 26 * U; }
+		for (int32 i = 0; i < S.Fish.Num() && i < 8; i++)
+		{
+			const AKeysCharter::FTripFish& F = S.Fish[i];
+			Text(FString::Printf(TEXT("%s %s, %.1f lb"), F.bCounted ? TEXT("\u2713") : TEXT("\u2717"), *F.Name, F.Weight), X + 36 * U, Yy, .75f, F.bCounted ? FLinearColor(.5f, 1.f, .6f) : FLinearColor(1.f, .55f, .5f));
+			Text(F.Verdict, X + 380 * U, Yy, .75f, FLinearColor(.75f, .8f, .85f));
+			Yy += 26 * U;
+		}
+		if (S.Fish.Num() > 8) { Text(FString::Printf(TEXT("+ %d more"), S.Fish.Num() - 8), X + 36 * U, Yy, .7f, FLinearColor(.7f, .75f, .8f)); Yy += 24 * U; }
+		Yy += 8 * U;
+		const int32 Used = FMath::RoundToInt(S.TimeUsed), Lim = FMath::RoundToInt(S.TimeLimit);
+		Text(FString::Printf(TEXT("Time used  %d:%02d of %d:%02d%s"), Used / 60, Used % 60, Lim / 60, Lim % 60, S.bLate ? TEXT("  (ran out)") : TEXT("")), X + 22 * U, Yy, .85f, S.bLate ? FLinearColor(1.f, .6f, .3f) : White); Yy += 34 * U;
+		auto Line = [&](const FString& L, const FString& V, const FLinearColor& C)
+		{
+			Text(L, X + 22 * U, Yy, .82f, C);
+			Text(V, X + SW - 160 * U, Yy, .82f, C);
+			Yy += 26 * U;
+		};
+		auto Usd = [](int32 V) { return FText::AsNumber(V).ToString(); };
+		Line(TEXT("Base pay"), TEXT("$") + Usd(S.BasePay), White);
+		if (S.Counted < S.Required && !S.bFailed) Line(FString::Printf(TEXT("  short of the count: paid for %d of %d"), S.Counted, S.Required), FString::Printf(TEXT("x%.2f"), S.Completion), FLinearColor(1.f, .7f, .4f));
+		Line(TEXT("Tip - time left on the clock"), TEXT("+$") + Usd(S.TipTime), FLinearColor(.6f, .9f, 1.f));
+		Line(FString::Printf(TEXT("Tip - big fish (%d)"), S.BigFish), TEXT("+$") + Usd(S.TipBig), FLinearColor(.6f, .9f, 1.f));
+		Line(FString::Printf(TEXT("Tip - extra fish (%d)"), S.ExtraFish), TEXT("+$") + Usd(S.TipExtra), FLinearColor(.6f, .9f, 1.f));
+		if (S.bLate) Line(TEXT("Penalty - back late"), TEXT("pay halved"), FLinearColor(1.f, .55f, .45f));
+		if (S.bFailed) Line(TEXT("Penalty - failed release"), TEXT("no pay"), FLinearColor(1.f, .55f, .45f));
+		Yy += 6 * U;
+		DrawRect(FLinearColor(1, 1, 1, .15f), X + 22 * U, Yy, SW - 44 * U, 2 * U); Yy += 10 * U;
+		Text(TEXT("Total paid"), X + 22 * U, Yy, 1.1f, Gold);
+		Text(TEXT("$") + Usd(S.Total), X + SW - 160 * U, Yy, 1.1f, Gold); Yy += 38 * U;
+		Text(FString::Printf(TEXT("Money  $%s     -     Enter to close and pick your next charter"), *FText::AsNumber(P->Cash).ToString()), X + 22 * U, Y + SH - 30 * U, .72f, FLinearColor(.75f, .8f, .85f));
+		return;
+	}
+	// your money, at the marina
+	if (Ch->IsAtMarina())
+	{
+		const float MW = 220 * U, MX = W - MW - 24 * U, MY = 250 * U;
+		DrawRect(Panel, MX, MY - 6 * U, MW, 32 * U);
+		Text(FString::Printf(TEXT("Money  $%s"), *FText::AsNumber(P->Cash).ToString()), MX + 12 * U, MY, .9f, Gold);
+	}
 	if (Ch->IsBoardShown() && Ch->NumOffers())
 	{
 		const float BW = 520 * U, RowH = 92 * U, BH = 64 * U + RowH * Ch->NumOffers() + 30 * U, X = W - BW - 24 * U, Y = 285 * U;

@@ -7,12 +7,14 @@
 #include "GameFramework/PlayerController.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "KeysSave.h"
 
 namespace
 {
 	// how far from a marina's slips its "zone" reaches: inside it the board is up and the charter clock waits
 	constexpr double MarinaZoneR = 150;
 	const TCHAR* TablePath = TEXT("/Game/KeysRun/Data/DT_CharterRequests.DT_CharterRequests");
+	const TCHAR* TuningPath = TEXT("/Game/KeysRun/Data/DA_CharterTuning.DA_CharterTuning");
 }
 
 AKeysCharter::AKeysCharter()
@@ -32,6 +34,8 @@ void AKeysCharter::BeginPlay()
 {
 	Super::BeginPlay();
 	LoadTable();
+	TuningAsset = LoadObject<UCharterTuning>(nullptr, TuningPath);
+	UE_LOG(LogTemp, Log, TEXT("KRCharter tuning: %s"), TuningAsset ? *TuningAsset->GetName() : TEXT("defaults (no DA_CharterTuning asset)"));
 	RollOffers();
 }
 
@@ -61,6 +65,11 @@ void AKeysCharter::RollOffers()
 	UE_LOG(LogTemp, Log, TEXT("KRCharter board rolled: %s"), *FString::JoinBy(Offers, TEXT(", "), [](const FName& N) { return N.ToString(); }));
 }
 
+const UCharterTuning* AKeysCharter::Tuning() const
+{
+	return TuningAsset ? TuningAsset.Get() : GetDefault<UCharterTuning>();
+}
+
 const FCharterRequest* AKeysCharter::Offer(int32 I) const
 {
 	if (!Table || !Offers.IsValidIndex(I)) return nullptr;
@@ -78,6 +87,8 @@ bool AKeysCharter::TakeOffer(int32 I)
 	Progress = 0;
 	bPendingRelease = bFailed = false;
 	FailReason.Reset();
+	TripFish.Reset();
+	bLeftDock = bBoardAfterSummary = false;
 	TimeLeft = ActiveCharter.TimeLimitMinutes * 60.0;
 	bTimerRunning = false;   // the clock starts when you leave the marina zone
 	if (AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0)))
@@ -150,12 +161,20 @@ void AKeysCharter::Tick(float DeltaSeconds)
 	}
 	if (bForceAway) bAtMarina = false;
 	if (bAtMarina && !bWasAtMarina && !bHasActive) RollOffers();   // a fresh board each time you come in
-	// a failed charter is over once you're back at the dock: the board comes back
-	if (bAtMarina && bHasActive && bFailed) CancelCharter();
+	// the trip ends when you come back into a marina's zone after leaving it - done, short, or failed - with the summary
+	if (bHasActive && bLeftDock && bAtMarina && !bSummaryOpen) FinishTrip(false);
 	if (ResultT > 0) ResultT = FMath::Max(0.0, ResultT - DeltaSeconds);
 	bWasAtMarina = bAtMarina;
 
+	// the summary: Enter closes it, back to a fresh board
+	if (bSummaryOpen)
+	{
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0); PC && (PC->WasInputKeyJustPressed(EKeys::Enter) || PC->WasInputKeyJustPressed(EKeys::F4))) CloseSummary();
+		return;
+	}
 	// the board's keys
+	if (IsBoardShown() && !bAtMarina)
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0); PC && PC->WasInputKeyJustPressed(EKeys::F4)) bBoardAfterSummary = false;   // put the board away out at sea
 	if (IsBoardShown())
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
@@ -167,8 +186,13 @@ void AKeysCharter::Tick(float DeltaSeconds)
 	{
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0); PC && PC->WasInputKeyJustPressed(EKeys::F4)) { CancelCharter(); return; }
 		// the clock runs from the moment you clear the marina zone
-		if (!bTimerRunning && !bAtMarina && !bFailed) bTimerRunning = true;
-		if (bTimerRunning) TimeLeft = FMath::Max(0.0, TimeLeft - DeltaSeconds);
+		if (!bTimerRunning && !bAtMarina && !bFailed && !bLeftDock) { bTimerRunning = true; bLeftDock = true; }
+		if (bTimerRunning)
+		{
+			TimeLeft = FMath::Max(0.0, TimeLeft - DeltaSeconds);
+			// out of time before you got back: the trip still ends, late, wherever you are
+			if (TimeLeft <= 0) FinishTrip(true);
+		}
 	}
 }
 
@@ -177,6 +201,8 @@ void AKeysCharter::DebugCmd(const FString& Cmd)
 	if (Cmd == TEXT("away")) bForceAway = true;
 	else if (Cmd == TEXT("home")) bForceAway = false;
 	else if (Cmd == TEXT("cancel")) CancelCharter();
+	else if (Cmd == TEXT("close")) CloseSummary();
+	else if (Cmd.StartsWith(TEXT("clock:"))) TimeLeft = FCString::Atod(*Cmd.Mid(6));   // test: set the time left, seconds
 	else if (Cmd == TEXT("roll")) RollOffers();
 	else if (Cmd.StartsWith(TEXT("take:"))) TakeOffer(FCString::Atoi(*Cmd.Mid(5)));
 	else if (Cmd.StartsWith(TEXT("pick:")))
@@ -220,44 +246,58 @@ void AKeysCharter::Fail(const FString& Why)
 	ShowResult(Why, FString::Printf(TEXT("Charter failed - %s won't be booking again."), *ActiveCharter.ClientName), false);
 }
 
+void AKeysCharter::LogFish(const FString& Name, double Weight, bool bCounted, const FString& Verdict)
+{
+	FTripFish F;
+	F.Name = Name; F.Weight = Weight; F.bCounted = bCounted; F.Verdict = Verdict;
+	TripFish.Add(F);
+}
+
 void AKeysCharter::OnLanded(const FString& SpeciesKey, const FString& SpeciesName, double Weight, ECharterMethod How)
 {
 	bPendingRelease = false;
-	if (!bHasActive || bFailed || IsComplete()) return;
+	if (!bHasActive || bFailed || bSummaryOpen) return;
 	const FCharterRequest& R = ActiveCharter;
 	const FString Lb = FString::Printf(TEXT("%.0f lb %s"), Weight, *SpeciesName.ToLower());
 	if (R.TargetSpecies.Num() && !R.TargetSpecies.Contains(FName(*SpeciesKey)))
 	{
+		LogFish(SpeciesName, Weight, false, TEXT("wrong species"));
 		ShowResult(TEXT("Wrong species"), FString::Printf(TEXT("%s - they want %s."), *Lb, *ShortTarget(R, R.RequiredCount)), false);
 		return;
 	}
 	// a catch-and-release charter's fish that's been speared is dead, whatever else: that's the charter gone
-	if (R.CatchAndRelease && How == ECharterMethod::Spear) { Fail(TEXT("Should've released it")); return; }
+	if (R.CatchAndRelease && How == ECharterMethod::Spear) { LogFish(SpeciesName, Weight, false, TEXT("speared - should've been released")); Fail(TEXT("Should've released it")); return; }
 	if (Weight < R.MinWeight)
 	{
+		LogFish(SpeciesName, Weight, false, FString::Printf(TEXT("too small (needs %.0f lb)"), R.MinWeight));
 		ShowResult(FString::Printf(TEXT("Too small (needs %.0f lb)"), R.MinWeight), FString::Printf(TEXT("That one's %s."), *Lb), false);
 		return;
 	}
 	if (R.Method != ECharterMethod::Any && R.Method != How)
 	{
+		LogFish(SpeciesName, Weight, false, TEXT("wrong method"));
 		ShowResult(TEXT("Wrong method"), FString::Printf(TEXT("It has to be %s - that one was %s."), *MethodName(R.Method), *MethodName(How)), false);
 		return;
 	}
 	if (R.CatchAndRelease)
 	{
 		bPendingRelease = true;
-		PendingLine = Lb;
+		PendingLine = Lb; PendingName = SpeciesName; PendingWeight = Weight;
 		ShowResult(TEXT("That's the one - release it!"), TEXT("Space releases it (it only counts if it swims away)."), true);
 		return;
 	}
+	const bool bExtra = IsComplete();
 	Progress++;
-	ShowResult(FString::Printf(TEXT("Counts! %s \u2713"), *Lb), FString::Printf(TEXT("%d / %d %s"), Progress, R.RequiredCount, *ShortTarget(R, R.RequiredCount)), true);
-	if (IsComplete()) ResultSub = TEXT("That's the lot - head back to the marina!");
+	LogFish(SpeciesName, Weight, true, bExtra ? TEXT("counted - bonus fish") : TEXT("counted"));
+	ShowResult(FString::Printf(TEXT("Counts! %s ✓"), *Lb), bExtra ? FString::Printf(TEXT("Bonus fish - %d over the %d they asked for."), Progress - R.RequiredCount, R.RequiredCount)
+		: FString::Printf(TEXT("%d / %d %s"), Progress, R.RequiredCount, *ShortTarget(R, R.RequiredCount)), true);
+	if (!bExtra && IsComplete()) ResultSub = TEXT("That's the lot - head back to the marina!");
 }
 
 void AKeysCharter::OnKept()
 {
 	if (!bHasActive || !bPendingRelease) return;
+	LogFish(PendingName, PendingWeight, false, TEXT("kept - should've been released"));
 	Fail(TEXT("Should've released it"));
 }
 
@@ -265,12 +305,107 @@ void AKeysCharter::OnReleased()
 {
 	if (!bHasActive || !bPendingRelease) return;
 	bPendingRelease = false;
+	const bool bExtra = IsComplete();
 	Progress++;
-	ShowResult(FString::Printf(TEXT("Counts! %s released \u2713"), *PendingLine), FString::Printf(TEXT("%d / %d %s"), Progress, ActiveCharter.RequiredCount, *ShortTarget(ActiveCharter, ActiveCharter.RequiredCount)), true);
-	if (IsComplete()) ResultSub = TEXT("That's the lot - head back to the marina!");
+	LogFish(PendingName, PendingWeight, true, bExtra ? TEXT("released - bonus fish") : TEXT("released"));
+	ShowResult(FString::Printf(TEXT("Counts! %s released ✓"), *PendingLine), bExtra ? FString::Printf(TEXT("Bonus fish - %d over the %d they asked for."), Progress - ActiveCharter.RequiredCount, ActiveCharter.RequiredCount)
+		: FString::Printf(TEXT("%d / %d %s"), Progress, ActiveCharter.RequiredCount, *ShortTarget(ActiveCharter, ActiveCharter.RequiredCount)), true);
+	if (!bExtra && IsComplete()) ResultSub = TEXT("That's the lot - head back to the marina!");
 }
 
 void AKeysCharter::OnCatchGone()
 {
 	bPendingRelease = false;
+}
+
+// ================================================================ the end of the trip: summary, pay, stars
+void AKeysCharter::FinishTrip(bool bLate)
+{
+	if (!bHasActive || bSummaryOpen) return;
+	const UCharterTuning* Tn = Tuning();
+	const FCharterRequest& R = ActiveCharter;
+	FTripSummary S;
+	S.Client = R.ClientName; S.Request = R.RequestText; S.Target = TargetLine(R);
+	S.Fish = TripFish;
+	S.TimeLimit = R.TimeLimitMinutes * 60.0;
+	S.TimeUsed = S.TimeLimit - TimeLeft;
+	S.Required = R.RequiredCount;
+	S.Counted = Progress;
+	S.BasePay = R.BasePay;
+	S.bLate = bLate;
+	S.bFailed = bFailed;
+	S.FailReason = FailReason;
+	S.Completion = R.RequiredCount > 0 ? FMath::Clamp(float(Progress) / R.RequiredCount, 0.f, 1.f) : 1.f;
+	S.Speed = S.TimeLimit > 0 ? FMath::Clamp(float(TimeLeft / S.TimeLimit), 0.f, 1.f) : 0.f;
+	// size: the counted fish against the request's minimum (or, with none, the species' middle weight)
+	{
+		double Sum = 0; int32 N = 0;
+		for (const FTripFish& F : TripFish)
+		{
+			if (!F.bCounted) continue;
+			double Ref = R.MinWeight;
+			if (Ref <= 0)
+				for (const FName& K : R.TargetSpecies)
+					if (const KeysData::FSpecies* Sp = KeysData::Species(K.ToString()); Sp && Sp->Name == F.Name) { Ref = (Sp->Min + Sp->Max) * .5; break; }
+			if (Ref <= 0) Ref = F.Weight;   // "anything": every fish is its own yardstick
+			Sum += F.Weight / FMath::Max(.01, Ref); N++;
+			if (R.MinWeight > 0 && F.Weight >= R.MinWeight * (1 + Tn->BigFishMargin)) S.BigFish++;
+		}
+		const double Avg = N ? Sum / N : 0;
+		S.Size = N ? FMath::Clamp(float((Avg - .5) / FMath::Max(.01, Tn->SizeFullMarksRatio - .5)), 0.f, 1.f) : 0.f;
+	}
+	S.ExtraFish = FMath::Max(0, Progress - R.RequiredCount);
+	// pay: the base (by the fraction done, if you came back short), tips for time left, big fish and extra fish
+	const bool bDone = Progress >= R.RequiredCount;
+	const double BaseEarned = bDone || !Tn->bPayIncompleteByFraction ? R.BasePay : R.BasePay * S.Completion;
+	double TimeTipPct = bDone && !bLate ? Tn->TipPercentPerMinuteLeft * FMath::FloorToDouble(TimeLeft / 60.0) : 0;
+	if (Tn->TimeTipCapPercent > 0) TimeTipPct = FMath::Min(TimeTipPct, double(Tn->TimeTipCapPercent));
+	S.TipTime = FMath::RoundToInt(R.BasePay * TimeTipPct / 100.0);
+	S.TipBig = S.BigFish * Tn->BigFishTip;
+	S.TipExtra = S.ExtraFish * Tn->ExtraFishTip;
+	double Total = BaseEarned + S.TipTime + S.TipBig + S.TipExtra;
+	if (bLate) Total *= Tn->LatePayMultiplier;
+	if (bFailed) Total *= Tn->FailedPayMultiplier;
+	S.Total = FMath::Max(0, FMath::RoundToInt(Total));
+	// stars
+	if (bFailed) S.Stars = Tn->FailedStars;
+	else if (bLate) S.Stars = Tn->LateStars;
+	else
+	{
+		const float Score = Tn->CompletionWeight * S.Completion + Tn->SpeedWeight * S.Speed * (bDone ? 1.f : 0.f) + Tn->SizeWeight * S.Size;
+		const float WSum = FMath::Max(.001f, Tn->CompletionWeight + Tn->SpeedWeight + Tn->SizeWeight);
+		const float Norm = Score / WSum;
+		S.Stars = 1;
+		for (const float Th : Tn->StarThresholds) if (Norm >= Th) S.Stars++;
+		S.Stars = FMath::Clamp(S.Stars, 1, 5);
+	}
+	S.Stars = FMath::Clamp(S.Stars, 1, 5);
+	Summary = S;
+	bSummaryOpen = true;
+	bTimerRunning = false;
+	// pay up and save straight away
+	if (AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0)))
+	{
+		P->Cash += S.Total;
+		P->SaveEconomy();
+		UE_LOG(LogTemp, Log, TEXT("KRTrip %s: counted %d/%d, late %d, failed %d, time %.0f/%.0f s, base %d (earned %.0f), tips time %d big %d (%d fish) extra %d (%d fish), total $%d, stars %d (completion %.2f speed %.2f size %.2f), money now %lld, saved %s"),
+			*ActiveRow.ToString(), S.Counted, S.Required, bLate ? 1 : 0, bFailed ? 1 : 0, S.TimeUsed, S.TimeLimit, S.BasePay, BaseEarned, S.TipTime, S.TipBig, S.BigFish, S.TipExtra, S.ExtraFish, S.Total, S.Stars, S.Completion, S.Speed, S.Size, P->Cash, P->HasSave() ? TEXT("yes") : TEXT("no (test run)"));
+		for (const FTripFish& F : S.Fish) UE_LOG(LogTemp, Log, TEXT("KRTrip   fish %s %.1f lb - %s"), *F.Name, F.Weight, *F.Verdict);
+	}
+	bHasActive = false;
+	bPendingRelease = false;
+	ActiveRow = NAME_None;
+}
+
+void AKeysCharter::CloseSummary()
+{
+	if (!bSummaryOpen) return;
+	bSummaryOpen = false;
+	bFailed = false;
+	Progress = 0;
+	TimeLeft = 0;
+	TripFish.Reset();
+	RollOffers();                 // three fresh requests
+	bBoardAfterSummary = true;    // and the board comes up, even out at sea after a late finish
+	UE_LOG(LogTemp, Log, TEXT("KRCharter summary closed - board up with fresh requests"));
 }

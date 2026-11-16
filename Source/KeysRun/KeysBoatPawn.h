@@ -206,6 +206,7 @@ public:
 	void Credit(int64 N) { Cash += N; SaveEconomy(); }
 	bool Debit(int64 N) { if (Cash < N) return false; Cash -= N; SaveEconomy(); return true; }
 	void SaveEconomy();
+	bool HasSave() const { return Save != nullptr; }
 	void ApplyOutfit();
 	bool IsBusy(FString& Why) const;        // something that leaving the helm would spoil (a fish on, a catch card, a race)
 	void ToastMsg(const FString& Msg, double Secs = 3.2) { ShowToast(Msg, Secs); }

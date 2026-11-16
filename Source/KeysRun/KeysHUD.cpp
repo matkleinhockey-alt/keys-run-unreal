@@ -233,6 +233,7 @@ void AKeysHUD::DrawGame()
 	{
 		DrawCard(P);
 		if (Now < P->ToastUntil && !P->Toast.IsEmpty()) Text(P->Toast, Canvas->SizeX * .5f, Canvas->SizeY * .1f + 14 * U, .95f, FLinearColor::White, nullptr, true);
+		DrawCharter(P);   // the charter's verdict on this fish shows over the catch card (and the trip summary over everything)
 		Contacts.Reset();
 		KeysTags::Live().Reset();
 		return;
