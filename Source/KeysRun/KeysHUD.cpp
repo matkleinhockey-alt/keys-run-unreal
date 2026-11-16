@@ -334,7 +334,7 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 	const TCHAR* Title = bMain ? TEXT("KEYS RUN") : P->Menu == EMenu::Pause ? TEXT("Paused") : P->Menu == EMenu::Settings ? TEXT("Settings") : TEXT("Controls");
 	Text(Title, X, 70 * U, bMain ? 4.2f : 2.8f, FLinearColor::White, Big);
 	if (bMain) Text(TEXT("Center console fishing  -  Marathon, Florida Keys"), X + 6 * U, 196 * U, 1.3f, Teal);
-	if (bMain) Text(TEXT("v1.28"), X + 6 * U, 232 * U, .8f, Dim);
+	if (bMain) Text(TEXT("v1.29"), X + 6 * U, 232 * U, .8f, Dim);
 
 	TArray<AKeysBoatPawn::FMenuItem> Items;
 	P->GetMenuItems(Items);

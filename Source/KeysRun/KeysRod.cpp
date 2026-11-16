@@ -6,7 +6,8 @@
 namespace
 {
 	const FLinearColor Alu(.82f, .83f, .85f), AluDark(.62f, .63f, .66f), Black(.018f, .018f, .02f), Foam(.03f, .03f, .032f),
-		Blue(.03f, .16f, .75f), Mono(.12f, .38f, 1.f), Silver(.9f, .9f, .92f);
+		Blue(.03f, .16f, .75f), Mono(.05f, .22f, .78f), MonoL(.1f, .34f, .95f), Silver(.9f, .9f, .92f),
+		Gold(.86f, .58f, .16f), GoldDark(.62f, .38f, .08f);
 
 	// a solid of revolution about Axis through C: Prof is (radius, distance along the axis); smooth, capped by the profile
 	void Lathe(FKeysMesh& M, const FVector& C, const FVector& Axis, const FVector& Ref, const TArray<FVector2D>& Prof, int32 Sides, const FLinearColor& Col)
@@ -80,12 +81,12 @@ namespace KeysMesh
 
 		// ---- the aluminium gimbal butt, its cross-pin, and the reel seat with its clamp rings
 		M.Surf = SurfSteel;
-		Lathe(M, P.Butt, D, Up, {{0, 0}, {.016, 0}, {.021, .006}, {.022, .03}, {.0215, .3}, {.0235, .31}, {.0235, .33}, {.0215, .34}, {.0215, .5}, {.025, .51}, {.025, .53}, {.017, .54}}, RS, Alu);
+		Lathe(M, P.Butt, D, Up, {{0, 0}, {.016, 0}, {.021, .006}, {.022, .03}, {.0215, .3}, {.0235, .31}, {.0235, .33}, {.0215, .34}, {.0215, .5}, {.025, .51}, {.025, .53}, {.017, .54}}, RS, Gold);
 		if (bNear)
 		{
 			Tube(M, At(.012) - Side * .024, At(.012) + Side * .024, .004, .004, 8, AluDark, SurfSteel);
 			for (const double S : {.36, .47})
-				Puck(M, At(S), D, Up, .028, .018, .004, RS, Alu, SurfSteel);   // the clamp rings, knurled by the steel's brushing
+				Puck(M, At(S), D, Up, .028, .018, .004, RS, Silver, SurfSteel);   // the clamp rings, knurled by the steel's brushing
 		}
 
 		// ---- the long black foam fore grip
@@ -93,7 +94,7 @@ namespace KeysMesh
 		Lathe(M, At(.54), D, Up, {{.017, 0}, {.024, .004}, {.026, .02}, {.025, .25}, {.024, .46}, {.021, .48}, {.012, .485}}, RS, Foam);
 		const double BlankS = 1.02;
 		// winding check
-		Puck(M, At(BlankS + .005), D, Up, .015, .012, .003, RS, Alu, SurfSteel);
+		Puck(M, At(BlankS + .005), D, Up, .015, .012, .003, RS, Gold, SurfSteel);
 
 		// ---- the blank: a tapered curve bowing toward the load; the first stretch cross-wrapped in blue and silver
 		const FVector B0 = At(BlankS), B2 = P.Butt + D * L + P.Bend, B1 = (B0 + B2) * .5 + P.Bend * .25 - D * 0;
@@ -169,7 +170,7 @@ namespace KeysMesh
 			const double HalfW = .06 * Sc, PlateR = .062 * Sc, PlateT = .014 * Sc;
 			// the foot and the seat clamp it bolts to
 			M.Surf = SurfSteel;
-			M.AddRoundBox(At(.415) + Up * .045, FVector(.13, .03, .05) * Sc, .006, Alu, FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), bNear ? 2 : 1);
+			M.AddRoundBox(At(.415) + Up * .045, FVector(.13, .03, .05) * Sc, .006, Silver, FRotationMatrix::MakeFromXZ(D, Up).ToQuat(), bNear ? 2 : 1);
 			// side plates, machined and cut away like a real big lever-drag's: a thick rim ring, a hub and three swept
 			// spokes, with the blue line on the spool showing through the windows between them
 			for (int32 s = -1; s <= 1; s += 2)
@@ -179,18 +180,20 @@ namespace KeysMesh
 				{
 					const double Ri = PlateR * .74, Bv = .004;
 					const uint8 W = M.Surf; M.Surf = SurfSteel;
-					Lathe(M, P0, Side * s, D, {{Ri, 0}, {PlateR - Bv, 0}, {PlateR, Bv}, {PlateR, PlateT - Bv}, {PlateR - Bv, PlateT}, {Ri + Bv, PlateT}, {Ri, PlateT - Bv}, {Ri, 0}}, bNear ? 28 : 12, Alu);
+					Lathe(M, P0, Side * s, D, {{Ri, 0}, {PlateR - Bv, 0}, {PlateR, Bv}, {PlateR, PlateT - Bv}, {PlateR - Bv, PlateT}, {Ri + Bv, PlateT}, {Ri, PlateT - Bv}, {Ri, 0}}, bNear ? 28 : 12, Gold);
 					M.Surf = W;
 				}
-				Puck(M, PC, Side * s, D, PlateR * .34, PlateT, .004, bNear ? 20 : 10, Alu, SurfSteel);
-				Puck(M, PC + Side * (s * PlateT * .7), Side * s, D, PlateR * .26, PlateT * .6, .003, bNear ? 16 : 8, AluDark, SurfSteel);
+				Puck(M, PC, Side * s, D, PlateR * .34, PlateT, .004, bNear ? 20 : 10, Gold, SurfSteel);
+				Puck(M, PC + Side * (s * PlateT * .7), Side * s, D, PlateR * .26, PlateT * .6, .003, bNear ? 16 : 8, Silver, SurfSteel);
+				if (bNear)   // a thin bright chamfer round the outer rim, where the anodising is cut through
+					Lathe(M, PC + Side * (s * PlateT * .5), Side * s, D, {{PlateR * .97, 0}, {PlateR * 1.005, 0}, {PlateR * 1.005, .0015}, {PlateR * .97, .0015}}, 28, Silver);
 				for (int32 k = 0; k < 3; k++)
 				{
 					const double A = 2 * PI * k / 3 + .5, A2 = A + .35;
 					const FVector In = (D * FMath::Cos(A) + Up * FMath::Sin(A)) * PlateR * .3, Out = (D * FMath::Cos(A2) + Up * FMath::Sin(A2)) * PlateR * .78;
 					const FVector Mid = PC + (In + Out) * .5, Dir = (Out - In).GetSafeNormal();
 					M.Surf = SurfSteel;
-					M.AddRoundBox(Mid, FVector((Out - In).Size() + .006, PlateR * .2, PlateT * .85), .003, Alu, FRotationMatrix::MakeFromXZ(Dir, Side * s).ToQuat(), 1);
+					M.AddRoundBox(Mid, FVector((Out - In).Size() + .006, PlateR * .2, PlateT * .85), .003, GoldDark, FRotationMatrix::MakeFromXZ(Dir, Side * s).ToQuat(), 1);
 				}
 				if (bNear)
 					for (int32 b = 0; b < 8; b++)
@@ -208,8 +211,14 @@ namespace KeysMesh
 			}
 			// the spool, packed with bright blue mono
 			{
-				const uint8 W = M.Surf; M.Surf = SurfGlass;
+				const uint8 W = M.Surf; M.Surf = SurfGelcoat;
 				Lathe(M, RC - Side * HalfW, Side, D, {{0, 0}, {PlateR * .8, 0}, {PlateR * .82, .004}, {PlateR * .82, HalfW * 2 - .004}, {PlateR * .8, HalfW * 2}, {0, HalfW * 2}}, bNear ? 24 : 10, Mono);
+				if (bNear)   // the line laid on in bands, a shade lighter
+					for (int32 b = 1; b < 7; b++)
+					{
+						const double X0 = HalfW * 2 * b / 7.0;
+						Lathe(M, RC - Side * HalfW + Side * (X0 - .0015), Side, D, {{PlateR * .82, 0}, {PlateR * .826, .0008}, {PlateR * .826, .0022}, {PlateR * .82, .003}}, 24, MonoL);
+					}
 				M.Surf = W;
 				// the spool's polished flange lips just inside the plates, round the line
 				M.Surf = SurfSteel;
@@ -221,11 +230,11 @@ namespace KeysMesh
 			const FVector RP = RC + Side * (HalfW + PlateT);
 			const double LS = Sc;
 			M.Surf = SurfSteel;
-			M.AddRoundBox(RP + Up * PlateR * .55 + D * .01 + Side * .008, FVector(.075, .012, .014) * LS, .005, Alu, FRotationMatrix::MakeFromXZ(D, Side).ToQuat() * FQuat(FVector::YAxisVector, -.5), 1);
+			M.AddRoundBox(RP + Up * PlateR * .55 + D * .01 + Side * .008, FVector(.075, .012, .014) * LS, .005, Gold, FRotationMatrix::MakeFromXZ(D, Side).ToQuat() * FQuat(FVector::YAxisVector, -.5), 1);
 			Puck(M, RP + Up * PlateR * 1.05 + D * .03 + Side * .008, Up, D, .011 * LS, .022 * LS, .003, bNear ? 16 : 8, Silver, SurfSteel);
 			// the crank: an arm from the hub out and up, and its big black oval knob
 			const FVector Hub = RP + Side * .012;
-			Puck(M, Hub, Side, D, .016, .018, .004, bNear ? 16 : 8, Alu, SurfSteel);
+			Puck(M, Hub, Side, D, .016, .018, .004, bNear ? 16 : 8, Gold, SurfSteel);
 			const FVector ArmEnd = Hub + Side * .012 + (Up * FMath::Cos(P.CrankA) - D * FMath::Sin(P.CrankA)) * .085 * LS;
 			P.OutKnob = ArmEnd + Side * .05;
 			P.OutKnobAxis = Side;

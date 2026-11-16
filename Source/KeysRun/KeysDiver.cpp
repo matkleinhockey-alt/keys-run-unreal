@@ -202,7 +202,7 @@ void AKeysDiver::BeginPlay()
 	}
 	// ---- the first-person speargun and the gloved hands holding it
 	{
-		const FLinearColor Stock = Hex(0x17191b), Steel = Hex(0xc7ced4), Band = Hex(0x34383d), Glove = Hex(0x1c1e21),
+		const FLinearColor Stock = Hex(0x3a2a1f), Steel = Hex(0xe2e7eb), Band = Hex(0x2a2d31), Glove = Hex(0x1c1e21),
 			Suit = Hex(0x2a2e2c), Mono = Hex(0xd9dde0), ReelC = Hex(0x222528), Grey = Hex(0x55595e);
 		FKeysMesh M;
 		M.Surf = SurfWood;
@@ -220,6 +220,13 @@ void AKeysDiver::BeginPlay()
 		// hook under its nose and the rubber butt cap
 		M.Surf = SurfMetalPaint;
 		M.AddRoundBox(FVector((BarrelLen - .25) * .5, 0, StockH * .5 + .001), FVector(BarrelLen - .1, .011, .004), .0015, Hex(0x0c0d0e), FQuat::Identity, 1);
+		M.Surf = SurfSteel;
+		for (int32 Side = -1; Side <= 1; Side += 2)   // polished edges of the track
+			M.AddRoundBox(FVector((BarrelLen - .25) * .5, Side * .0062, StockH * .5 + .0028), FVector(BarrelLen - .1, .0014, .0016), .0006, Steel, FQuat::Identity, 1);
+		M.Surf = SurfWood;
+		for (int32 Side = -1; Side <= 1; Side += 2)   // a lighter inlaid stripe down each side of the stock
+			M.AddRoundBox(FVector((BarrelLen - .3) * .5 + .02, Side * (StockW * .5 + .0004), .004), FVector(BarrelLen - .25, .001, .006), .0005, Hex(0x8a5a32), FQuat::Identity, 1);
+		M.Surf = SurfMetalPaint;
 		for (int32 Side = -1; Side <= 1; Side += 2)
 			for (int32 k = 0; k < 2; k++)
 				Tube(M, FVector(BarrelLen - .051, Side * (StockW * .275 + BandR), StockH * .5 + BandR * (1.1 - 2.15 * k)), FVector(BarrelLen - .049, Side * (StockW * .275 + BandR), StockH * .5 + BandR * (1.1 - 2.15 * k)), BandR * 1.25, BandR * 1.25, 10, Hex(0x050505), true);

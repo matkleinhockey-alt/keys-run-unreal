@@ -346,9 +346,11 @@ if (kind < 0.5) {
   rough = 0.78; spec = 0.4;
 } else if (kind < 6.5) {           // stainless: brushed, bright
   float4 br = F.nd(p * float3(4.0, 4.0, 90.0));
-  metal = 1.0; rough = 0.05 + 0.07 * br.x;
+  // coloured metal (gold anodised reel plates, blued fittings) keeps its colour and a satin finish; grey steel goes bright
+  float sat = saturate((max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b))) * 3.0);
+  metal = 1.0; rough = 0.12 + 0.08 * br.x + 0.16 * sat;
   g = br.yzw * 0.006 * F.aa(90.0, fw);
-  col = lerp(col, float3(0.92, 0.93, 0.95), 0.6);
+  col = lerp(col, float3(0.92, 0.93, 0.95), 0.6 * (1.0 - sat));
 } else if (kind < 7.5) {           // marine vinyl
   float4 gr = F.nd(p * 160.0);
   float4 pu = F.nd(p * 6.0);
