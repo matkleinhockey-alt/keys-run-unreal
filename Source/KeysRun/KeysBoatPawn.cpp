@@ -680,6 +680,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 			}
 		}
 		else if (Cmd == TEXT("weigh")) WeighIn();
+		else if (Cmd == TEXT("mode=charter")) bFreeFish = false;
+		else if (Cmd == TEXT("mode=free")) bFreeFish = true;
 		else if (Cmd == TEXT("ffstate"))
 		{
 			const AKeysCharter* Ch = AKeysCharter::Get(this);

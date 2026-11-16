@@ -55,8 +55,10 @@ void AKeysCharter::RollOffers()
 	Offers.Reset();
 	if (!Table) return;
 	TArray<FName> Names = Table->GetRowNames();
+	if (bHasActive) Names.Remove(ActiveRow);   // never re-offer the charter you're already running
 	for (int32 i = Names.Num() - 1; i > 0; i--) Names.Swap(i, FMath::RandRange(0, i));
 	for (int32 i = 0; i < FMath::Min(3, Names.Num()); i++) Offers.Add(Names[i]);
+	UE_LOG(LogTemp, Log, TEXT("KRCharter board rolled: %s"), *FString::JoinBy(Offers, TEXT(", "), [](const FName& N) { return N.ToString(); }));
 }
 
 const FCharterRequest* AKeysCharter::Offer(int32 I) const
@@ -78,7 +80,8 @@ bool AKeysCharter::TakeOffer(int32 I)
 	bTimerRunning = false;   // the clock starts when you leave the marina zone
 	if (AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0)))
 		P->ShowMsg(FString::Printf(TEXT("Charter booked: %s. The clock starts when you leave the marina."), *ActiveCharter.ClientName), 4);
-	UE_LOG(LogTemp, Log, TEXT("KRCharter took %s (%s)"), *ActiveRow.ToString(), *ActiveCharter.ClientName);
+	UE_LOG(LogTemp, Log, TEXT("KRCharter took %s (%s) - %s, %.0f min, $%d"), *ActiveRow.ToString(), *ActiveCharter.ClientName, *TargetLine(ActiveCharter), ActiveCharter.TimeLimitMinutes, ActiveCharter.BasePay);
+	RollOffers();   // the board re-rolls once you've picked: the other two go back in the pile
 	return true;
 }
 
@@ -87,6 +90,8 @@ void AKeysCharter::CancelCharter()
 	if (!bHasActive) return;
 	bHasActive = false;
 	bTimerRunning = false;
+	TimeLeft = 0;
+	Progress = 0;
 	ActiveRow = NAME_None;
 	RollOffers();
 }
@@ -167,4 +172,19 @@ void AKeysCharter::DebugCmd(const FString& Cmd)
 	else if (Cmd == TEXT("cancel")) CancelCharter();
 	else if (Cmd == TEXT("roll")) RollOffers();
 	else if (Cmd.StartsWith(TEXT("take:"))) TakeOffer(FCString::Atoi(*Cmd.Mid(5)));
+	else if (Cmd.StartsWith(TEXT("pick:")))
+	{
+		// test: re-roll the board until that request is on it, then take it from its slot, as F1-F3 would
+		const FName Want(*Cmd.Mid(5));
+		int32 Rolls = 0, Slot = INDEX_NONE;
+		while ((Slot = Offers.IndexOfByKey(Want)) == INDEX_NONE && Rolls++ < 200) RollOffers();
+		UE_LOG(LogTemp, Log, TEXT("KRCharter pick %s: on the board in slot F%d after %d re-rolls"), *Want.ToString(), Slot + 1, Rolls);
+		if (Slot != INDEX_NONE && !TakeOffer(Slot)) UE_LOG(LogTemp, Warning, TEXT("KRCharter pick %s: TakeOffer refused (board shown %d, active %d)"), *Want.ToString(), IsBoardShown() ? 1 : 0, bHasActive ? 1 : 0);
+	}
+	else if (Cmd == TEXT("state"))
+	{
+		UE_LOG(LogTemp, Log, TEXT("KRCharter state: at marina %d (%s), board shown %d, active %s, timer running %d, left %.1f s of %.0f, board: %s"),
+			bAtMarina ? 1 : 0, *Marina, IsBoardShown() ? 1 : 0, bHasActive ? *ActiveRow.ToString() : TEXT("none"), bTimerRunning ? 1 : 0, TimeLeft, bHasActive ? ActiveCharter.TimeLimitMinutes * 60.0 : 0.0,
+			*FString::JoinBy(Offers, TEXT(", "), [](const FName& N) { return N.ToString(); }));
+	}
 }
