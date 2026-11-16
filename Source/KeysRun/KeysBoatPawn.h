@@ -290,6 +290,8 @@ public:
 	void UpdateReleaseAnim(double Dt);
 	bool GetRelease(FVector& OutFish, double& OutT, double& OutSide) const { if (ReleaseT < 0) return false; OutFish = RelFish; OutT = ReleaseT; OutSide = RelSide; return true; }
 	bool bWasInChair = false;
+	double ChairIntroAge = 0;
+	int32 ChairIntroJump = 0;   // 0 none yet, 1 the first jump is on, 2 it's over
 	double Fuel = 1, DiscoverT = 0;
 	TArray<FString> SpotsFound;        // teleport destinations you've been within 200 m of
 	void UpdateFuel(double Dt);

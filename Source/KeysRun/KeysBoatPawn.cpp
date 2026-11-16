@@ -2290,9 +2290,17 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	// a trolled fish on: a few seconds of the chair shot (your buddy strapping in, rod bent) before first person takes over
 	{
 		const bool bChair = InChair();
-		if (bChair && !bWasInChair) ChairIntroT = 4.0;
+		if (bChair && !bWasInChair) { ChairIntroT = 1.5; ChairIntroAge = 0; ChairIntroJump = 0; }   // the hit: third person, then first person
 		bWasInChair = bChair;
-		if (bChair && ChairIntroT > 0 && bJumping) ChairIntroT = FMath::Max(ChairIntroT, 2.5);   // an opening jump: stay on the chair shot a little after it
+		// watch the first jump in third person, then 1.5 s on the guy in the chair (later jumps, a tail-walk, don't hold it;
+		// and never more than 6 s in all)
+		if (bChair && ChairIntroT > 0)
+		{
+			ChairIntroAge += Dt;
+			if (bJumping && ChairIntroJump < 2) { ChairIntroJump = 1; ChairIntroT = FMath::Max(ChairIntroT, 1.5); }
+			else if (!bJumping && ChairIntroJump == 1) ChairIntroJump = 2;
+			if (ChairIntroAge > 6) ChairIntroT = 0;
+		}
 		ChairIntroT = FMath::Max(0.0, ChairIntroT - Dt);
 	}
 	if (InChair() && (!bFpPref || ChairIntroT > 0)) bFpOn = false;   // the chair cinematic: the angler is in the shot, not your own rod and hands
@@ -3525,7 +3533,10 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 		const FVector Fu = FishMesh->GetComponentLocation() / 100.0;
 		bOn = Fu.Z > WaveH(Fu.X, Fu.Y, GetWorld()->GetTimeSeconds(), AmpAt(Fu.X, Fu.Y)) - FishLen * .25;
 	}
-	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : 1.2);
+	// after the hit's first jump: 1.5 s on the guy in the chair, unzoomed, before first person takes over
+	const bool bChairBeat = InChair() && ChairIntroJump == 2 && ChairIntroT > 0;
+	if (bChairBeat) bOn = false;
+	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : bChairBeat ? 5.0 : 1.2);
 	// the chair cameras set their own field of view each frame: start the zoom from it and hand it back after
 	if (bExtCam && !bOn && JumpLook < .001) { JumpFov = Camera->FieldOfView; return; }
 	float Want = bExtCam ? Camera->FieldOfView : 88.f;
