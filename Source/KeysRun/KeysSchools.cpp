@@ -766,14 +766,9 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 		break;
 	case ERole::Hanger:
 	{
-		// barracuda hang still, and come to have a look at a diver, keeping a few meters off
+		// barracuda hang still
 		if (S.GoalT <= 0) { S.GoalT = S.Rng.FRandRange(10, 20); S.Goal = PickGoal(S); }
-		for (const FThreat& T : Threats)
-			if (T.Kind == 0 && (T.P - M.P).Size() < 14)
-			{
-				const FVector Off = (M.P - T.P).GetSafeNormal() * 4.5;
-				S.Goal = T.P + FVector(Off.X, FMath::Clamp(Off.Y, -1.0, 1.0), Off.Z);
-			}
+		// (they no longer come over to a diver: they hold their spot and turn to watch, and let you come to them)
 		break;
 	}
 	default:
@@ -903,6 +898,16 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 			if (Lat.SizeSquared() < 1e-4) Lat = FVector::CrossProduct(Vn, FVector(0, 1, 0));
 			Dir = (Lat.GetSafeNormal() * 1.6 + Dir * .5).GetSafeNormal();
 		}
+		if (T.Kind == 0)
+		{
+			// a diver: the school curves round you and carries on, rather than turning tail (a fast-finning diver is
+			// still a fright: T.Power rises with your speed)
+			const FVector Vn = Ld.V.SizeSquared() > 1e-4 ? Ld.V.GetSafeNormal() : Ld.Fwd;
+			FVector Lat = D - Vn * FVector::DotProduct(D, Vn);
+			if (Lat.SizeSquared() < 1e-4) Lat = FVector::CrossProduct(Vn, FVector(0, 1, 0));
+			Dir = (Lat.GetSafeNormal() * 1.5 + Dir * .45).GetSafeNormal();
+			K2 *= .8;
+		}
 		Dir.Y *= .4;
 		Flee += Dir * K2;
 		// the threat the followers dodge: strongest wins
@@ -925,6 +930,23 @@ void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
 	// cut off from the main leader by a scare: school on its own for a while, then come back
 	// one body: no part of the school ever goes off on its own (it parts round a threat and closes up again)
 	Ld.LooseT = 0;
+	// coral heads, rock and wreck in the way at its depth: feel ahead and to either side and swing round the clear side
+	// (the main leader steers; the body follows its path)
+	if (bMain && Ld.V.SizeSquared() > .01)
+	{
+		const FVector Vn = Flat(Ld.V).GetSafeNormal();
+		const double Look = FMath::Max(3.0, Ld.V.Size() * 2.5) + Ld.Ext;
+		auto Blocked = [&](const FVector& Dir2) { const FVector Q = Ld.P + Dir2 * Look; return TopAt(Q.X, Q.Z) - (Ld.P.Y - Ld.Ext * .5); };
+		const double Ahd = Blocked(Vn);
+		if (Ahd > 0)
+		{
+			const FVector L = Vn.RotateAngleAxis(40, FVector(0, 1, 0)), R2 = Vn.RotateAngleAxis(-40, FVector(0, 1, 0));
+			const double BL = Blocked(L), BR = Blocked(R2);
+			const FVector Side = BL < BR ? L : R2;
+			Desired = FMath::Lerp(Desired, Side * FMath::Max(Cruise, Desired.Size()), FMath::Min(1.0, .4 + Ahd));
+			if (S.GoalT > 1.5) S.WanderYaw = FMath::Atan2(Side.Z, Side.X);   // and the wander goes that way too
+		}
+	}
 	// the bottom, the coral and wrecks below; the surface above; the habitat around
 	const FVector Ahead = Ld.P + Ld.V * 1.2;
 	const double Top = FMath::Max(TopAt(Ld.P.X, Ld.P.Z), TopAt(Ahead.X, Ahead.Z));

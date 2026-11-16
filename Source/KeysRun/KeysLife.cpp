@@ -2298,30 +2298,26 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			}
 			else G.AnchorKind = 0;
 		}
-		// curious about a calm diver: reef fish come in to have a look and hang a few meters off, circling slowly, so
-		// there's something within a speargun's reach (bold ones closer, shy schools a bit further out). Finning hard,
-		// or a shaft past them, still scatters them (above).
+		// wary, not curious: reef fish go about their business and let a calm diver come to them. One that comes close
+		// is passed round (they swing off to the side and carry on), nearer for bold fish, wider for shy ones; finning
+		// hard, or a shaft past them, still scatters them (above).
 		if (bDiver && G.Flee <= 0 && !G.bChased && V->Kind != EKeysKind::Shark && V->Act != EKeysAct::Blow)
 		{
 			const double Dx = DiverX - G.CX, Dz = DiverZ - G.CZ, Dd = LHyp(Dx, Dz);
 			const FLifeFlee FP = LifeFleeParams(G.Type, V);
 			const double Stand = FP.DiverR <= 3 ? 2.6 : FP.DiverR <= 5 ? 3.4 : 4.0;
-			if (Dd < 35 && Dd > .1)
+			const double Aware = Stand * 2.2;
+			if (Dd < Aware && Dd > .1)
 			{
-				const double Calm = 1 - LClamp((DiverSpeed - .6) / 1.2, 0, 1);
-				const double ToH = FMath::Atan2(-Dx, -Dz);
 				const double Side = FMath::Fmod(G.Ph, 2.0) < 1 ? 1 : -1;
-				// closing in from outside the stand-off ring, then round it (tangent), easing out if it got too close
-				const double Rc = LClamp((Dd - Stand) / Stand, -1, 1);
-				const double Vx = Dx / Dd * Rc - Dz / Dd * Side * (1 - FMath::Abs(Rc) * .6), Vz = Dz / Dd * Rc + Dx / Dd * Side * (1 - FMath::Abs(Rc) * .6);
-				const double WantH = FMath::Atan2(-Vx, -Vz);
-				G.H = LAngLerp(G.H, Dd > Stand * 2 ? ToH : WantH, Dt * (.9 + 1.2 * Calm) * Calm);
-				if (Dd < Stand * 2) Sp *= .55;   // and slow right down while they look you over
-				G.Cur = FMath::Min(1.0, G.Cur + Dt * .3 * Calm * (Dd < 25 ? 1 : 0));
+				const double Push = LClamp((Aware - Dd) / (Aware - Stand * .6), 0, 1);   // 0 at the edge, 1 close in
+				// round you (tangent) and a little away, more so the closer you are
+				const double Vx = -Dz / Dd * Side * (1 - .5 * Push) - Dx / Dd * Push, Vz = Dx / Dd * Side * (1 - .5 * Push) - Dz / Dd * Push;
+				G.H = LAngLerp(G.H, FMath::Atan2(-Vx, -Vz), Dt * (.8 + 1.6 * Push));
 			}
-			else G.Cur = FMath::Max(0.0, G.Cur - Dt * .2);
 		}
-		else G.Cur = FMath::Max(0.0, G.Cur - Dt * (G.Flee > 0 ? 1.0 : .2));
+		if (G.Flee > 0) G.Cur = FMath::Max(0.0, G.Cur - Dt);
+		else G.Cur = FMath::Max(0.0, G.Cur - Dt * .2);
 		if (G.Glide > 0)
 		{
 			G.Glide -= Dt;

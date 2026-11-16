@@ -393,9 +393,8 @@ void AKeysAudio::UpdateLoops(double Dt, double T)
 	{
 		if (S.bFishRunning && !S.bReeling) { Rate = 40 + S.FishStr * 30; Rg = .025 + .012 * S.Drag; }
 		else if (S.bFishRunning) { Rate = 55; Rg = .02 + .01 * S.Drag; Pitch = 3100; }
-		else if (S.bReeling) { Rate = 14; Rg = .012; Pitch = 1900; }
+		// (no crank ratchet while you wind: the owner found it grating - only the drag sings, when line goes out)
 	}
-	else if (S.bReeling && S.bLineOut) { Rate = 12; Rg = .01; Pitch = 1900; }
 	Loops.ReelRate = (float)FMath::Max(1.0, Rate);
 	Loops.ReelPitch = (float)Pitch;
 	Loops.ReelDepth = (float)Rg;

@@ -635,9 +635,36 @@ float3 dvel = (hn - ho) * E * sr * (6.0 * dk * (1.0 - dk) / dd);   // how fast i
 float dartK = saturate(length(dvel) / 150.0);
 // it swims the path the leader swam Delay ago: put back the ground the leader has covered since, so the fish
 // keeps its place in the school on the straight and strings out along the leader's curve in a turn
-float spd = min(length(A1.xyz - A0.xyz) / StepDt, 600.0);
-float trail = spd * Delay;
-float3 pos = P + F * (sl.x + trail + wv.x + spot.x) + R * (sl.y + wv.y + spot.y) + U * (sl.z + wv.z + spot.z);
+// and it chases that spot rather than sitting on it (deadwatersstudio's fish system): each fish has its own lag, so
+// in a turn the school streams round after the leader like a ribbon, the slow ones swinging wide, and on the
+// straight they settle back into place. The chase is a weighted blend of where its spot was over the last moments.
+float tau = (0.35 + 0.6 * frac(Seed * 5.17)) / clamp(lively, 0.5, 1.5);
+float3 acc = float3(0, 0, 0); float3 T0 = float3(0, 0, 0);
+float3 slb = float3(SlotX, SlotY, SlotZ);
+[unroll] for (int kk = 0; kk < 4; kk++)
+{
+  float off = kk == 0 ? 0.0 : kk == 1 ? 0.5 : kk == 2 ? 1.0 : 2.0;
+  float wk = kk == 0 ? 0.4 : kk == 1 ? 0.3 : kk == 2 ? 0.2 : 0.1;
+  float dk = Delay + tau * off;
+  float sk = Head - dk / StepDt;
+  float j0 = floor(sk); float fk = sk - j0;
+  j0 = j0 - floor(j0 / hist) * hist;
+  float j1 = j0 + 1.0; j1 = j1 - floor(j1 / hist) * hist;
+  float4 a0 = Texture2DSampleLevel(Tex, TexSampler, float2((j0 * 5.0 + 0.5) / tw, vv), 0);
+  float4 a1 = Texture2DSampleLevel(Tex, TexSampler, float2((j1 * 5.0 + 0.5) / tw, vv), 0);
+  float4 b0 = Texture2DSampleLevel(Tex, TexSampler, float2((j0 * 5.0 + 1.5) / tw, vv), 0);
+  float4 b1 = Texture2DSampleLevel(Tex, TexSampler, float2((j1 * 5.0 + 1.5) / tw, vv), 0);
+  float3 Pk = lerp(a0.xyz, a1.xyz, fk); float4 Bk = lerp(b0, b1, fk);
+  float3 Fk = normalize(Bk.xyz + float3(1e-4, 0, 0));
+  float3 Rk = cross(Up, Fk); float rk = length(Rk); Rk = rk > 1e-3 ? Rk / rk : float3(0, 1, 0);
+  float3 Uk = cross(Fk, Rk);
+  float spk = min(length(a1.xyz - a0.xyz) / StepDt, 600.0);
+  float3 slk = slb * Bk.w * E;
+  float3 Tk = Pk + Fk * (slk.x + spk * dk + wv.x + spot.x) + Rk * (slk.y + wv.y + spot.y) + Uk * (slk.z + wv.z + spot.z);
+  acc += Tk * wk;
+  if (kk == 0) T0 = Tk;
+}
+float3 pos = acc;
 // the threat: fish within ~10 m of it are pushed off its line and close in again behind it
 float3 dv = pos - C.xyz; float dist = length(dv) + 1.0;
 float k = C.w * saturate(1.6 - dist / 700.0);
@@ -645,7 +672,7 @@ float3 away = dv / dist; away.z *= 0.35;
 pos += away * k * 450.0;
 pos.z = clamp(pos.z, D.x + 15.0 + Size * 25.0, D.y - 20.0 - Size * 12.0);
 // face along the motion: the leader's heading, the wander and the dodge
-float3 Fh = F * 110.0 + (F * wd.x + R * wd.y + U * wd.z) * 0.7 + away * (k * 300.0) + (F * dvel.x + R * dvel.y + U * dvel.z) * 0.45;
+float3 Fh = F * 110.0 + (F * wd.x + R * wd.y + U * wd.z) * 0.7 + away * (k * 300.0) + (F * dvel.x + R * dvel.y + U * dvel.z) * 0.45 + (T0 - pos) * 3.0;   // and it faces the spot it's chasing
 Fh.z = clamp(Fh.z, -0.5 * length(Fh.xy), 0.5 * length(Fh.xy));
 float3 F2 = normalize(Fh + float3(1e-4, 0, 0));
 float3 R2 = cross(Up, F2); float r2 = length(R2); R2 = r2 > 1e-3 ? R2 / r2 : float3(0, 1, 0);
