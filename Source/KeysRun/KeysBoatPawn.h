@@ -228,7 +228,7 @@ public:
 	bool bDashChart = false;
 	// "Run to" (web ui/runto.ts): the marinas' approaches, Sombrero Reef, the humps and the rigs; the Esc menu picks one
 	struct FRunDest { FString Name, Note; double X, Z; };
-	void RunDests(TArray<FRunDest>& Out) const;
+	void RunDests(TArray<FRunDest>& Out, bool bOnlyFound = false) const;
 	int32 RunSel = 0;
 	bool bGearOpen = false;   // the gear screen (Tab; web ui/gear.ts)
 	double LineBreakNow() const { return LineBreakAt(); }
@@ -276,6 +276,16 @@ public:
 	double SleepAlpha() const;
 	bool SleepCard() const;
 	TArray<FString> WrecksFound;       // wreck ids passed over within 260 m (the chart's memory)
+	// Free Fish mode: no charter, no clock, catches logged but unpaid. Fuel is unlimited unless the setting says otherwise.
+	bool bFreeFish = true, bUnlimitedFuel = true, bFuelOutMsg = false;
+	// the rod answering the fish: kicks on head shakes (decaying), and leaning toward where it is
+	double RodKick = 0, VmYawPull = 0, VmLunge = 0;
+	double Fuel = 1, DiscoverT = 0;
+	TArray<FString> SpotsFound;        // teleport destinations you've been within 200 m of
+	void UpdateFuel(double Dt);
+	void UpdateDiscovery(double Dt);
+	void PickBestOwnedBoat();
+	bool OutOfFuel() const { return !bUnlimitedFuel && Fuel <= 0; }
 	void DebugFinal(const FString& Cmd);
 	// fishing from a pier, a dock or a marina's planks (web game/fishing/shore.ts): the rod's state machine runs with the
 	// angler standing in for the boat (shoreBoat), so every rule downstream works unchanged

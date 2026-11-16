@@ -663,8 +663,8 @@ void AKeysBoatPawn::UpdateDash(double Dt, double T)
 	if (!bOn) Rpm = 0;
 	TachRpm += (Rpm - TachRpm) * FMath::Min(1.0, Dt * (bOn ? 6 : 2.5));
 	const double Load = FMath::Clamp(FMath::Abs(Thr) * .7 + F * .3, 0.0, 1.0);
-	// no fuel dock in the game, so the tank drains slowly with the throttle and never runs dry
-	if (bOn) FuelK = FMath::Max(.22, FuelK - Dt * (.00002 + .00012 * Thr * Thr));
+	// the fuel gauge reads the tank (UpdateFuel); with unlimited fuel it sits near full
+	FuelK += ((bUnlimitedFuel ? .92 : Fuel) - FuelK) * FMath::Min(1.0, Dt * 2);
 	WaterK += ((bOn ? .5 + .07 * Load : .08) - WaterK) * FMath::Min(1.0, Dt * .05);
 
 	// ---- redraw: every frame while you're at the helm or close by, slowly from further off, not at all from afar

@@ -90,6 +90,11 @@ public:
 	UPROPERTY() TArray<FKeysTagged> Tags;
 	UPROPERTY() TMap<FString, int64> Services;
 	UPROPERTY() TArray<FString> WrecksFound;
+	// Free Fish (the no-pressure sandbox) or Charter Captain; fuel; the spots you've been within 200 m of (teleport list)
+	UPROPERTY() bool bFreeFish = true;
+	UPROPERTY() bool bUnlimitedFuel = true;
+	UPROPERTY() double Fuel = 1;
+	UPROPERTY() TArray<FString> SpotsFound;
 
 	static constexpr int32 MaxTop = 12;
 

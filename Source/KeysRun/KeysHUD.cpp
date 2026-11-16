@@ -333,6 +333,7 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 	const TCHAR* Title = bMain ? TEXT("KEYS RUN") : P->Menu == EMenu::Pause ? TEXT("Paused") : P->Menu == EMenu::Settings ? TEXT("Settings") : TEXT("Controls");
 	Text(Title, X, 70 * U, bMain ? 4.2f : 2.8f, FLinearColor::White, Big);
 	if (bMain) Text(TEXT("Center console fishing  -  Marathon, Florida Keys"), X + 6 * U, 196 * U, 1.3f, Teal);
+	if (bMain) Text(TEXT("v1.25"), X + 6 * U, 232 * U, .8f, Dim);
 
 	TArray<AKeysBoatPawn::FMenuItem> Items;
 	P->GetMenuItems(Items);
@@ -564,6 +565,7 @@ void AKeysHUD::DrawGauges(AKeysBoatPawn* P)
 	Text(FString::Printf(TEXT("Score  %s"), *FText::AsNumber(P->Score).ToString()), X + 16 * U, 32 * U, 1.25f, Gold);
 	Text(FString::Printf(TEXT("%d fish  -  cooler %d fish, %d / %.0f lb"), P->Count, P->Cooler.Num(), FMath::RoundToInt(P->CoolerLb()), P->Spec().CoolerCap), X + 16 * U, 70 * U, .85f, Dim);
 	Text(FString::Printf(TEXT("%s %s"), *P->Spec().Brand, *P->Spec().Name), X + 16 * U, 96 * U, .85f, Dim);
+	Text(P->bFreeFish ? TEXT("FREE FISH") : TEXT("CHARTER CAPTAIN"), X + 300 * U - 10 * U - (P->bFreeFish ? 74 : 124) * U, 32 * U, .7f, P->bFreeFish ? Teal : Gold);
 
 	// helm, bottom left
 	const float GY = H - 236 * U;
@@ -575,6 +577,7 @@ void AKeysHUD::DrawGauges(AKeysBoatPawn* P)
 	Text(FString::Printf(TEXT("%.1f ft"), P->DepthHere() * 3.28), X + 150 * U, GY + 44 * U, 1.0f, Teal);
 	Text(FString::Printf(TEXT("Trim %d%%%s"), FMath::RoundToInt(P->TrimV * 100), P->bTrimMode ? TEXT("  (trim mode)") : TEXT("")), X + 150 * U, GY + 74 * U, .9f, P->bTrimMode ? Gold : Dim);
 	Text(TEXT("Throttle"), X + 18 * U, GY + 124 * U, .8f, Dim);
+	if (!P->bUnlimitedFuel) Text(FString::Printf(TEXT("Fuel %d%%"), FMath::RoundToInt(P->Fuel * 100)), X + 250 * U, GY + 104 * U, .8f, P->Fuel < .15 ? Red : Dim);
 	Bar(X + 100 * U, GY + 130 * U, 220 * U, 10 * U, float(FMath::Max(0.0, P->Throttle())), Teal);
 	Text(P->ZoneName() + TEXT("  -  ") + P->NearName(), X + 18 * U, GY + 150 * U, .8f, FLinearColor::White);
 	Text(TEXT("Sea: ") + SeaStates()[SeaIndex()].Name + TEXT("  -  ") + KeysWx::HudLine(P->BoatX(), P->BoatZ()), X + 18 * U, GY - 26 * U, .85f, Dim);

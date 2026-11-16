@@ -148,6 +148,8 @@ void AKeysBoatPawn::BeginPlay()
 		Tags = Save->Tags;
 		Svc = Save->Services;
 		WrecksFound = Save->WrecksFound;
+		bFreeFish = Save->bFreeFish; bUnlimitedFuel = Save->bUnlimitedFuel; Fuel = Save->Fuel; SpotsFound = Save->SpotsFound;
+		if (bFreeFish) PickBestOwnedBoat();
 		// every boat in the Keys has a pistol in the console: the starter kit is two magazines' worth and three shafts (sim/shop.ts)
 		if (!Save->bStarterKit) { Counts.FindOrAdd(TEXT("handgun.ammo")) += 24; Counts.FindOrAdd(TEXT("spear.shafts")) += 3; Save->bStarterKit = true; }
 	}
@@ -288,6 +290,7 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 	{
 	case EMenu::Main:
 		Add(TEXT("play"), TEXT("Start fishing"));
+		Add(TEXT("mode"), TEXT("Mode"), bFreeFish ? TEXT("Free Fish - no clock, no charters, no pay") : TEXT("Charter Captain - clients, clocks, pay"), true);
 		Add(TEXT("boat"), TEXT("Boat"), Spec().Brand + TEXT(" ") + Spec().Name + (OwnsBoat(Spec().Id) ? FString() : FString::Printf(TEXT("  ($%s)"), *Commas(Spec().Price))), true);
 		Add(TEXT("online"), OnlineLabel, OnlineValue);
 		Add(TEXT("board"), TEXT("Leaderboard"));
@@ -301,17 +304,19 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		const AKeysEvents* Ev = AKeysEvents::Get(this);
 		const bool bTour = Ev && Ev->InTourney() && Ev->TourneyPhase() != AKeysEvents::ETourney::Over;
 		const bool bRace = Ev && (Ev->RacePhase() == AKeysEvents::ERace::Countdown || Ev->RacePhase() == AKeysEvents::ERace::Racing);
-		Add(TEXT("tourney"), TEXT("Fishing tournament"), bTour ? FString(TEXT("quit it")) : FString(TEXT("15 min, five species")));
-		Add(TEXT("race"), TEXT("Marathon race"), bRace ? FString(TEXT("abandon it")) : FString(TEXT("2 laps, R at the helm")));
+		// Free Fish is a sandbox: no timed events
+		if (!bFreeFish || bTour) Add(TEXT("tourney"), TEXT("Fishing tournament"), bTour ? FString(TEXT("quit it")) : FString(TEXT("15 min, five species")));
+		if (!bFreeFish || bRace) Add(TEXT("race"), TEXT("Marathon race"), bRace ? FString(TEXT("abandon it")) : FString(TEXT("2 laps, R at the helm")));
 		Add(TEXT("estates"), TEXT("Land office"), TEXT("Keys Run Estates  ( , )"));
 		{
 			TArray<FRunDest> Ds;
-			RunDests(Ds);
+			RunDests(Ds, true);
+			if (!Ds.Num()) Add(TEXT("runto"), TEXT("Teleport to"), TEXT("nowhere yet - get within 200 m of a marina, reef, wreck or rig"));
 			if (Ds.Num())
 			{
 				const FRunDest& D = Ds[FMath::Clamp(RunSel, 0, Ds.Num() - 1)];
 				const double Km = FMath::Sqrt(FMath::Square(D.X - X) + FMath::Square(D.Z - Z)) / 1000;
-				Add(TEXT("runto"), TEXT("Run to"), FString::Printf(TEXT("%s - %s, %s"), *D.Name, *D.Note, Km < 1 ? *FString::Printf(TEXT("%d m"), FMath::RoundToInt(Km * 1000)) : *FString::Printf(TEXT("%.1f km"), Km)), true);
+				Add(TEXT("runto"), FString::Printf(TEXT("Teleport to (%d found)"), Ds.Num()), FString::Printf(TEXT("%s - %s, %s"), *D.Name, *D.Note, Km < 1 ? *FString::Printf(TEXT("%d m"), FMath::RoundToInt(Km * 1000)) : *FString::Printf(TEXT("%.1f km"), Km)), true);
 			}
 		}
 		Add(TEXT("online"), OnlineLabel, OnlineValue);
@@ -332,6 +337,7 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		Add(TEXT("radio"), TEXT("Radio"), A ? A->GetRadioLabel().Replace(TEXT("Radio: "), TEXT("")) : FString(TEXT("Off")), true);
 		Add(TEXT("view"), TEXT("Camera"), View == 0 ? TEXT("Chase") : View == 1 ? TEXT("Helm") : TEXT("Tuna tower"), true);
 		Add(TEXT("fpview"), TEXT("Fishing view"), bFpPref ? TEXT("First person") : TEXT("Third person"), true);
+		Add(TEXT("fuel"), TEXT("Fuel"), bUnlimitedFuel ? TEXT("Unlimited") : FString::Printf(TEXT("Realistic (%d%% - refuel free at any marina)"), FMath::RoundToInt(Fuel * 100)), true);
 		Add(TEXT("autochase"), TEXT("Auto-chase hooked fish"), bAutoChase ? TEXT("On") : TEXT("Off"), true);
 		Add(TEXT("diveview"), TEXT("Dive view"), bDiveChase ? TEXT("Chase") : TEXT("Dive mask"), true);
 		Add(TEXT("haze"), TEXT("Underwater haze"), UnderwaterHaze < .8 ? TEXT("Clear") : UnderwaterHaze > 1.2 ? TEXT("Murky") : TEXT("Normal"), true);
@@ -359,10 +365,17 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 			*Spec().Brand, *Spec().Name, *Commas(Spec().Price), *Commas(Cash)), 5);
 	}
 	else if (Id == TEXT("resume")) Menu = EMenu::None;
+	else if (Id == TEXT("mode"))
+	{
+		bFreeFish = !bFreeFish;
+		if (bFreeFish) PickBestOwnedBoat();
+		SaveEconomy();
+	}
+	else if (Id == TEXT("fuel")) { bUnlimitedFuel = !bUnlimitedFuel; bFuelOutMsg = false; SaveEconomy(); }
 	else if (Id == TEXT("runto"))
 	{
 		TArray<FRunDest> Ds;
-		RunDests(Ds);
+		RunDests(Ds, true);
 		if (Dir != 0 && Ds.Num()) RunSel = (RunSel + Dir + Ds.Num()) % Ds.Num();
 		else if (Dir == 0) RunTo(RunSel);
 	}
@@ -1339,9 +1352,15 @@ void AKeysBoatPawn::ApplyOutfit()
 	if (AKeysExtras* Ex = AKeysExtras::Get(this)) Ex->SetCosmeticFlag(Wearing.FindRef(TEXT("flag")));
 }
 
-void AKeysBoatPawn::RunDests(TArray<FRunDest>& Out) const
+void AKeysBoatPawn::RunDests(TArray<FRunDest>& Out, bool bOnlyFound) const
 {
 	Out.Reset();
+	ON_SCOPE_EXIT
+	{
+		// the wrecks, then (for the teleport list) only the places you've been near
+		if (bOnlyFound) Out.RemoveAll([this](const FRunDest& D) { return !SpotsFound.Contains(D.Name); });
+	};
+	for (const KeysWrecks::FWreck& W : KeysWrecks::Wrecks()) Out.Add({FString(W.Name), TEXT("wreck"), W.X + 30, W.Z});
 	for (const FMarina& M : Marinas()) Out.Add({M.Name, TEXT("marina"), M.SX, M.SZ + M.Dir * 48});
 	Out.Add({TEXT("Sombrero Reef"), TEXT("the crest"), 60, 1462});
 	for (const FHump& Hm : Humps()) Out.Add({Hm.Name, Hm.bPatch ? TEXT("patch reef") : TEXT("offshore hump"), Hm.X, ChainZ(Hm.X) + Hm.DZ});
@@ -1354,10 +1373,63 @@ void AKeysBoatPawn::RunDests(TArray<FRunDest>& Out) const
 	}
 }
 
+// The tank: realistic fuel burns with the throttle (a full tank is about 25 minutes flat out) and fills up for free
+// whenever you're slow at a marina's slips. Unlimited (the default) never drains.
+void AKeysBoatPawn::UpdateFuel(double Dt)
+{
+	if (bUnlimitedFuel) { Fuel = 1; return; }
+	const double Burn = (.05 + .95 * FMath::Pow(FMath::Abs(Thr), 1.5)) / 1500.0;
+	if (bRunning) Fuel = FMath::Max(0.0, Fuel - Burn * Dt);
+	if (NearMarina(X, Z) && FMath::Abs(Speed) < 1.5 && Fuel < 1)
+	{
+		Fuel = FMath::Min(1.0, Fuel + Dt / 12);
+		if (Fuel >= 1) ShowToast(TEXT("Topped up at the fuel dock."));
+		bFuelOutMsg = false;
+	}
+	if (Fuel <= 0 && !bFuelOutMsg) { bFuelOutMsg = true; ShowToast(TEXT("Out of fuel. Teleport to a marina from the menu (Esc), or turn on unlimited fuel in Settings."), 6); }
+}
+
+// discovery: the first time you come within 200 m of a marina, reef, wreck or rig it joins the teleport list. The
+// marina nearest where you first start is known from the outset (it's your home port).
+void AKeysBoatPawn::UpdateDiscovery(double Dt)
+{
+	DiscoverT -= Dt;
+	if (DiscoverT > 0 || !bRunning) return;
+	DiscoverT = 1;
+	TArray<FRunDest> Ds;
+	RunDests(Ds);
+	if (!SpotsFound.Num())
+	{
+		const FRunDest* Home = nullptr; double Best = 1e18;
+		for (const FRunDest& D : Ds) if (D.Note == TEXT("marina")) { const double Dd = FMath::Square(D.X - X) + FMath::Square(D.Z - Z); if (Dd < Best) { Best = Dd; Home = &D; } }
+		if (Home) SpotsFound.Add(Home->Name);
+	}
+	for (const FRunDest& D : Ds)
+	{
+		if (SpotsFound.Contains(D.Name) || FMath::Square(D.X - X) + FMath::Square(D.Z - Z) > 200.0 * 200.0) continue;
+		SpotsFound.Add(D.Name);
+		ShowToast(FString::Printf(TEXT("Discovered %s (%s) - you can teleport here from the menu."), *D.Name, *D.Note), 4);
+		SaveEconomy();
+	}
+}
+
+// Free Fish starts you in the best boat you own: the dearest, and the longest of those
+void AKeysBoatPawn::PickBestOwnedBoat()
+{
+	const TArray<FBoatSpec>& B = Boats();
+	int32 Best = -1;
+	for (int32 i = 0; i < B.Num(); i++)
+	{
+		if (!OwnsBoat(B[i].Id)) continue;
+		if (Best < 0 || B[i].Price > B[Best].Price || (B[i].Price == B[Best].Price && B[i].Len > B[Best].Len)) Best = i;
+	}
+	if (Best >= 0 && Best != BoatIndex) { BoatIndex = PickIndex = Best; Rebuild(); }
+}
+
 void AKeysBoatPawn::RunTo(int32 I)
 {
 	TArray<FRunDest> Ds;
-	RunDests(Ds);
+	RunDests(Ds, true);
 	if (!Ds.IsValidIndex(I)) return;
 	// refuse while something is going on that teleporting would spoil
 	const AKeysEvents* Ev = AKeysEvents::Get(this);
@@ -1372,7 +1444,7 @@ void AKeysBoatPawn::RunTo(int32 I)
 	bCamInit = false;
 	if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
 	Menu = EMenu::None;
-	ShowToast(FString::Printf(TEXT("Run to %s."), *Ds[I].Name));
+	ShowToast(FString::Printf(TEXT("Teleported to %s."), *Ds[I].Name));
 }
 
 void AKeysBoatPawn::PrepareToLeaveHelm()
@@ -1473,6 +1545,7 @@ void AKeysBoatPawn::SaveEconomy()
 	Save->Tags = Tags;
 	Save->Services = Svc;
 	Save->WrecksFound = WrecksFound;
+	Save->bFreeFish = bFreeFish; Save->bUnlimitedFuel = bUnlimitedFuel; Save->Fuel = Fuel; Save->SpotsFound = SpotsFound;
 	Save->Write();
 }
 
@@ -1890,13 +1963,17 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 		else if (Gear == 2) TT = (bFwd || (bBack && !bLineOut)) ? -.35 : 0;
 	}
 	if (bTrimMode && bCanDrive && !bFwd && !bBack) TT = Thr;   // throttle holds while you trim
+	if (OutOfFuel()) TT = 0;   // dry tank: the engines idle and die
 	double AcThr = 0, AcSteer = 0;
 	const bool bAc = AutoChase(TopMs, bCanDrive, AcThr, AcSteer);
 	if (bAc) TT = AcThr;
 	double TrollT = 0;
 	if (!bAc && bCanDrive && TrollThrottle(TopMs, TrollT)) { TT = TrollT; Gear = 0; }   // trolling holds seven knots
 	else if (!bAc && bCanDrive && ScriptThr > -.5) TT = FMath::Max(ScriptThr, -.35);   // -1: no hold; down to -0.35 backs down
+	if (OutOfFuel()) { TT = 0; ScriptThr = -1; }
 	Thr += (TT - Thr) * FMath::Min(1.0, Dt * 2.5);
+	UpdateFuel(Dt);
+	UpdateDiscovery(Dt);
 
 	// trim: the sweet spot moves out as you get on plane; too far in plows the bow, too far out blows the props out
 	if (bTrimUp) TrimV = FMath::Min(1.0, TrimV + Dt * .35);
@@ -2828,7 +2905,7 @@ void AKeysBoatPawn::WeighIn()
 	// the fillets go to the fish house at the dock price (content/economy.ts MEAT_PRICE); game fish and billfish don't sell
 	double Sale = 0;
 	for (const FKeysCooler& C : Cooler) Sale += C.Weight * .45 * KeysTown::MeatPrice(C.Key);
-	const int64 Paid = FMath::RoundToInt64(Sale);
+	const int64 Paid = bFreeFish ? 0 : FMath::RoundToInt64(Sale);   // Free Fish: logged and scored, but no sale
 	Cash += Paid;
 	SaveEconomy();
 	ShowToast(FString::Printf(TEXT("Weighed in %d fish (%d lb) at %s. Top fish: %s, %.1f lb. +%s points%s"), Cooler.Num(), FMath::RoundToInt(Lb), *M->Name, *BigF->Name, BigF->Weight, *Commas(Bonus),
@@ -3027,6 +3104,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 			ShakeT = Rand(.5, 1.8) * (1.4 - Stamina * .6);
 			Tension += (bReel ? .08 : .04) * S;
 			Shake = FMath::Max(Shake, .1 + .1 * S);
+			RodKick = FMath::Min(1.0, RodKick + .55 + .3 * S);   // the rod jerks down with each head shake
 			if (!(DeepT > 0) && !bJumping)
 				if (AKeysAudio* A = AKeysAudio::Get(this)) A->Splash(FX, FZ, 6, .7);
 		}
@@ -3098,12 +3176,25 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 void AKeysBoatPawn::UpdateViewModel(double Dt)
 {
 	if (InChair() && (bAction || bReelKey)) VmCrank -= Dt * 22;   // the chair angler winds the same reel
+	RodKick *= FMath::Exp(-Dt * 3.2);
 	if (!bFpOn) return;
 	const double Now = GetWorld()->GetTimeSeconds();
 	double Bend = .01;
-	if (FState == EKeysFish::Fight) Bend = Clamp(Tension, 0, 1.1) * .15 + Shake * .08 * FMath::Sin(Now * 45);
+	double LungeWant = 0, YawWant = 0;
+	if (FState == EKeysFish::Fight)
+	{
+		// the blank loads with the line, kicks and buzzes on every head shake, and throbs while the fish runs
+		Bend = Clamp(Tension, 0, 1.1) * .2 + Shake * .08 * FMath::Sin(Now * 45) + RodKick * .11 * (.55 + .45 * FMath::Sin(Now * 31))
+			+ (bRunningFish ? .025 * FMath::Sin(Now * 9.5) : 0);
+		LungeWant = RodKick * .2 + (bRunningFish ? .06 + .04 * FMath::Sin(Now * 3.1) : 0) + Clamp(Tension - .6, 0, .5) * .2;
+		// and the rod leans toward wherever the fish is
+		const double Bear = FMath::Atan2(-(FX - X), -(FZ - Z));
+		YawWant = FMath::Clamp(FMath::UnwindRadians(Bear - FpYaw) * .4, -.32, .32) * Clamp(Tension + .3, 0, 1);
+	}
 	else if (FState == EKeysFish::Bite) Bend = .09;
 	else if (FState == EKeysFish::Nibble && DipT > 0) Bend = .045;
+	VmLunge = Lerp(VmLunge, LungeWant, FMath::Min(1.0, Dt * 12));
+	VmYawPull = Lerp(VmYawPull, YawWant, FMath::Min(1.0, Dt * 3));
 	VmBend = Lerp(VmBend, Bend, FMath::Min(1.0, Dt * 10));
 	double Rx = -1.15 + (bCharging ? Charge * .7 : 0);
 	if (VmWhip > 0) { VmWhip = FMath::Max(0.0, VmWhip - Dt / .35); Rx -= .45 * FMath::Sin(VmWhip * PI); }
@@ -3111,6 +3202,7 @@ void AKeysBoatPawn::UpdateViewModel(double Dt)
 	const double PumpWant = FState == EKeysFish::Fight ? (bAction ? -.1 : .12 + .14 * Clamp(Tension, 0, 1)) : 0;
 	VmPump = Lerp(VmPump, PumpWant, FMath::Min(1.0, Dt * (bAction ? 2.5 : 1.4)));
 	Rx += VmPump;
+	Rx += VmLunge;
 	VmRx = Lerp(VmRx, Rx, FMath::Min(1.0, Dt * 14));
 	if ((bReelKey && IsLineOut()) || (FState == EKeysFish::Fight && bAction)) VmCrank -= Dt * 22;   // the down arrow winds the reel
 }
@@ -3204,7 +3296,7 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 	// Ry(.16) * Rx(Th): the rod base's yaw-pitch-roll ("YXZ") rotation
 	// while a fish is in the air the rod drops down and out to the right, so it isn't across the jump
 	const double Jl = JumpLook * JumpLook * (3 - 2 * JumpLook);
-	const double Yw = .16 + .42 * Jl;
+	const double Yw = .16 + .42 * Jl - VmYawPull;
 	auto Rot = [Yw](double Th, const FVector& V)
 	{
 		const double C = FMath::Cos(Th), Sn = FMath::Sin(Th), Cy = FMath::Cos(Yw), Sy = FMath::Sin(Yw);
@@ -3332,7 +3424,7 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 			RP.Lod = 0;
 			RP.CrankA = PI / 4 + VmCrank;
 			const double Bend = FState == EKeysFish::Fight ? Clamp(Tension, 0, 1) : 0;
-			RP.Bend = (G2U(End) - (RP.Butt + RP.Dir * RP.Len)).GetSafeNormal() * Bend * .7;
+			RP.Bend = (G2U(End) - (RP.Butt + RP.Dir * RP.Len)).GetSafeNormal() * (Bend * .7 + RodKick * .35 * (.6 + .4 * FMath::Sin(T * 31)));
 			TipU = KeysMesh::BuildTunaRod(M, RP);
 		}
 		else
@@ -3344,7 +3436,8 @@ void AKeysBoatPawn::DrawLineAndRod(double T)
 		// the rod bends toward the load when a fish is pulling
 		const double Bend = FState == EKeysFish::Fight ? Clamp(Tension, 0, 1) : 0;
 		const FVector Mid = (Butt + Tip) * .5 + (End - Tip).GetSafeNormal() * Bend * .5;
-		const FVector RodTipBent = Tip + (End - Tip).GetSafeNormal() * Bend * .6 - FVector(0, Bend * .5, 0);
+		const double Kick = RodKick * (.6 + .4 * FMath::Sin(T * 31));
+		const FVector RodTipBent = Tip + (End - Tip).GetSafeNormal() * (Bend * .6 + Kick * .3) - FVector(0, Bend * .5 + Kick * .25, 0);
 		(void)Mid;
 		// the tuna rod: butt at the angler's hip, the blank bowing toward the load
 		KeysMesh::FRodPose RP;

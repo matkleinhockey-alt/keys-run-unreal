@@ -124,6 +124,13 @@ void AKeysCharter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0));
 	if (!P) return;
+	// Free Fish is a sandbox: no board, no charter, no clock
+	if (P->bFreeFish)
+	{
+		if (bHasActive) CancelCharter();
+		bAtMarina = bWasAtMarina = false;
+		return;
+	}
 	// in a marina's zone: near its line of slips
 	bAtMarina = false;
 	for (const KeysGeo::FMarina& M : KeysGeo::Marinas())
