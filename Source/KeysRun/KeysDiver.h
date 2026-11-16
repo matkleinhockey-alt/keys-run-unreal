@@ -98,6 +98,7 @@ private:
 	};
 	struct FBubble { FVector P, V; double Age = -1, R0 = .005, P0 = 1, WobA = 0, WobF = 0, WobP = 0; };
 	struct FPuff { FVector P, V; double Life = 0, Max = 1; };
+	struct FBlood { FVector P, V; double Age = -1, Life = 6, R = .1; };
 	struct FSnow { FVector P, V; double Seed; };
 	struct FSeep { int64 Key; FVector P; double Rate; double Acc = 0; };
 	struct FSeepB { FVector P, V; double Age = -1, Life = 1, Size = .02; int32 Slot = 0; };
@@ -173,7 +174,10 @@ private:
 	FVector SwayV = FVector::ZeroVector;
 	FVector MuzzleG = FVector::ZeroVector;   // the muzzle, game meters
 	// the fish on the line (speared-fish-visual.ts)
-	int32 FishMode = 0;   // 0 none, 1 held, 2 fleeing
+	int32 FishMode = 0;   // 0 none, 1 held, 2 fleeing, 3 dying on the spear, 4 held up by the diver
+	double KillT = 0;
+	TArray<FBlood> Blood;
+	void BleedAt(const FVector& G, int32 N, double Spread);
 	FVector FishPos = FVector::ZeroVector, FishTgt = FVector::ZeroVector, FleeDir = FVector::ZeroVector;
 	double FishHead = 0, FishTension = .5, FishStam = 1, FleeT = 0;
 

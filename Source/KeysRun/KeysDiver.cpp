@@ -466,7 +466,7 @@ void AKeysDiver::FixedStep(double Dt, double T)
 		WakingT += Dt;
 		FInput In;
 		In.LookYaw = CamYaw; In.LookPitch = CamPitch;
-		Step(S, In, T, Dt, SwimMul);
+		Step(S, In, T, Dt, SwimMul * 1.6);   // 1.6: long freediving fins
 		FrameEvents.Append(S.Events);
 		if (WakingT >= BlackoutWakeDelay)
 		{
@@ -479,7 +479,7 @@ void AKeysDiver::FixedStep(double Dt, double T)
 	In.bFwd = Btn.bFwd || bDebugSwim; In.bBack = Btn.bBack; In.bLeft = Btn.bLeft; In.bRight = Btn.bRight;
 	In.bAscend = Btn.bAscend; In.bDescend = Btn.bDescend; In.bSprint = Btn.bSprint;
 	In.LookYaw = CamYaw; In.LookPitch = CamPitch;
-	Step(S, In, T, Dt, SwimMul);
+	Step(S, In, T, Dt, SwimMul * 1.6);   // 1.6: long freediving fins
 	if (DebugHoldDepth >= 0) { S.Y = FMath::Max(-DebugHoldDepth, KeysSea::SeafloorHeightAt(S.X, S.Z) + .6); S.VY = 0; }
 	FrameEvents.Append(S.Events);
 	bCanReboard = S.Depth() < 1.5 && FVector2D(S.X - BX, S.Z - BZ).Size() < 6;
@@ -592,27 +592,24 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 			const FTarget* Target = Tg.FindByPredicate([&](const FTarget& X) { return X.Id == Hit.Id; });
 			if (Target && Hit.bHeld)
 			{
-				Speared.bOn = true;
+				// a clean kill shot: no fight under water. The fish shudders on the shaft, bleeds a little into the current,
+				// and is drawn in to the diver's hand
+				Speared.bOn = false;
 				Speared.Target = *Target;
-				Speared.P = FightParamsFor(Target->Key, Target->Weight);
-				Speared.P.TetherMax = FMath::Max(4.0, Speared.P.TetherMax * SpearTetherMul);   // the reel conversion: it runs less far
-				Speared.F = StartFight(Hit.Point.X, Hit.Point.Z);
 				const KeysData::FSpecies* Sp = KeysData::Species(Target->Key);
-				const double SizeT = Sp ? DvClamp((Target->Weight - Sp->Min) / FMath::Max(1e-6, Sp->Max - Sp->Min), 0, 1) : .5;
-				Speared.Label = SizeT > .7 ? TEXT("Something heavy is on the spear") : SizeT > .35 ? TEXT("Solid fish on the spear") : TEXT("Fish on the spear");
 				UE_LOG(LogTemp, Log, TEXT("KRDive speared %s %.1f lb at %.1f m"), *Speared.Target.Key, Speared.Target.Weight, Hit.AtDist);
 				if (AKeysLife* L = AKeysLife::Get(this)) L->TakeSpeared(Target->Id);
-				// the fish on the line (speared-fish-visual.ts)
 				FKeysMesh M;
 				const double Scale = Sp ? 1.35 * DvClamp(FMath::Pow(Target->Weight / ((Sp->Min + Sp->Max) / 2), 1.0 / 3), .75, 1.5) : 1.35;
 				if (!AKeysLife::BuildCreatureMesh(Target->Key, M, Scale))
 					KeysMesh::BuildFish(M, KeysMesh::FishLength(Target->Weight), Sp ? Sp->Color : FLinearColor::Gray, false);
 				M.SmoothNormals();
 				M.Commit(FishOnLine, 0, AKeysWorld::VertexColorMaterial());
-				FishMode = 1;
+				FishMode = 3; KillT = 0;
 				FishPos = FishTgt = Hit.Point;
-				FishHead = 0; FishTension = .5; FishStam = 1;
-				if (P) P->ShowMsg(Speared.Label + TEXT(" - hold S to haul it in, ease off if the bar runs red."), 3.5);
+				FishHead = FMath::Atan2(-(Hit.Point.X - S.X), -(Hit.Point.Z - S.Z)) + PI * .5;
+				BleedAt(Hit.Point, 26, .12);
+				if (P) P->ShowMsg(TEXT("Stoned it - clean shot."), 2.5);
 			}
 			else if (Target && P) P->ShowMsg(TEXT("The shot doesn't have enough force left to hold - it glances off."));
 			Shot.bAlive = false;
@@ -792,8 +789,11 @@ void AKeysDiver::UpdateGun(double Dt)
 	const bool bDrawNow = bDrawing && HandsFree() && !bLoaded && Gun.ReloadT <= 0;
 	const double Frac = bLoaded ? 1 : DvClamp(Gun.Draw, 0, 1);
 	const double Recover = Gun.ReloadT > 0 ? FMath::Min(1.0, 1 - Gun.ReloadT / SpearReload) : 1;
+	// reloading is a new shaft fed in through the muzzle and pushed home until it latches (the bands go on at the end)
+	const double LoadE = Gun.ReloadT > 0 ? FMath::SmoothStep(0.0, 1.0, DvClamp((Recover - .15) / .8, 0, 1)) : 1;
+	const double ShaftOut = (1 - LoadE) * .85;
 	const double Effort = DrawRateFor(KickSpeed);
-	GunShaft->SetRelativeLocation(FVector((BarrelLen + ShaftPoke * .5 * Frac) * 100, 0, RailY * 100));
+	GunShaft->SetRelativeLocation(FVector((BarrelLen + ShaftPoke * .5 + ShaftOut) * 100, 0, RailY * 100));
 	StrainT += Dt;
 	const double Tremble = bDrawNow ? FMath::Sin(StrainT * 41) * .006 * (.4 + Frac) : 0;
 	const double BandLen = DvLerp(BandShort, BandLong, Frac) + Tremble;
@@ -810,7 +810,8 @@ void AKeysDiver::UpdateGun(double Dt)
 	const bool bGlove = !bLoaded && PoseW > .3;
 	if (bGlove)
 	{
-		const double HandX = Recover < 1 ? BandAnchorX - BandShort : BandAnchorX - BandLen;
+		// the loading hand pushes the new shaft back in through the muzzle
+		const double HandX = Gun.ReloadT > 0 ? BarrelLen + .05 + ShaftOut * .7 : BandAnchorX - BandLen;
 		GunGlove->SetRelativeLocation(FVector(HandX * 100, 0, (RailY + .012) * 100));
 		GunGlove->SetRelativeRotation(FRotator(0, 0, bDrawNow ? FMath::RadiansToDegrees(FMath::Sin(StrainT * 7.5) * .18) : 0));
 	}
@@ -841,7 +842,7 @@ void AKeysDiver::UpdateGun(double Dt)
 	GunBase->SetVisibility(bShow, false);
 	GunBandL->SetVisibility(bShow);
 	GunBandR->SetVisibility(bShow);
-	GunShaft->SetVisibility(bShow && !Speared.bOn);
+	GunShaft->SetVisibility(bShow && !Speared.bOn && !(Gun.ReloadT > 0 && Recover < .15));
 	GunGlove->SetVisibility(bShow && bGlove);
 	GunHandL->SetVisibility(bShow && !bGlove);
 	GunWish->SetRelativeLocation(FVector((BandAnchorX - BandLen) * 100, 0, (StockH * .5 + BandRad * 1.1) * 100));
@@ -901,6 +902,41 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 	if (FishMode == 0) { FishOnLine->SetVisibility(false); return; }
 	FishOnLine->SetVisibility(true);
 	double Pitch = 0, Yaw = 0, Roll = 0, Sc = 1;
+	if (FishMode == 3 || FishMode == 4)
+	{
+		KillT += Dt;
+		const FQuat CQ = CamRotUE.Quaternion();
+		// where the diver holds it up: a little below and left of the view, side-on
+		const FVector HoldU = CamPosUE + CQ.RotateVector(FVector(1.05, -.32, -.3) * 100);
+		const FVector HoldG = U2G(HoldU);
+		if (FishMode == 3)
+		{
+			// 0-0.7 s: kicking on the shaft where it was hit, bleeding; 0.7-1.9 s: drawn in along the line to the hand
+			const double Sh = KillT < .7 ? (1 - KillT / .7) : 0;
+			if (KillT < .7 && FMath::FRand() < Dt * 14) BleedAt(FishPos, 2, .06);
+			const double In = DvClamp((KillT - .7) / 1.2, 0, 1), E = In * In * (3 - 2 * In);
+			const FVector P = FMath::Lerp(FishTgt, HoldG, E);
+			if (In > 0 && FMath::FRand() < Dt * 5) BleedAt(P, 1, .04);
+			Yaw = FishHead + FMath::Sin(KillT * 38) * .35 * Sh;
+			Roll = FMath::Sin(KillT * 31 + .7) * .5 * Sh + E * .3;
+			Pitch = FMath::Sin(KillT * 24) * .2 * Sh;
+			FishOnLine->SetWorldLocationAndRotation(G2U(P), FRotator(FMath::RadiansToDegrees(Pitch), YawDeg(Yaw), FMath::RadiansToDegrees(Roll)));
+			if (KillT >= 1.9) { FishMode = 4; KillT = 0; if (AKeysBoatPawn* Pw = Pawn()) Pw->ShowMsg(FString::Printf(TEXT("%s - on the stringer."), *Speared.Target.Key.Replace(TEXT("_"), TEXT(" "))), 2.5); }
+			FishOnLine->SetWorldScale3D(FVector(1));
+			return;
+		}
+		// held up: side-on across the view, tail drooping, a last flick or two
+		const FRotator R = (CQ * FRotator(-12, 90, 8 + FMath::Sin(KillT * 3) * 3 * FMath::Max(0.0, 1 - KillT)).Quaternion()).Rotator();
+		FishOnLine->SetWorldLocationAndRotation(HoldU, R);
+		FishOnLine->SetWorldScale3D(FVector(.8));
+		if (KillT > 2.6)
+		{
+			if (AKeysBoatPawn* Pw = Pawn()) Pw->LandSpeared(Speared.Target.Key, Speared.Target.Weight, S.X, S.Z);
+			FishMode = 0;
+			FishOnLine->ClearAllMeshSections();
+		}
+		return;
+	}
 	if (FishMode == 1)
 	{
 		FishPos.X = DvLerp(FishPos.X, FishTgt.X, FMath::Min(1.0, Dt * 9));
@@ -986,8 +1022,32 @@ void AKeysDiver::Puff(int32 N, const FVector& P, double RMin, double RMax)
 
 // the diver's breath (entities/diver/bubbles.ts): a slow leak that quickens as the air runs low and with effort,
 // a clearing puff every 2.4 m of descent, a burst on surfacing and on blackout; bubbles grow as they rise
+void AKeysDiver::BleedAt(const FVector& G, int32 N, double Spread)
+{
+	for (int32 i = 0; i < N; i++)
+	{
+		FBlood B;
+		B.P = G + FVector(DvRand(-1, 1), DvRand(-1, 1), DvRand(-1, 1)) * Spread;
+		B.V = FVector(DvRand(-1, 1), DvRand(-.3, .6), DvRand(-1, 1)) * .25;
+		B.Age = 0; B.Life = DvRand(4.5, 8); B.R = DvRand(.05, .12);
+		int32 Slot = Blood.IndexOfByPredicate([](const FBlood& X) { return X.Age < 0; });
+		if (Slot == INDEX_NONE) { if (Blood.Num() < 260) Slot = Blood.Add(B); else Slot = FMath::RandRange(0, Blood.Num() - 1); }
+		Blood[Slot] = B;
+	}
+}
+
 void AKeysDiver::UpdateBubbles(double Dt, double T)
 {
+	// the blood: clouds that spread, drift off on the current and thin out
+	for (FBlood& B : Blood)
+	{
+		if (B.Age < 0) continue;
+		B.Age += Dt;
+		if (B.Age > B.Life) { B.Age = -1; continue; }
+		const FVector2D Cur = KeysSea::CurrentAt(B.P.X, B.P.Z, T, FMath::Max(0.0, -B.P.Y));
+		B.V *= FMath::Max(0.0, 1 - Dt * 1.2);
+		B.P += (B.V + FVector(Cur.X, .03, Cur.Y)) * Dt;
+	}
 	const double H = FMath::Min(.05, FMath::Max(0.0, Dt));
 	if (bDiving)
 	{
@@ -1171,6 +1231,12 @@ void AKeysDiver::DrawParticles()
 		const double A = FMath::Min(1.0, B.Age * 6) * (B.Age > 108 ? (110 - B.Age) / 2 : 1) * .9;
 		Quad(B.P, R * 2.4, FLinearColor(.88f, .97f, 1.f, float(A)), false);
 	}
+	for (const FBlood& B : Blood)
+		if (B.Age >= 0)
+		{
+			const double U = B.Age / B.Life;
+			Quad(B.P, B.R * 2 * (1 + B.Age * .7), FLinearColor(.2f, .02f, .025f, float(FMath::Min(1.0, B.Age * 6) * FMath::Pow(1 - U, 1.8) * .42)), true);
+		}
 	for (const FPuff& P : Muzzle)
 		if (P.Life > 0) Quad(P.P, (.04 + (1 - P.Life / P.Max) * .05) * .6, FLinearColor(.85f, .95f, 1.f, float(DvClamp(P.Life / P.Max, 0, 1) * .8)), false);
 	if (UnderAmt > .01)

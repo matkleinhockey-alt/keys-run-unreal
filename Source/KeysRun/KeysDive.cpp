@@ -154,13 +154,10 @@ namespace KeysDive
 	void StepReload(FGun& G, double Dt, bool bDrawing, double Speed, double DrawMul)
 	{
 		if (G.Draw >= 1 && G.ReloadT <= 0) return;
-		if (G.ReloadT > 0) { G.ReloadT = FMath::Max(0.0, G.ReloadT - Dt); return; }
-		if (bDrawing) G.Draw = FMath::Min(1.0, G.Draw + (Dt / (SpearDrawTime * DClamp(DrawMul, .3, 1.5))) * DrawRateFor(Speed));
-		else
-		{
-			const double Notch = FMath::FloorToDouble(G.Draw * SpearDrawNotches + 1e-9) / SpearDrawNotches;
-			G.Draw = FMath::Max(Notch, G.Draw - SpearDrawSlip * Dt);
-		}
+		// a new shaft is pushed in by hand and latched: once it's home the gun is loaded (no drawing the bands)
+		if (G.ReloadT > 0) { G.ReloadT = FMath::Max(0.0, G.ReloadT - Dt); if (G.ReloadT <= 0) G.Draw = 1; return; }
+		(void)bDrawing; (void)Speed; (void)DrawMul;
+		G.Draw = 1;
 	}
 
 	FShot Fire(const FVector& Origin, const FVector& Dir, double Range)

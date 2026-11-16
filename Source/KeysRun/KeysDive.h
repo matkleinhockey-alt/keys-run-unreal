@@ -65,7 +65,7 @@ namespace KeysDive
 	void Step(FState& S, const FInput& In, double T, double Dt, double SwimMul = 1);
 
 	// ---- spear (sim/spear.ts)
-	constexpr double SpearSpeed = 25, SpearRange = 18, SpearReload = 1.8, SpearReloadFloor = 1.6, SpearDrawTime = 2.8;
+	constexpr double SpearSpeed = 25, SpearRange = 18, SpearReload = 2.2, SpearReloadFloor = 2.0, SpearDrawTime = 2.8;
 	constexpr int32 SpearDrawNotches = 3;
 	constexpr double SpearDrawSlip = .45, SpearDrawSwimSpeed = 1.4, SpearDrawMinRate = .35;
 	constexpr double AssistCone = .17, AssistStrength = .65;

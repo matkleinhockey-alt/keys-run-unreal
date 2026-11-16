@@ -449,7 +449,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	static const FRow Dive[] = {
 		{TEXT("J"), TEXT("Jump in / back aboard (from anywhere)")}, {TEXT("W A S D + mouse"), TEXT("Swim where you look")},
 		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
-		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("R"), TEXT("Haul the bands back to reload")},
+		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("Reload"), TEXT("A fresh spear goes in by hand after each shot")},
 		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}, {TEXT("F"), TEXT("Prise open a wreck's box (treasure)")}};
 	const float ColW = W * .5f, Row = 23.2f * U;
 	auto Block = [&](const TCHAR* Head, const FRow* Rows, int32 N, float BX, float BY)
