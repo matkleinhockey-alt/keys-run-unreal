@@ -97,6 +97,7 @@ AKeysBoatPawn::AKeysBoatPawn()
 	FishMesh->SetUsingAbsoluteLocation(true);
 	FishMesh->SetUsingAbsoluteRotation(true);
 	FishMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	FishMesh->LightingChannels.bChannel1 = true;   // the diver's fill light (a speared fish held up under water)
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	Bobber = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Bobber"));

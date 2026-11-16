@@ -138,6 +138,8 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunWish;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Lines;     // flying shaft, its tether, the float line and float
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FishOnLine;
+	UPROPERTY() TObjectPtr<class UPointLightComponent> FishFill;   // lights only the speared fish (lighting channel 1)
+	void UpdateFishFill();
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Particles;
 	UPROPERTY() TObjectPtr<UPostProcessComponent> Post;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> PostMID;

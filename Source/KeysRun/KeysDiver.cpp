@@ -12,6 +12,7 @@
 #include "KeysAudio.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/PostProcessComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
@@ -163,6 +164,21 @@ AKeysDiver::AKeysDiver()
 	GunWish = MakePMC(this, GunBase, TEXT("GunWish"));
 	Lines = MakePMC(this, Root, TEXT("Lines"));
 	FishOnLine = MakePMC(this, Root, TEXT("FishOnLine"));
+	FishOnLine->LightingChannels.bChannel1 = true;
+	// under water the sun barely reaches a fish held up at the mask (and the diver's own body shades it), so it read as a
+	// black cut-out on the spear and on the catch card: a soft fill from over the shoulder, on a lighting channel of its own
+	// so it lights the fish and nothing else on the reef
+	FishFill = CreateDefaultSubobject<UPointLightComponent>(TEXT("FishFill"));
+	FishFill->SetupAttachment(Root);
+	FishFill->SetUsingAbsoluteLocation(true);
+	FishFill->SetIntensityUnits(ELightUnits::Lumens);
+	FishFill->SetCastShadows(false);
+	FishFill->SetSourceRadius(30.f);
+	FishFill->SetSoftSourceRadius(50.f);
+	FishFill->SetLightColor(FLinearColor(1.f, .97f, .92f));
+	FishFill->LightingChannels.bChannel0 = false;
+	FishFill->LightingChannels.bChannel1 = true;
+	FishFill->SetVisibility(false);
 	Particles = MakePMC(this, Root, TEXT("Particles"));
 	Particles->SetCastShadow(false);
 	Particles->bUseAsyncCooking = false;
@@ -730,6 +746,7 @@ void AKeysDiver::Tick(float DeltaSeconds)
 	}
 	UpdateShaftAndLine(T);
 	UpdateSpearedFish(Dt, T);
+	UpdateFishFill();
 	UpdateUnderwaterLook(Dt);
 	UpdateBubbles(Dt, T);
 	UpdateSnow(Dt, T);
@@ -905,6 +922,24 @@ void AKeysDiver::UpdateShaftAndLine(double T)
 	}
 	if (M.V.Num()) M.Commit(Lines, 0, AKeysWorld::VertexColorMaterial());
 	else Lines->ClearAllMeshSections();
+}
+
+void AKeysDiver::UpdateFishFill()
+{
+	if (!FishFill) return;
+	const AKeysBoatPawn* Pw = Pawn();
+	const bool bHeld = FishMode == 3 || FishMode == 4;
+	const bool bCard = bDiving && Pw && Pw->FState == EKeysFish::Caught && Pw->bCardSpeared;
+	const bool bOn = bCamUnder && (bHeld || bCard);
+	if (bOn)
+	{
+		// up and behind the mask, a little to the right, so the side of the fish facing the lens carries the light
+		const FQuat CQ = CamRotUE.Quaternion();
+		FishFill->SetWorldLocation(CamPosUE + CQ.RotateVector(FVector(-40, 50, 70)));
+		FishFill->SetIntensity(900.f);
+		FishFill->SetAttenuationRadius(700.f);
+	}
+	if (FishFill->IsVisible() != bOn) FishFill->SetVisibility(bOn);
 }
 
 void AKeysDiver::UpdateSpearedFish(double Dt, double T)
