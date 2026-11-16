@@ -158,6 +158,11 @@ private:
 	FKeysHuman Captain, Crew;
 	FKeysHuman LandYou, LandMate;   // you and the mate, hauling a landed fish aboard (KeysCrew.cpp PoseLanding)
 	bool bLandInit = false;
+	// the mate: while you troll he stands in the stern corner working a rod of his own, watching the spread
+	FKeysHuman Mate;
+	bool bMateInit = false, bMateOn = false;
+	void UpdateMate(double T);
+	void DrawMate(FKeysMesh& M, double T);
 	// after a landing: blood on the aft deck, and the captain hosing it off (KeysCrew.cpp)
 	FVector BloodAt = FVector::ZeroVector, CapHome = FVector::ZeroVector, Nozzle = FVector::ZeroVector, SprayTo = FVector::ZeroVector;
 	double BloodK = 0, HoseT = -1;

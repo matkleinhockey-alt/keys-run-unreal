@@ -608,7 +608,7 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 				FishMode = 3; KillT = 0;
 				FishPos = FishTgt = Hit.Point;
 				FishHead = FMath::Atan2(-(Hit.Point.X - S.X), -(Hit.Point.Z - S.Z)) + PI * .5;
-				BleedAt(Hit.Point, 26, .12);
+				BleedAt(Hit.Point, 10, .08);
 				if (P) P->ShowMsg(TEXT("Stoned it - clean shot."), 2.5);
 			}
 			else if (Target && P) P->ShowMsg(TEXT("The shot doesn't have enough force left to hold - it glances off."));
@@ -913,10 +913,10 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 		{
 			// 0-0.7 s: kicking on the shaft where it was hit, bleeding; 0.7-1.9 s: drawn in along the line to the hand
 			const double Sh = KillT < .7 ? (1 - KillT / .7) : 0;
-			if (KillT < .7 && FMath::FRand() < Dt * 14) BleedAt(FishPos, 2, .06);
+			if (KillT < .7 && FMath::FRand() < Dt * 6) BleedAt(FishPos, 1, .05);
 			const double In = DvClamp((KillT - .7) / 1.2, 0, 1), E = In * In * (3 - 2 * In);
 			const FVector P = FMath::Lerp(FishTgt, HoldG, E);
-			if (In > 0 && FMath::FRand() < Dt * 5) BleedAt(P, 1, .04);
+			if (In > 0 && FMath::FRand() < Dt * 2) BleedAt(P, 1, .03);
 			Yaw = FishHead + FMath::Sin(KillT * 38) * .35 * Sh;
 			Roll = FMath::Sin(KillT * 31 + .7) * .5 * Sh + E * .3;
 			Pitch = FMath::Sin(KillT * 24) * .2 * Sh;
@@ -1235,7 +1235,7 @@ void AKeysDiver::DrawParticles()
 		if (B.Age >= 0)
 		{
 			const double U = B.Age / B.Life;
-			Quad(B.P, B.R * 2 * (1 + B.Age * .7), FLinearColor(.2f, .02f, .025f, float(FMath::Min(1.0, B.Age * 6) * FMath::Pow(1 - U, 1.8) * .42)), true);
+			Quad(B.P, B.R * 2 * (1 + B.Age * .7), FLinearColor(.2f, .02f, .025f, float(FMath::Min(1.0, B.Age * 6) * FMath::Pow(1 - U, 1.8) * .3)), true);
 		}
 	for (const FPuff& P : Muzzle)
 		if (P.Life > 0) Quad(P.P, (.04 + (1 - P.Life / P.Max) * .05) * .6, FLinearColor(.85f, .95f, 1.f, float(DvClamp(P.Life / P.Max, 0, 1) * .8)), false);

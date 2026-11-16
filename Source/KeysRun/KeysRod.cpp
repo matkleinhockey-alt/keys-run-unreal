@@ -244,13 +244,17 @@ namespace KeysMesh
 // ---------------------------------------------------------------- the fighting chair
 namespace KeysMesh
 {
-	bool HasFightChair(const KeysData::FBoatSpec& S) { return S.Id == TEXT("freeman"); }
+	// the teak fighting chair: on the offshore fishing boats (the go-fast boats and the little Robalo go without)
+	bool HasFightChair(const KeysData::FBoatSpec& S)
+	{
+		return S.Id == TEXT("freeman") || S.Id == TEXT("grady") || S.Id == TEXT("yellowfin") || S.Id == TEXT("contender");
+	}
 
 	FVector FightChairBase(const KeysData::FBoatSpec& S)
 	{
 		// 2.6 m in from the transom, on the centreline: clear of the leaning post, the stern rod holders and the guests'
 		// lap of the cockpit (which crosses the stern behind it)
-		const double X = SternX(S) + 2.75;
+		const double X = SternX(S) + FMath::Min(2.75, S.Len * .22);
 		return FVector(X, 0, SoleAt(S, X) + .38);
 	}
 

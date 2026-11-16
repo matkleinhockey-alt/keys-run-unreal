@@ -299,6 +299,7 @@ void AKeysExtras::UpdateCrew(double Dt, double T)
 	Crew.DefaultPose();
 	PoseLanding(T);
 	UpdateHose(Dt, T);
+	UpdateMate(T);
 
 	UpdateShower(Dt, T);
 	UpdatePole(Dt, T);
@@ -361,12 +362,12 @@ void AKeysExtras::DrawHose(FKeysMesh& M, double T)
 	if (BloodK > .01)
 	{
 		const FLinearColor Deck0(.86f, .86f, .83f), Red(.36f, .04f, .04f);
-		const FLinearColor C = FMath::Lerp(Deck0, Red, float(FMath::Min(1.0, BloodK * 1.2)));
+		const FLinearColor C = FMath::Lerp(Deck0, Red, float(FMath::Min(1.0, BloodK) * .8));
 		FRandomStream R(int32(BloodAt.X * 97 + BloodAt.Y * 31));
-		for (int32 k = 0; k < 11; k++)
+		for (int32 k = 0; k < 5; k++)
 		{
-			const double X = BloodAt.X + R.FRandRange(-.5, .5), Y = BloodAt.Y + R.FRandRange(-.35, .35);
-			const double Rr = R.FRandRange(.03, .1) * (k == 0 ? 2.0 : 1);
+			const double X = BloodAt.X + R.FRandRange(-.35, .35), Y = BloodAt.Y + R.FRandRange(-.25, .25);
+			const double Rr = R.FRandRange(.025, .07) * (k == 0 ? 1.6 : 1);
 			const double Z = Deck.SoleAt(X) + .012;
 			for (int32 j = 0; j < 12; j++)
 			{
@@ -377,7 +378,7 @@ void AKeysExtras::DrawHose(FKeysMesh& M, double T)
 		}
 		// the smear running aft to the transom
 		const double Z = Deck.SoleAt(BloodAt.X) + .011;
-		M.AddQuad(FVector(BloodAt.X, BloodAt.Y - .05, Z), FVector(BloodAt.X, BloodAt.Y + .05, Z), FVector(BloodAt.X - .9, BloodAt.Y + .02, Z), FVector(BloodAt.X - .9, BloodAt.Y - .02, Z), C, FVector::UpVector);
+		M.AddQuad(FVector(BloodAt.X, BloodAt.Y - .05, Z), FVector(BloodAt.X, BloodAt.Y + .05, Z), FVector(BloodAt.X - .5, BloodAt.Y + .015, Z), FVector(BloodAt.X - .5, BloodAt.Y - .015, Z), C, FVector::UpVector);
 	}
 	if (HoseT < 0) return;
 	// the hose: green, from the nozzle in his hands down to the deck and forward to the bib at the console
@@ -419,6 +420,49 @@ void AKeysExtras::DrawHose(FKeysMesh& M, double T)
 			}
 		}
 	}
+}
+
+void AKeysExtras::UpdateMate(double T)
+{
+	const AKeysBoatPawn* P = PawnRef.Get();
+	bMateOn = P && P->IsTrolling() && P->FState != EKeysFish::Fight && P->FState != EKeysFish::Caught && !P->Stage.bOn && HoseT < 0 && !P->IsDiving() && !P->IsAshore();
+	if (!bMateOn) return;
+	if (!bMateInit)
+	{
+		bMateInit = true;
+		FKeysHumanLook L;
+		L.Skin = XHex(0xb07850); L.Shirt = XHex(0xf2efe6); L.Bottom = XHex(0x34495e); L.bShortsLong = true;
+		L.bCap = true; L.CapColor = XHex(0x2e5e3a); L.bGlasses = true; L.Hair = XHex(0x241a12); L.bShoes = true; L.Shoes = XHex(0x2b2f35);
+		Mate.Init(L, false);
+	}
+	// the starboard stern corner, facing aft and a little out over the wake, rocking with the boat
+	const double X = -Deck.L * .5 + 1.35;
+	Mate.Pos = FVector(X, -FMath::Max(.3, Deck.InnerHB(X) - .7), Deck.SoleAt(X));
+	Mate.Yaw = PI + .35;
+	Mate.Pitch = .04 * FMath::Sin(T * .9);
+	Mate.Roll = 0;
+	Mate.DefaultPose();
+	const FTransform Tr = Mate.ToBoat();
+	const FVector Butt = Tr.TransformPosition(FVector(.2, .02, .92));
+	const FVector Dir = Tr.TransformVector(FVector(FMath::Cos(.62), 0, FMath::Sin(.62))).GetSafeNormal();
+	const FVector Side = Tr.TransformVector(FVector(0, 1, 0));
+	Mate.Pose(Tr.InverseTransformPosition(Butt + Dir * .62 - Side * .02), Tr.InverseTransformPosition(Butt + Dir * .3 + Side * .12 + FVector(0, 0, .03 * FMath::Sin(T * 5))));
+}
+
+void AKeysExtras::DrawMate(FKeysMesh& M, double T)
+{
+	if (!bMateOn) return;
+	Mate.Build(M);
+	const FTransform Tr = Mate.ToBoat();
+	KeysMesh::FRodPose RP;
+	RP.Butt = Tr.TransformPosition(FVector(.2, .02, .92)) - Tr.TransformVector(FVector(FMath::Cos(.62), 0, FMath::Sin(.62))) * .25;
+	RP.Dir = Tr.TransformVector(FVector(FMath::Cos(.62), 0, FMath::Sin(.62))).GetSafeNormal();
+	RP.Up = FVector::UpVector;
+	RP.Len = 2.3;
+	RP.Bend = FVector(0, 0, -.12 - .04 * FMath::Sin(T * 1.7));
+	RP.Lod = 1;
+	RP.CrankA = T * 2.5;
+	KeysMesh::BuildTunaRod(M, RP);
 }
 
 void AKeysExtras::PoseLanding(double T)
@@ -959,6 +1003,7 @@ void AKeysExtras::CommitCrew(double T)
 	FKeysMesh M;
 	Captain.Build(M);
 	DrawHose(M, T);
+	DrawMate(M, T);
 	Crew.Build(M);
 	if (LandYou.bVisible)
 	{
