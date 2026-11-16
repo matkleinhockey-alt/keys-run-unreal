@@ -803,8 +803,10 @@ void AKeysDiver::UpdateGun(double Dt)
 	GunShaft->SetRelativeLocation(FVector((BarrelLen + ShaftPoke * .5 + ShaftOut) * 100, 0, RailY * 100));
 	StrainT += Dt;
 	const double Tremble = bDrawNow ? FMath::Sin(StrainT * 41) * .006 * (.4 + Frac) : 0;
-	const double BandLen = DvLerp(BandShort, BandLong, Frac) + Tremble;
-	const double BandRad = DvLerp(BandR, .0045, Frac);
+	// on the shot the bands slam forward past their rest length, then spring back and settle (KickT runs 1 -> 0)
+	const double Whip = KickT > 0 ? KickT * FMath::Cos((1 - KickT) * PI * 4.5) : 0;
+	const double BandLen = FMath::Max(.12, DvLerp(BandShort, BandLong, Frac) + Tremble - .14 * Whip);
+	const double BandRad = DvLerp(BandR, .0045, Frac) * (1 + .25 * FMath::Max(0.0, Whip));
 	// the bands run from their anchor near the muzzle back along the barrel to the hand
 	for (int32 Side = -1; Side <= 1; Side += 2)
 	{
@@ -852,7 +854,8 @@ void AKeysDiver::UpdateGun(double Dt)
 	GunShaft->SetVisibility(bShow && !Speared.bOn && !(Gun.ReloadT > 0 && Recover < .15));
 	GunGlove->SetVisibility(bShow && bGlove);
 	GunHandL->SetVisibility(bShow && !bGlove);
-	GunWish->SetRelativeLocation(FVector((BandAnchorX - BandLen) * 100, 0, (StockH * .5 + BandRad * 1.1) * 100));
+	// the wishbone flicks up off the shaft as the bands slam forward
+	GunWish->SetRelativeLocation(FVector((BandAnchorX - BandLen) * 100, 0, (StockH * .5 + BandRad * 1.1 + .025 * FMath::Abs(Whip)) * 100));
 	GunWish->SetVisibility(bShow);
 	MuzzleG = U2G(PosUE + Q.RotateVector(FVector(BarrelLen, 0, RailY) * 100));
 }

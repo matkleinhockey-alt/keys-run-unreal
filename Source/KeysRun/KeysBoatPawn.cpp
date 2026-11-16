@@ -3459,8 +3459,38 @@ void AddGripHand(FKeysMesh& M, const FVector& C, const FVector& A0, const FVecto
 	KeysShapes::AddBlob(M, Wrist, FVector(.026, .03, .022), FRotationMatrix::MakeFromXZ(ToE, N).ToQuat(), Skin, 10, 5);
 	M.AddTube(Wrist, Wrist + ToE * .075, .025, .029, 10, Skin);
 	M.Surf = SurfCloth;
-	M.AddTube(Wrist + ToE * .06, Elbow, .039, .046, 12, Sleeve);
-	M.AddTube(Wrist + ToE * .055, Wrist + ToE * .075, .036, .041, 12, Sleeve * .92f);   // the cuff
+	{
+		// the sleeve: loose fabric that bunches into folds behind the cuff and hangs a little under the forearm,
+		// with a seam down the outside, rather than a straight pipe
+		const FVector S0 = Wrist + ToE * .06;
+		const double SL = (Elbow - S0).Size();
+		const FVector Down = (FVector::DownVector - ToE * FVector::DotProduct(FVector::DownVector, ToE)).GetSafeNormal(UE_SMALL_NUMBER, N);
+		const int32 NS = 14;
+		auto RingC = [&](double t) { return S0 + ToE * (SL * t) + Down * (.006 * FMath::Sin(t * PI)); };
+		auto RingR = [&](double t)
+		{
+			const double Base = FMath::Lerp(.04, .047, t);
+			const double Bunch = FMath::Exp(-t * 5.0);   // folds pile up near the cuff and smooth out up the arm
+			return Base * (1 + (.07 * Bunch + .015) * FMath::Sin(t * 38.0 + 1.1));
+		};
+		for (int32 k = 0; k < NS; k++)
+		{
+			const double t0 = double(k) / NS, t1 = double(k + 1) / NS;
+			M.AddTube(RingC(t0), RingC(t1), RingR(t0), RingR(t1), 14, Sleeve);
+		}
+		// the seam down the outside of the sleeve, a shade darker
+		const FVector Out = FVector::CrossProduct(ToE, Down).GetSafeNormal() * (bMirror ? -1 : 1);
+		for (int32 k = 0; k < NS; k++)
+		{
+			const double t0 = double(k) / NS, t1 = double(k + 1) / NS;
+			M.AddTube(RingC(t0) + Out * (RingR(t0) - .001), RingC(t1) + Out * (RingR(t1) - .001), .0018, .0018, 4, Sleeve * .8f);
+		}
+		// the cuff: a turned-back band with a button
+		M.AddTube(Wrist + ToE * .052, Wrist + ToE * .078, .037, .042, 14, Sleeve * .9f);
+		M.AddTube(Wrist + ToE * .05, Wrist + ToE * .054, .036, .037, 14, Sleeve * .78f);
+		M.Surf = SurfDefault;
+		KeysShapes::AddBlob(M, Wrist + ToE * .065 + Out * .042, FVector(.0045, .0045, .0018), FRotationMatrix::MakeFromZ(Out).ToQuat(), FLinearColor(.9f, .9f, .88f), 8, 3);
+	}
 	M.Surf = Keep;
 }
 
@@ -3484,7 +3514,7 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 	const double Rx = VmRx - .3 * Jl;
 	auto S0 = [&](double A, double B, double C) { return Base + Rot(Rx, FVector(A, B, C)); };   // point in the butt section's frame
 	const FLinearColor RodC(FColor(0x1d, 0x21, 0x26)), Cork(FColor(0xb8, 0x92, 0x5e)), DarkC(FColor(0x22, 0x26, 0x2b)), GoldC(FColor(0xc9, 0xa2, 0x27)),
-		Skin(FColor(0xd9, 0xa2, 0x7f)), Sleeve(FColor(0x9c, 0xc8, 0xe0)), Guide(FColor(0xc9, 0xce, 0xd3));
+		Skin(FColor(0xd9, 0xa2, 0x7f)), Sleeve(FColor(0x6f, 0xa6, 0xcc)), Guide(FColor(0xc9, 0xce, 0xd3));
 	const FQuat CQ = CT.GetRotation();
 
 	// where the bending rod's tip ends up: five sections, each bent a little more toward the load
