@@ -895,6 +895,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (KeysBuffs::Seconds(K) > 0) { Buffs.Add(K, GetWorld()->GetTimeSeconds() + KeysBuffs::Seconds(K)); ShowToast(KeysBuffs::StartText(K)); }
 		}
 		else if (Cmd == TEXT("keep")) KeepFish();
+		else if (Cmd == TEXT("letgo")) ReleaseFish();
+		else if (Cmd == TEXT("tagrel")) TagAndRelease();
 		else if (Cmd == TEXT("harbour")) { X = AKeysEvents::HarbourX(); Z = AKeysEvents::HarbourZ(); Speed = Thr = 0; bCamInit = false; }
 		else if (Cmd.StartsWith(TEXT("ev:"))) { if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->DebugCmd(Cmd.Mid(3)); }
 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
@@ -1006,17 +1008,25 @@ void AKeysBoatPawn::RunTestScript(double T)
 		{
 			// land a fish of that species (a fifth of the way up its size range) and show the catch card; catch=tourney: the tournament's first
 			if (FState != EKeysFish::Idle) ReelIn(FString());
-			Key = Cmd.Mid(6);
-			if (Key == TEXT("tourney")) if (const AKeysEvents* Ev = AKeysEvents::Get(this)) Key = Ev->FirstSpecies();   // the first of the tournament's five
-			Sp = Species(Key);
-			if (Sp)
+			// catch=key[:lb[:cast|troll|spear]] for the charter tests
+			TArray<FString> Parts;
+			Cmd.Mid(6).ParseIntoArray(Parts, TEXT(":"));
+			Key = Parts.Num() ? Parts[0] : FString();
+			const double ForceLb = Parts.Num() > 1 ? FCString::Atod(*Parts[1]) : 0;
+			const FString How = Parts.Num() > 2 ? Parts[2] : FString();
+			if (How == TEXT("spear") && Species(Key)) { LandSpeared(Key, ForceLb > 0 ? ForceLb : 2, X + FMath::Cos(H) * 4, Z - FMath::Sin(H) * 4); Key = Parts[0]; }
+			else if (Key == TEXT("tourney")) if (const AKeysEvents* Ev = AKeysEvents::Get(this)) Key = Ev->FirstSpecies();   // the first of the tournament's five
+			if (How != TEXT("spear")) Sp = Species(Key);
+			if (Sp && How != TEXT("spear"))
 			{
-				Weight = FMath::RoundToDouble((Sp->Min + (Sp->Max - Sp->Min) * .2) * 10) / 10;
+				Weight = ForceLb > 0 ? ForceLb : FMath::RoundToDouble((Sp->Min + (Sp->Max - Sp->Min) * .2) * 10) / 10;
 				FX = X + FMath::Cos(H) * 8; FZ = Z - FMath::Sin(H) * 8;
 				Bob = FVector(FX, 0, FZ);
 				PickRecapture();
 				BuildHookedMesh();
+				if (How == TEXT("troll")) HookedStation = 0;   // as if it came off the spread
 				Land();
+				HookedStation = -1;
 			}
 		}
 		else if (Cmd.StartsWith(TEXT("fin:"))) DebugFinal(Cmd.Mid(4));
@@ -1153,7 +1163,9 @@ void AKeysBoatPawn::LandSpeared(const FString& InKey, double InWeight, double In
 	Spot.Zone = Zone;
 	CurTag = -1;
 	BuildHookedMesh();
+	bLandingSpear = true;
 	Land();
+	bLandingSpear = false;
 	CardBonus = CardBonus.IsEmpty() ? FString(TEXT("Speared underwater")) : TEXT("Speared underwater - ") + CardBonus;
 	bCardSpeared = true;
 	if (bCanKeep) CardNote = TEXT("Release it for a 25% conservation bonus, or keep it and weigh in at a marina dock. (A speared fish can't be tagged.)");
@@ -2900,8 +2912,12 @@ void AKeysBoatPawn::Land()
 		static const TSet<FString> Toothy = {TEXT("barracuda"), TEXT("kingfish"), TEXT("wahoo"), TEXT("cero"), TEXT("blacktip"), TEXT("bullshark"), TEXT("lemonshark"), TEXT("tigershark"), TEXT("hammerhead"), TEXT("bluefish")};
 		if (Toothy.Contains(Key) && UseOne(TEXT("leader.fluoro"))) SaveEconomy();
 	}
+	// what the charter (if any) makes of it: speared, trolled off the spread, or cast
+	const ECharterMethod How = bLandingSpear ? ECharterMethod::Spear : HookedStation >= 0 ? ECharterMethod::Troll : ECharterMethod::Cast;
 	FState = EKeysFish::Caught;
 	bJumping = false;
+	ReleaseT = -1;
+	if (AKeysCharter* Ch = AKeysCharter::Get(this); Ch && !bFreeFish && Sp) Ch->OnLanded(Key, Sp->Name, Weight, How);
 	const FSpecies& S = *Sp;
 	int32 Pts = FMath::RoundToInt(Weight * S.Mult);
 	Count++;
@@ -2954,7 +2970,14 @@ void AKeysBoatPawn::Land()
 
 void AKeysBoatPawn::KeepFish()
 {
-	if (FState != EKeysFish::Caught || !bCanKeep) return;
+	if (FState != EKeysFish::Caught) return;
+	// trying to keep a catch-and-release charter's fish ends the charter, even one you couldn't legally keep anyway
+	if (AKeysCharter* Ch = AKeysCharter::Get(this); Ch && Ch->IsPendingRelease())
+	{
+		Ch->OnKept();
+		if (!bCanKeep) { ShowToast(FString::Printf(TEXT("A %s goes back - and the clients wanted it released. It's dead on deck now."), *Sp->Name), 5); FinishCatch(); return; }
+	}
+	if (!bCanKeep) return;
 	Cooler.Add({Sp->Name, Weight, int32(LastPts), Key});
 	if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->OnKeep(Key, Weight);   // a tournament counts what you bring in
 	ShowToast(FString::Printf(TEXT("%s is on ice. %d fish in the cooler."), *Sp->Name, Cooler.Num()));
@@ -2973,7 +2996,54 @@ void AKeysBoatPawn::ReleaseFish()
 	else ShowToast(FString::Printf(TEXT("Released! +%d conservation bonus."), Bonus));
 	if (Save) Save->RecordScore(Score);
 	if (AKeysOnline* O = AKeysOnline::Get(this)) O->ReportScore(Score);
+	if (AKeysCharter* Ch = AKeysCharter::Get(this)) Ch->OnReleased();
+	const bool bSpeared = bCardSpeared;
 	FinishCatch();
+	if (!bSpeared) StartReleaseAnim();
+}
+
+// The release: whoever landed it carries the fish to the gunwale, leans out and lowers it into the water, lets go,
+// and it shakes itself awake and swims off and down
+void AKeysBoatPawn::StartReleaseAnim()
+{
+	if (!BoatMesh || !FishMesh) return;
+	const FTransform BT = BoatMesh->GetComponentTransform();
+	RelStart = BT.InverseTransformPosition(FishMesh->GetComponentLocation()) / 100.0;
+	RelSide = RelStart.Y >= 0 ? 1 : -1;
+	if (Stage.bOn || FMath::Abs(Stage.Side) > .5) RelSide = Stage.Side >= 0 ? 1 : -1;
+	RelFish = RelStart;
+	ReleaseT = 0;
+	ShowFishMesh(true);
+}
+
+void AKeysBoatPawn::UpdateReleaseAnim(double Dt)
+{
+	if (ReleaseT < 0 || !BoatMesh) return;
+	if (FState != EKeysFish::Idle) { ReleaseT = -1; return; }
+	ReleaseT += Dt;
+	const double T = ReleaseT;
+	const FBoatSpec& S = Spec();
+	const double RX = FMath::Clamp(RelStart.X, -S.Len * .42, S.Len * .3);
+	const double HB = KeysMesh::InnerHalfBeam(S, RX) + .14;
+	const FVector Rail(RX, RelSide * (HB + .25), KeysMesh::SheerAt(S, RX) + .25);
+	const FVector Water(RX, RelSide * (HB + .45), -.05);
+	auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };
+	double FYaw = RelSide * 90, FRoll = 0, FPitch = 0;
+	if (T < .9) RelFish = FMath::Lerp(RelStart + FVector(0, 0, .5), Rail, Ease(T / .9));            // lifted to the rail
+	else if (T < 1.7) RelFish = FMath::Lerp(Rail, Water, Ease((T - .9) / .8));                      // lowered into the water
+	else
+	{
+		// let go: a beat to come round, then a kick and away, nose out from the hull and angling down
+		const double U = T - 1.7;
+		const double Go = FMath::Max(0.0, U - .4);
+		RelFish = Water + FVector(-Go * .8, RelSide * (Go * 2.2 + Go * Go * .8), -Go * .9);
+		FYaw = RelSide * 90 - RelSide * 25 + FMath::Sin(T * (U < .4 ? 6 : 16)) * (U < .4 ? 10 : 22);
+		FPitch = -12 * FMath::Min(1.0, Go);
+	}
+	if (T < 1.7) FRoll = 70 - 70 * Ease((T - .9) / .8);   // carried on its side, righted as it goes in
+	const FTransform BT = BoatMesh->GetComponentTransform();
+	FishMesh->SetWorldLocationAndRotation(BT.TransformPosition(RelFish * 100.0), (BT.GetRotation() * FRotator(FPitch, FYaw, FRoll).Quaternion()));
+	if (T > 4.2) { ReleaseT = -1; ShowFishMesh(false); }
 }
 
 void AKeysBoatPawn::FinishCatch()
@@ -3606,6 +3676,9 @@ FString AKeysBoatPawn::Hint() const
 	const FMarina* Mar = NearMarina(X, Z);
 	if (FState == EKeysFish::Idle && !bCharging && Mar && Kn < 5)
 		return Cooler.Num() ? FString::Printf(TEXT("Press E to weigh in your cooler at %s"), *Mar->Name) : FString::Printf(TEXT("Tied up at %s - nothing on ice yet"), *Mar->Name);
+	if (FState == EKeysFish::Caught)
+		if (const AKeysCharter* Ch = AKeysCharter::Get(this); Ch && Ch->IsPendingRelease())
+			return TEXT("Charter: SPACE releases it and it counts (T tags and releases) - keeping it fails the charter");
 	if (FState == EKeysFish::Caught) return bCardSpeared || CurTag >= 0 ? TEXT("K keeps it in the cooler - Space releases it") : TEXT("K keeps it in the cooler - Space releases it - T tags it and lets it go");
 	if (bTrimMode && FState == EKeysFish::Idle && !bCharging) return TEXT("Trim mode: Up trims up, Down trims down - W/S throttle - T to exit");
 	if (bCharging) return TEXT("Release to cast - hold longer to throw farther");
@@ -3716,6 +3789,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	DrawLineAndRod(T);
 	EndShoreSwap();
 	UpdateSpread(Dt, T);
+	UpdateReleaseAnim(Dt);
 	if (LureCamN >= 0 && LureCamN < NumStations && bSpreadOut)
 	{
 		// test only (lurecam=N): sit just off the side of a trolled lure, looking at it

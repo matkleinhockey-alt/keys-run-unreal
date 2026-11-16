@@ -66,6 +66,22 @@ public:
 
 	void DebugCmd(const FString& Cmd);   // charter=board|take:N|cancel|leave
 
+	// ---- checking catches against the active charter (no payout yet)
+	// a fish has just come aboard (or been speared): species, weight and method against the request
+	void OnLanded(const FString& SpeciesKey, const FString& SpeciesName, double Weight, ECharterMethod How);
+	void OnKept();       // K on the catch card: on a catch-and-release charter that's a fail
+	void OnReleased();   // Space / T on the catch card: counts on a catch-and-release charter
+	void OnCatchGone();  // the card closed some other way
+	bool IsPendingRelease() const { return bPendingRelease; }
+	bool IsComplete() const { return bHasActive && Progress >= ActiveCharter.RequiredCount; }
+	bool IsFailed() const { return bFailed; }
+	FString GetFailReason() const { return FailReason; }
+	static FString ShortTarget(const FCharterRequest& R, int32 N);   // "snapper", "Mahi-Mahi", "fish"
+	// the result banner
+	FString ResultText, ResultSub;
+	bool bResultGood = false;
+	double ResultT = 0;
+
 private:
 	UPROPERTY() TObjectPtr<UDataTable> Table;
 	TArray<FName> Offers;
@@ -76,6 +92,10 @@ private:
 	double TimeLeft = 0;
 	FString Marina;
 	bool bForceAway = false;
+	bool bPendingRelease = false, bFailed = false;
+	FString FailReason, PendingLine;
+	void ShowResult(const FString& Text, const FString& Sub, bool bGood);
+	void Fail(const FString& Why);
 
 	void LoadTable();
 	void RollOffers();

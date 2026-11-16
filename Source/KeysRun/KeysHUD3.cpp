@@ -159,10 +159,29 @@ void AKeysHUD::DrawCharter(AKeysBoatPawn* P)
 		Text(FString::Printf(TEXT("CHARTER - %s"), *R.ClientName), X + 16 * U, Y + 10 * U, .9f, Gold);
 		Text(R.RequestText, X + 16 * U, Y + 36 * U, .72f, White);
 		Text(AKeysCharter::TargetLine(R), X + 16 * U, Y + 58 * U, .72f, FLinearColor(.6f, .85f, 1.f));
-		Text(FString::Printf(TEXT("%d / %d"), Ch->GetProgress(), R.RequiredCount), X + 16 * U, Y + 84 * U, 1.2f, White);
 		const int32 Sec = FMath::CeilToInt32(Ch->SecondsLeft());
-		const FString Clock = Ch->IsTimerRunning() ? FString::Printf(TEXT("%d:%02d"), Sec / 60, Sec % 60) : FString::Printf(TEXT("%d:%02d - starts when you leave the marina"), Sec / 60, Sec % 60);
-		Text(Clock, X + 120 * U, Y + 88 * U, .85f, Ch->IsTimerRunning() && Sec < 600 ? FLinearColor(1.f, .45f, .35f) : FLinearColor(.85f, .9f, .95f));
+		if (Ch->IsFailed())
+			Text(FString::Printf(TEXT("Charter failed - %s"), *Ch->GetFailReason()), X + 16 * U, Y + 86 * U, 1.0f, FLinearColor(1.f, .4f, .35f));
+		else if (Ch->IsComplete())
+			Text(TEXT("Head back to the marina!"), X + 16 * U, Y + 84 * U, 1.2f, FLinearColor(.4f, 1.f, .6f));
+		else
+		{
+			Text(FString::Printf(TEXT("%d / %d %s"), Ch->GetProgress(), R.RequiredCount, *AKeysCharter::ShortTarget(R, R.RequiredCount)), X + 16 * U, Y + 84 * U, 1.2f, White);
+			const FString Clock = Ch->IsTimerRunning() ? FString::Printf(TEXT("%d:%02d"), Sec / 60, Sec % 60) : FString::Printf(TEXT("%d:%02d - starts when you leave the marina"), Sec / 60, Sec % 60);
+			Text(Clock, X + 230 * U, Y + 88 * U, .85f, Ch->IsTimerRunning() && Sec < 600 ? FLinearColor(1.f, .45f, .35f) : FLinearColor(.85f, .9f, .95f));
+		}
 		Text(TEXT("F4 cancel"), X + BW - 90 * U, Y + BH - 22 * U, .6f, FLinearColor(.6f, .65f, .7f));
+	}
+	// the verdict on the last catch: big, in the middle, fading out
+	if (Ch->ResultT > 0 && !Ch->ResultText.IsEmpty())
+	{
+		const float A = float(FMath::Min(1.0, Ch->ResultT / .6));
+		const float Cx = W * .5f, BW = 640 * U, BH = 112 * U, Y = Canvas->SizeY * .2f;
+		DrawRect(FLinearColor(.02f, .04f, .06f, .8f * A), Cx - BW * .5f, Y, BW, BH);
+		const FLinearColor Edge = Ch->bResultGood ? FLinearColor(.25f, .85f, .45f, A) : FLinearColor(.95f, .35f, .3f, A);
+		DrawRect(Edge, Cx - BW * .5f, Y, BW, 5 * U);
+		FLinearColor TC = Edge; TC.A = A;
+		Text(Ch->ResultText, Cx, Y + 18 * U, 1.7f, TC, GEngine->GetLargeFont(), true);
+		Text(Ch->ResultSub, Cx, Y + 74 * U, .9f, FLinearColor(.9f, .93f, .96f, A), nullptr, true);
 	}
 }

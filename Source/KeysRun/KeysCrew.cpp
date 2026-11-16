@@ -496,8 +496,11 @@ void AKeysExtras::PoseLanding(double T)
 {
 	const AKeysBoatPawn* P = PawnRef.Get();
 	const bool bOn = P && P->Stage.bOn;
-	LandYou.bVisible = LandMate.bVisible = bOn;
-	if (!bOn) return;
+	FVector RelFish; double RelT = 0, RelSide = 1;
+	const bool bRel = P && !bOn && P->GetRelease(RelFish, RelT, RelSide) && RelT < 3.0;
+	LandYou.bVisible = bOn || bRel;
+	LandMate.bVisible = bOn;
+	if (!bOn && !bRel) return;
 	if (!bLandInit)
 	{
 		bLandInit = true;
@@ -509,6 +512,27 @@ void AKeysExtras::PoseLanding(double T)
 		M.Shirt = XHex(0xe9e4d6); M.Bottom = XHex(0x6b5b45); M.bShortsLong = true; M.bCap = true; M.CapColor = XHex(0x8a2b2b); M.Hair = XHex(0x14100c);
 		M.Skin = FLinearColor(FColor(0x8d, 0x5a, 0x3c)); M.bShoes = true; M.Shoes = XHex(0xeeeeee);
 		LandMate.Init(M, false);
+	}
+	if (bRel)
+	{
+		// the release: you carry it to the rail, lean out and lower it in with both hands under it, let go, and watch it go
+		auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };
+		const double X = RelFish.X;
+		FKeysHuman& H = LandYou;
+		H.DefaultPose();
+		H.Roll = 0;
+		H.Pos = FVector(X + .15, RelSide * (Deck.InnerHB(X) - .32), Deck.SoleAt(X));
+		H.Yaw = FMath::Atan2(RelSide, 0.0);   // facing out over the side
+		const double Lean = RelT < .9 ? .1 * Ease(RelT / .9) : RelT < 1.7 ? .1 + .5 * Ease((RelT - .9) / .8) : .6 - .45 * Ease((RelT - 2.0) / .8);
+		H.Pitch = -Lean;
+		const FTransform Tr = H.ToBoat();
+		if (RelT < 1.75)
+		{
+			// both hands under the fish: one at the head, one at the tail wrist
+			const FVector Along(.22, 0, 0);
+			H.Pose(Tr.InverseTransformPosition(RelFish + Along + FVector(0, 0, -.04)), Tr.InverseTransformPosition(RelFish - Along + FVector(0, 0, -.04)));
+		}
+		return;
 	}
 	const AKeysBoatPawn::FLandStage& S = P->Stage;
 	auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };

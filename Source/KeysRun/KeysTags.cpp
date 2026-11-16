@@ -2,6 +2,7 @@
 // the town's services (shared/sim/services.ts, game/services/index.ts), the pony bottle's air fills
 // (shared/sim/dive-gear.ts), the run's best fish on the dock, and the test hooks for all of it.
 #include "KeysBoatPawn.h"
+#include "KeysCharter.h"
 #include "KeysSpeech.h"
 #include "KeysGeo.h"
 #include "KeysSea.h"
@@ -187,7 +188,9 @@ void AKeysBoatPawn::TagAndRelease()
 	if (Save) Save->RecordScore(Score);
 	if (AKeysOnline* O = AKeysOnline::Get(this)) O->ReportScore(Score);
 	SaveEconomy();
+	if (AKeysCharter* Ch = AKeysCharter::Get(this)) Ch->OnReleased();
 	FinishCatch();
+	StartReleaseAnim();
 }
 
 // ================================================================ the town's services

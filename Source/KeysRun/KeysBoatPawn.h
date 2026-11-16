@@ -281,6 +281,13 @@ public:
 	bool bFreeFish = true, bUnlimitedFuel = true, bFuelOutMsg = false;
 	// the rod answering the fish: kicks on head shakes (decaying), and leaning toward where it is
 	double RodKick = 0, VmYawPull = 0, VmLunge = 0, ChairIntroT = 0;
+	// the release: you lift the fish over the side and let it go, and it swims off (boat-local, meters)
+	double ReleaseT = -1, RelSide = 1;
+	FVector RelStart = FVector::ZeroVector, RelFish = FVector::ZeroVector;
+	bool bLandingSpear = false;
+	void StartReleaseAnim();
+	void UpdateReleaseAnim(double Dt);
+	bool GetRelease(FVector& OutFish, double& OutT, double& OutSide) const { if (ReleaseT < 0) return false; OutFish = RelFish; OutT = ReleaseT; OutSide = RelSide; return true; }
 	bool bWasInChair = false;
 	double Fuel = 1, DiscoverT = 0;
 	TArray<FString> SpotsFound;        // teleport destinations you've been within 200 m of
