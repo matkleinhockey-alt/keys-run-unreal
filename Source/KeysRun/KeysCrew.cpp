@@ -83,6 +83,7 @@ void AKeysExtras::BuildLayout()
 		const double X = Deck.MidX - Deck.ConL * .5 - (S.Id == TEXT("midnight") ? .42 : .14);
 		Captain.Pos = FVector(X, .12, Deck.SoleAt(X));
 		Captain.Yaw = 0;
+		CapHome = Captain.Pos;
 		HelmL = XJ(-.1, 1.1, .12);
 		HelmR = XJ(.16, 1.12, .12);
 		Captain.Pose(HelmL, HelmR);
@@ -297,6 +298,7 @@ void AKeysExtras::UpdateCrew(double Dt, double T)
 	Captain.Pose(HelmL, HelmR);
 	Crew.DefaultPose();
 	PoseLanding(T);
+	UpdateHose(Dt, T);
 
 	UpdateShower(Dt, T);
 	UpdatePole(Dt, T);
@@ -306,6 +308,119 @@ void AKeysExtras::UpdateCrew(double Dt, double T)
 // You and the mate landing the fish (AKeysBoatPawn::Stage): at the gunwale leaning out over the side, gaff and hand line
 // on its head, hauling it up and in and stepping back as it comes over; or inside the transom heaving it through the
 // tuna door in three pulls. Once it's aboard you put both hands up and the mate stands over it, hands on hips.
+// After a fish comes aboard there's blood where it landed; once the catch is dealt with the captain leaves the wheel,
+// hoses the aft deck down until it's clean, coils the hose and goes back to the helm.
+void AKeysExtras::UpdateHose(double Dt, double T)
+{
+	const AKeysBoatPawn* P = PawnRef.Get();
+	// a fish on deck (not one speared under water): from the landing until the catch is dealt with
+	const bool bStage = P && (P->Stage.bOn || (P->FState == EKeysFish::Caught && !P->bCardSpeared));
+	if (bStage)
+	{
+		BloodAt = P->Stage.bOn ? P->Stage.Final : FVector(-Deck.L * .5 + 1.6, .25, 0);
+		BloodAt.Z = Deck.SoleAt(BloodAt.X);
+		BloodK = FMath::Min(1.0, BloodK + Dt * 1.5);
+		HoseT = -1;
+	}
+	if (bWasStage && !bStage && BloodK > 0) HoseT = 0;
+	bWasStage = bStage;
+	if (HoseT < 0) return;
+	HoseT += Dt;
+	auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };
+	// where he stands to hose: a step forward of the blood, inboard
+	// beside the fighting chair (or where it would be), on the side away from the blood, a step forward of it
+	const double SpY = (BloodAt.Y > 0 ? -1 : 1) * FMath::Min(1.0, Deck.InnerHB(BloodAt.X + 1.3) - .35);
+	const FVector Spot(BloodAt.X + 1.3, SpY, Deck.SoleAt(BloodAt.X + 1.3));
+	const double Out = Ease(HoseT / 1.6), Back = Ease((HoseT - 7.6) / 1.6);
+	const double W = Out * (1 - Back);
+	Captain.Pos = FMath::Lerp(CapHome, Spot, W);
+	Captain.Pos.Z = Deck.SoleAt(Captain.Pos.X);
+	const double FaceAft = FMath::Atan2(BloodAt.Y - Spot.Y, BloodAt.X - Spot.X);
+	Captain.Yaw = FMath::Lerp(0.0, FMath::UnwindRadians(FaceAft), W);
+	Captain.Pitch = .08 * W;
+	const bool bSpray = HoseT > 1.7 && HoseT < 7.4;
+	// the spray sweeps back and forth over the stain, which washes out as he goes
+	SprayTo = BloodAt + FVector(FMath::Sin(T * 1.3) * .5, FMath::Sin(T * 2.1) * .7, 0);
+	SprayTo.Z = Deck.SoleAt(SprayTo.X);
+	if (bSpray) BloodK = FMath::Max(0.0, BloodK - Dt / 5.0);
+	const FTransform Tr = Captain.ToBoat();
+	const FVector Chest = Tr.TransformPosition(FVector(.32, -.05, 1.12));
+	Nozzle = Chest + (SprayTo - Chest).GetSafeNormal() * .12;
+	if (W > .05)
+	{
+		const FVector L = Tr.InverseTransformPosition(Nozzle);
+		const FVector R = Tr.InverseTransformPosition(Nozzle - (SprayTo - Chest).GetSafeNormal() * .28 + FVector(0, 0, -.08));
+		Captain.Pose(L, R);
+	}
+	if (HoseT > 9.4) { HoseT = -1; BloodK = 0; Captain.Pos = CapHome; Captain.Yaw = 0; Captain.Pitch = 0; }
+}
+
+void AKeysExtras::DrawHose(FKeysMesh& M, double T)
+{
+	// the blood: dark splashes and a smear toward the scuppers, washing out to the deck colour
+	if (BloodK > .01)
+	{
+		const FLinearColor Deck0(.86f, .86f, .83f), Red(.36f, .04f, .04f);
+		const FLinearColor C = FMath::Lerp(Deck0, Red, float(FMath::Min(1.0, BloodK * 1.2)));
+		FRandomStream R(int32(BloodAt.X * 97 + BloodAt.Y * 31));
+		for (int32 k = 0; k < 11; k++)
+		{
+			const double X = BloodAt.X + R.FRandRange(-.5, .5), Y = BloodAt.Y + R.FRandRange(-.35, .35);
+			const double Rr = R.FRandRange(.03, .1) * (k == 0 ? 2.0 : 1);
+			const double Z = Deck.SoleAt(X) + .012;
+			for (int32 j = 0; j < 12; j++)
+			{
+				const double A0 = j * PI / 6, A1 = (j + 1) * PI / 6;
+				const double R0 = Rr * (.8 + .3 * FMath::Sin(j * 2.7 + k)), R1 = Rr * (.8 + .3 * FMath::Sin((j + 1) * 2.7 + k));
+				M.AddTri(FVector(X, Y, Z), FVector(X + FMath::Cos(A1) * R1, Y + FMath::Sin(A1) * R1, Z), FVector(X + FMath::Cos(A0) * R0, Y + FMath::Sin(A0) * R0, Z), C, FVector::UpVector);
+			}
+		}
+		// the smear running aft to the transom
+		const double Z = Deck.SoleAt(BloodAt.X) + .011;
+		M.AddQuad(FVector(BloodAt.X, BloodAt.Y - .05, Z), FVector(BloodAt.X, BloodAt.Y + .05, Z), FVector(BloodAt.X - .9, BloodAt.Y + .02, Z), FVector(BloodAt.X - .9, BloodAt.Y - .02, Z), C, FVector::UpVector);
+	}
+	if (HoseT < 0) return;
+	// the hose: green, from the nozzle in his hands down to the deck and forward to the bib at the console
+	const FLinearColor Green(.12f, .42f, .16f);
+	const FVector Bib(CapHome.X + .2, -.55, CapHome.Z + .25);
+	const FVector Low((Nozzle.X + Bib.X) * .5, (Nozzle.Y + Bib.Y) * .5, Deck.SoleAt((Nozzle.X + Bib.X) * .5) + .03);
+	FVector Prev = Nozzle;
+	for (int32 k = 1; k <= 10; k++)
+	{
+		const double U = k / 10.0;
+		const FVector Pp = FMath::Lerp(FMath::Lerp(Nozzle, Low, U), FMath::Lerp(Low, Bib, U), U);
+		M.AddTube(Prev, Pp, .016, .016, 5, Green);
+		Prev = Pp;
+	}
+	M.AddTube(Nozzle, Nozzle + (SprayTo - Nozzle).GetSafeNormal() * .14, .022, .014, 6, FLinearColor(.75f, .6f, .2f));
+	// the spray: a fan of fine jets from the nozzle to the deck, and the splash where it hits
+	if (HoseT > 1.7 && HoseT < 7.4)
+	{
+		const FLinearColor Water(.82f, .92f, .98f);
+		const FVector D = (SprayTo - Nozzle);
+		const FVector Side = FVector::CrossProduct(D.GetSafeNormal(), FVector::UpVector).GetSafeNormal();
+		for (int32 j = 0; j < 7; j++)
+		{
+			const double Sp = (j - 3) * .07 + FMath::Sin(T * 23 + j) * .02;
+			const FVector To = SprayTo + Side * (Sp * D.Size());
+			FVector Pv = Nozzle + D.GetSafeNormal() * .14;
+			for (int32 k = 1; k <= 6; k++)
+			{
+				const double U = k / 6.0;
+				FVector Pp = FMath::Lerp(Nozzle + D.GetSafeNormal() * .14, To, U) + FVector(0, 0, FMath::Sin(U * PI) * .15);
+				M.AddTube(Pv, Pp, .006 + .01 * U, .006 + .01 * U, 3, Water);
+				Pv = Pp;
+			}
+			for (int32 s = 0; s < 3; s++)
+			{
+				const double A = T * 9 + j * 1.7 + s * 2.1;
+				const FVector Sp2 = To + FVector(FMath::Cos(A) * .12, FMath::Sin(A) * .12, .04 + .06 * FMath::Abs(FMath::Sin(T * 11 + j + s)));
+				M.AddTube(To, Sp2, .012, .004, 3, Water);
+			}
+		}
+	}
+}
+
 void AKeysExtras::PoseLanding(double T)
 {
 	const AKeysBoatPawn* P = PawnRef.Get();
@@ -843,6 +958,7 @@ void AKeysExtras::CommitCrew(double T)
 	if (!CrewMesh) return;
 	FKeysMesh M;
 	Captain.Build(M);
+	DrawHose(M, T);
 	Crew.Build(M);
 	if (LandYou.bVisible)
 	{

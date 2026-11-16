@@ -158,6 +158,12 @@ private:
 	FKeysHuman Captain, Crew;
 	FKeysHuman LandYou, LandMate;   // you and the mate, hauling a landed fish aboard (KeysCrew.cpp PoseLanding)
 	bool bLandInit = false;
+	// after a landing: blood on the aft deck, and the captain hosing it off (KeysCrew.cpp)
+	FVector BloodAt = FVector::ZeroVector, CapHome = FVector::ZeroVector, Nozzle = FVector::ZeroVector, SprayTo = FVector::ZeroVector;
+	double BloodK = 0, HoseT = -1;
+	bool bWasStage = false;
+	void UpdateHose(double Dt, double T);
+	void DrawHose(FKeysMesh& M, double T);
 	void PoseLanding(double T);
 	FKeysHuman ChairH;   // the angler in the fighting chair (the Freeman's trolling fights)
 	FVector ChairEyeL = FVector::ZeroVector;
