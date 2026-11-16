@@ -297,6 +297,7 @@ namespace KeysMesh
 			{TEXT("yellowfin"), 1.32, .46, .56, 21, 51, 1.5, .56, 0,   0,   0xf2efe2, 0x1f3b57, 0xe9d98a, 0x1f3b57, 0x8e949a, 0xf6f4ea, 0xf3f1e6, 0xe2decd, false},
 			{TEXT("contender"), 1.18, .44, .5,  20, 49, 1.2, .46, 0,   0,   0xf4f6f5, 0x2f7a52, 0xf2f4f5, 0x2f7a52, 0xb9bec4, 0xf7f8f8, 0xf2f2ee, 0xdedfd9, false},
 			{TEXT("nortech"),   1.22, .26, .68, 25, 57, 2.6, .5,  .26, .4,  0x14161a, 0xff7a18, 0x14161a, 0xff7a18, 0x0b0c0e, 0x1b1e23, 0x22262c, 0x1b1e23, false},
+			{TEXT("viking"),    1.7,  .7,  .95, 14, 44, 1.9, .64, 0,   0,   0xf2f2f0, 0x111316, 0xffffff, -1,       0x1a1c1f, 0x8a5530, 0xf7f6f2, 0xc49a6c, false},
 		};
 		// built once for all eight, so the references handed out stay put
 		static const TArray<TPair<FString, FHullDef>> Built = []()
@@ -317,6 +318,8 @@ namespace KeysMesh
 				// bow with a flared coaming and its rounded tumblehome stern
 				if (H.bCat) { H.MinBow = .45; H.Tunnel = .34; H.TunnelRise = 1.0; H.TunnelArch = .26; H.BowRecess = .4; H.SoleRise = .75; H.SponW = .27; H.StemFoot = .12; }
 				// the Midnight's gunwale steps down over the aft cockpit, with panel seams at the step and forward
+				// the Viking: a flared bow, and the gunwale stepping down to the cockpit aft of the salon
+				if (FString(R.Id) == TEXT("viking")) { H.Flare = .03; H.SheerDrop = .45; H.SheerDropT = .3; H.SoleRise = .1; }
 				if (FString(R.Id) == TEXT("midnight")) { H.Tumble = .08; H.Flare = .06; H.SheerDrop = .2; H.SheerDropT = .3; H.Seams = {.3, .62}; H.SoleRise = .12; }
 				Out.Add(TPair<FString, FHullDef>(R.Id, H));
 			}

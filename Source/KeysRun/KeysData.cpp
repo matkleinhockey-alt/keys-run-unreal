@@ -139,6 +139,9 @@ namespace KeysData
 		Add(TEXT("nortech"), TEXT("Nor-Tech"), TEXT("390 Sport"), TEXT("Twin Mercury Racing 500R"), 11.9, 2.9, 2, 82, .58, .58, TEXT("2' 8\""), 1.05, false, true,
 			0x14161a, 0xff7a18, 0x14161a, 0x14161a, 0x14161a, 0x1b1e23, 180, .26,
 			TEXT("Not a fishing boat. A stepped-hull go-fast that will out-run everything here in a straight line and punish you for asking it to turn."));
+		Add(TEXT("viking"), TEXT("Viking"), TEXT("54 Convertible"), TEXT("Twin 2,000 hp diesels"), 16.5, 5.2, 2, 44, .3, .55, TEXT("4' 9\""), 1.45, false, true,
+			0xffffff, 0x7a4a26, 0x111316, 0xffffff, 0xf4f4f2, 0xc49a6c, 1500, .26,
+			TEXT("A true sportfishing yacht: air-conditioned salon, flybridge with a hardtop and long riggers, and a teak cockpit built around the fighting chair. Draws too much for the flats."));
 
 		// fit-out per hull, from HULLS[id].style (content/boats.ts) and BOAT_PRICE (sim/economy.ts)
 		struct FFit { const TCHAR* Id; uint32 EngAcc, EngLow, Cove, Uph; bool bTTop, bRadar, bRodRack, bBowRail, bRiggerPoles, bSunpad, bLeaning, bBracket; int32 Steps; double Entry; int64 Price; };
@@ -151,6 +154,7 @@ namespace KeysData
 			{TEXT("yellowfin"), 0x1f3b57, 0x2a2d31, 0x1f3b57, 0x1f3b57, true,  true,  true,  true,  true,  false, true,  true,  0, .56, 30000},
 			{TEXT("contender"), 0x2f7a52, 0x2a2d31, 0x2f7a52, 0x2f7a52, true,  false, true,  true,  true,  false, true,  false, 0, .46, 20000},
 			{TEXT("nortech"),   0xff7a18, 0x0b0c0e, 0xff7a18, 0xff7a18, false, false, false, false, false, true,  false, true,  2, .50, 85000},
+			{TEXT("viking"),    0x7a4a26, 0x111316, 0,        0xeceae4, false, true,  false, false, false, false, false, false, 0, .52, 250000},
 		};
 		for (FBoatSpec& S : B)
 			for (const FFit& F : Fits)

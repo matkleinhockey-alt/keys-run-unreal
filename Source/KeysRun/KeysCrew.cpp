@@ -83,6 +83,12 @@ void AKeysExtras::BuildLayout()
 		const double X = Deck.MidX - Deck.ConL * .5 - (S.Id == TEXT("midnight") ? .42 : .14);
 		Captain.Pos = FVector(X, .12, Deck.SoleAt(X));
 		Captain.Yaw = 0;
+		// the Viking is driven from the flybridge, standing at the helm pod
+		if (S.Id == TEXT("viking"))
+		{
+			const KeysMesh::FBoatLayout Lo = KeysMesh::BoatLayout(S);
+			Captain.Pos = FVector(Lo.TopX + 1.55 - .62, -.25, Lo.TopZ - 2.15);
+		}
 		CapHome = Captain.Pos;
 		HelmL = XJ(-.1, 1.1, .12);
 		HelmR = XJ(.16, 1.12, .12);
@@ -102,6 +108,12 @@ void AKeysExtras::BuildLayout()
 		const double X = Deck.MidX + Deck.ConL * .5 + Deck.ConFwd + .25;
 		Crew.Pos = FVector(X, 0, Deck.SoleAt(X));
 		Crew.Yaw = 0;
+		if (S.Id == TEXT("viking"))
+		{
+			const double SalA = Deck.MidX - Deck.ConL * .5;
+			Crew.Pos = FVector(SalA - .32, -.6, Deck.SoleAt(SalA - 1.5) + .3);
+			Crew.Yaw = PI;
+		}
 		// the Freeman and the Midnight Express have their own seat on the console's front
 		// (the go-fasts with a sun pad have no console seat of their own)
 		if (S.bSunpad && S.Id != TEXT("midnight")) Props.AddBox(FVector(X - .02, 0, Deck.SoleAt(X) + .21), FVector(.42, .62, .42), XHex(0xeeeae0));
@@ -146,6 +158,13 @@ void AKeysExtras::BuildLayout()
 		if (bRound) { PathPts.Add(FVector2D(SX1, -SeatLane(SX1))); PathPts.Add(FVector2D(SX0, -SeatLane(SX0))); }
 		PathPts.Add(FVector2D(-Zc, -Lane(-Zc)));
 		PathPts.Add(FVector2D(-Zc - .15, 0));
+		if (S.Id == TEXT("viking"))
+		{
+			// the Viking's guests stay in the cockpit: a lap round the fighting chair
+			const double SalA = Deck.MidX - Deck.ConL * .5, XA = -L * .5 + .75, XB = SalA - 1.05;
+			PathPts.Reset();
+			PathPts.Add(FVector2D(XA, Lane(XA))); PathPts.Add(FVector2D(XB, Lane(XB))); PathPts.Add(FVector2D(XB, -Lane(XB))); PathPts.Add(FVector2D(XA, -Lane(XA)));
+		}
 		// every corner of the lap on open deck
 		for (FVector2D& Pp : PathPts) ClampToDeck(Pp.X, Pp.Y, .32);
 		PathCum.Reset();
@@ -220,6 +239,14 @@ void AKeysExtras::BuildLayout()
 		// beside the console, where there is room between it and the gunwale
 		const double Xb = (ConA + ConF) * .5, Hb = Deck.InnerHB(Xb) - .35;
 		if (Hb > Deck.ConW * .5 + .45) { FightSpots.Add(FVector(Xb, Hb, 0)); FightSpots.Add(FVector(Xb, -Hb, 0)); }
+		if (S.Id == TEXT("viking"))
+		{
+			// out of the angler's way: along the mezzanine in front of the salon
+			const double SalA = Deck.MidX - Deck.ConL * .5;
+			FightSpots.Reset();
+			const double Hw = Deck.InnerHB(SalA - .9) - .45;
+			for (int32 i = 0; i < 5; i++) FightSpots.Add(FVector(SalA - .9, -Hw + 2 * Hw * i / 4, 0));
+		}
 		if (!FightSpots.Num())
 		{
 			double Xc = LaneX1, Yc = 0;
@@ -294,7 +321,7 @@ void AKeysExtras::UpdateCrew(double Dt, double T)
 	// the captain drives and the crew sits; Luigi mode overrides the right hands with a beer. His right hand rests on
 	// the throttle and goes with it (KeysDash.cpp)
 	FVector Grip;
-	if (const AKeysBoatPawn* P = PawnRef.Get(); P && P->ThrottleGrip(Grip) && Captain.Yaw == 0) HelmR = Grip + FVector(-.07, 0, -.07) - Captain.Pos;   // the wrist aft of and under the grip, the hand over it
+	if (const AKeysBoatPawn* P = PawnRef.Get(); P && P->ThrottleGrip(Grip) && Captain.Yaw == 0 && !(Deck.Spec && Deck.Spec->Id == TEXT("viking"))) HelmR = Grip + FVector(-.07, 0, -.07) - Captain.Pos;   // the wrist aft of and under the grip, the hand over it
 	Captain.Pose(HelmL, HelmR);
 	Crew.DefaultPose();
 	PoseLanding(T);

@@ -203,7 +203,8 @@ namespace KeysMesh
 	struct FDims
 	{
 		double L, HB, Free, Draft, DeckZ, MidX, TopZ, TopL, TopW, TC, TopH, TY, W2, L2, ConL, ConW, ConFwd;
-		bool bTower, bBig, bFree, bMid;
+		bool bTower, bBig, bFree, bMid, bVik = false;
+		double SalA = 0, SalF = 0, FlyZ = 0;   // the Viking: salon aft and forward ends, flybridge deck height
 		// web tower frame (x across, y up, z toward the stern from the top's center) -> this boat's frame
 		FVector P(double X, double Y, double Z) const { return FVector(TC - Z, X, Y); }
 	};
@@ -231,6 +232,20 @@ namespace KeysMesh
 		D.bBig = D.bFree;
 		D.TY = D.TopH + (D.bBig ? 3.3 : 2.5);
 		D.W2 = FMath::Min(1.15, D.TopW * .5); D.L2 = 1.05;
+		if (S.Id == TEXT("viking"))
+		{
+			// the Viking 54: a 4.6 m teak cockpit, the salon forward of it, the flybridge on the salon roof running back
+			// over the mezzanine, and its hardtop on aluminium legs (the "console" here is the salon)
+			D.bVik = true;
+			D.SalA = -D.L * .5 + 4.6; D.SalF = D.SalA + 6.2;
+			D.MidX = (D.SalA + D.SalF) * .5; D.ConL = D.SalF - D.SalA; D.ConW = S.Beam * .8; D.ConFwd = 0;
+			D.DeckZ = SoleAt(S, D.SalA - 1.5);
+			D.FlyZ = D.DeckZ + 2.3;
+			D.TopL = 3.4; D.TopW = S.Beam * .74; D.TC = D.SalA + .9;
+			D.TopZ = D.FlyZ + 2.15; D.TopH = D.TopZ + .05;
+			D.bTower = false; D.bBig = true;
+			D.TY = D.TopH + 2.5;
+		}
 		return D;
 	}
 
@@ -249,6 +264,7 @@ namespace KeysMesh
 		if (S.bLeaning && !D.bMid && !D.bFree) Hi = FMath::Min(Hi, D.MidX - 1.15 - .4 - .12);   // the leaning post's back
 		if (D.bMid) Hi = FMath::Min(Hi, D.MidX - 3.7 - .35 - .12);      // the wet bar behind the two rows of buckets
 		if (D.bFree) Hi = FMath::Min(Hi, D.TC - D.TopL * .5);           // out from under the long hardtop
+		if (D.bVik) Hi = D.SalA - 1.0;                                   // the mezzanine step in front of the salon
 		Hi = FMath::Max(Hi, Lo + .5);
 	}
 
@@ -260,6 +276,12 @@ namespace KeysMesh
 			OutEye = FVector(D.TC - D.L2 * .12, 0, D.TY + .03 + 1.62);
 			return true;
 		}
+		if (D.bVik)
+		{
+			// the flybridge helm
+			OutEye = FVector(D.TC + 1.2, 0, D.FlyZ + 1.55);
+			return true;
+		}
 		if (D.bFree)
 		{
 			// no tower: standing up on the hardtop
@@ -269,11 +291,24 @@ namespace KeysMesh
 		return false;
 	}
 
-	bool HasSwingingRiggers(const KeysData::FBoatSpec& S) { const FDims D = Dims(S); return D.bTower || D.bFree; }
+	bool HasSwingingRiggers(const KeysData::FBoatSpec& S) { const FDims D = Dims(S); return D.bTower || D.bFree || D.bVik; }
 
 	bool RiggerTips(const KeysData::FBoatSpec& S, double Rig, FVector OutTip[2], FVector OutBase[2])
 	{
 		const FDims D = Dims(S);
+		if (D.bVik)
+		{
+			// the Viking's long white riggers off the hardtop's sides, swung out wide and raked aft
+			const double K = FMath::Clamp(Rig, 0.0, 1.0), A = FMath::Lerp(.1, 1.0, K), Rk = FMath::Lerp(.75, .5, K);
+			for (int32 i = 0; i < 2; i++)
+			{
+				const double Sx = i == 0 ? -1 : 1;
+				OutBase[i] = FVector(D.TC - D.TopL * .1, Sx * D.TopW * .47, D.FlyZ + .9);
+				const FVector Dir(-FMath::Sin(Rk) * FMath::Cos(A), Sx * FMath::Sin(A), FMath::Cos(Rk) * FMath::Cos(A));
+				OutTip[i] = OutBase[i] + Dir.GetSafeNormal() * 10.5;
+			}
+			return true;
+		}
 		if (D.bFree && !D.bTower)
 		{
 			// the Freeman's long black riggers on swivel bases at the hardtop's aft corners: stowed raked well aft and up,
@@ -341,6 +376,202 @@ namespace KeysMesh
 		}
 	}
 
+	// The Viking 54 Convertible, from the owner's photos: a closed white foredeck with a teak caprail running to the
+	// flared bow, the salon with its dark wraparound glass, the flybridge on its roof (a flared visor over the salon
+	// windows, teak helm pod, two teak helm chairs with white quilted cushions), the hardtop on aluminium legs with an
+	// open-array radar and a satellite dome, long white riggers, a ladder up from the cockpit, and aft: the mezzanine
+	// step and quilted bench against the salon's aft glass and door, the teak cockpit and a varnished teak transom.
+	static void BuildVikingTop(FKeysMesh& M, const KeysData::FBoatSpec& S, bool bRiggers)
+	{
+		const FDims D = Dims(S);
+		const FLinearColor White = Srgb(.97, .97, .96), Off = Srgb(.93, .93, .91), Glass = Srgb(.06, .08, .1), Teak = Srgb(.42, .22, .1),
+			TeakLt = Srgb(.66, .48, .3), Steel = Srgb(.85, .86, .88), Cush = Srgb(.93, .93, .91), Dark = Srgb(.05, .055, .06);
+		const uint8 Keep = M.Surf;
+		auto Box = [&M](const FVector& C, const FVector& Sz, const FLinearColor& Col, double R, uint8 Kind)
+		{
+			const uint8 W = M.Surf; M.Surf = Kind; M.AddRoundBox(C, Sz, R, Col, FQuat::Identity, 2); M.Surf = W;
+		};
+		auto Tube = [&M](const FVector& A, const FVector& B, double R, const FLinearColor& Col, uint8 Kind)
+		{
+			const uint8 W = M.Surf; M.Surf = Kind; M.AddTube(A, B, R, R, 10, Col); M.Surf = W;
+		};
+		auto HB = [&S](double X) { return InnerHalfBeam(S, X) + .1; };
+		const double SalA = D.SalA, SalF = D.SalF, FlyZ = D.FlyZ, DeckZ = D.DeckZ;
+		const double Bow = S.Len * .5;
+
+		// ---- the foredeck: a crowned white deck from the salon to the bow, at the sheer
+		{
+			const int32 NV = 14, NU = 7;
+			TArray<FVector> G;
+			for (int32 v = 0; v < NV; v++)
+			{
+				const double X = FMath::Lerp(SalF - .4, Bow - .15, double(v) / (NV - 1));
+				const double W = FMath::Max(.05, HB(X) - .02), Z = SheerAt(S, X) + .01;
+				for (int32 u = 0; u < NU; u++)
+				{
+					const double Y = FMath::Lerp(-W, W, double(u) / (NU - 1));
+					G.Add(FVector(X, Y, Z + .14 * (1 - FMath::Square(Y / FMath::Max(W, .01)))));
+				}
+			}
+			M.Surf = SurfGelcoat;
+			M.AddGrid(G, NU, NV, false, White, FVector(0, 0, -10));
+			Box(FVector(Bow - 3.2, 0, SheerAt(S, Bow - 3.2) + .16), FVector(.6, .6, .05), Off, .03, SurfGelcoat);   // hatch
+			for (int32 Sd = -1; Sd <= 1; Sd += 2) Box(FVector(Bow - 1.2, Sd * .35, SheerAt(S, Bow - 1.2) + .14), FVector(.3, .05, .06), Steel, .02, SurfSteel);   // cleats
+		}
+
+		// ---- the salon: sides rising off the side decks, tumbling in a little, a crowned roof; the forward end
+		// sweeps down to the foredeck as the windshield
+		const double RoofZ = FlyZ;
+		auto SalW = [&](double X) { return FMath::Max(.6, HB(X) - .38); };
+		auto RoofAt = [&](double X) { const double T = FMath::Clamp((X - (SalF - 2.4)) / 2.4, 0.0, 1.0); return FMath::Lerp(RoofZ, SheerAt(S, SalF) + .25, T * T); };
+		{
+			const int32 NV = 16;
+			const double Prof[6][2] = {{-1.0, 0}, {-1.0, .55}, {-.93, .97}, {0, 1.03}, {.93, .97}, {1.0, .55}};
+			TArray<FVector> G;
+			for (int32 v = 0; v < NV; v++)
+			{
+				const double X = FMath::Lerp(SalA, SalF, double(v) / (NV - 1));
+				const double W = SalW(X), Zb = FMath::Min(SheerAt(S, X), RoofAt(X) - .2), Zt = RoofAt(X);
+				for (int32 u = 0; u < 6; u++) G.Add(FVector(X, Prof[u][0] * W * (u == 0 ? 1 : 1), Zb + (Zt - Zb) * Prof[u][1]));
+			}
+			M.Surf = SurfGelcoat;
+			// close the ring along the bottom by adding the last point back to the first side
+			TArray<FVector> G2;
+			for (int32 v = 0; v < NV; v++) { for (int32 u = 0; u < 6; u++) G2.Add(G[v * 6 + u]); G2.Add(FVector(G[v * 6].X, -G[v * 6].Y, G[v * 6].Z)); }
+			M.AddGrid(G2, 7, NV, false, White, FVector(SalA + 1, 0, DeckZ + .2));
+			// the dark glass: a band along each side sweeping up and forward into the windshield
+			M.Surf = SurfGlass;
+			for (int32 Sd = -1; Sd <= 1; Sd += 2)
+				for (int32 v = 0; v < NV - 1; v++)
+				{
+					const double X0 = FMath::Lerp(SalA + .5, SalF - .15, double(v) / (NV - 1)), X1 = FMath::Lerp(SalA + .5, SalF - .15, double(v + 1) / (NV - 1));
+					auto Pt = [&](double X, double H)
+					{
+						const double W = SalW(X), Zb = FMath::Min(SheerAt(S, X), RoofAt(X) - .2), Zt = RoofAt(X);
+						return FVector(X, Sd * (W * (H < .7 ? 1.0 : .97) + .012), Zb + (Zt - Zb) * H);
+					};
+					// one clean band: its top follows the roof, its bottom sweeps up toward the windshield
+					const double U0 = double(v) / (NV - 1), U1 = double(v + 1) / (NV - 1);
+					const FVector A = Pt(X0, FMath::Lerp(.42, .62, U0 * U0)), B = Pt(X1, FMath::Lerp(.42, .62, U1 * U1)), C = Pt(X1, .9), Dd = Pt(X0, .9);
+					if (Sd > 0) M.AddQuad(A, B, C, Dd, Glass, FVector(0, 1, 0)); else M.AddQuad(B, A, Dd, C, Glass, FVector(0, -1, 0));
+				}
+			// windshield across the front
+			{
+				const double X0 = SalF - 1.9, X1 = SalF - .45;
+				const double W0 = SalW(X0) * .95, W1 = SalW(X1) * .9;
+				const FVector A(X0, -W0, RoofAt(X0) + .015), B(X0, W0, RoofAt(X0) + .015), C(X1, W1, RoofAt(X1) + .012), Dd(X1, -W1, RoofAt(X1) + .012);
+				M.AddQuad(Dd, C, B, A, Glass, FVector(1, 0, 1).GetSafeNormal());
+			}
+			// the aft wall: white, a big dark window to port and the door to starboard
+			M.Surf = SurfGelcoat;
+			const double WA = SalW(SalA);
+			M.AddQuad(FVector(SalA, -WA, DeckZ), FVector(SalA, WA, DeckZ), FVector(SalA, WA, RoofZ), FVector(SalA, -WA, RoofZ), White, FVector(-1, 0, 0));
+			M.Surf = SurfGlass;
+			M.AddQuad(FVector(SalA - .012, -WA + .25, DeckZ + .95), FVector(SalA - .012, .2, DeckZ + .95), FVector(SalA - .012, .2, RoofZ - .25), FVector(SalA - .012, -WA + .25, RoofZ - .25), Glass, FVector(-1, 0, 0));
+			M.AddQuad(FVector(SalA - .012, .45, DeckZ + .55), FVector(SalA - .012, 1.25, DeckZ + .55), FVector(SalA - .012, 1.25, RoofZ - .3), FVector(SalA - .012, .45, RoofZ - .3), Glass, FVector(-1, 0, 0));
+			M.Surf = Keep;
+		}
+
+		// ---- the cockpit: mezzanine step with a teak tread, quilted bench against the salon, teak transom
+		{
+			const double MW = SalW(SalA) + .2;
+			Box(FVector(SalA - .4, 0, DeckZ + .14), FVector(.8, MW * 2, .28), White, .05, SurfGelcoat);
+			Box(FVector(SalA - .78, 0, DeckZ + .285), FVector(.06, MW * 2, .025), TeakLt, .01, SurfTeakDeck);
+			Box(FVector(SalA - .3, -.5, DeckZ + .5), FVector(.55, 2.2, .18), Cush, .07, SurfHexQuilt);
+			Box(FVector(SalA - .08, -.5, DeckZ + .82), FVector(.14, 2.2, .5), Cush, .06, SurfHexQuilt);
+			// the transom: varnished teak across its face, a livewell hatch on top, the exhausts low down
+			const double XT = SternX(S) - .012, WT = HB(SternX(S) + .05) - .08;
+			M.Surf = SurfWood;
+			M.AddQuad(FVector(XT, WT, SheerAt(S, XT + .05) - .08), FVector(XT, -WT, SheerAt(S, XT + .05) - .08), FVector(XT, -WT * .92, -.25), FVector(XT, WT * .92, -.25), Teak, FVector(-1, 0, 0));
+			M.Surf = Keep;
+			Box(FVector(SternX(S) + .35, 0, SheerAt(S, SternX(S) + .3) + .02), FVector(.5, 1.6, .06), Off, .03, SurfGelcoat);
+			for (int32 Sd = -1; Sd <= 1; Sd += 2) Tube(FVector(XT + .05, Sd * WT * .55, -.18), FVector(XT - .03, Sd * WT * .55, -.18), .12, Dark, SurfRubber);
+		}
+
+		// ---- the flybridge: deck on the salon roof, overhanging the mezzanine; coaming with a flared visor forward
+		const double FA = SalA - 1.25, FF = SalF - 2.0;
+		auto FlyW = [&](double X) { return FMath::Min(SalW(FMath::Max(X, SalA)) + .2, HB(X) - .1); };
+		{
+			Box(FVector((FA + SalA) * .5, 0, FlyZ - .12), FVector(SalA - FA + .1, FlyW(SalA) * 2, .24), White, .08, SurfGelcoat);   // the overhang
+			// the coaming: a rounded rim round the sides and the front, and the visor lip below it over the salon glass
+			TArray<FVector> Rim, Lip;
+			const int32 N = 22;
+			for (int32 k = 0; k <= N; k++)
+			{
+				const double T = double(k) / N;
+				// side, front arc, other side
+				FVector P;
+				if (T < .35) { const double X = FMath::Lerp(FA + .2, FF - .9, T / .35); P = FVector(X, -FlyW(X), 0); }
+				else if (T > .65) { const double X = FMath::Lerp(FF - .9, FA + .2, (T - .65) / .35); P = FVector(X, FlyW(X), 0); }
+				else { const double A = (T - .35) / .3 * PI; const double W = FlyW(FF - .9); P = FVector(FF - .9 + FMath::Sin(A) * .9, -FMath::Cos(A) * W, 0); }
+				Rim.Add(FVector(P.X, P.Y, FlyZ + .62));
+				Lip.Add(FVector(P.X + (T > .3 && T < .7 ? .25 : 0), P.Y * 1.04, FlyZ - .02));
+			}
+			M.Surf = SurfGelcoat;
+			M.AddSweep(Rim, .09, .09, FVector(0, 0, 1), White, 10);
+			M.AddSweep(Lip, .16, .07, FVector(0, 0, 1), White, 10);
+			for (int32 k = 0; k < Rim.Num() - 1; k++)
+			{
+				const FVector A = Rim[k], B = Rim[k + 1];
+				const FVector A0(A.X, A.Y, FlyZ - .02), B0(B.X, B.Y, FlyZ - .02);
+				const FVector Nn = FVector::CrossProduct(B - A, FVector::UpVector).GetSafeNormal();
+				M.AddQuad(A0, B0, B, A, Off, -Nn);
+				M.AddQuad(B0, A0, A, B, Off, Nn);
+			}
+			M.Surf = Keep;
+			// the helm pod: white with a teak top, the wheel, two screens; bench seating forward of it
+			const double HX = D.TC + 1.55;
+			Box(FVector(HX + .25, 0, FlyZ + .45), FVector(.7, 1.8, .9), White, .1, SurfGelcoat);
+			Box(FVector(HX + .02, 0, FlyZ + .92), FVector(.55, 1.3, .08), Teak, .04, SurfWood);
+			Tube(FVector(HX - .15, -.25, FlyZ + .78), FVector(HX - .2, -.25, FlyZ + 1.02), .03, Steel, SurfSteel);
+			for (int32 k = 0; k < 16; k++)
+			{
+				const double A0 = 2 * PI * k / 16, A1 = 2 * PI * (k + 1) / 16;
+				Tube(FVector(HX - .22, -.25 + FMath::Cos(A0) * .22, FlyZ + 1.02 + FMath::Sin(A0) * .22), FVector(HX - .22, -.25 + FMath::Cos(A1) * .22, FlyZ + 1.02 + FMath::Sin(A1) * .22), .015, Steel, SurfSteel);
+			}
+			Box(FVector(HX + .5, 0, FlyZ + 1.15), FVector(.06, 1.1, .4), Dark, .02, SurfGlass);
+			Box(FVector(FF - .55, 0, FlyZ + .25), FVector(.7, FlyW(FF - .6) * 1.6, .5), Cush, .1, SurfHexQuilt);
+			for (int32 Sd = -1; Sd <= 1; Sd += 2)
+				BuildTeakHelmChair(M, FVector(HX - .95, Sd * .42, FlyZ), FVector::XAxisVector, Teak, Cush, Steel);
+			// the rod rack and rail along the aft edge
+			const double RW = FlyW(FA) - .05;
+			Tube(FVector(FA + .15, -RW, FlyZ + .9), FVector(FA + .15, RW, FlyZ + .9), .025, Steel, SurfSteel);
+			for (int32 k = -3; k <= 3; k++) Tube(FVector(FA + .15, k * RW / 3.5, FlyZ + .75), FVector(FA + .12, k * RW / 3.5, FlyZ + 1.0), .035, Steel, SurfSteel);
+		}
+
+		// ---- the hardtop on aluminium legs, the radar and the dome
+		{
+			const double TA = D.TC - D.TopL * .5, TF = D.TC + D.TopL * .5, TW = D.TopW * .5;
+			for (int32 Sd = -1; Sd <= 1; Sd += 2)
+			{
+				Tube(FVector(TA + .2, Sd * (TW - .15), FlyZ), FVector(TA + .3, Sd * (TW - .1), D.TopZ), .045, Steel, SurfSteel);
+				Tube(FVector(TF - .5, Sd * (TW - .25), FlyZ + .6), FVector(TF - .2, Sd * (TW - .1), D.TopZ), .045, Steel, SurfSteel);
+				Tube(FVector(TA + .3, Sd * (TW - .1), FlyZ + 1.2), FVector(TF - .35, Sd * (TW - .18), FlyZ + 1.2), .03, Steel, SurfSteel);
+				Tube(FVector(TA + .25, Sd * (TW - .12), FlyZ + .5), FVector(TF - .45, Sd * (TW - .22), D.TopZ - .1), .025, Steel, SurfSteel);
+			}
+			Box(FVector(D.TC, 0, D.TopZ + .06), FVector(D.TopL, D.TopW, .14), White, .07, SurfGelcoat);
+			// open-array radar on a pedestal, a satellite dome, and the whips
+			Box(FVector(D.TC + .4, 0, D.TopZ + .3), FVector(.35, .35, .32), White, .08, SurfGelcoat);
+			Box(FVector(D.TC + .4, 0, D.TopZ + .52), FVector(.25, 1.9, .14), White, .05, SurfGelcoat);
+			Box(FVector(D.TC - .7, .3, D.TopZ + .45), FVector(.75, .75, .75), White, .37, SurfGelcoat);
+			for (int32 Sd = -1; Sd <= 1; Sd += 2) Tube(FVector(D.TC - 1.2, Sd * .8, D.TopZ + .1), FVector(D.TC - 1.25, Sd * .8, D.TopZ + 3.2), .02, White, SurfGelcoat);
+		}
+
+		// ---- the ladder up from the cockpit, starboard side of the salon door
+		{
+			const double Y = SalW(SalA) - .2;
+			const FVector B0(SalA - .9, Y, DeckZ), T0(SalA - .05, Y, FlyZ + .6);
+			for (int32 Sd = -1; Sd <= 1; Sd += 2) Tube(B0 + FVector(0, Sd * .22, 0), T0 + FVector(0, Sd * .22, 0), .022, Steel, SurfSteel);
+			for (int32 k = 1; k <= 6; k++)
+			{
+				const FVector P = FMath::Lerp(B0, T0, k / 7.0);
+				Box(P, FVector(.08, .42, .03), TeakLt, .01, SurfWood);
+			}
+		}
+		if (bRiggers) BuildRiggers(M, S, 0);
+		M.Surf = Keep;
+	}
+
 	void BuildBoat(FKeysMesh& M, const KeysData::FBoatSpec& S, bool bRiggers)
 	{
 		const FDims Dm = Dims(S);
@@ -352,7 +583,7 @@ namespace KeysMesh
 		// the two boats dressed after their owners' photos: the Freeman (light grey, black hardtop legs, teak helm
 		// chairs, quilted bow lounge) and the Midnight Express (champagne metallic, six outboards, tan honeycomb leather,
 		// teak-look decking, black arched hardtop supports)
-		const bool bFree = S.Id == TEXT("freeman"), bMid = S.Id == TEXT("midnight");
+		const bool bFree = S.Id == TEXT("freeman"), bMid = S.Id == TEXT("midnight"), bVik = Dm.bVik;
 		const uint8 UphK = bMid ? SurfHexQuilt : SurfVinyl;
 		const FLinearColor Teak = Srgb(.42, .22, .1), FrameBlack = Srgb(.025, .026, .03), Tan = Srgb(.78, .66, .48);
 		// the hull itself: the web game's loft (KeysHull.cpp), a cat's sponsons and bridge deck on the Freeman.
@@ -410,6 +641,8 @@ namespace KeysMesh
 			return Out;
 		};
 		const double CZ = SoleAt(S, MidX);
+		if (!bVik)
+		{
 		if (bMid)
 		{
 			// the long tapered console: a smooth loft from the helm forward, its flat top falling toward the bow seat,
@@ -1053,6 +1286,8 @@ namespace KeysMesh
 			if (bRiggers) BuildRiggers(M, S, 0);
 		}
 
+		}
+		if (bVik) BuildVikingTop(M, S, bRiggers);
 		// the fighting chair's pedestal and swivel base (the chair turns, so AKeysExtras draws it)
 		if (HasFightChair(S))
 		{
@@ -1062,6 +1297,7 @@ namespace KeysMesh
 		// outboards (KeysBoatParts.cpp): on the transom, or set back on a bracket with its own swim platform. Real
 		// outboard proportions: the cavitation plate a little above the keel line, the clamp 0.76 m (a 30-inch shaft)
 		// over it, about a metre of cowl above that.
+		if (!bVik)
 		{
 			const double XT = SternX(S), NE = FMath::Max(1, S.Engines);
 			const double ESp = FMath::Min(.76, S.Beam * (S.bBracket ? 1.08 : .9) / NE);
