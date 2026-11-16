@@ -336,6 +336,7 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatMesh;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> LineMesh;
+	UPROPERTY() TArray<TObjectPtr<class UTextRenderComponent>> TransomName;   // the Viking's name on her teak transom
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FishMesh;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> RiggerMesh;   // the tower boats' swinging outriggers
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> TrollMesh;    // the trolling spread: lines, lures, teasers

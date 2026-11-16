@@ -298,6 +298,7 @@ void AKeysHUD::DrawGame()
 	if (P->bLoginOpen) DrawLogin(P);
 	DrawPanels(P);
 	DrawServices(P);
+	DrawCharter(P);
 	Contacts.Reset();
 }
 

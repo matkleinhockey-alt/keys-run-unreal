@@ -3,6 +3,7 @@
 // behind the door: neon, sweeping beams, a sparkler or a spotlight) and the scratch-off card.
 #include "KeysHUD.h"
 #include "KeysBoatPawn.h"
+#include "KeysCharter.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
@@ -120,4 +121,48 @@ void AKeysHUD::DrawServices(AKeysBoatPawn* P)
 		Yy += Wrapped(C.Lines[i], Cx - 420 * U, Yy, 840 * U, 1.05f, FLinearColor(1, 1, 1, La)) + 18 * U;
 	}
 	Text(TEXT("Space to go in"), Cx, H - 70 * U, .85f, FLinearColor(Neon.R, Neon.G, Neon.B, In * .8f), nullptr, true);
+}
+
+// Charter Captain (placeholder UI): the marina's charter board with three requests, and the active charter's panel
+// (who, what they want, progress and the clock)
+void AKeysHUD::DrawCharter(AKeysBoatPawn* P)
+{
+	const AKeysCharter* Ch = AKeysCharter::Get(this);
+	if (!Ch || !P || P->IsDiving() || P->IsAshore()) return;
+	const FLinearColor Panel(.03f, .06f, .09f, .78f), Gold(1.f, .82f, .35f), White(.95f, .97f, 1.f);
+	const float W = Canvas->SizeX;
+	if (Ch->IsBoardShown() && Ch->NumOffers())
+	{
+		const float BW = 520 * U, RowH = 92 * U, BH = 64 * U + RowH * Ch->NumOffers() + 30 * U, X = W - BW - 24 * U, Y = 285 * U;
+		DrawRect(Panel, X, Y, BW, BH);
+		DrawRect(Gold, X, Y, BW, 4 * U);
+		Text(FString::Printf(TEXT("CHARTER BOARD - %s"), *Ch->MarinaName()), X + 16 * U, Y + 14 * U, 1.05f, Gold);
+		for (int32 i = 0; i < Ch->NumOffers(); i++)
+		{
+			const FCharterRequest* R = Ch->Offer(i);
+			if (!R) continue;
+			const float RY = Y + 52 * U + i * RowH;
+			DrawRect(FLinearColor(1, 1, 1, .05f), X + 10 * U, RY, BW - 20 * U, RowH - 8 * U);
+			Text(FString::Printf(TEXT("F%d  %s"), i + 1, *R->ClientName), X + 20 * U, RY + 6 * U, .9f, White);
+			Text(FString::Printf(TEXT("$%d"), R->BasePay), X + BW - 90 * U, RY + 6 * U, .9f, Gold);
+			Text(R->RequestText, X + 20 * U, RY + 30 * U, .72f, FLinearColor(.8f, .86f, .92f));
+			Text(FString::Printf(TEXT("%s  -  %.0f min"), *AKeysCharter::TargetLine(*R), R->TimeLimitMinutes), X + 20 * U, RY + 54 * U, .72f, FLinearColor(.6f, .85f, 1.f));
+		}
+		Text(TEXT("F1 / F2 / F3 to take a charter"), X + 16 * U, Y + BH - 26 * U, .72f, FLinearColor(.7f, .75f, .8f));
+	}
+	if (Ch->HasActiveCharter())
+	{
+		const FCharterRequest& R = Ch->GetActiveCharter();
+		const float BW = 460 * U, BH = 128 * U, X = W - BW - 24 * U, Y = 285 * U;
+		DrawRect(Panel, X, Y, BW, BH);
+		DrawRect(FLinearColor(.2f, .75f, .55f), X, Y, 4 * U, BH);
+		Text(FString::Printf(TEXT("CHARTER - %s"), *R.ClientName), X + 16 * U, Y + 10 * U, .9f, Gold);
+		Text(R.RequestText, X + 16 * U, Y + 36 * U, .72f, White);
+		Text(AKeysCharter::TargetLine(R), X + 16 * U, Y + 58 * U, .72f, FLinearColor(.6f, .85f, 1.f));
+		Text(FString::Printf(TEXT("%d / %d"), Ch->GetProgress(), R.RequiredCount), X + 16 * U, Y + 84 * U, 1.2f, White);
+		const int32 Sec = FMath::CeilToInt32(Ch->SecondsLeft());
+		const FString Clock = Ch->IsTimerRunning() ? FString::Printf(TEXT("%d:%02d"), Sec / 60, Sec % 60) : FString::Printf(TEXT("%d:%02d - starts when you leave the marina"), Sec / 60, Sec % 60);
+		Text(Clock, X + 120 * U, Y + 88 * U, .85f, Ch->IsTimerRunning() && Sec < 600 ? FLinearColor(1.f, .45f, .35f) : FLinearColor(.85f, .9f, .95f));
+		Text(TEXT("F4 cancel"), X + BW - 90 * U, Y + BH - 22 * U, .6f, FLinearColor(.6f, .65f, .7f));
+	}
 }

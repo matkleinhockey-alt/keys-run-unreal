@@ -1,5 +1,7 @@
 #include "KeysBoatPawn.h"
+#include "Components/TextRenderComponent.h"
 #include "KeysGarden.h"
+#include "KeysCharter.h"
 #include "KeysHUD.h"
 #include "KeysWrecks.h"
 #include "KeysOcean.h"
@@ -185,6 +187,35 @@ void AKeysBoatPawn::Rebuild()
 	M.Commit(BoatMesh, 0, AKeysWorld::VertexColorMaterial());
 	if (Clear.T.Num()) Clear.Commit(BoatMesh, 1, GlassMat.Get());
 	else BoatMesh->ClearMeshSection(1);
+	// the Viking's name across her varnished teak transom, her home port under it
+	{
+		const KeysData::FBoatSpec& BS = Spec();
+		const bool bName = BS.Id == TEXT("viking");
+		if (bName && TransomName.Num() == 0)
+			for (int32 k = 0; k < 2; k++)
+			{
+				UTextRenderComponent* Tx = NewObject<UTextRenderComponent>(this);
+				Tx->SetupAttachment(BoatMesh);
+				Tx->RegisterComponent();
+				Tx->SetHorizontalAlignment(EHTA_Center);
+				Tx->SetVerticalAlignment(EVRTA_TextCenter);
+				Tx->SetCastShadow(false);
+				TransomName.Add(Tx);
+			}
+		for (int32 k = 0; k < TransomName.Num(); k++)
+		{
+			UTextRenderComponent* Tx = TransomName[k];
+			if (!Tx) continue;
+			Tx->SetVisibility(bName);
+			if (!bName) continue;
+			const double XT = KeysMesh::SternX(BS) - .03, ZTop = KeysMesh::SheerAt(BS, XT + .1) - .08, ZBot = -.25;
+			const double Zc = k == 0 ? FMath::Lerp(ZBot, ZTop, .62) : FMath::Lerp(ZBot, ZTop, .3);
+			Tx->SetText(FText::FromString(k == 0 ? TEXT("BADABING") : TEXT("MARATHON, FL")));
+			Tx->SetTextRenderColor(k == 0 ? FColor(0xf6, 0xf1, 0xe2) : FColor(0xdd, 0xe6, 0xee));
+			Tx->SetWorldSize(k == 0 ? 52.f : 18.f);
+			Tx->SetRelativeLocationAndRotation(FVector(XT * 100, 0, Zc * 100), FRotator(0, 180, 0));
+		}
+	}
 	RigBuilt = -1;   // the outriggers are their own mesh, so they can swing (KeysTroll.cpp)
 }
 
@@ -631,6 +662,10 @@ void AKeysBoatPawn::RunTestScript(double T)
 				for (const FKeysWeedline& Wd : Lf->AllWeeds()) if (!Best || Hyp(Wd.X - X, Wd.Z - Z) < Hyp(Best->X - X, Best->Z - Z)) Best = &Wd;
 				if (Best) { X = Best->X - FMath::Sin(Best->Ang) * 14; Z = Best->Z + FMath::Cos(Best->Ang) * 14; H = Best->Ang; Speed = Thr = 0; bCamInit = false; }
 			}
+		}
+		else if (Cmd.StartsWith(TEXT("charter=")))
+		{
+			if (AKeysCharter* Ch = AKeysCharter::Get(this)) Ch->DebugCmd(Cmd.Mid(8));
 		}
 		else if (Cmd == TEXT("goto=garden"))
 		{
