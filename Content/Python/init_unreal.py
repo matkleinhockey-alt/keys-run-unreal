@@ -1260,6 +1260,26 @@ vis += Bonus;
 float turb = smoothstep(vis * 0.3, vis, d);
 turb *= turb;
 below = lerp(below, insc * amb, turb);
+// looking up at the surface (or through it at the sky): from under water you only see out through Snell's window, a
+// bright circle overhead (rays steeper than ~41 degrees); everything shallower is the surface mirroring the deep water
+// below. Either way it's seen through all the water between you and the surface, so from deep down it fades to blue.
+{
+  float3 vd0 = normalize(WP - Cam);
+  if (WP.z / 100.0 > -0.6 && vd0.z > 0.0 && camDepth > 0.05)
+  {
+    float dSurf = camDepth / max(vd0.z, 0.02);
+    float3 trS = exp(-K * (dSurf + camDepth));
+    // the window glows a bright, clear blue with the sky and the sun's glare coming through it softly (not a flat
+    // pale sheet with a hard edge), dimming the deeper you are
+    float3 glow = float3(0.30, 0.78, 0.92) * Haze / max(Ex, 1e-6) * 0.55 * amb;
+    float3 skyc = lerp(glow, col * trS, 0.3) + glow * trS * 0.6;
+    float win = smoothstep(0.55, 0.80, vd0.z);
+    float3 tir = insc * amb * 0.8;
+    float3 surf = lerp(tir, skyc, win);
+    surf = lerp(surf, insc * amb, smoothstep(vis * 0.6, vis * 1.3, dSurf));
+    below = surf;
+  }
+}
 // light shafts: march the view ray through the first 20 m, sampling a caustic-like pattern projected down
 // the refracted sun direction from the surface; brighter near the surface, under the sun's side of the sky
 {
