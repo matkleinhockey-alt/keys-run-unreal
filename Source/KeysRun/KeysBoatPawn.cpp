@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "KeysGarden.h"
 #include "KeysHUD.h"
 #include "KeysWrecks.h"
 #include "KeysOcean.h"
@@ -630,6 +631,11 @@ void AKeysBoatPawn::RunTestScript(double T)
 				for (const FKeysWeedline& Wd : Lf->AllWeeds()) if (!Best || Hyp(Wd.X - X, Wd.Z - Z) < Hyp(Best->X - X, Best->Z - Z)) Best = &Wd;
 				if (Best) { X = Best->X - FMath::Sin(Best->Ang) * 14; Z = Best->Z + FMath::Cos(Best->Ang) * 14; H = Best->Ang; Speed = Thr = 0; bCamInit = false; }
 			}
+		}
+		else if (Cmd == TEXT("goto=garden"))
+		{
+			// the Abyssal Garden dive site: stop the boat over it
+			if (const AKeysGarden* G = AKeysGarden::Get(this)) { X = G->Center().X + 18; Z = G->Center().Y - 6; Speed = Thr = 0; bCamInit = false; }
 		}
 		else if (Cmd.StartsWith(TEXT("goto=")))
 		{

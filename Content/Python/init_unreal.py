@@ -1221,21 +1221,17 @@ float d = Dist / 100.0;
 // the web game's path: object-to-eye plus the camera's own depth (the light coming down to it). The pixel's own depth
 // is folded in at half weight, so a floor far below a diver near the surface still loses its reds.
 float pixDepth = clamp(-WP.z / 100.0, 0.0, 60.0);
-const float3 K = float3(0.22, 0.095, 0.045) * 0.38;
+const float3 K = float3(0.22, 0.095, 0.045) * 0.26;
 float3 tr = exp(-K * (d + max(camDepth, 0.5 * (camDepth + pixDepth))));
 // the blue glow scattered down from above fades slowly in clear Keys water: still a dim blue at 45 m, never black
-float amb = max(exp(-camDepth / 26.0), 0.09);
+float amb = max(exp(-camDepth / 48.0), 0.3);
 float3 insc = float3(0.045, 0.34, 0.47) * Haze / max(Ex, 1e-6);
 float3 below = col * tr + insc * amb * (1.0 - tr);
-float vis = 10.0;
-if (camDepth <= 0.0) vis = 30.0;
-else if (camDepth <= 5.0) vis = lerp(30.0, 25.0, camDepth / 5.0);
-else if (camDepth <= 10.0) vis = lerp(25.0, 20.0, (camDepth - 5.0) / 5.0);
-else if (camDepth <= 15.0) vis = lerp(20.0, 15.0, (camDepth - 10.0) / 5.0);
-else if (camDepth <= 20.0) vis = lerp(15.0, 13.0, (camDepth - 15.0) / 5.0);
-else vis = 13.0;
+// clear Keys water: you see a long way, losing it gradually with depth (the owner found the old 20 m at 10 m too short)
+float vis = 48.0 - 22.0 * smoothstep(0.0, 40.0, camDepth);
 vis += Bonus;
-float turb = smoothstep(vis * 0.6, vis, d);
+float turb = smoothstep(vis * 0.3, vis, d);
+turb *= turb;
 below = lerp(below, insc * amb, turb);
 // light shafts: march the view ray through the first 20 m, sampling a caustic-like pattern projected down
 // the refracted sun direction from the surface; brighter near the surface, under the sun's side of the sky

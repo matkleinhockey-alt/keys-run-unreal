@@ -21,6 +21,7 @@
 #include "KeysSeafloor.h"
 #include "KeysDiver.h"
 #include "KeysReef.h"
+#include "KeysGarden.h"
 #include "KeysTown.h"
 #include "KeysWalker.h"
 #include "KeysLandmarks.h"
@@ -60,6 +61,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	SpawnOnce<AKeysSeafloor>(W);
 	SpawnOnce<AKeysDiver>(W);
 	SpawnOnce<AKeysReef>(W);
+	SpawnOnce<AKeysGarden>(W);
 	SpawnOnce<AKeysTown>(W);
 	SpawnOnce<AKeysWalker>(W);
 	SpawnOnce<AKeysLandmarks>(W);

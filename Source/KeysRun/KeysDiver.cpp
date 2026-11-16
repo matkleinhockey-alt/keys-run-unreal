@@ -349,7 +349,7 @@ void AKeysDiver::BeginPlay()
 		Post->Settings.AddBlendable(PostMID, 1.f);
 		// under water the scene is mostly dim haze, and auto exposure would blow out the lit sand and coral up close
 		Post->Settings.bOverride_AutoExposureBias = true;
-		Post->Settings.AutoExposureBias = -.35f;
+		Post->Settings.AutoExposureBias = -.1f;
 	}
 	if (UMaterialInterface* BM = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Bubble.M_KR_Bubble")))
 	{
