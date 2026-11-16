@@ -69,6 +69,7 @@ bool AKeysCharter::TakeOffer(int32 I)
 {
 	const FCharterRequest* R = Offer(I);
 	if (!R || bHasActive) return false;
+	if (const AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0)); P && P->bFreeFish) return false;   // no charters in Free Fish
 	ActiveCharter = *R;
 	ActiveRow = Offers[I];
 	bHasActive = true;

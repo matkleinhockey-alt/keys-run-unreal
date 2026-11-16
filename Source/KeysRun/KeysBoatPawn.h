@@ -229,6 +229,7 @@ public:
 	// "Run to" (web ui/runto.ts): the marinas' approaches, Sombrero Reef, the humps and the rigs; the Esc menu picks one
 	struct FRunDest { FString Name, Note; double X, Z; };
 	void RunDests(TArray<FRunDest>& Out, bool bOnlyFound = false) const;
+	bool TeleportSpot(const FRunDest& D, double& OX, double& OZ) const;
 	int32 RunSel = 0;
 	bool bGearOpen = false;   // the gear screen (Tab; web ui/gear.ts)
 	double LineBreakNow() const { return LineBreakAt(); }
@@ -279,7 +280,8 @@ public:
 	// Free Fish mode: no charter, no clock, catches logged but unpaid. Fuel is unlimited unless the setting says otherwise.
 	bool bFreeFish = true, bUnlimitedFuel = true, bFuelOutMsg = false;
 	// the rod answering the fish: kicks on head shakes (decaying), and leaning toward where it is
-	double RodKick = 0, VmYawPull = 0, VmLunge = 0;
+	double RodKick = 0, VmYawPull = 0, VmLunge = 0, ChairIntroT = 0;
+	bool bWasInChair = false;
 	double Fuel = 1, DiscoverT = 0;
 	TArray<FString> SpotsFound;        // teleport destinations you've been within 200 m of
 	void UpdateFuel(double Dt);

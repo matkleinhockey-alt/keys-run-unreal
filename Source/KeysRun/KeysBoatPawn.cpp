@@ -395,7 +395,10 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 		if (AKeysEvents* Ev = AKeysEvents::Get(this))
 		{
 			Menu = EMenu::None;
-			if (Id == TEXT("race")) { StopTroll(true); Ev->ToggleRace(); }
+			const bool bRaceOn = Ev->RacePhase() == AKeysEvents::ERace::Countdown || Ev->RacePhase() == AKeysEvents::ERace::Racing;
+			const bool bTourOn = Ev->InTourney() && Ev->TourneyPhase() != AKeysEvents::ETourney::Over;
+			if (bFreeFish && !(Id == TEXT("race") ? bRaceOn : bTourOn)) ShowToast(TEXT("No timed events in Free Fish."));
+			else if (Id == TEXT("race")) { StopTroll(true); Ev->ToggleRace(); }
 			else Ev->ToggleTourney();
 		}
 	}
@@ -675,6 +678,46 @@ void AKeysBoatPawn::RunTestScript(double T)
 				for (const FKeysWeedline& Wd : Lf->AllWeeds()) if (!Best || Hyp(Wd.X - X, Wd.Z - Z) < Hyp(Best->X - X, Best->Z - Z)) Best = &Wd;
 				if (Best) { X = Best->X - FMath::Sin(Best->Ang) * 14; Z = Best->Z + FMath::Cos(Best->Ang) * 14; H = Best->Ang; Speed = Thr = 0; bCamInit = false; }
 			}
+		}
+		else if (Cmd == TEXT("weigh")) WeighIn();
+		else if (Cmd == TEXT("ffstate"))
+		{
+			const AKeysCharter* Ch = AKeysCharter::Get(this);
+			const AKeysEvents* Ev = AKeysEvents::Get(this);
+			const double* Best = nullptr;
+			UE_LOG(LogTemp, Log, TEXT("KRFree mode %s cash %lld count %d boat %s charterBoard %d charterActive %d timer %d tourney %d racing %d fuel %.2f unlimited %d"),
+				bFreeFish ? TEXT("FreeFish") : TEXT("Charter"), Cash, Count, *Spec().Id, Ch && Ch->IsBoardShown() ? 1 : 0, Ch && Ch->HasActiveCharter() ? 1 : 0,
+				Ch && Ch->IsTimerRunning() ? 1 : 0, Ev && Ev->InTourney() ? 1 : 0, Ev && Ev->IsRacing() ? 1 : 0, Fuel, bUnlimitedFuel ? 1 : 0);
+			if (Save) for (const TPair<FString, double>& B : Save->SpeciesBest) UE_LOG(LogTemp, Log, TEXT("KRFree best %s %.1f lb"), *B.Key, B.Value);
+			(void)Best;
+		}
+		else if (Cmd == TEXT("spots"))
+		{
+			TArray<FRunDest> All, Found;
+			RunDests(All); RunDests(Found, true);
+			UE_LOG(LogTemp, Log, TEXT("KRSpots %d of %d discovered"), Found.Num(), All.Num());
+			for (const FRunDest& D : Found) UE_LOG(LogTemp, Log, TEXT("KRSpots found %s (%s)"), *D.Name, *D.Note);
+		}
+		else if (Cmd == TEXT("tpcheck"))
+		{
+			// every destination's landing spot: water depth, shore distance, nearest rig
+			TArray<FRunDest> All;
+			RunDests(All);
+			TArray<FVector2D> Rigs;
+			if (const AKeysLife* L = AKeysLife::Get(this)) { TArray<FKeysMarker> Mk; L->GetMarkers(Mk); for (const FKeysMarker& M : Mk) if (M.Kind == 0) Rigs.Add(FVector2D(M.X, M.Z)); }
+			int32 Bad = 0;
+			for (const FRunDest& D : All)
+			{
+				double TX, TZ;
+				const bool bOk = TeleportSpot(D, TX, TZ);
+				double RigD = 1e9;
+				for (const FVector2D& R : Rigs) RigD = FMath::Min(RigD, FVector2D::Distance(R, FVector2D(TX, TZ)));
+				const double Dep = DepthAt(TX, TZ), Sh = ShoreInfo(TX, TZ).D;
+				const bool bGood = bOk && Dep >= Spec().Draft + .6 && Sh > 6 && RigD > 100;
+				Bad += bGood ? 0 : 1;
+				UE_LOG(LogTemp, Log, TEXT("KRTp %s %-32s (%s) -> %.0f,%.0f depth %.1f m shore %.0f m rig %.0f m moved %.0f m"), bGood ? TEXT("OK ") : TEXT("BAD"), *D.Name, *D.Note, TX, TZ, Dep, Sh, RigD, FMath::Sqrt(FMath::Square(TX - D.X) + FMath::Square(TZ - D.Z)));
+			}
+			UE_LOG(LogTemp, Log, TEXT("KRTp checked %d destinations, %d bad"), All.Num(), Bad);
 		}
 		else if (Cmd.StartsWith(TEXT("charter=")))
 		{
@@ -1426,6 +1469,40 @@ void AKeysBoatPawn::PickBestOwnedBoat()
 	if (Best >= 0 && Best != BoatIndex) { BoatIndex = PickIndex = Best; Rebuild(); }
 }
 
+// Where a teleport puts the boat: clear water near the spot (deep enough for this hull, off the shore, clear of the
+// marina docks and bridge piers: AKeysTraffic::SpotClear) and well clear of every oil rig's legs and platform.
+bool AKeysBoatPawn::TeleportSpot(const FRunDest& D, double& OX, double& OZ) const
+{
+	TArray<FVector2D> Rigs;
+	if (const AKeysLife* L = AKeysLife::Get(this))
+	{
+		TArray<FKeysMarker> Mk;
+		L->GetMarkers(Mk);
+		for (const FKeysMarker& M : Mk) if (M.Kind == 0) Rigs.Add(FVector2D(M.X, M.Z));
+	}
+	constexpr double RigClear = 110;   // the biggest platform's half-diagonal plus the boat and a margin
+	auto NearRig = [&](double PX, double PZ) { for (const FVector2D& R : Rigs) if (FVector2D::Distance(R, FVector2D(PX, PZ)) < RigClear) return true; return false; };
+	for (int32 Try = 0; Try < 6; Try++)
+	{
+		double TX = D.X, TZ = D.Z;
+		if (Try > 0) { const double A = Try * 1.05; TX += FMath::Cos(A) * 60 * Try; TZ += FMath::Sin(A) * 60 * Try; }
+		if (!AKeysTraffic::FindClearSpot(TX, TZ, Spec())) continue;
+		if (NearRig(TX, TZ))
+		{
+			// push straight out from the rig, then find clear water again
+			for (const FVector2D& R : Rigs)
+			{
+				const FVector2D V(TX - R.X, TZ - R.Y);
+				if (V.Size() < RigClear) { const FVector2D Dir = V.Size() > 1 ? V.GetSafeNormal() : FVector2D(1, 0); TX = R.X + Dir.X * (RigClear + 20); TZ = R.Y + Dir.Y * (RigClear + 20); }
+			}
+			if (!AKeysTraffic::FindClearSpot(TX, TZ, Spec()) || NearRig(TX, TZ)) continue;
+		}
+		OX = TX; OZ = TZ;
+		return true;
+	}
+	return false;
+}
+
 void AKeysBoatPawn::RunTo(int32 I)
 {
 	TArray<FRunDest> Ds;
@@ -1437,9 +1514,10 @@ void AKeysBoatPawn::RunTo(int32 I)
 	if (IsBusy(Why) || IsLineOut()) { if (Why.IsEmpty()) Why = TEXT("Reel in first."); }
 	else if (Ev && (Ev->IsRacing() || (Ev->InTourney() && Ev->TourneyPhase() != AKeysEvents::ETourney::Over))) Why = TEXT("Not in the middle of a race or a tournament.");
 	if (!Why.IsEmpty()) { Menu = EMenu::None; ShowToast(Why); return; }
+	double NX, NZ;
+	if (!TeleportSpot(Ds[I], NX, NZ)) { Menu = EMenu::None; ShowToast(FString::Printf(TEXT("No clear water to put the boat at %s."), *Ds[I].Name)); return; }
 	StopTroll(true);
-	X = Ds[I].X; Z = Ds[I].Z;
-	AKeysTraffic::FindClearSpot(X, Z, Spec());
+	X = NX; Z = NZ;
 	Speed = Thr = DVX = DVZ = 0;
 	bCamInit = false;
 	if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
@@ -1492,8 +1570,9 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		const FVector Base = KeysMesh::FightChairBase(Spec());
 		const FQuat Q(FVector::UpVector, ChairYaw);
 		const FVector FishW = ToUE(FX, 0, FZ);
-		// first person (V): the seated angler's own view down the rod (UpdateCamera); otherwise the cinematic below
-		if (bFpPref) return false;
+		// first person (V): the seated angler's own view down the rod (UpdateCamera) once the opening shot is done;
+		// otherwise the cinematic below
+		if (bFpPref && ChairIntroT <= 0) return false;
 		// the chair fight from outside the boat, low off the stern quarter: side-on to the angler, so he, the chair and
 		// the bent rod fill the shot with the hull and the wake behind, and nothing (hardtop, tower, riggers) between.
 		// The lens sits on the side away from the fish, so the rod and line run off into the frame, holding that side
@@ -1778,7 +1857,13 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	}
 	if (Hit(EKeys::R) && (FState == EKeysFish::Waiting || FState == EKeysFish::Casting || FState == EKeysFish::Nibble)) ReelIn(TEXT("Line reeled in."));
 	else if (Hit(EKeys::R) && FState == EKeysFish::Idle && !bCharging)
-		if (AKeysEvents* Ev = AKeysEvents::Get(this)) { StopTroll(true); Ev->ToggleRace(); }   // the Marathon race (web game/race)
+		if (AKeysEvents* Ev = AKeysEvents::Get(this))
+		{
+			// Free Fish has no clocks: the race is a Charter Captain thing (but one already running can still be abandoned)
+			if (bFreeFish && Ev->RacePhase() != AKeysEvents::ERace::Countdown && Ev->RacePhase() != AKeysEvents::ERace::Racing)
+				ShowToast(TEXT("No races in Free Fish - switch to Charter Captain on the main menu for timed events."));
+			else { StopTroll(true); Ev->ToggleRace(); }   // the Marathon race (web game/race)
+		}
 	if (Hit(EKeys::T) && FState == EKeysFish::Caught) { if (T - CaughtT > .7) TagAndRelease(); }
 	else if (Hit(EKeys::T))
 	{
@@ -2187,7 +2272,15 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 {
 	Stage.bOn = false;   // set again below while a landing is being shot
 	if (IsDiving() || IsAshore()) { bExtCam = false; return; }   // the diver / walker actor places the camera (ApplyDiveCamera)
-	if (InChair() && !bFpPref) bFpOn = false;   // the chair cinematic: the angler is in the shot, not your own rod and hands
+	// a trolled fish on: a few seconds of the chair shot (your buddy strapping in, rod bent) before first person takes over
+	{
+		const bool bChair = InChair();
+		if (bChair && !bWasInChair) ChairIntroT = 4.0;
+		bWasInChair = bChair;
+		if (bChair && ChairIntroT > 0 && bJumping) ChairIntroT = FMath::Max(ChairIntroT, 2.5);   // an opening jump: stay on the chair shot a little after it
+		ChairIntroT = FMath::Max(0.0, ChairIntroT - Dt);
+	}
+	if (InChair() && (!bFpPref || ChairIntroT > 0)) bFpOn = false;   // the chair cinematic: the angler is in the shot, not your own rod and hands
 	{
 		FVector EP; FRotator ER; float EF;
 		bExtCam = ExternalCamera(EP, ER, EF);
@@ -2196,7 +2289,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	const FBoatSpec& S = Spec();
 
 	// first person while fishing (V), and the helm view (1) while driving
-	const bool bWantFp = bRunning && bFpPref && IsFishingActive() && FState != EKeysFish::Caught;   // the landing has its own shot
+	const bool bWantFp = bRunning && bFpPref && IsFishingActive() && FState != EKeysFish::Caught && !(InChair() && ChairIntroT > 0);   // the landing has its own shot
 	if (bWantFp != bFpOn)
 	{
 		bFpOn = bWantFp;
@@ -2817,7 +2910,9 @@ void AKeysBoatPawn::Land()
 	{ bSlam1 = true; Score += 1000; Bonus = TEXT("Inshore grand slam - +1,000"); }
 	if (!bSlam2 && CaughtKeys.Contains(TEXT("sailfish")) && CaughtKeys.Contains(TEXT("mahi")) && CaughtKeys.Contains(TEXT("wahoo")))
 	{ bSlam2 = true; Score += 1500; Bonus += (Bonus.IsEmpty() ? TEXT("") : TEXT(" - ")) + FString(TEXT("Blue water slam - +1,500")); }
+	// every catch goes on the leaderboard / species records, in Free Fish too (only the money is off there)
 	if (Save) { Save->Record(Key, Weight, Spec().Brand + TEXT(" ") + Spec().Name); Save->RecordScore(Score); }   // lbRecord
+	UE_LOG(LogTemp, Log, TEXT("KRCatch logged %s %.1f lb (mode %s, written to the save: %s)"), *Key, Weight, bFreeFish ? TEXT("FreeFish") : TEXT("Charter"), Save ? TEXT("yes") : TEXT("no - test run"));
 	if (AKeysOnline* O = AKeysOnline::Get(this)) O->ReportCatch(Key, Weight, Spec().Brand + TEXT(" ") + Spec().Name, Score);
 
 	const double SizeT = (Weight - S.Min) / (S.Max - S.Min);
@@ -2907,6 +3002,7 @@ void AKeysBoatPawn::WeighIn()
 	for (const FKeysCooler& C : Cooler) Sale += C.Weight * .45 * KeysTown::MeatPrice(C.Key);
 	const int64 Paid = bFreeFish ? 0 : FMath::RoundToInt64(Sale);   // Free Fish: logged and scored, but no sale
 	Cash += Paid;
+	UE_LOG(LogTemp, Log, TEXT("KRWeigh %d fish, sale would be $%.0f, paid $%lld (mode %s), cash now %lld"), Cooler.Num(), Sale, Paid, bFreeFish ? TEXT("FreeFish") : TEXT("Charter"), Cash);
 	SaveEconomy();
 	ShowToast(FString::Printf(TEXT("Weighed in %d fish (%d lb) at %s. Top fish: %s, %.1f lb. +%s points%s"), Cooler.Num(), FMath::RoundToInt(Lb), *M->Name, *BigF->Name, BigF->Weight, *Commas(Bonus),
 		Paid > 0 ? *FString::Printf(TEXT(", and the fish house paid $%s for the fillets."), *Commas(Paid)) : TEXT("!")), 6);
@@ -3349,7 +3445,13 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 {
 	// the chair fight's own cameras take the jump cam too (it swings and zooms from where they put the lens)
 	if (IsDiving() || (bExtCam && (!InChair() || bDbgCam))) return;
-	const bool bOn = bJumping && FState == EKeysFish::Fight;
+	// only once the fish is breaking the surface (zooming onto it under water just fills the frame with sea)
+	bool bOn = bJumping && FState == EKeysFish::Fight;
+	if (bOn)
+	{
+		const FVector Fu = FishMesh->GetComponentLocation() / 100.0;
+		bOn = Fu.Z > WaveH(Fu.X, Fu.Y, GetWorld()->GetTimeSeconds(), AmpAt(Fu.X, Fu.Y)) - FishLen * .25;
+	}
 	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : 1.2);
 	// the chair cameras set their own field of view each frame: start the zoom from it and hand it back after
 	if (bExtCam && !bOn && JumpLook < .001) { JumpFov = Camera->FieldOfView; return; }
@@ -3372,8 +3474,9 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 		const FVector F = FishMesh->GetComponentLocation(), C = Camera->GetComponentLocation();
 		const double D = FVector::Dist(F, C) / 100;
 		const double Across = FishLen * 3 + 2.5;   // meters of scene across the frame
-		// in first person the rod and hands are in shot, so don't zoom as hard
-		const float MinFov = IsFirstPerson() ? 50.f : 11.f;
+		// the full jump cam in first person too: the rod drops away out of frame (BuildViewModel's JumpLook), so the
+		// lens can swing right onto the fish and zoom in on it
+		const float MinFov = IsFirstPerson() ? 32.f : 11.f;
 		Want = FMath::Clamp(float(FMath::RadiansToDegrees(2 * FMath::Atan(Across * .5 / FMath::Max(D, 1.0)))), MinFov, 88.f);
 	}
 	JumpFov = FMath::FInterpTo(JumpFov, Want, Dt, bOn ? 4.f : 1.8f);
@@ -3383,7 +3486,7 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 		const FVector F = FishMesh->GetComponentLocation(), C = Camera->GetComponentLocation();
 		const FQuat To = (F - C).Rotation().Quaternion(), From = Camera->GetComponentQuat();
 		const double A = JumpLook * JumpLook * (3 - 2 * JumpLook);
-		Camera->SetWorldRotation(FQuat::Slerp(From, To, float(A * (IsFirstPerson() ? .9 : 1.0))));
+		Camera->SetWorldRotation(FQuat::Slerp(From, To, float(A)));
 	}
 }
 
