@@ -669,6 +669,10 @@ void AKeysBoatPawn::RunTestScript(double T)
 				Speed = Thr = 0; bCamInit = false;
 			}
 		}
+		else if (Cmd.StartsWith(TEXT("pelicans")))
+		{
+			if (AKeysLife* Lf = AKeysLife::Get(this)) Lf->BringPelicans(X, Z, H, Cmd.Len() > 9 ? FCString::Atod(*Cmd.Mid(9)) : 30);
+		}
 		else if (Cmd == TEXT("goweed"))
 		{
 			// beside the nearest sargassum weedline, looking along it

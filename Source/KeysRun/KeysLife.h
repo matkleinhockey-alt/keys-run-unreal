@@ -275,6 +275,8 @@ private:
 	TArray<FKeysRig> Rigs;
 public:
 	const TArray<FKeysWeedline>& AllWeeds() const { return Weeds; }
+	// test harness: a pelican flock gliding across Dist meters ahead of (X, Z) on heading H
+	void BringPelicans(double X, double Z, double H, double Dist);
 	// the I-th rig (not counting the twins), game meters
 	bool RigAt(int32 I, double& OutX, double& OutZ) const { int32 N = 0; for (const FKeysRig& R : Rigs) if (!R.bTwin && N++ == I) { OutX = R.X; OutZ = R.Z; return true; } return false; }
 private:

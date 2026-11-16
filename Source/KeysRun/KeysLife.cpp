@@ -891,7 +891,17 @@ namespace
 		FLifeTpl Body;
 		TArray<FVector> Inner, Outer, Tip;   // right wing panels, bird-local
 		FLinearColor WingC, TipC;           // linear
-		double Ei = .3;
+		double Ei = .3, Span = 1;
+	};
+
+	// a generated seabird (Content/KeysRun/Props/bird_<kind>.krfish, Tools/birdglb.py): bird-local game meters at full
+	// span, wings level, head +z. The wings are bent per frame about the shoulder and the elbow (see EmitBird).
+	struct FLifeBirdModel
+	{
+		TArray<FVector> P, N;
+		TArray<FLinearColor> C;   // linear
+		TArray<int32> T;          // wound for Unreal
+		bool bOk = false;
 	};
 
 	const FLifeBirdTpl& LifeBirdTpl(uint8 Kind)
@@ -941,6 +951,51 @@ namespace
 				B.Tip = {FVector(Eo * .62, .003, Ch * .24 - Sw * .45), FVector(Eo, .003, -Sw), FVector(Eo * .8, .003, -Ch * .32 - Sw * .4), FVector(Eo * .62, .003, -Ch * .3 - Sw * .3)};
 				B.WingC = LLin(LHex(D.WingC));
 				B.TipC = LLin(LHex(D.TipC));
+				B.Span = D.Span;
+			}
+		}
+		return K[FMath::Min<int32>(Kind, 3)];
+	}
+
+	const FLifeBirdModel& LifeBirdModel(uint8 Kind)
+	{
+		static FLifeBirdModel K[4];
+		static bool bLoaded = false;
+		if (!bLoaded)
+		{
+			bLoaded = true;
+			const TCHAR* Keys[4] = {TEXT("gull"), TEXT("tern"), TEXT("frigate"), TEXT("pelican")};
+			for (int32 k = 0; k < 4; k++)
+			{
+				TArray<uint8> B;
+				const FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Props") / (FString(TEXT("bird_")) + Keys[k] + TEXT(".krfish"));
+				if (!FFileHelper::LoadFileToArray(B, *Path) || B.Num() < 16 || FMemory::Memcmp(B.GetData(), "KRF1", 4)) continue;
+				uint32 NV, NT;
+				FMemory::Memcpy(&NV, B.GetData() + 8, 4); FMemory::Memcpy(&NT, B.GetData() + 12, 4);
+				if (16 + int64(NV) * 28 + int64(NT) * 12 > B.Num()) continue;
+				FLifeBirdModel& M = K[k];
+				const double Span = LifeBirdTpl(uint8(k)).Span;
+				for (uint32 i = 0; i < NV; i++)
+				{
+					const uint8* R = B.GetData() + 16 + i * 28;
+					float F[6]; FMemory::Memcpy(F, R, 24);
+					M.P.Add(FVector(F[0], F[1], F[2]) * Span);
+					M.N.Add(FVector(F[3], F[4], F[5]).GetSafeNormal());
+					M.C.Add(FLinearColor(FColor(R[24], R[25], R[26], 255)));
+				}
+				const uint8* Tp = B.GetData() + 16 + int64(NV) * 28;
+				for (uint32 t = 0; t < NT; t++)
+				{
+					uint32 I[3]; FMemory::Memcpy(I, Tp + t * 12, 12);
+					if (I[0] >= NV || I[1] >= NV || I[2] >= NV) continue;
+					// the game -> Unreal swap mirrors; wind each triangle front-facing against its normal (as LifeBufTriN)
+					const FVector UA = LG2U(M.P[I[0]]), UB = LG2U(M.P[I[1]]), UC = LG2U(M.P[I[2]]);
+					const FVector NU = LN2U(M.N[I[0]] + M.N[I[1]] + M.N[I[2]]);
+					const bool bSwap = FVector::DotProduct(FVector::CrossProduct(UB - UA, UC - UA), NU) > 0;
+					M.T.Append({int32(I[0]), int32(bSwap ? I[2] : I[1]), int32(bSwap ? I[1] : I[2])});
+				}
+				M.bOk = M.T.Num() > 0;
+				UE_LOG(LogTemp, Log, TEXT("KeysLife: seabird model %s %d verts %d tris"), Keys[k], M.P.Num(), M.T.Num() / 3);
 			}
 		}
 		return K[FMath::Min<int32>(Kind, 3)];
@@ -1190,6 +1245,43 @@ void AKeysLife::EmitBird(const FKeysBird& B)
 	const double S = B.Scale;
 	FKeysLifeBuf& Buf = BirdBuf;
 	const int32 I0 = Buf.V.Num();
+	if (const FLifeBirdModel& Md = LifeBirdModel(B.Kind); Md.bOk)
+	{
+		// the generated bird, its wings bent about the shoulder and the elbow, blended across each joint
+		const double Sh = K.Span * .07, El = K.Ei, BandS = K.Span * .03, BandE = K.Span * .04;
+		FLifeR3 Rsh[2], Rel[2];
+		for (int32 i = 0; i < 2; i++)
+		{
+			const double Sx = i ? 1 : -1;
+			Rsh[i] = FLifeR3::XYZ(0, -Sx * 1.15 * B.Tuck, Sx * B.Up);
+			Rel[i] = FLifeR3::XYZ(0, -Sx * .9 * B.Tuck, Sx * (B.Hand - B.Up * .25));
+		}
+		for (int32 v = 0; v < Md.P.Num(); v++)
+		{
+			const FVector& Pv = Md.P[v];
+			const FVector& Nv = Md.N[v];
+			const int32 Si = Pv.X >= 0 ? 1 : 0;
+			const double Sx = Si ? 1 : -1, Ax = FMath::Abs(Pv.X);
+			const double WIn = FMath::SmoothStep(Sh - BandS, Sh + BandS, Ax), WOut = FMath::SmoothStep(El - BandE, El + BandE, Ax);
+			FVector L = Pv, Nl = Nv;
+			if (WIn > 0)
+			{
+				const FVector Pin(Sx * Sh, 0, 0), Pel(Sx * El, 0, 0);
+				const FVector Inner = Pin + Rsh[Si] * (Pv - Pin);
+				const FVector Outer = Pin + Rsh[Si] * ((Pel - Pin) + Rel[Si] * (Pv - Pel));
+				const FVector NIn = Rsh[Si] * Nv, NOut = Rsh[Si] * (Rel[Si] * Nv);
+				L = FMath::Lerp(FMath::Lerp(Pv, Inner, WIn), Outer, WOut);
+				Nl = FMath::Lerp(FMath::Lerp(Nv, NIn, WIn), NOut, WOut).GetSafeNormal();
+			}
+			Buf.V.Add(LG2U(Pos + R * (L * S)));
+			Buf.N.Add(LN2U(R * Nl));
+			Buf.UV.Add(FVector2D::ZeroVector);
+			Buf.C.Add(Md.C[v]);
+		}
+		for (const int32 Ix : Md.T) Buf.T.Add(I0 + Ix);
+		Buf.Sig = Buf.Sig * 31 + B.Kind + 1;
+		return;
+	}
 	const FLifeTpl& Body = K.Body;
 	for (int32 i = 0; i < Body.P.Num(); i++)
 	{
@@ -1220,6 +1312,16 @@ void AKeysLife::EmitBird(const FKeysBird& B)
 		Panel(K.Tip, true, K.TipC);
 	}
 	Buf.Sig = Buf.Sig * 31 + B.Kind + 1;
+}
+
+void AKeysLife::BringPelicans(double X, double Z, double H, double Dist)
+{
+	if (!Pelicans.Num()) return;
+	FKeysPelicanFlock& F = Pelicans[0];
+	SpawnFlock(F, true);
+	const double Fx = -FMath::Sin(H), Fz = -FMath::Cos(H);
+	F.X = X + Fx * Dist - FMath::Cos(H) * 25; F.Z = Z + Fz * Dist + FMath::Sin(H) * 25;
+	F.H = H + PI / 2; F.Alt = 3; F.Turn = 0;
 }
 
 void AKeysLife::SpawnFlock(FKeysPelicanFlock& F, bool bNear)
