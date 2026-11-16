@@ -1385,7 +1385,8 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		const FVector Base = KeysMesh::FightChairBase(Spec());
 		const FQuat Q(FVector::UpVector, ChairYaw);
 		const FVector FishW = ToUE(FX, 0, FZ);
-		// a trolled fish is always fought from the chair and shown from outside, first-person setting or not
+		// first person (V): the seated angler's own view down the rod (UpdateCamera); otherwise the cinematic below
+		if (bFpPref) return false;
 		// the chair fight from outside the boat, low off the stern quarter: side-on to the angler, so he, the chair and
 		// the bent rod fill the shot with the hull and the wake behind, and nothing (hardtop, tower, riggers) between.
 		// The lens sits on the side away from the fish, so the rod and line run off into the frame, holding that side
@@ -2051,6 +2052,8 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 FVector AKeysBoatPawn::FishSpotLocal() const
 {
 	const FBoatSpec& S = Spec();
+	// in the fighting chair: your eyes are the seated angler's (a touch high, so the view clears the transom)
+	if (InChair()) return ChairEyeLocal() + FVector(0, 0, .3 - 1.62);
 	if (HookedStation >= 0)
 	{
 		// a trolled fish is astern: fight it from the transom, on the side it is on
@@ -2072,7 +2075,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 {
 	Stage.bOn = false;   // set again below while a landing is being shot
 	if (IsDiving() || IsAshore()) { bExtCam = false; return; }   // the diver / walker actor places the camera (ApplyDiveCamera)
-	if (InChair()) bFpOn = false;   // the chair fight is a third-person shot: the angler is in it, not behind the lens
+	if (InChair() && !bFpPref) bFpOn = false;   // the chair cinematic: the angler is in the shot, not your own rod and hands
 	{
 		FVector EP; FRotator ER; float EF;
 		bExtCam = ExternalCamera(EP, ER, EF);
@@ -3059,7 +3062,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 
 void AKeysBoatPawn::UpdateViewModel(double Dt)
 {
-	if (InChair() && bAction) VmCrank -= Dt * 22;   // the chair angler winds the same reel
+	if (InChair() && (bAction || bReelKey)) VmCrank -= Dt * 22;   // the chair angler winds the same reel
 	if (!bFpOn) return;
 	const double Now = GetWorld()->GetTimeSeconds();
 	double Bend = .01;
@@ -3074,7 +3077,7 @@ void AKeysBoatPawn::UpdateViewModel(double Dt)
 	VmPump = Lerp(VmPump, PumpWant, FMath::Min(1.0, Dt * (bAction ? 2.5 : 1.4)));
 	Rx += VmPump;
 	VmRx = Lerp(VmRx, Rx, FMath::Min(1.0, Dt * 14));
-	if ((bBack && IsLineOut()) || (FState == EKeysFish::Fight && bAction)) VmCrank -= Dt * 22;
+	if ((bReelKey && IsLineOut()) || (FState == EKeysFish::Fight && bAction)) VmCrank -= Dt * 22;   // the down arrow winds the reel
 }
 
 // A hand closed round a cylinder (a rod grip, a reel knob): the axis A through C, radius R; N points from the axis to the
