@@ -680,6 +680,18 @@ void AKeysBoatPawn::RunTestScript(double T)
 			}
 		}
 		else if (Cmd == TEXT("weigh")) WeighIn();
+		else if (Cmd.StartsWith(TEXT("pin=")))
+		{
+			// pin=t:N[:dist] or pin=r:N[:dist]: hold a passing boat alongside for a look
+			TArray<FString> Pp; Cmd.Mid(4).ParseIntoArray(Pp, TEXT(":"));
+			if (AKeysTraffic* Tr = Cast<AKeysTraffic>(UGameplayStatics::GetActorOfClass(this, AKeysTraffic::StaticClass())); Tr && Pp.Num() >= 2)
+			{
+				const int32 N = FCString::Atoi(*Pp[1]);
+				Tr->PinTraffic = Pp[0] == TEXT("t") ? N : -1;
+				Tr->PinRacer = Pp[0] == TEXT("r") ? N : -1;
+				if (Pp.Num() >= 3) Tr->PinDist = FCString::Atod(*Pp[2]);
+			}
+		}
 		else if (Cmd == TEXT("mode=charter")) bFreeFish = false;
 		else if (Cmd == TEXT("mode=free")) bFreeFish = true;
 		else if (Cmd == TEXT("ffstate"))

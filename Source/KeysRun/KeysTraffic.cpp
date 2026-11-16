@@ -3,6 +3,8 @@
 #include "KeysGeo.h"
 #include "KeysMesh.h"
 #include "KeysWorld.h"
+#include "KeysLandmarks.h"
+#include "Components/StaticMeshComponent.h"
 #include "ProceduralMeshComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -88,6 +90,7 @@ namespace
 	}
 
 	constexpr double SeatHip = .45;   // JS seated humans sit roughly this far above their group origin
+	constexpr double CrewSole = .05;   // the cockpit sole of the generated center console, above the waterline, x its length
 
 	// ---------------------------------------------------------------- racers (makeRacer)
 	struct FRacerPal { uint32 H, B, C, U; uint32 S[5]; };
@@ -168,6 +171,27 @@ namespace
 		{EK::JetSki, 0x9fd8ff, 0x1f4f8c, -1, 0, 0, -1, -1, 0xe86a92, -1, 0xe4572e, TEXT("sombrero"), 14}};
 
 	uint32 Or(int64 V, uint32 Def) { return V >= 0 ? uint32(V) : Def; }
+
+	// the generated model for a kind of passing boat (Content/KeysRun/Props/traffic_<key>.krfish, Tools/trafficglb.py):
+	// 1 unit long, bow +x, waterline at 0. Null keeps the hand-built hull.
+	const TCHAR* ModelKey(FKeysAIBoat::EKind K)
+	{
+		return K == FKeysAIBoat::CC ? TEXT("traffic_cc") : K == FKeysAIBoat::Sport ? TEXT("traffic_sport") : K == FKeysAIBoat::Racer ? TEXT("traffic_racer") : nullptr;
+	}
+
+	// with a generated model aboard, only the people are hand-built: where they stand and sit on that model
+	void BuildTrafficCrew(FKeysMesh& M, const FTrafficDef& D, double& OutL, double& OutB)
+	{
+		if (D.Kind == EK::CC)
+		{
+			const double L = D.L > 0 ? D.L : 9;
+			OutL = L; OutB = L * .33;
+			FPerson Drv; Drv.Shirt = Or(D.Shirt, 0x9cc8e0); Drv.Shorts = 0x2b3540; Drv.bCap = true;
+			Person(M, .3, CrewSole * L, L * .1, false, Drv);
+			if (D.Crew >= 0) Person(M, 0, CrewSole * L + SeatHip, -L * .2, true, Blonde(uint32(D.Crew)));
+		}
+		else { OutL = 16; OutB = 4.8; }   // the express sportfisher: the skipper is inside, behind tinted glass
+	}
 
 	// builds the boat into M and returns its length and beam
 	void BuildTrafficBoat(FKeysMesh& M, const FTrafficDef& D, double& OutL, double& OutB)
@@ -430,6 +454,28 @@ void AKeysTraffic::BeginPlay()
 	BuildTraffic();
 }
 
+UStaticMesh* AKeysTraffic::TrafficModel(uint8 Kind)
+{
+	const TCHAR* Key = ModelKey(FKeysAIBoat::EKind(Kind));
+	if (!Key) return nullptr;
+	if (TObjectPtr<UStaticMesh>* Found = Models.Find(Key)) return Found->Get();
+	UStaticMesh* SM = AKeysLandmarks::LoadPropMesh(this, Key);
+	Models.Add(Key, SM);
+	return SM;
+}
+
+void AKeysTraffic::AttachModel(USceneComponent* Parent, UStaticMesh* Model, double L)
+{
+	UStaticMeshComponent* SC = NewObject<UStaticMeshComponent>(this);
+	SC->SetStaticMesh(Model);
+	SC->SetMaterial(0, AKeysWorld::VertexColorMaterial());
+	SC->SetupAttachment(Parent);
+	SC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SC->SetRelativeScale3D(FVector(L));   // the prop loader already works in centimetres per unit
+	SC->SetCastShadow(true);
+	SC->RegisterComponent();
+}
+
 void AKeysTraffic::BuildRacers()
 {
 	const double Dz[3][2] = {{880, 1250}, {1850, 2600}, {700, 1700}};
@@ -448,11 +494,13 @@ void AKeysTraffic::BuildRacers()
 		RouteAt(R.R, R.S, X, Z, TX, TZ);
 		R.X = X; R.Z = Z; R.H = FMath::Atan2(-TX, -TZ);
 		FKeysMesh M;
-		BuildRacer(M, RacerPal[i]);
+		UStaticMesh* Model = TrafficModel(FKeysAIBoat::Racer);
+		if (!Model) BuildRacer(M, RacerPal[i]);
 		UProceduralMeshComponent* C = NewMesh(*FString::Printf(TEXT("Racer%d"), i), Root);
 		C->SetUsingAbsoluteLocation(true);
 		C->SetUsingAbsoluteRotation(true);
-		M.Commit(C, 0, AKeysWorld::VertexColorMaterial());
+		if (M.T.Num()) M.Commit(C, 0, AKeysWorld::VertexColorMaterial());
+		if (Model) AttachModel(C, Model, R.L);
 		R.Mesh = Meshes.Add(C);
 		RacerBoats.Add(R);
 	}
@@ -480,11 +528,14 @@ void AKeysTraffic::BuildTraffic()
 		R.X = X; R.Z = Z; R.H = FMath::Atan2(-TX, -TZ);
 
 		FKeysMesh M;
-		BuildTrafficBoat(M, D, R.L, R.B);
+		UStaticMesh* Model = TrafficModel(D.Kind);
+		if (Model) BuildTrafficCrew(M, D, R.L, R.B);
+		else BuildTrafficBoat(M, D, R.L, R.B);
 		UProceduralMeshComponent* C = NewMesh(*FString::Printf(TEXT("Traffic%d"), Idx), Root);
 		C->SetUsingAbsoluteLocation(true);
 		C->SetUsingAbsoluteRotation(true);
-		M.Commit(C, 0, AKeysWorld::VertexColorMaterial());
+		if (M.T.Num()) M.Commit(C, 0, AKeysWorld::VertexColorMaterial());
+		if (Model) AttachModel(C, Model, R.L);
 		R.Mesh = Meshes.Add(C);
 		if (D.Kind == FKeysAIBoat::Wake)
 		{
@@ -537,7 +588,12 @@ void AKeysTraffic::UpdateRacers(double Dt, double T, AKeysBoatPawn* Pw, const FV
 		if (Along > -25 && Along < 180 && FMath::Abs(Side - R.Off) < 26) R.OffT = Side > 0 ? Side - 38 : Side + 38;
 		R.OffT *= 1 - Dt * .15;
 		R.Off = Lerp(R.Off, Clamp(R.OffT, -55, 55), FMath::Min(1.0, Dt * .9));
-		const double X = PX0 + Px * R.Off, Z = PZ0 + Pz * R.Off;
+		double X = PX0 + Px * R.Off, Z = PZ0 + Pz * R.Off;
+		if (int32(&R - RacerBoats.GetData()) == PinRacer)
+		{
+			X = BX + PinDist * FMath::Cos(Pw->BoatH()); Z = BZ - PinDist * FMath::Sin(Pw->BoatH());
+			TX = -FMath::Sin(Pw->BoatH()); TZ = -FMath::Cos(Pw->BoatH());
+		}
 		R.X = X;
 		R.Z = Z;
 		R.H = AngLerp(R.H, FMath::Atan2(-TX, -TZ), Dt * 3);
@@ -549,7 +605,7 @@ void AKeysTraffic::UpdateRacers(double Dt, double T, AKeysBoatPawn* Pw, const FV
 		if (C)
 		{
 			const bool bVis = DCam < 1700;
-			C->SetVisibility(bVis);
+			C->SetVisibility(bVis, true);
 			if (bVis)
 				C->SetWorldLocationAndRotation(ToUE(X, (Hb + Hs) / 2 + .32, Z),
 					BoatRot(R.H, FMath::Atan2(Hb - Hs, 12.8) + .07, FMath::Sin(T * 1.3 + R.S * .01) * .03));
@@ -585,7 +641,12 @@ void AKeysTraffic::UpdateTraffic(double Dt, double T, AKeysBoatPawn* Pw, const F
 		R.OffT *= 1 - Dt * .15;
 		R.Off = Lerp(R.Off, Clamp(R.OffT, -45, 45), FMath::Min(1.0, Dt * .8));
 		const double Weave = bJet ? FMath::Sin(T * .9 + R.Ph) * 14 + FMath::Sin(T * 2.3 + R.Ph * 1.7) * 4 : 0;
-		const double X = PX0 + Px * (R.Off + Weave), Z = PZ0 + Pz * (R.Off + Weave);
+		double X = PX0 + Px * (R.Off + Weave), Z = PZ0 + Pz * (R.Off + Weave);
+		if (int32(&R - TrafficBoats.GetData()) == PinTraffic)
+		{
+			X = BX + PinDist * FMath::Cos(Pw->BoatH()); Z = BZ - PinDist * FMath::Sin(Pw->BoatH());
+			TX = -FMath::Sin(Pw->BoatH()); TZ = -FMath::Cos(Pw->BoatH());
+		}
 		R.X = X;
 		R.Z = Z;
 		const double Wv = bJet ? FMath::Atan(FMath::Cos(T * .9 + R.Ph) * 14 * .9 / FMath::Max(4.0, R.Speed)) : 0;

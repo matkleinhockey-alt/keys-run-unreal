@@ -56,6 +56,7 @@ public:
 	FString ZoneNameAt(double PX, double PZ) const;   // the same label for any spot (where a cast lands)
 	FString NearName() const;
 	double BoatX() const { return X; }
+	double BoatH() const { return H; }
 	double BoatZ() const { return Z; }
 	double Heading() const { return H; }
 	double Throttle() const { return Thr; }

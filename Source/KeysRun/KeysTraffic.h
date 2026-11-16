@@ -6,6 +6,7 @@
 #include "KeysTraffic.generated.h"
 
 class UProceduralMeshComponent;
+class UStaticMesh;
 class AKeysBoatPawn;
 
 // A closed loop of waypoints on the flat (x, z) map, game meters, with cumulative arc length.
@@ -65,6 +66,14 @@ private:
 	void UpdateRacers(double Dt, double T, AKeysBoatPawn* P, const FVector2D& Cam);
 	void UpdateTraffic(double Dt, double T, AKeysBoatPawn* P, const FVector2D& Cam);
 	UProceduralMeshComponent* NewMesh(const FName& Name, USceneComponent* Parent);
+	UStaticMesh* TrafficModel(uint8 Kind);
+public:
+	// test harness: hold traffic boat N (or racer N) abeam of the player, Dist meters off, so it can be looked at
+	int32 PinTraffic = -1, PinRacer = -1;
+	double PinDist = 22;
+private:
+	void AttachModel(USceneComponent* Parent, UStaticMesh* Model, double L);
+	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> Models;
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> Meshes;
