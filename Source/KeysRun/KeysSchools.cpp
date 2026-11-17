@@ -24,20 +24,11 @@ using namespace KeysGeo;
 
 namespace
 {
-	// ---- the leader track texture (M_KR_Fish reads it)
-	constexpr int32 SchRows = 512;       // leaders alive at once
-	constexpr int32 SchHist = 96;        // samples of history per leader (4.8 s: the whole school strung out on the leader's path)
-	constexpr double SchStep = .05;      // seconds between samples
-	constexpr int32 SchTex = 5;          // texels per sample (position, heading, threat, floor, shape)
-	constexpr double SchMaxDelay = (SchHist - 4) * SchStep;
-	constexpr double PhaseWrap = 512 * 2 * PI;
-
 	// ---- where schools live
 	constexpr double CellSize = 26;
 	constexpr double SpawnR = 140, KeepR = 190;
 	constexpr int32 MaxSchools = 56, MaxFish = 3200;
-	constexpr double BoundsExt = 2600;   // cm: how far the material may carry a fish from its instance's anchor
-	constexpr double RebaseDist = 11;    // m: re-anchor a school's instances once its leaders stray this far
+	constexpr double BoundsExt = 40;     // mesh units: the tail beat and body bend reach a little outside the rest pose
 
 	using ERole = AKeysSchools::ERole;
 
@@ -117,6 +108,38 @@ namespace
 	const double CoralR[] = {.85, .8, .9, 1.0, .55, .45, .65, .5, .65, 0};
 
 	FVector G2U(const FVector& P) { return FVector(P.X * 100.0, P.Z * 100.0, P.Y * 100.0); }
+
+	// how each species schools, as boids (distances in its own spacing, Spacing x body length):
+	//   Sight    how far it sees its neighbours;  Sep  how close it lets one come before it moves off
+	//   Align    how much it matches their heading;  Cohere  how much it drifts toward them;  SepK  how hard it keeps off
+	//   Goal     how much it follows the school's own intent (its wander, its coral head, the hunt)
+	//   Mill     whether it balls up and mills round when a predator comes;  Nbr  how many neighbours it pays heed to
+	struct FBoid { double Sight, Sep, Align, Cohere, SepK, Goal, Mill; int32 Nbr; };
+	const FBoid Boids[NumSpec] = {
+		//                Sight Sep   Align Cohere SepK Goal Mill Nbr
+		/* silverside */ {3.0,  .85,  2.2,  1.4,   3.0, .5,  1,   8},   // tight bait: dense, quick to agree
+		/* herring */    {3.2,  .85,  2.0,  1.2,   3.0, .6,  1,   8},
+		/* schoolmaster*/{3.5,  .95,  .5,   .5,    2.0, .35, 0,   6},   // a lazy aggregation over the coral
+		/* grunt */      {3.5,  .95,  .35,  .55,   2.0, .3,  0,   6},
+		/* lanesnapper */{3.5,  .95,  .7,   .6,    2.0, .45, 0,   6},
+		/* yellowtail */ {3.2,  .9,   1.2,  .9,    2.4, .5,  0,   7},
+		/* grouper */    {1,    1,    0,    0,     1,   .3,  0,   0},
+		/* redgrouper */ {1,    1,    0,    0,     1,   .3,  0,   0},
+		/* barracuda */  {2.5,  .9,   .3,   .2,    1.5, .3,  0,   3},
+		/* bonefish */   {3.0,  .9,   1.4,  1.0,   2.5, .6,  0,   6},
+		/* permit */     {3.0,  .9,   1.3,  1.1,   2.5, .6,  0,   5},
+		/* bluerunner */ {3.0,  .95,  1.4,  .7,    2.5, .8,  0,   6},
+		/* jack */       {3.2,  1.05, 1.0,  .45,   2.2, .8,  0,   6},   // loose jacks: wide spacing, a looser pack
+		/* blacktip */   {1,    1,    0,    0,     1,   .9,  0,   0},
+		/* bullshark */  {1,    1,    0,    0,     1,   .9,  0,   0},
+	};
+	// a species' sight in meters (the neighbour grid's cell size for it)
+	double SightM(int32 Sp) { return FMath::Max(.3, Boids[Sp].Sight * Specs[Sp].Spacing * (Specs[Sp].LenMin + Specs[Sp].LenMax) * .5); }
+	bool Lives(ERole R) { return R == ERole::Reef || R == ERole::Hole || R == ERole::Flats; }   // its depth is height above the bottom
+	int64 GridKey(int32 Sp, int32 X, int32 Y, int32 Z)
+	{
+		return (int64(Sp & 0xf) << 60) | (int64((X + (1 << 19)) & 0xfffff) << 40) | (int64((Y + (1 << 19)) & 0xfffff) << 20) | int64((Z + (1 << 19)) & 0xfffff);
+	}
 	FVector D2U(const FVector& D) { return FVector(D.X, D.Z, D.Y); }
 	double Hyp(double A, double B) { return FMath::Sqrt(A * A + B * B); }
 	int64 CellKey(int32 X, int32 Z) { return (int64(X) << 32) ^ int64(uint32(Z)); }
@@ -140,6 +163,7 @@ AKeysSchools::AKeysSchools()
 	RootComponent = Root;
 }
 
+
 AKeysSchools* AKeysSchools::Get(const UObject* WorldContext)
 {
 	UWorld* W = WorldContext ? WorldContext->GetWorld() : nullptr;
@@ -153,40 +177,9 @@ void AKeysSchools::BeginPlay()
 	Super::BeginPlay();
 	FString Script;
 	bScriptLog = FParse::Value(FCommandLine::Get(), TEXT("KRScript="), Script, false);
-	SetupTexture();
-	for (int32 r = SchRows - 1; r >= 0; r--) FreeRows.Add(r);
-}
-
-void AKeysSchools::SetupTexture()
-{
-	TArray64<uint8> Zero;
-	Zero.SetNumZeroed(SchHist * SchTex * SchRows * sizeof(FLinearColor));
-	Tex = UTexture2D::CreateTransient(SchHist * SchTex, SchRows, PF_A32B32G32R32F, TEXT("KeysFishTrack"), Zero);
-	if (Tex)
-	{
-		Tex->Filter = TF_Nearest;
-		Tex->SRGB = false;
-		Tex->AddressX = TA_Wrap;
-		Tex->AddressY = TA_Clamp;
-		Tex->NeverStream = true;
-		Tex->UpdateResource();
-	}
-	Column.SetNumZeroed(SchRows * SchTex);
-	UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Fish.M_KR_Fish"));
-	if (!M) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: M_KR_Fish missing (open the editor once to create it); no school fish")); return; }
+	UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Boid.M_KR_Boid"));
+	if (!M) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: M_KR_Boid missing (open the editor once to create it); no school fish")); return; }
 	MID = UMaterialInstanceDynamic::Create(M, this);
-	MID->SetTextureParameterValue(TEXT("LeaderTex"), Tex);
-	MID->SetScalarParameterValue(TEXT("Hist"), SchHist);
-	MID->SetScalarParameterValue(TEXT("Rows"), SchRows);
-	MID->SetScalarParameterValue(TEXT("StepDt"), SchStep);
-}
-
-int32 AKeysSchools::AllocRow()
-{
-	if (!FreeRows.Num()) return -1;
-	const int32 R = FreeRows.Pop();
-	FreshRows.Add(R);
-	return R;
 }
 
 // ================================================================ the bottom: floor, coral and wrecks, cached on 1 m tiles
@@ -324,7 +317,7 @@ int32 AKeysSchools::PoolFor(int32 Sp, int32 Lod)
 	C->SetStaticMesh(SM);
 	C->SetupAttachment(Root);
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	C->NumCustomDataFloats = 8;
+	C->NumCustomDataFloats = 8;   // tail phase, its rate, when, amplitude, body bend, flash, shade, seed (M_KR_Boid)
 	C->SetCastShadow(true);
 	C->SetMaterial(0, MID);
 	C->SetCullDistances(0, int32(KeepR * 100));
@@ -339,6 +332,7 @@ int32 AKeysSchools::PoolFor(int32 Sp, int32 Lod)
 
 void AKeysSchools::FlushPools()
 {
+	// lay out a pool's instances again: every school in it, in order, at the fish's own places
 	for (int32 P = 0; P < Pools.Num(); P++)
 	{
 		if (!PoolDirty[P]) continue;
@@ -348,17 +342,37 @@ void AKeysSchools::FlushPools()
 		if (!C) continue;
 		C->ClearInstances();
 		TArray<FTransform> Xf;
-		TArray<FSchool*> Mine;
 		for (FSchool& S : Schools)
-			if (S.Pool == P) { S.First = Xf.Num(); for (int32 i = 0; i < S.NFish; i++) Xf.Add(FTransform(S.AnchorUE)); Mine.Add(&S); }
-		if (!Xf.Num()) { C->MarkRenderStateDirty(); continue; }
-		C->AddInstances(Xf, false, false);
-		for (FSchool* S : Mine)
-			for (int32 i = 0; i < S->NFish; i++) C->SetCustomData(S->First + i, TArrayView<const float>(S->Data.GetData() + i * 8, 8), false);
+			if (S.Pool == P) { S.First = Xf.Num(); for (int32 i = 0; i < S.Fish.Num(); i++) Xf.Add(FTransform(G2U(S.Fish[i].P))); }
+		if (Xf.Num()) C->AddInstances(Xf, false, true);
+		for (FSchool& S : Schools) if (S.Pool == P) WriteInstances(S);
 		C->MarkRenderStateDirty();
+		PoolMoved[P] = false;
 	}
 }
 
+void AKeysSchools::WriteInstances(FSchool& S)
+{
+	if (!Pools.IsValidIndex(S.Pool) || !Pools[S.Pool]) return;
+	UInstancedStaticMeshComponent* C = Pools[S.Pool];
+	if (S.First + S.Fish.Num() > C->GetInstanceCount()) return;
+	TArray<FTransform> Xf;
+	Xf.SetNum(S.Fish.Num());
+	for (int32 i = 0; i < S.Fish.Num(); i++)
+	{
+		const FFish& F = S.Fish[i];
+		FRotator R = FRotationMatrix::MakeFromX(D2U(F.Fwd)).Rotator();
+		R.Roll = FMath::RadiansToDegrees(F.Roll);
+		Xf[i] = FTransform(R, G2U(F.P), FVector(F.Len));
+		const float D[8] = {float(FMath::Fmod(F.Phase, 2 * PI)), float(F.Freq), float(NowT), float(F.Amp),
+			float(FMath::Clamp(F.YawRate * .45, -.9, .9)), float(FMath::Clamp(F.Flash, 0.0, 1.0)), float(F.Shade), float(F.Seed)};
+		C->SetCustomData(S.First + i, TArrayView<const float>(D, 8), false);
+	}
+	C->BatchUpdateInstancesTransforms(S.First, Xf, true, false, false);
+	PoolMoved[S.Pool] = true;
+}
+
+// ================================================================ the world around: camera, boat, lures, diver, predators
 // ================================================================ the world around: camera, boat, diver, predators
 void AKeysSchools::ReadWorld(double Dt)
 {
@@ -396,6 +410,21 @@ void AKeysSchools::ReadWorld(double Dt)
 				Pr.R = 4 + Spd * .4;
 				Threats.Add(Pr);
 			}
+		}
+	}
+	// the bait in the water: a cast float or a fish fighting on the line, and the trolled lures skipping along
+	if (AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0)))
+	{
+		TArray<FVector4> Lp;
+		P->LureSpots(Lp);
+		for (const FVector4& L4 : Lp)
+		{
+			FThreat T;
+			T.Kind = 4;
+			T.P = FVector(L4.X, L4.Y, L4.Z);
+			T.R = 2.5 + 3 * L4.W;
+			T.Power = .35 + .65 * L4.W;
+			Threats.Add(T);
 		}
 	}
 	bDiving = false;
@@ -446,13 +475,13 @@ void AKeysSchools::ReadWorld(double Dt)
 	{
 		if (!Specs[S.Sp].bPredator) continue;
 		const bool bCharge = S.HuntLeft > 0;
-		for (const FLeader& Ld : S.L)
+		for (const FFish& F : S.Fish)
 		{
 			FThreat T;
 			T.Kind = 2;
 			T.SchoolId = S.Id;
-			T.P = Ld.P;
-			T.V = Ld.V;
+			T.P = F.P;
+			T.V = F.V;
 			T.R = (bCharge ? 7 : 4) + S.Len * 3;
 			T.Power = bCharge ? 1 : .45;
 			Threats.Add(T);
@@ -467,38 +496,36 @@ void AKeysSchools::Startle(double X, double Z, double Radius)
 	Startles.Add({FVector(X, Y, Z), Radius * 1.4, .7});
 }
 
-// ================================================================ spawning
 AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double HomeTop, int64 Cell, uint32 Seed, double NScale)
 {
 	const FSpec& Sc = Specs[Sp];
 	FSchool S;
 	S.Rng.Initialize(int32(Seed));
 	S.Pace = S.Rng.FRandRange(1 - Tempers[Sp].PaceJ, 1 + Tempers[Sp].PaceJ);
-	S.Shape = FVector(Tempers[Sp].Stretch, 1 / FMath::Sqrt(Tempers[Sp].Stretch), 1 / FMath::Sqrt(Tempers[Sp].Stretch));
-	S.ShapeWant = S.Shape;
 	S.Id = NextId++;
 	S.Sp = Sp;
 	S.Cell = Cell;
 	S.Len = S.Rng.FRandRange(Sc.LenMin, Sc.LenMax);
 	S.Home = Home;
 	S.HomeTop = HomeTop;
+	S.MillDir = S.Rng.FRand() < .5 ? -1 : 1;
 	int32 N = FMath::Max(1, FMath::RoundToInt32(S.Rng.FRandRange(Sc.NMin, Sc.NMax + .99) * NScale));
 	int32 NFishAll = 0;
-	for (const FSchool& O : Schools) NFishAll += O.NFish;
+	for (const FSchool& O : Schools) NFishAll += O.Fish.Num();
 	if (!Cell)
 	{
 		// a test school: make room by letting the furthest ones go
-		while (Schools.Num() && (NFishAll + N > MaxFish || FreeRows.Num() < 10))
+		while (Schools.Num() && NFishAll + N > MaxFish)
 		{
 			int32 Far = -1;
 			double FD = -1;
 			for (int32 i = 0; i < Schools.Num(); i++)
 			{
-				const double D = (Schools[i].L[0].P - Home).Size();
+				const double D = (Schools[i].Center - Home).Size();
 				if (!Schools[i].bPinned && D > FD) { FD = D; Far = i; }
 			}
 			if (Far < 0) break;
-			NFishAll -= Schools[Far].NFish;
+			NFishAll -= Schools[Far].Fish.Num();
 			const int64 FarCell = Schools[Far].Cell;
 			Despawn(Far);
 			if (FarCell) Cells.Add(FarCell, -1);
@@ -506,80 +533,35 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 	}
 	if (NFishAll + N > MaxFish) N = MaxFish - NFishAll;
 	if (N < 1) return nullptr;
-	const int32 NSub = N < 6 ? FMath::Min(N - 1, Sc.SubMax) : FMath::Clamp(S.Rng.RandRange(Sc.SubMin, Sc.SubMax), 0, N - 1);
-	const int32 NL = 1 + FMath::Max(0, NSub);
-	if (FreeRows.Num() < NL) return nullptr;
-	// group sizes and radii
-	const int32 PerGroup = FMath::Max(1, N / NL);
 	const double Space = Sc.Spacing * S.Len;
-	const double GroupR = Space * FMath::Pow(double(PerGroup), 1.0 / 3.0) * .62;
-	S.Radius = GroupR * (NL > 1 ? 2.2 : 1);
+	S.Radius = FMath::Max(Space, Space * FMath::Pow(double(N), 1.0 / 3.0) * .62);
 	const bool bBall = Sc.Role == ERole::Bait;
-	// leaders
-	FVector Start = Home;
-	S.L.SetNum(NL);
-	for (int32 k = 0; k < NL; k++)
+	const double Yaw = S.Rng.FRandRange(0, 2 * PI);
+	const FVector Fw(FMath::Cos(Yaw), 0, FMath::Sin(Yaw));
+	FVector Rt, Up;
+	Frame(Fw, Rt, Up);
+	S.Fish.SetNum(N);
+	for (int32 i = 0; i < N; i++)
 	{
-		FLeader& Ld = S.L[k];
-		Ld.Row = AllocRow();
-		const double Yaw = S.Rng.FRandRange(0, 2 * PI);
-		Ld.Fwd = FVector(FMath::Cos(Yaw), 0, FMath::Sin(Yaw));
-		Ld.Phase = S.Rng.FRandRange(0, 2 * PI);
-		Ld.Ext = GroupR;
-		if (k > 0)
-		{
-			// sub-leaders sit around and behind the main leader
-			const double A = 2 * PI * (k - 1) / FMath::Max(1, NL - 1) + S.Rng.FRandRange(-.3, .3);
-			// one body: the sub-groups hold places all round the school's centre (ahead, behind, either side, a little
-			// above and below), a bait ball rounder. They track the centre a split second late, the ones at the back a
-			// touch later than the ones in front, so a turn sweeps through the whole school almost at once.
-			const double Rb = GroupR * (bBall ? 1.1 : 1.25);
-			Ld.Slot = bBall ? FVector(FMath::Cos(A) * Rb * .8, FMath::Sin(A) * Rb, FMath::Sin(A * 2 + 1) * Rb * .6)
-				: FVector(FMath::Cos(A) * Rb * 1.15, FMath::Sin(A) * Rb * .9, FMath::Sin(A * 2 + .7) * Rb * .3);
-			// the ones behind swim the leader's own path (most of the time it takes to get there), so a turn streams
-			// back through the school instead of swinging it round like a plank; SteerLeader takes the distance back off
-			Ld.Delay = FMath::Min(SchMaxDelay * .45, .05 + FMath::Max(0.0, -Ld.Slot.X) / FMath::Max(.3, Sc.Cruise) * .6);
-		}
-		FVector Rt, Up;
-		Frame(S.L[0].Fwd, Rt, Up);
-		Ld.P = Start + S.L[0].Fwd * Ld.Slot.X + Rt * Ld.Slot.Y + Up * Ld.Slot.Z;
+		FFish& F = S.Fish[i];
+		// a ball (bait) or a fish-shaped blob drawn out along the heading (everything else), spaced by body lengths
+		FVector U;
+		do U = FVector(S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1)); while (U.SizeSquared() > 1);
+		const FVector Off = bBall ? U * S.Radius : FVector(U.X * S.Radius * 1.4, U.Y * S.Radius, U.Z * S.Radius * .45);
+		F.P = Home + Fw * Off.X + Rt * Off.Y + Up * Off.Z;
+		F.Fwd = (Fw + Rt * S.Rng.FRandRange(-.15, .15)).GetSafeNormal();
+		F.V = F.Fwd * Sc.Cruise * .4;
+		F.Pace = S.Rng.FRandRange(.88, 1.12);
+		F.Phase = S.Rng.FRandRange(0, 2 * PI);
+		F.Len = S.Len * S.Rng.FRandRange(.88, 1.12);
+		F.Shade = S.Rng.FRandRange(.82, 1.08);
+		F.Seed = S.Rng.FRand();
+		// its place in the depth band: height above the bottom for fish that live on it, an offset in the school else
+		F.BandY = Lives(Sc.Role) ? S.Rng.FRandRange(Sc.AltMin, Sc.AltMax) : Off.Z;
 	}
+	S.Center = Home;
+	S.Heading = Fw;
 	S.Goal = Home;
-	// the fish: each follows one leader from a slot around it, a little later the further back it swims
-	S.NFish = N;
-	S.Data.SetNumZeroed(N * 8);
-	int32 Fi = 0;
-	for (int32 k = 0; k < NL; k++)
-	{
-		const int32 Ng = k == NL - 1 ? N - Fi : PerGroup;
-		for (int32 j = 0; j < Ng; j++, Fi++)
-		{
-			FVector Sl = FVector::ZeroVector;
-			double Dl = 0;
-			if (j > 0)
-			{
-				// a point in a ball (bait) or a fish-shaped blob trailing back (everything else), spaced by body lengths
-				FVector U;
-				do U = FVector(S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1), S.Rng.FRandRange(-1, 1)); while (U.SizeSquared() > 1);
-				Sl = bBall ? U * GroupR : FVector((U.X - .45) * GroupR * 1.5, U.Y * GroupR, U.Z * GroupR * .5);
-				// follow the fish ahead down the same path: the shader takes back the ground the leader covered meanwhile
-				Dl = .03 + FMath::Max(0.0, -Sl.X) / FMath::Max(.35, Sc.Cruise) * .6 + S.Rng.FRandRange(0, .06);
-			}
-			float* D = S.Data.GetData() + Fi * 8;
-			D[0] = float(S.L[k].Row);
-			D[1] = float(FMath::Min(SchMaxDelay - S.L[k].Delay, Dl));
-			// slot in the leader's frame, Unreal's axes (x ahead, y right, z up) in cm
-			D[2] = float(Sl.X * 100);
-			D[3] = float(Sl.Y * 100);
-			D[4] = float(Sl.Z * 100);
-			D[5] = float(S.Rng.FRand());
-			D[6] = float(S.Len * S.Rng.FRandRange(.85, 1.15));
-			D[7] = float(S.Rng.FRandRange(.82, 1.08));
-		}
-	}
-	S.AnchorUE = G2U(Home);
-	S.TrackP.Init(Home, SchHist);
-	S.TrackF.Init(S.L[0].Fwd, SchHist);
 	Schools.Add(MoveTemp(S));
 	return &Schools.Last();
 }
@@ -587,7 +569,6 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 void AKeysSchools::Despawn(int32 Index)
 {
 	FSchool& S = Schools[Index];
-	for (const FLeader& Ld : S.L) if (Ld.Row >= 0) { FreeRows.Add(Ld.Row); FreshRows.Remove(Ld.Row); }
 	if (PoolDirty.IsValidIndex(S.Pool)) PoolDirty[S.Pool] = true;
 	if (S.Cell) Cells.Remove(S.Cell);
 	Schools.RemoveAt(Index);
@@ -608,7 +589,7 @@ AKeysSchools::FSchool* AKeysSchools::NearestOfRole(const FVector& P, bool bBaitO
 		if (S.Id == NotId || Specs[S.Sp].bPredator) continue;
 		const ERole R = Specs[S.Sp].Role;
 		if (bBaitOnly ? R != ERole::Bait : (R != ERole::Bait && R != ERole::Reef && R != ERole::Flats)) continue;
-		const double D = (S.L[0].P - P).Size();
+		const double D = (S.Center - P).Size();
 		if (D < BD) { BD = D; Best = &S; }
 	}
 	return Best;
@@ -621,7 +602,7 @@ void AKeysSchools::Populate()
 	{
 		FSchool& S = Schools[i];
 		if (S.bPinned) continue;
-		const double DX = S.L[0].P.X - Cam.X, DZ = S.L[0].P.Z - Cam.Z, D = Hyp(DX, DZ);
+		const double DX = S.Center.X - Cam.X, DZ = S.Center.Z - Cam.Z, D = Hyp(DX, DZ);
 		if (D <= KeepR) continue;
 		// the bubble: an open-water school that swims out of it comes back in on the far side, just out of sight,
 		// still on its way (reef fish, grouper, barracuda and flats fish belong where they live, and are let go)
@@ -631,11 +612,10 @@ void AKeysSchools::Populate()
 			const double NX = Cam.X - DX / D * KeepR * .9, NZ = Cam.Z - DZ / D * KeepR * .9;
 			if (ValidWater(S.Sp, NX, NZ))
 			{
-				const FVector Dl(NX - S.L[0].P.X, 0, NZ - S.L[0].P.Z);
+				const FVector Dl(NX - S.Center.X, 0, NZ - S.Center.Z);
 				const double Floor = TopAt(NX, NZ) + 1.0;
-				for (FLeader& Ld : S.L) { Ld.P += Dl; Ld.P.Y = FMath::Clamp(Ld.P.Y, FMath::Min(Floor, -.8), -.8); }
-				for (FVector& Tp : S.TrackP) { Tp += Dl; Tp.Y = FMath::Clamp(Tp.Y, FMath::Min(Floor, -.8), -.8); }
-				S.Home += Dl; S.Goal += Dl;
+				for (FFish& F : S.Fish) { F.P += Dl; F.P.Y = FMath::Clamp(F.P.Y, FMath::Min(Floor, -.8), -.8); }
+				S.Center += Dl; S.Home += Dl; S.Goal += Dl;
 				if (S.Cell) { Cells.Remove(S.Cell); S.Cell = 0; }   // the water it left can fill again
 				UE_LOG(LogTemp, Verbose, TEXT("KRSchools wrap %s to %.0f %.0f"), Specs[S.Sp].Key, NX, NZ);
 				WrapCount++;
@@ -722,19 +702,6 @@ void AKeysSchools::Populate()
 	}
 }
 
-// ================================================================ steering
-FVector AKeysSchools::TrackAt(const FSchool& S, double Delay, FVector& OutFwd) const
-{
-	// TrackP[(TrackN - 1) % H] is the newest sample; interpolate Delay seconds back
-	const double Back = FMath::Clamp(Delay / SchStep, 0.0, double(SchHist - 2));
-	const int32 B0 = FMath::FloorToInt32(Back);
-	const double Fr = Back - B0;
-	const int32 I0 = int32(((S.TrackN - 1 - B0) % SchHist + SchHist) % SchHist), I1 = int32(((S.TrackN - 2 - B0) % SchHist + SchHist) % SchHist);
-	OutFwd = FMath::Lerp(S.TrackF[I0], S.TrackF[I1], Fr).GetSafeNormal();
-	if (OutFwd.IsNearlyZero()) OutFwd = S.L[0].Fwd;
-	return FMath::Lerp(S.TrackP[I0], S.TrackP[I1], Fr);
-}
-
 FVector AKeysSchools::PickGoal(FSchool& S)
 {
 	const FSpec& Sc = Specs[S.Sp];
@@ -745,7 +712,7 @@ FVector AKeysSchools::PickGoal(FSchool& S)
 		if (!ValidWater(S.Sp, X, Z)) continue;
 		const double Top = TopAt(X, Z);
 		double Y;
-		if (Sc.Role == ERole::Bait || Sc.Role == ERole::Hunter || Sc.Role == ERole::Hanger) Y = FMath::Lerp(Top + Sc.AltMin + S.L[0].Ext, -.8 - S.L[0].Ext * .5, S.Rng.FRandRange(.25, .7));
+		if (Sc.Role == ERole::Bait || Sc.Role == ERole::Hunter || Sc.Role == ERole::Hanger) Y = FMath::Lerp(Top + Sc.AltMin + S.Radius * .5, -.8 - S.Radius * .5, S.Rng.FRandRange(.25, .7));
 		else Y = Top + S.Rng.FRandRange(Sc.AltMin, Sc.AltMax);
 		return FVector(X, FMath::Min(Y, -.3), Z);
 	}
@@ -756,7 +723,6 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 {
 	const FSpec& Sc = Specs[S.Sp];
 	S.GoalT -= Dt;
-	FLeader& M = S.L[0];
 	switch (Sc.Role)
 	{
 	case ERole::Reef:
@@ -776,15 +742,15 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 		// the main leader picks its own way: a heading that drifts and swings from side to side, followed by a goal a
 		// few body lengths out along it; it leans back toward home when it has roamed far, and turns away from water
 		// it doesn't belong in. Its depth changes now and then. The rest of the school swims the path it leaves.
-		if (!S.bWander) { S.bWander = true; S.WanderYaw = FMath::Atan2(M.Fwd.Z, M.Fwd.X); S.WanderTurn = 0; }
+		if (!S.bWander) { S.bWander = true; S.WanderYaw = FMath::Atan2(S.Heading.Z, S.Heading.X); S.WanderTurn = 0; }
 		const double Tn = Tempers[S.Sp].Turn;
 		S.WanderTurn = FMath::Clamp(S.WanderTurn * (1 - Dt * .35) + S.Rng.FRandRange(-1.0, 1.0) * Dt * 1.1 * Tn, -.55 * Tn, .55 * Tn);
 		S.WanderYaw += S.WanderTurn * Dt;
-		const FVector ToHome = Flat(S.Home - M.P);
+		const FVector ToHome = Flat(S.Home - S.Center);
 		const double Far = ToHome.Size() / FMath::Max(5.0, Sc.Roam);
 		if (Far > .65) S.WanderYaw += FMath::FindDeltaAngleRadians(S.WanderYaw, FMath::Atan2(ToHome.Z, ToHome.X)) * FMath::Min(1.0, Dt * .9 * Far);
 		const double Ahead = FMath::Max(4.0, Sc.Cruise * S.Pace * 4);
-		double GX = M.P.X + FMath::Cos(S.WanderYaw) * Ahead, GZ = M.P.Z + FMath::Sin(S.WanderYaw) * Ahead;
+		double GX = S.Center.X + FMath::Cos(S.WanderYaw) * Ahead, GZ = S.Center.Z + FMath::Sin(S.WanderYaw) * Ahead;
 		if (!ValidWater(S.Sp, GX, GZ)) { S.WanderTurn = S.WanderTurn >= 0 ? .55 : -.55; S.WanderYaw += S.WanderTurn * Dt * 2; }
 		if (S.GoalT <= 0) { S.GoalT = S.Rng.FRandRange(7, 14); S.Goal.Y = PickGoal(S).Y; }
 		S.Goal = FVector(GX, S.Goal.Y, GZ);
@@ -799,304 +765,281 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 		{
 			S.HuntLeft -= Dt;
 			FSchool* Prey = Find(S.PreyId);
-			if (Prey && S.HuntLeft > 1.2) S.HuntDir = (Prey->L[0].P - M.P).GetSafeNormal();
-			S.Goal = M.P + S.HuntDir * 12;
+			if (Prey && S.HuntLeft > 1.2) S.HuntDir = (Prey->Center - S.Center).GetSafeNormal();
+			S.Goal = S.Center + S.HuntDir * 12;
 			if (S.HuntLeft <= 0) S.GoalT = 0;
 		}
 		else if (S.HuntT <= 0)
 		{
 			S.HuntT = S.Rng.FRandRange(Sc.Role == ERole::Hanger ? 18 : 10, Sc.Role == ERole::Patrol ? 40 : 26);
-			if (FSchool* Prey = NearestOfRole(M.P, Sc.Role == ERole::Hanger, S.Id, Sc.Role == ERole::Patrol ? 60 : 40))
+			if (FSchool* Prey = NearestOfRole(S.Center, Sc.Role == ERole::Hanger, S.Id, Sc.Role == ERole::Patrol ? 60 : 40))
 			{
 				S.PreyId = Prey->Id;
-				const double D = (Prey->L[0].P - M.P).Size();
+				const double D = (Prey->Center - S.Center).Size();
 				S.HuntLeft = D / Sc.Burst + 1.8;
-				S.HuntDir = (Prey->L[0].P - M.P).GetSafeNormal();
+				S.HuntDir = (Prey->Center - S.Center).GetSafeNormal();
 			}
 		}
 	}
 }
 
-void AKeysSchools::SteerLeader(FSchool& S, int32 K, double Dt)
+// ================================================================ the boids
+void AKeysSchools::BuildGrid()
+{
+	// every fish, hashed by species and a cell the size of its species' sight: a fish's neighbours are all in the 27
+	// cells round its own
+	GridItems.Reset();
+	GridNext.Reset();
+	GridHead.Reset();
+	for (int32 s = 0; s < Schools.Num(); s++)
+	{
+		const FSchool& S = Schools[s];
+		if (Boids[S.Sp].Nbr <= 0) continue;
+		const double Cs = SightM(S.Sp);
+		for (int32 i = 0; i < S.Fish.Num(); i++)
+		{
+			const FVector& P = S.Fish[i].P;
+			const int64 K = GridKey(S.Sp, FMath::FloorToInt32(P.X / Cs), FMath::FloorToInt32(P.Y / Cs), FMath::FloorToInt32(P.Z / Cs));
+			const int32 Ix = GridItems.Add({s, i});
+			int32& H = GridHead.FindOrAdd(K, -1);
+			GridNext.Add(H);
+			H = Ix;
+		}
+	}
+}
+
+void AKeysSchools::StepSchool(FSchool& S, double Dt)
 {
 	const FSpec& Sc = Specs[S.Sp];
-	FLeader& Ld = S.L[K];
-	const bool bMain = K == 0;
-	const bool bHunting = Sc.bPredator && S.HuntLeft > 0;
-	// where it wants to be
-	FVector Want;
-	const double Cruise = Sc.Cruise * S.Pace, Burst = Sc.Burst * FMath::Sqrt(S.Pace);
-	double Speed = Cruise;
-	if (bMain || Ld.LooseT > 0)
+	// the school as a whole: where it is, which way it's going, what it means to do
+	FVector C = FVector::ZeroVector, Cv = FVector::ZeroVector;
+	double Al = 0;
+	for (const FFish& F : S.Fish) { C += F.P; Cv += F.V; Al = FMath::Max(Al, F.Alarm); }
+	const int32 N = FMath::Max(1, S.Fish.Num());
+	S.Center = C / N;
+	S.CenterV = Cv / N;
+	S.Alarm = Al;
+	if (S.CenterV.SizeSquared() > .01) S.Heading = FMath::Lerp(S.Heading, S.CenterV.GetSafeNormal(), FMath::Min(1.0, Dt * 2)).GetSafeNormal();
+	MainGoal(S, Dt);
+	// a bait ball with a predator about balls up tight and mills round in a vortex; it loosens again once it's gone
+	if (Boids[S.Sp].Mill > 0)
 	{
-		if (bMain) Want = S.Goal;
-		else { Ld.LooseT -= Dt; Want = Ld.P + Ld.LooseDir * 6; }
-		if (bHunting) Speed = Burst;
+		bool bPred = false;
+		for (const FThreat& T : Threats)
+			if ((T.Kind == 2 || T.Kind == 3) && (T.P - S.Center).Size() < 22 + S.Radius) { bPred = true; break; }
+		const double Want = bPred ? 1.0 : 0.0;
+		S.Mill = FMath::Clamp(S.Mill + (Want - S.Mill) * FMath::Min(1.0, Dt * (Want > S.Mill ? 1.6 : .25)), 0.0, 1.0);
+	}
+	// last step's fear, for the wave to spread from
+	for (FFish& F : S.Fish) F.AlarmIn = F.Alarm;
+	(void)Sc;
+}
+
+void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
+{
+	const FSpec& Sc = Specs[S.Sp];
+	const FBoid& B = Boids[S.Sp];
+	const FTemper& Tm = Tempers[S.Sp];
+	FFish& F = S.Fish[I];
+	FishSteps++;
+	const double Space = Sc.Spacing * F.Len;
+	const double Cruise = Sc.Cruise * S.Pace * F.Pace, Burst = Sc.Burst * FMath::Sqrt(S.Pace) * F.Pace;
+	FVector Acc = FVector::ZeroVector;
+
+	// ---- the neighbours: the nearest few of its own kind it can see
+	FVector SumV = FVector::ZeroVector, SumP = FVector::ZeroVector, Sep = FVector::ZeroVector, FleeIn = FVector::ZeroVector;
+	double MaxAl = 0;
+	int32 Nn = 0;
+	if (MaxNbr > 0)
+	{
+		const double Cs = SightM(S.Sp), Sight2 = FMath::Square(FMath::Min(Cs, B.Sight * Space)), SepD = B.Sep * Space;
+		const int32 Cx = FMath::FloorToInt32(F.P.X / Cs), Cy = FMath::FloorToInt32(F.P.Y / Cs), Cz = FMath::FloorToInt32(F.P.Z / Cs);
+		for (int32 dz = -1; dz <= 1 && Nn < MaxNbr; dz++)
+			for (int32 dy = -1; dy <= 1 && Nn < MaxNbr; dy++)
+				for (int32 dx = -1; dx <= 1 && Nn < MaxNbr; dx++)
+				{
+					const int32* H = GridHead.Find(GridKey(S.Sp, Cx + dx, Cy + dy, Cz + dz));
+					for (int32 It = H ? *H : -1; It >= 0 && Nn < MaxNbr; It = GridNext[It])
+					{
+						const FRef& R = GridItems[It];
+						const FFish& O = Schools[R.School].Fish[R.Fish];
+						if (&O == &F) continue;
+						const FVector D = F.P - O.P;
+						const double D2 = D.SizeSquared();
+						if (D2 > Sight2 || D2 < 1e-8) continue;
+						Nn++;
+						SumV += O.V;
+						SumP += O.P;
+						const double Dd = FMath::Sqrt(D2);
+						if (Dd < SepD) Sep += D / Dd * (SepD - Dd) / SepD;
+						// fear passes on from whoever has it (as it was a step ago, so it travels as a wave)
+						if (O.AlarmIn > MaxAl) MaxAl = O.AlarmIn;
+						FleeIn += O.FleeDir * O.AlarmIn;
+					}
+				}
+	}
+	NbrAcc += Nn;
+	if (Nn > 0)
+	{
+		const FVector AvgV = SumV / Nn, AvgP = SumP / Nn;
+		Acc += (AvgV - F.V) * B.Align * 1.2;                             // alignment
+		Acc += (AvgP - F.P) * B.Cohere * 1.1 / FMath::Max(.2, Space);   // cohesion
+		Acc += Sep * B.SepK * Sc.Accel;                                  // separation
+	}
+
+	// ---- the school's intent: its wander, its coral head, its hunt; and back to the others if it has strayed
+	const bool bHold = Sc.Role == ERole::Reef || Sc.Role == ERole::Hole || Sc.Role == ERole::Hanger;
+	if (bHold)
+	{
+		// a lazy aggregation: each fish drifts round the spot, never quite still
+		const FVector To = S.Goal - F.P;
+		const double Rr = S.Radius * (Sc.Role == ERole::Reef ? 1.1 : .4);
+		const double Out = FMath::Max(0.0, Flat(To).Size() - Rr * .5) / FMath::Max(.3, Rr);
+		Acc += Flat(To).GetSafeNormal() * Out * Cruise * B.Goal * 2.0;
 	}
 	else
 	{
-		FVector F;
-		const FVector P0 = TrackAt(S, Ld.Delay, F);
-		FVector Rt, Up;
-		Frame(F, Rt, Up);
-		// the body tightens into a ball under attack, and draws out long when it swims hard
-		const double Sp = FMath::Lerp(1.0, .45, S.Ball);
-		const double Str = FMath::Clamp(S.L[0].V.Size() / FMath::Max(.3, Cruise) - 1, 0.0, 1.5);
-		const FVector& Sh = S.Shape;
-		const double Trail = FMath::Min(S.L[0].V.Size(), Burst) * (Ld.Delay - .05);   // where it was then is this far back
-		Want = P0 + F * Trail + (F * Ld.Slot.X * Sh.X * (1 + .35 * Str) + Rt * Ld.Slot.Y * Sh.Y * (1 - .12 * Str) + Up * Ld.Slot.Z * Sh.Z) * Sp;
-		Speed = FMath::Max(Cruise, S.L[0].V.Size()) * 1.3;
+		FVector To = S.Goal - S.Center;
+		const double Dg = To.Size();
+		const FVector Want = Dg > .01 ? To / Dg * Cruise * FMath::Min(1.0, Dg / 3.0) : FVector::ZeroVector;
+		const double Gk = (Sc.bPredator && S.HuntLeft > 0) ? 2.5 : 1.0;
+		Acc += (Want * (Sc.bPredator && S.HuntLeft > 0 ? Burst / FMath::Max(.1, Cruise) : 1.0) - F.V) * B.Goal * .6 * Gk;
 	}
-	const FVector To = Want - Ld.P;
-	const double Dist = To.Size();
-	const double Arrive = bMain ? FMath::Min(1.0, Dist / 2.5) : FMath::Min(2.2, Dist / .5);
-	FVector Desired = Dist > 1e-3 ? To / Dist * Speed * Arrive : FVector::ZeroVector;
-	if (!bMain) Desired += S.L[0].V;   // moving with the body
-	else if (S.bSqueezed)
 	{
-		// a bait ball crowded by the reef, a wreck or the edge of its water slides off it into the open, and in thin
-		// water keeps to the middle of what depth there is
-		Desired += S.Nudge * Tempers[S.Sp].Slide;
-		if (Sc.Role == ERole::Bait || Sc.Role == ERole::Hunter) Desired.Y += FMath::Clamp((S.MidY - Ld.P.Y) * 1.2, -.8, .8) * FMath::Max(0.0, 1 - S.Shape.Z);
+		// cut off from its school (round a coral head, past a predator): it finds its way back once the fright passes
+		const FVector ToC = S.Center - F.P;
+		const double Dc = ToC.Size(), Far = (Dc - S.Radius * 1.6) / FMath::Max(.3, S.Radius);
+		if (Far > 0 && Dc > 1e-3) Acc += ToC / Dc * FMath::Min(1.0, Far) * Cruise * (1 - .8 * F.Alarm) * .9;
 	}
-	// separation from the school's other leaders
-	for (int32 j = 0; j < S.L.Num(); j++)
+
+	// ---- milling: round and round the ball's middle, a tight vortex
+	if (S.Mill > .01)
 	{
-		if (j == K) continue;
-		const FVector D = Ld.P - S.L[j].P;
-		const double Dd = D.Size(), Want2 = (Ld.Ext + S.L[j].Ext) * .8 * FMath::Min(1.0, FMath::Min(S.Shape.Y, S.Shape.Z) * 1.15);
-		if (Dd < Want2 && Dd > 1e-3) Desired += D / Dd * (Want2 - Dd) * 1.5;
+		const FVector R0 = Flat(F.P - S.Center);
+		const double Rd = R0.Size();
+		if (Rd > 1e-3)
+		{
+			const FVector Tan = FVector(-R0.Z, 0, R0.X) / Rd * S.MillDir;
+			const double Ring = S.Radius * .55;
+			const FVector Want = Tan * Cruise * 1.7 - R0 / Rd * (Rd - Ring) * 1.2 + FVector(0, (S.Center.Y - F.P.Y) * .6, 0);
+			Acc += (Want - F.V) * S.Mill * 2.4;
+		}
 	}
-	// threats
+
+	// ---- threats: run, and the fear runs through the school ahead of any of them
 	FVector Flee = FVector::ZeroVector;
-	double Best = 0;
+	double Direct = 0;
 	for (const FThreat& T : Threats)
 	{
 		if (T.SchoolId == S.Id) continue;
+		if (Sc.bPredator && T.Kind != 1 && T.Kind != 0) continue;   // hunters mind only the boat and the diver
 		double R = T.R;
-		if (T.Kind == 0) R = Sc.DiverR * T.R + Ld.Ext;
-		else if (T.Kind == 2)
-		{
-			if (Sc.bPredator) continue;
-			// reef fish and flats fish only mind a predator that's charging; bait minds them all
-			if (Sc.Role != ERole::Bait && T.Power < .9) continue;
-			R += Ld.Ext;
-		}
-		else R += Ld.Ext;
-		if (bMain) R += S.Radius - Ld.Ext;   // the school's centre feels a threat at the edge of the whole school
-		if (Sc.Role == ERole::Hanger && T.Kind == 0) R *= .5;   // a barracuda just backs off a little
-		FVector D = Ld.P - T.P;
+		if (T.Kind == 0) R = Sc.DiverR * T.R;
+		else if (T.Kind == 2 && Sc.Role != ERole::Bait && T.Power < .9) continue;   // reef and flats fish mind a charge
+		else if (T.Kind == 4 && Sc.Role != ERole::Bait && Sc.Role != ERole::Flats) R *= .5;
+		if (Sc.Role == ERole::Hanger && T.Kind == 0) R *= .5;
+		FVector D = F.P - T.P;
 		const double Dd = D.Size();
 		if (Dd > R || Dd < 1e-3) continue;
-		double K2 = (1 - Dd / R) * T.Power;
+		const double K = (1 - Dd / R) * T.Power;
 		FVector Dir = D / Dd;
-		if (T.Kind == 2 && !T.V.IsNearlyZero())
+		if ((T.Kind == 2 || T.Kind == 0 || T.Kind == 1) && !T.V.IsNearlyZero())
 		{
-			// the fountain: dodge off the predator's line, not straight ahead of it
+			// the fountain: off the line the threat is coming along, not straight ahead of it
 			const FVector Vn = T.V.GetSafeNormal();
 			FVector Lat = D - Vn * FVector::DotProduct(D, Vn);
-			if (Lat.SizeSquared() < 1e-4) Lat = FVector::CrossProduct(Vn, FVector(0, 1, 0));
+			if (Lat.SizeSquared() < 1e-4) Lat = FVector::CrossProduct(Vn, FVector(0, 1, 0)) * (F.Seed < .5 ? -1 : 1);
 			Dir = (Lat.GetSafeNormal() * 1.6 + Dir * .5).GetSafeNormal();
 		}
-		if (T.Kind == 0)
+		Dir.Y *= .45;
+		Flee += Dir * K;
+		Direct = FMath::Max(Direct, FMath::Min(1.0, K * 1.8));
+	}
+	const double Prev = F.Alarm;
+	if (Direct > 0)
+	{
+		F.Alarm = FMath::Max(F.Alarm, Direct);
+		F.FleeDir = Flee.GetSafeNormal();
+	}
+	else if (MaxAl * .9 > F.Alarm + .02)
+	{
+		// caught from the neighbours: quickly, but not at once, and it bolts the way they're bolting
+		F.Alarm = FMath::Min(MaxAl * .9, F.Alarm + Dt * 9);
+		if (!FleeIn.IsNearlyZero()) F.FleeDir = FleeIn.GetSafeNormal();
+	}
+	else F.Alarm = FMath::Max(0.0, F.Alarm - Dt * .45);
+	// the flash: the moment it takes fright it rolls onto its side and the light catches its flank
+	if (F.Alarm - Prev > Dt * 3.5 && F.Alarm > .4 && F.Flash < .25)
+	{
+		F.Flash = 1;
+		F.FlashSide = FVector::CrossProduct(F.Fwd, F.FleeDir).Y >= 0 ? 1 : -1;
+		Flashes++;
+	}
+	F.Flash = FMath::Max(0.0, F.Flash - Dt * 2.2);
+	if (F.Alarm > .02 && !F.FleeDir.IsNearlyZero()) Acc += (F.FleeDir * Burst - F.V) * F.Alarm * 3.0 * (1 - .5 * S.Mill);
+	if (Sc.Role == ERole::Hole && F.Alarm > .3) Acc.Y = FMath::Min(Acc.Y, -.5);   // a grouper backs down into its hole
+
+	// ---- its depth band, the bottom, coral heads and wrecks ahead, the surface
+	const double TopHere = TopAt(F.P.X, F.P.Z);
+	double WantY;
+	if (Lives(Sc.Role)) WantY = TopHere + F.BandY;
+	else
+	{
+		const double Lo = TopHere + Sc.AltMin + F.Len, Hi = -.35 - F.Len * .5;
+		WantY = FMath::Clamp(S.Goal.Y + F.BandY * (1 - .5 * S.Mill), FMath::Min(Lo, Hi), Hi);
+	}
+	Acc.Y += (WantY - F.P.Y) * .9 - F.V.Y * .6;
+	const double Spd0 = F.V.Size();
+	const FVector Vn = Spd0 > .02 ? F.V / Spd0 : F.Fwd;
+	{
+		const double Look = FMath::Max(.5, Spd0 * .9) + F.Len;
+		const FVector Q = F.P + Flat(Vn).GetSafeNormal() * Look;
+		const double TopQ = TopAt(Q.X, Q.Z);
+		const double Clear = F.P.Y - F.Len * .6;
+		if (TopQ > Clear)
 		{
-			// a diver: the school curves round you and carries on, rather than turning tail (a fast-finning diver is
-			// still a fright: T.Power rises with your speed)
-			const FVector Vn = Ld.V.SizeSquared() > 1e-4 ? Ld.V.GetSafeNormal() : Ld.Fwd;
-			FVector Lat = D - Vn * FVector::DotProduct(D, Vn);
-			if (Lat.SizeSquared() < 1e-4) Lat = FVector::CrossProduct(Vn, FVector(0, 1, 0));
-			Dir = (Lat.GetSafeNormal() * 1.5 + Dir * .45).GetSafeNormal();
-			K2 *= .8;
-		}
-		Dir.Y *= .4;
-		Flee += Dir * K2;
-		// the threat the followers dodge: strongest wins
-		const double Felt = (1 - Dd / (R + 8)) * T.Power;
-		if (Felt > Best) { Best = Felt; Ld.ThreatP = T.P; }
-		if (Sc.Role == ERole::Bait && T.Kind == 2 && Dd < 22) S.Ball = FMath::Min(1.0, S.Ball + Dt * 2.5);
-	}
-	Ld.ThreatK = Best > Ld.ThreatK ? FMath::Min(1.0, Ld.ThreatK + Dt * 6) : FMath::Max(Best, Ld.ThreatK - Dt * .35);
-	// the school dodges as one: the whole body swerves on its centre's flight; a sub-group only gives way a little
-	// where the threat is right on it (the fish themselves part round it in the shader)
-	if (!bMain) Flee *= .35;
-	if (!Flee.IsNearlyZero())
-	{
-		const double Fk = FMath::Min(1.0, Flee.Size());
-		Ld.Alarm = FMath::Max(Ld.Alarm, Fk);
-		Desired = FMath::Lerp(Desired, Flee.GetSafeNormal() * Burst, FMath::Min(1.0, Fk * 1.8));
-		if (Sc.Role == ERole::Hole) Desired.Y = FMath::Min(Desired.Y, -.3);   // a grouper backs down into its hole
-	}
-	Ld.Alarm = FMath::Max(0.0, Ld.Alarm - Dt * .3);
-	// cut off from the main leader by a scare: school on its own for a while, then come back
-	// one body: no part of the school ever goes off on its own (it parts round a threat and closes up again)
-	Ld.LooseT = 0;
-	// coral heads, rock and wreck in the way at its depth: feel ahead and to either side and swing round the clear side
-	// (the main leader steers; the body follows its path)
-	if (bMain && Ld.V.SizeSquared() > .01)
-	{
-		const FVector Vn = Flat(Ld.V).GetSafeNormal();
-		const double Look = FMath::Max(3.0, Ld.V.Size() * 2.5) + Ld.Ext;
-		auto Blocked = [&](const FVector& Dir2) { const FVector Q = Ld.P + Dir2 * Look; return TopAt(Q.X, Q.Z) - (Ld.P.Y - Ld.Ext * .5); };
-		const double Ahd = Blocked(Vn);
-		if (Ahd > 0)
-		{
-			const FVector L = Vn.RotateAngleAxis(40, FVector(0, 1, 0)), R2 = Vn.RotateAngleAxis(-40, FVector(0, 1, 0));
-			const double BL = Blocked(L), BR = Blocked(R2);
-			const FVector Side = BL < BR ? L : R2;
-			Desired = FMath::Lerp(Desired, Side * FMath::Max(Cruise, Desired.Size()), FMath::Min(1.0, .4 + Ahd));
-			if (S.GoalT > 1.5) S.WanderYaw = FMath::Atan2(Side.Z, Side.X);   // and the wander goes that way too
+			// in the way at its depth: round the clear side (the school parts round it and closes up behind)
+			const FVector Lft = Flat(Vn).GetSafeNormal().RotateAngleAxis(50, FVector(0, 1, 0)), Rgt = Flat(Vn).GetSafeNormal().RotateAngleAxis(-50, FVector(0, 1, 0));
+			const double TL = TopAt(F.P.X + Lft.X * Look, F.P.Z + Lft.Z * Look), TR = TopAt(F.P.X + Rgt.X * Look, F.P.Z + Rgt.Z * Look);
+			const FVector Side = TL < TR ? Lft : Rgt;
+			const double Hard = FMath::Min(1.5, (TopQ - Clear) / FMath::Max(.2, F.Len) + .3);
+			Acc += Side * Sc.Accel * 2.0 * Hard + FVector(0, Sc.Accel * .6 * Hard, 0);
 		}
 	}
-	// the bottom, the coral and wrecks below; the surface above; the habitat around
-	const FVector Ahead = Ld.P + Ld.V * 1.2;
-	const double Top = FMath::Max(TopAt(Ld.P.X, Ld.P.Z), TopAt(Ahead.X, Ahead.Z));
-	const double Lo = Top + FMath::Max(.15, Sc.AltMin * .6) + Ld.Ext * (Sc.Role == ERole::Bait ? .7 : .35) * FMath::Min(1.0, S.Shape.Z);
-	const double Hi = -.35 - Ld.Ext * .45 * FMath::Min(1.0, S.Shape.Z) - S.Len * .2;
-	if (Ld.P.Y < Lo) Desired.Y = FMath::Max(Desired.Y, (Lo - Ld.P.Y) * 2.5);
-	if (Ld.P.Y > Hi && Hi > Lo) Desired.Y = FMath::Min(Desired.Y, (Hi - Ld.P.Y) * 2.5);
-	if (!ValidWater(S.Sp, Ahead.X, Ahead.Z) || Flat(Ld.P - S.Home).Size() > Sc.Roam * 1.6 + 10)
-	{
-		const FVector Home = Flat(S.Home - Ld.P).GetSafeNormal() * FMath::Max(Cruise, Desired.Size());
-		Desired = FMath::Lerp(Desired, Home, .7);
-		if (bMain && S.GoalT > 1) S.GoalT = 0;
-	}
-	// integrate
-	double Max = Flee.IsNearlyZero() && !bHunting ? FMath::Max(Cruise * 2.2, .6) : Burst;
-	if (!bMain) Max = FMath::Max(Max, S.L[0].V.Size() * 1.4);   // the body keeps together when it bolts
-	Desired = ClampLen(Desired, Max);
-	Ld.V += ClampLen(Desired - Ld.V, Sc.Accel * (Flee.IsNearlyZero() ? 1 : 2) * Dt);
-	Ld.P += Ld.V * Dt;
-	if (Ld.P.Y < Top + .1) { Ld.P.Y = Top + .1; Ld.V.Y = FMath::Max(0.0, Ld.V.Y); }
-	if (Ld.P.Y > -.25) { Ld.P.Y = -.25; Ld.V.Y = FMath::Min(0.0, Ld.V.Y); }
-	// face the way it swims (slowly when hovering); a hovering hanger turns to watch a diver
-	const double Spd = Ld.V.Size();
-	FVector Face = Spd > .06 ? Ld.V / Spd : Ld.Fwd;
-	if (Sc.Role == ERole::Hanger && Spd < .4) for (const FThreat& T : Threats) if (T.Kind == 0 && (T.P - Ld.P).Size() < 14) Face = (T.P - Ld.P).GetSafeNormal();
+
+	// ---- integrate: limited acceleration and turn rate, its own speed, no snapping
+	const double Pref = FMath::Lerp(bHold ? Cruise * .45 : Cruise, Burst, FMath::Min(1.0, F.Alarm * 1.2));
+	const double MaxA = Sc.Accel * (1 + 1.5 * F.Alarm) * 2.0;
+	FVector NewV = F.V + Acc.GetClampedToMaxSize(MaxA) * Dt;
+	double Spd = NewV.Size();
+	Spd += (Pref - Spd) * FMath::Min(1.0, Dt * (F.Alarm > .2 ? 3.0 : 1.2));
+	Spd = FMath::Clamp(Spd, bHold ? .03 : Cruise * .25, Burst * 1.15);
+	FVector Dir = NewV.SizeSquared() > 1e-6 ? NewV.GetSafeNormal() : Vn;
+	const double MaxTurn = (1.6 + 1.2 * FMath::Min(1.0, .35 / FMath::Max(.08, F.Len))) * Tm.Agile * (1 + 1.2 * F.Alarm) * Dt;
+	const double Ang = FMath::Acos(FMath::Clamp(FVector::DotProduct(Vn, Dir), -1.0, 1.0));
+	if (Ang > MaxTurn && Ang > 1e-4) Dir = FQuat::Slerp(FQuat::Identity, FQuat::FindBetweenNormals(Vn, Dir), MaxTurn / Ang).RotateVector(Vn).GetSafeNormal();
+	Dir.Y = FMath::Clamp(Dir.Y, -.5, .5);
+	F.V = Dir.GetSafeNormal() * Spd;
+	F.P += F.V * Dt;
+	const double TopNow = FMath::Max(TopHere, TopAt(F.P.X, F.P.Z));
+	if (F.P.Y < TopNow + .08 + F.Len * .2) { F.P.Y = TopNow + .08 + F.Len * .2; F.V.Y = FMath::Max(0.0, F.V.Y); }
+	if (F.P.Y > -.2 - F.Len * .2) { F.P.Y = -.2 - F.Len * .2; F.V.Y = FMath::Min(0.0, F.V.Y); }
+
+	// ---- the body: face the way it swims, bank into turns, roll flat on its side in a flash; the tail beat
+	const FVector OldF = F.Fwd;
+	FVector Face = Spd > .04 ? F.V / Spd : F.Fwd;
 	Face.Y = FMath::Clamp(Face.Y, -.45, .45);
-	Ld.Fwd = FMath::Lerp(Ld.Fwd, Face.GetSafeNormal(), FMath::Min(1.0, Dt * (Spd > .5 ? 5 : 1.2) * Tempers[S.Sp].Agile)).GetSafeNormal();
-	// tail beat and how hard it swims
-	const double Rel = Spd / FMath::Max(.05, S.Len);
-	Ld.Phase = FMath::Fmod(Ld.Phase + Dt * 2 * PI * FMath::Min(9.0, .7 + .55 * Rel), PhaseWrap);
-	Ld.Amp = FMath::Lerp(Ld.Amp, FMath::Clamp(.18 + .2 * Rel, .18, 1.0), FMath::Min(1.0, Dt * 3));
-}
-
-// A bait ball takes the shape of the water it is in. It feels round itself (and a little ahead) for the bottom,
-// the surface, coral heads and wrecks rising into it and the edge of the water it lives in, and gives way: over a
-// shallow flat or a reef top it spreads into a low sheet; along a channel or between coral heads it narrows and
-// draws out into a ribbon; pressed against a wall it slides off it. The fish keep their room, so what it loses one
-// way it gains another, and when the water opens up again it rounds back out.
-void AKeysSchools::SenseShape(FSchool& S, double Dt)
-{
-	const FLeader& M = S.L[0];
-	S.SenseT -= Dt;
-	if (S.SenseT <= 0)
-	{
-		S.SenseT = .15;
-		const double Sp = FMath::Lerp(1.0, .45, S.Ball);
-		const double R0 = FMath::Max(.4, S.Radius * Sp);
-		FVector F = Flat(M.Fwd).GetSafeNormal();
-		if (F.IsNearlyZero()) F = FVector(1, 0, 0);
-		FVector Rt, Up;
-		Frame(F, Rt, Up);
-		Rt = Flat(Rt).GetSafeNormal();
-		// depth: the highest bottom under the ball and just ahead of it
-		const FVector C = M.P + Flat(M.V) * .6;
-		double Floor = TopAt(C.X, C.Z);
-		for (int32 q = 0; q < 8; q++)
-		{
-			const double A = q * PI / 4;
-			const FVector Q = C + (F * FMath::Cos(A) + Rt * FMath::Sin(A)) * R0 * .8;
-			Floor = FMath::Max(Floor, TopAt(Q.X, Q.Z));
-		}
-		const double Lo = Floor + .25 + S.Len, Hi = -.35 - S.Len * .3;
-		const double Room = Hi - Lo, Hn = 2 * R0 * .85;
-		const double SqZ = FMath::Clamp(Room / Hn, .22, 1.0);
-		S.MidY = (Lo + Hi) * .5;
-		// room either side: out from the centre until coral, a wreck or the edge of its water gets in the way
-		const double BallBot = M.P.Y - R0 * SqZ * .6;
-		double Free[2];
-		for (int32 Side = 0; Side < 2; Side++)
-		{
-			const double Sg = Side ? 1 : -1;
-			Free[Side] = R0 * 1.6;
-			for (int32 Stp = 1; Stp <= 6; Stp++)
-			{
-				const double D = R0 * 1.6 * Stp / 6;
-				const FVector Q = C + Rt * Sg * D;
-				if (!ValidWater(S.Sp, Q.X, Q.Z) || TopAt(Q.X, Q.Z) > BallBot) { Free[Side] = FMath::Max(.15, D - R0 * .2); break; }
-			}
-		}
-		// what it can't have upward it takes sideways and lengthways; what it can't have sideways, lengthways
-		const double Wide = (Free[0] + Free[1]) / (2 * R0);
-		const double SY = FMath::Clamp(FMath::Min(1 / FMath::Sqrt(SqZ), Wide), .3, 1.7);
-		const double SX = FMath::Clamp(1 / (SY * SqZ), .75, 3.2);
-		// each species gives to it as far as its nature lets it, from its own shape at ease
-		const FTemper& Tm = Tempers[S.Sp];
-		const double Rs = 1 / FMath::Sqrt(Tm.Stretch);
-		S.ShapeWant = FVector(FMath::Lerp(1.0, SX, Tm.Flex) * Tm.Stretch, FMath::Lerp(1.0, SY, Tm.Flex) * Rs, FMath::Lerp(1.0, SqZ, Tm.Flex) * Rs);
-		// slide toward the middle of the gap, off whatever it's pressed against
-		const double Off = (Free[1] - Free[0]) * .5;
-		S.Nudge = FMath::Abs(Off) > R0 * .1 ? Rt * FMath::Clamp(Off, -R0, R0) * 1.1 : FVector::ZeroVector;
-		S.bSqueezed = SqZ < .98 || Wide < .98 || !S.Nudge.IsNearlyZero();
-	}
-	// it gives way quickly and rounds out again slowly
-	for (int32 a = 0; a < 3; a++)
-	{
-		const double Rate = S.ShapeWant[a] < S.Shape[a] ? Tempers[S.Sp].Give : Tempers[S.Sp].Back;
-		S.Shape[a] = FMath::FInterpTo(S.Shape[a], S.ShapeWant[a], Dt, Rate);
-	}
-}
-
-void AKeysSchools::StepSchool(FSchool& S, double Dt, double T)
-{
-	MainGoal(S, Dt);
-	S.Ball = FMath::Max(0.0, S.Ball - Dt * .25);
-	if (S.NFish > 1 && Tempers[S.Sp].Flex > 0) SenseShape(S, Dt);
-	for (int32 k = 0; k < S.L.Num(); k++) SteerLeader(S, k, Dt);
-}
-
-// ================================================================ the track texture
-void AKeysSchools::WriteSample()
-{
-	if (!Tex) return;
-	const int32 Col = int32(SampleIdx % SchHist);
-	for (FSchool& S : Schools)
-	{
-		// the main leader's own track, for its sub-leaders
-		S.TrackP[S.TrackN % SchHist] = S.L[0].P;
-		S.TrackF[S.TrackN % SchHist] = S.L[0].Fwd;
-		S.TrackN++;
-		const double Spread = Specs[S.Sp].Role == ERole::Bait ? FMath::Lerp(1.0, .55, S.Ball) : 1.0;
-		for (const FLeader& Ld : S.L)
-		{
-			if (Ld.Row < 0) continue;
-			FLinearColor* C = Column.GetData() + Ld.Row * SchTex;
-			const FVector P = G2U(Ld.P), F = D2U(Ld.Fwd), Tp = G2U(Ld.ThreatP);
-			const double Top = TopAt(Ld.P.X, Ld.P.Z);
-			C[0] = FLinearColor(float(P.X), float(P.Y), float(P.Z), float(Ld.Phase));
-			C[1] = FLinearColor(float(F.X), float(F.Y), float(F.Z), float(Spread));
-			C[2] = FLinearColor(float(Tp.X), float(Tp.Y), float(Tp.Z), float(Ld.ThreatK));
-			C[3] = FLinearColor(float(Top * 100), -15.f, float(Ld.Amp), float(Ld.Alarm));
-			C[4] = FLinearColor(float(S.Shape.X), float(S.Shape.Y), float(S.Shape.Z), float(Tempers[S.Sp].Dart));
-		}
-	}
-	{
-		FLinearColor* Buf = new FLinearColor[SchRows * SchTex];
-		FMemory::Memcpy(Buf, Column.GetData(), SchRows * SchTex * sizeof(FLinearColor));
-		FUpdateTextureRegion2D* Rg = new FUpdateTextureRegion2D(Col * SchTex, 0, 0, 0, SchTex, SchRows);
-		Tex->UpdateTextureRegions(0, 1, Rg, SchTex * sizeof(FLinearColor), sizeof(FLinearColor), (uint8*)Buf, [](uint8* D, const FUpdateTextureRegion2D* R) { delete[] (FLinearColor*)D; delete R; });
-		Uploads++;
-	}
-	// a new leader's whole history starts where it is now, so its followers have something to read
-	for (const int32 Row : FreshRows)
-	{
-		FLinearColor* Buf = new FLinearColor[SchHist * SchTex];
-		for (int32 h = 0; h < SchHist; h++) FMemory::Memcpy(Buf + h * SchTex, Column.GetData() + Row * SchTex, SchTex * sizeof(FLinearColor));
-		FUpdateTextureRegion2D* Rg = new FUpdateTextureRegion2D(0, Row, 0, 0, SchHist * SchTex, 1);
-		Tex->UpdateTextureRegions(0, 1, Rg, SchHist * SchTex * sizeof(FLinearColor), sizeof(FLinearColor), (uint8*)Buf, [](uint8* D, const FUpdateTextureRegion2D* R) { delete[] (FLinearColor*)D; delete R; });
-	}
-	FreshRows.Reset();
-	SampleIdx++;
+	F.Fwd = FMath::Lerp(F.Fwd, Face.GetSafeNormal(), FMath::Min(1.0, Dt * 7)).GetSafeNormal();
+	const double Yaw0 = FMath::Atan2(OldF.Z, OldF.X), Yaw1 = FMath::Atan2(F.Fwd.Z, F.Fwd.X);
+	const double Yr = Dt > 0 ? FMath::FindDeltaAngleRadians(Yaw0, Yaw1) / Dt : 0;
+	F.YawRate += (Yr - F.YawRate) * FMath::Min(1.0, Dt * 8);
+	const double Bank = FMath::Clamp(F.YawRate * Spd * .55, -.75, .75);
+	const double RollWant = Bank + F.FlashSide * F.Flash * 1.25;
+	F.Roll += (RollWant - F.Roll) * FMath::Min(1.0, Dt * (F.Flash > .1 ? 14 : 5));
+	const double Rel = Spd / FMath::Max(.05, F.Len);
+	F.Freq = 2 * PI * FMath::Clamp(.9 + .55 * Rel, .9, 9.0);
+	F.Phase = FMath::Fmod(F.Phase + F.Freq * Dt, 2 * PI * 64);
+	F.Amp += (FMath::Clamp(.22 + .16 * Rel + .5 * F.Alarm, .2, 1.0) - F.Amp) * FMath::Min(1.0, Dt * 3);
 }
 
 // ================================================================ per frame
@@ -1111,72 +1054,51 @@ void AKeysSchools::Tick(float DeltaSeconds)
 	ReadWorld(Dt);
 	PopT -= Dt;
 	if (PopT <= 0) { PopT = .5; Populate(); }
-	// leaders: every frame up close, every 2nd / 4th frame further off (with the time they missed)
+	BuildGrid();
+	// every frame up close, every 2nd / 4th frame further off (with the time they missed), and far schools heed
+	// fewer neighbours
 	static uint32 TickN = 0;
 	TickN++;
 	for (FSchool& S : Schools)
 	{
-		const double D = Hyp(S.L[0].P.X - Cam.X, S.L[0].P.Z - Cam.Z);
-		const uint32 Every = D < 50 ? 1 : D < 100 ? 2 : 4;
+		const double D = Hyp(S.Center.X - Cam.X, S.Center.Z - Cam.Z);
+		const uint32 Every = D < 35 ? 1 : D < 80 ? 2 : 4;
 		S.Step += Dt;
+		S.bStepped = false;
 		if ((TickN + uint32(S.Id)) % Every) continue;
-		StepSchool(S, FMath::Min(S.Step, .12), NowT);
+		const double Sd = FMath::Min(S.Step, .12);
 		S.Step = 0;
+		StepSchool(S, Sd);
+		const int32 Nbr = Every >= 4 ? FMath::Max(3, Boids[S.Sp].Nbr / 2) : Boids[S.Sp].Nbr;
+		for (int32 i = 0; i < S.Fish.Num(); i++) StepFish(S, i, Sd, Nbr);
+		S.bStepped = true;
 	}
-	// detail level and anchoring: only these touch instance data
+	// detail level: a different mesh up close, mid and far
 	for (FSchool& S : Schools)
 	{
-		const double D = (S.L[0].P - Cam).Size();
-		const bool bSmall = S.Len < .25;
+		const double D = (S.Center - Cam).Size();
 		int32 Lod = D < 16 ? 0 : D < 45 ? 1 : 2;
-		if (bSmall) Lod = FMath::Max(1, Lod);
+		if (S.Len < .25) Lod = FMath::Max(1, Lod);
 		if (S.Lod >= 0 && FMath::Abs(Lod - S.Lod) == 1)
 		{
-			// hysteresis
 			const double Edge = (FMath::Max(Lod, S.Lod) == 1) ? 16 : 45;
-			if (FMath::Abs(D - Edge) < 4) Lod = S.Lod;
+			if (FMath::Abs(D - Edge) < 4) Lod = S.Lod;   // hysteresis
 		}
 		if (Lod != S.Lod)
 		{
 			const int32 P = PoolFor(S.Sp, Lod);
 			if (P < 0) continue;
+			while (PoolMoved.Num() < Pools.Num()) PoolMoved.Add(false);
 			if (PoolDirty.IsValidIndex(S.Pool)) PoolDirty[S.Pool] = true;
 			S.Pool = P;
 			S.Lod = Lod;
 			PoolDirty[P] = true;
 		}
-		FVector Mid = FVector::ZeroVector;
-		double Far = 0;
-		for (const FLeader& Ld : S.L) Mid += Ld.P;
-		Mid /= S.L.Num();
-		const FVector MidU = G2U(Mid);
-		for (const FLeader& Ld : S.L) Far = FMath::Max(Far, (G2U(Ld.P) - S.AnchorUE).Size() / 100);
-		if (Far > RebaseDist)
-		{
-			S.AnchorUE = MidU;
-			Rebases++;
-			if (Pools.IsValidIndex(S.Pool) && Pools[S.Pool] && !PoolDirty[S.Pool])
-			{
-				TArray<FTransform> Xf;
-				Xf.Init(FTransform(S.AnchorUE), S.NFish);
-				Pools[S.Pool]->BatchUpdateInstancesTransforms(S.First, Xf, false, true, true);
-			}
-		}
 	}
+	while (PoolMoved.Num() < Pools.Num()) PoolMoved.Add(false);
 	FlushPools();
-	// the track: 20 samples a second; the material interpolates between the last two
-	SampleT += Dt;
-	int32 NS = 0;
-	while (SampleT >= SchStep && NS < 3) { SampleT -= SchStep; WriteSample(); NS++; }
-	if (SampleT >= SchStep) SampleT = FMath::Fmod(SampleT, SchStep);
-	if (MID)
-	{
-		auto Wrap = [](double H) { return FMath::Fmod(FMath::Fmod(H, double(SchHist)) + SchHist, double(SchHist)); };
-		const double Head = double(SampleIdx - 2) + SampleT / SchStep;
-		MID->SetScalarParameterValue(TEXT("Head"), float(Wrap(Head)));
-		MID->SetScalarParameterValue(TEXT("HeadPrev"), float(Wrap(Head - Dt / SchStep)));
-	}
-	// rough cost, for the log
+	for (FSchool& S : Schools) if (S.bStepped && PoolDirty.IsValidIndex(S.Pool)) WriteInstances(S);
+	for (int32 P = 0; P < Pools.Num(); P++) if (PoolMoved[P] && Pools[P]) { Pools[P]->MarkRenderStateDirty(); PoolMoved[P] = false; }
 	CpuAcc += FPlatformTime::Seconds() - T0;
 	FrameAcc += DeltaSeconds;
 	CpuN++;
@@ -1192,28 +1114,23 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 	if (C.IsEmpty()) C = Cmd;
 	if (C == TEXT("body"))
 	{
-		// how well each school holds together: the furthest sub-group from the centre, in school radii
-		int32 N = 0; double Worst = 0, Sum = 0;
+		// how each school holds together: mean and furthest fish from its centre in school radii, how many are well away
+		// from it (split off), how hard it's milling and how frightened it is
 		for (const FSchool& S : Schools)
 		{
-			if (S.L.Num() < 2) continue;
-			double M = 0;
-			for (int32 k = 1; k < S.L.Num(); k++) M = FMath::Max(M, (S.L[k].P - S.L[0].P).Size() / FMath::Max(.1, S.Radius));
-			Worst = FMath::Max(Worst, M); Sum += M; N++;
+			if (S.Fish.Num() < 3) continue;
+			double Sum = 0, Mx = 0;
+			int32 Off = 0;
+			for (const FFish& F : S.Fish)
+			{
+				const double D = (F.P - S.Center).Size() / FMath::Max(.1, S.Radius);
+				Sum += D; Mx = FMath::Max(Mx, D);
+				if (D > 2) Off++;
+			}
+			UE_LOG(LogTemp, Log, TEXT("KRSchools body %s #%d: %d fish, mean %.2f radii, furthest %.2f, %d split off, mill %.2f, alarm %.2f, speed %.2f m/s"),
+				Specs[S.Sp].Key, S.Id, S.Fish.Num(), Sum / S.Fish.Num(), Mx, Off, S.Mill, S.Alarm, S.CenterV.Size());
 		}
-		UE_LOG(LogTemp, Log, TEXT("KRSchools body: %d schools, mean furthest sub-group %.2f radii, worst %.2f; %d wrapped round the bubble so far"), N, N ? Sum / N : 0.0, Worst, WrapCount);
-		return;
-	}
-	if (C == TEXT("shape"))
-	{
-		// how the bait balls are shaped by the water round them: along x across x up
-		for (const FSchool& S : Schools)
-		{
-			if (S.NFish < 2) continue;
-			const double Top = TopAt(S.L[0].P.X, S.L[0].P.Z);
-			UE_LOG(LogTemp, Log, TEXT("KRSchools shape %s #%d pace %.2f at %.0f %.1f %.0f (bottom %.1f): %.2f x %.2f x %.2f%s"), Specs[S.Sp].Key, S.Id, S.Pace,
-				S.L[0].P.X, S.L[0].P.Y, S.L[0].P.Z, Top, S.Shape.X, S.Shape.Y, S.Shape.Z, S.Nudge.IsNearlyZero() ? TEXT("") : TEXT(", sliding off something"));
-		}
+		UE_LOG(LogTemp, Log, TEXT("KRSchools body: %d wrapped round the bubble so far"), WrapCount);
 		return;
 	}
 	// the point in front of the camera (or the diver), a little way off
@@ -1252,10 +1169,12 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 			S->Goal = S->Home;
 			S->GoalT = 6;
 			// broadside to the view
-			for (FLeader& Ld : S->L) Ld.Fwd = FVector::CrossProduct(Flat2, FVector(0, 1, 0)).GetSafeNormal();
+			const FVector Side = FVector::CrossProduct(Flat2, FVector(0, 1, 0)).GetSafeNormal();
+			for (FFish& F : S->Fish) { F.Fwd = Side; F.V = Side * Specs[Sp].Cruise * .4; }
+			S->Heading = Side;
 			LastPut = S->Id;
 		}
-		UE_LOG(LogTemp, Log, TEXT("KRSchools put %s at %.1f %.1f %.1f (top %.1f): %d fish, %d leaders"), Specs[Sp].Key, At.X, Yc, At.Z, Top, S ? S->NFish : 0, S ? S->L.Num() : 0);
+		UE_LOG(LogTemp, Log, TEXT("KRSchools put %s at %.1f %.1f %.1f (top %.1f): %d fish"), Specs[Sp].Key, At.X, Yc, At.Z, Top, S ? S->Fish.Num() : 0);
 		return S;
 	};
 	if (C == TEXT("put"))
@@ -1296,8 +1215,8 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		// a predator charges the nearest school from off to one side
 		FSchool* Prey = NearestOfRole(Eye, false, -1, 80);
 		if (!Prey) { UE_LOG(LogTemp, Log, TEXT("KRSchools pred: nothing to hunt")); return; }
-		const int32 PreyId = Prey->Id, PreySp = Prey->Sp, PreyN = Prey->NFish;
-		const FVector PreyP = Prey->L[0].P;
+		const int32 PreyId = Prey->Id, PreySp = Prey->Sp, PreyN = Prey->Fish.Num();
+		const FVector PreyP = Prey->Center;
 		const int32 Sp = C == TEXT("shark") ? Blacktip : Jack;
 		const FVector Side = FVector::CrossProduct(Flat2, FVector(0, 1, 0)).GetSafeNormal();
 		const FVector From = PreyP + Side * 16 + Flat2 * 3;
@@ -1307,10 +1226,10 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		{
 			S->bPinned = true;
 			S->PreyId = PreyId;
-			S->HuntDir = (PreyP - S->L[0].P).GetSafeNormal();
-			S->HuntLeft = (PreyP - S->L[0].P).Size() / Specs[Sp].Burst + 2;
+			S->HuntDir = (PreyP - S->Center).GetSafeNormal();
+			S->HuntLeft = (PreyP - S->Center).Size() / Specs[Sp].Burst + 2;
 			S->HuntT = 30;
-			for (FLeader& Ld : S->L) { Ld.Fwd = S->HuntDir; Ld.V = S->HuntDir * Specs[Sp].Burst * .7; }
+			for (FFish& F : S->Fish) { F.Fwd = S->HuntDir; F.V = S->HuntDir * Specs[Sp].Burst * .7; }
 			UE_LOG(LogTemp, Log, TEXT("KRSchools %s charges the %s school (%d fish)"), Specs[Sp].Key, Specs[PreySp].Key, PreyN);
 		}
 	}
@@ -1323,9 +1242,7 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		AKeysDiver* Dv = AKeysDiver::Get(this);
 		if (S && Dv && Dv->IsDiving())
 		{
-			FVector Mid = FVector::ZeroVector;
-			for (const FLeader& Ld : S->L) Mid += Ld.P;
-			Mid /= S->L.Num();
+			const FVector Mid = S->Center;
 			const KeysDive::FState& St = Dv->State();
 			const FVector Dir = (Mid - FVector(St.X, St.Y + .15, St.Z)).GetSafeNormal();
 			Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%f,%f"), FMath::Atan2(-Dir.X, -Dir.Z), FMath::Asin(FMath::Clamp(Dir.Y, -1.0, 1.0))));
@@ -1340,10 +1257,10 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 	else if (C == TEXT("clear")) { for (int32 i = Schools.Num() - 1; i >= 0; i--) Despawn(i); Cells.Reset(); }
 	else if (C == TEXT("stats"))
 	{
-		int32 Fish = 0, Lead = 0;
-		for (const FSchool& S : Schools) { Fish += S.NFish; Lead += S.L.Num(); }
-		UE_LOG(LogTemp, Log, TEXT("KRSchools stats: %d schools, %d fish, %d leaders on the CPU, %d tiles; CPU %.3f ms/frame avg, frame %.2f ms avg (%.0f fps); %d uploads, %d pool rebuilds, %d rebases"),
-			Schools.Num(), Fish, Lead, Tiles.Num(), CpuN ? CpuAcc / CpuN * 1000 : 0, CpuN ? FrameAcc / CpuN * 1000 : 0, FrameAcc > 0 ? CpuN / FrameAcc : 0, Uploads, Rebuilds, Rebases);
-		CpuAcc = FrameAcc = 0; CpuN = Uploads = Rebuilds = Rebases = 0;
+		int32 NF = 0;
+		for (const FSchool& S : Schools) NF += S.Fish.Num();
+		UE_LOG(LogTemp, Log, TEXT("KRSchools stats: %d schools, %d fish (boids), %d fish steps/frame, %.1f neighbours each, %d flashes, %d tiles; CPU %.3f ms/frame avg, frame %.2f ms avg (%.0f fps); %d pool rebuilds"),
+			Schools.Num(), NF, CpuN ? FishSteps / CpuN : 0, FishSteps ? NbrAcc / FishSteps : 0.0, Flashes, Tiles.Num(), CpuN ? CpuAcc / CpuN * 1000 : 0, CpuN ? FrameAcc / CpuN * 1000 : 0, FrameAcc > 0 ? CpuN / FrameAcc : 0, Rebuilds);
+		CpuAcc = FrameAcc = NbrAcc = 0; CpuN = Rebuilds = FishSteps = Flashes = 0;
 	}
 }

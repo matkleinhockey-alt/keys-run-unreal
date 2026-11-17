@@ -261,7 +261,9 @@ public:
 	int32 CurTag = -1;                 // the tagged fish on the card, or -1
 	bool bCardSpeared = false;
 	// the landed fish's middle in the hull's frame, meters (x forward, y, z up)
-	FVector LandedFishLocal() const;         // the card is a speared fish (it can't be tagged)
+	FVector LandedFishLocal() const;
+	// the bait in the water, for the fish to shy from: game meters, w = how lively (0 a float sitting, 1 a fish on)
+	void LureSpots(TArray<FVector4>& Out) const;         // the card is a speared fish (it can't be tagged)
 	FString CardTagHead;
 	TArray<FString> CardTagLines;
 	void TagAndRelease();

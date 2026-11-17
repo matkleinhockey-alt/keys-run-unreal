@@ -7,21 +7,24 @@
 class UInstancedStaticMeshComponent;
 class UStaticMesh;
 class UMaterialInstanceDynamic;
-class UTexture2D;
 struct FKeysMesh;
 
 // The living schools under the boat: bait balls of silversides and herring in mid-water, snapper and grunt schools
 // hovering on coral heads and wrecks, grouper by their holes, barracuda hanging still, bonefish and permit tailing
 // across the flats, jacks and sharks hunting through it all. Ambient only: the spearable fish stay AKeysLife's.
 //
-// Motion runs mostly on the GPU (M_KR_Fish). Each school is a small tree of leaders: one main leader that steers
-// (wanders its habitat, keeps off the bottom, the coral and the wrecks and under the surface, runs from the diver, the
-// boat and predators) and a few sub-leaders that trail it along its own track with a delay, keeping their place in
-// the formation (and breaking away when a predator cuts them off, rejoining later). Only the leaders are simulated
-// here. Twenty times a second their state is written into a float texture (one row per leader, ~2.4 s of history),
-// and every fish is an instance that never moves: the material reads where its leader was a moment ago and places,
-// turns and bends the fish around it, so turns ripple back through the school. Instance data is only rewritten when
-// a school appears, leaves, changes detail level or drifts far from where its instances are anchored.
+// Every fish is its own boid. It sees only its few nearest neighbours of its own kind (found through a spatial hash
+// per species, so a thousand-odd fish cost little): it keeps its distance from them, matches their heading and drifts
+// toward them. On top of that each fish keeps to its species' depth band and spacing, feels its way round coral heads,
+// wrecks and the bottom, follows its school's loose intent (wander the habitat, hold a coral head, hunt), and runs from
+// threats - a predator, the boat, a lure, the diver. Fear spreads from fish to fish faster than any of them can swim,
+// so a scare runs through a school as a wave; each fish that catches it rolls onto its side, flashing. A bait ball
+// under attack tightens and mills round in a vortex; a school that parts round a predator or a coral head closes up
+// again behind it. Schools far from the camera are stepped less often.
+//
+// Rendering: one instanced static mesh per species and detail level; the instances are the fish, moved every time
+// their school is stepped. The material (M_KR_Boid) bends the body and beats the tail with world position offset,
+// the tail's frequency following each fish's swimming speed (carried in per-instance custom data).
 UCLASS()
 class KEYSRUN_API AKeysSchools : public AActor
 {
@@ -36,46 +39,39 @@ public:
 
 	// a shot, a spear hissing past, a splash: fish near (X, Z) bolt (game meters)
 	void Startle(double X, double Z, double Radius);
-	// test hooks (-KRScript fish:...): bait, snapper, grouper, cuda, flats, pred, scare, dash, clear, stats
+	// test hooks (-KRScript fish:...): bait, herring, snapper, grunt, grouper, cuda, flats, pred, shark, scare, look,
+	// put=<species>, clear, clearall, off, on, stats, body
 	void DebugCmd(const FString& Cmd);
 
 	enum class ERole : uint8 { Bait, Reef, Hole, Hanger, Flats, Hunter, Patrol };
 
-	struct FLeader
+	struct FFish
 	{
 		FVector P = FVector::ZeroVector, V = FVector::ZeroVector;   // game meters, y up
 		FVector Fwd = FVector(1, 0, 0);
-		FVector Slot = FVector::ZeroVector;   // place in the main leader's frame (m): x ahead, y right, z up
-		double Delay = 0;                      // how far behind the main leader's track it swims (s)
-		double Phase = 0, Amp = .4, Alarm = 0, ThreatK = 0, LooseT = 0, Ext = 1;
-		FVector ThreatP = FVector::ZeroVector;
-		FVector LooseDir = FVector(1, 0, 0);
-		int32 Row = -1;
+		FVector FleeDir = FVector::ZeroVector;
+		double Roll = 0, YawRate = 0;
+		double Pace = 1;                       // this fish's own speed, round the school's
+		double Phase = 0, Freq = 6, Amp = .3;  // tail beat (rad, rad/s, 0-1)
+		double Alarm = 0, AlarmIn = 0, Flash = 0, FlashSide = 1;
+		double Len = .3, Shade = 1, Seed = 0;
+		double BandY = 0;                      // the depth it likes, inside its species' band
 	};
 
 	struct FSchool
 	{
-		int32 Id = 0, Sp = 0, Lod = -1, Pool = -1, First = 0, NFish = 0;
-		double Len = .3, Radius = 1, Ball = 0, GoalT = 0, Step = 0, HuntT = 0, HuntLeft = 0;
-		double WanderYaw = 0, WanderTurn = 0;   // the main leader's own way: its heading, and how it is swinging
+		int32 Id = 0, Sp = 0, Lod = -1, Pool = -1, First = 0;
+		double Len = .3, Radius = 1, GoalT = 0, Step = 0, HuntT = 0, HuntLeft = 0;
+		double WanderYaw = 0, WanderTurn = 0, Mill = 0, MillDir = 1, Alarm = 0;
 		bool bWander = false;
-		// the shape the water leaves it (bait balls): stretch along / across the heading and up, and a push off
-		// whatever crowds it, from the bottom, the surface, coral and wrecks and the edge of its water
-		FVector Shape = FVector(1, 1, 1), ShapeWant = FVector(1, 1, 1), Nudge = FVector::ZeroVector;
-		double SenseT = 0, MidY = 0;
-		bool bSqueezed = false;
-		double Pace = 1;   // this school's own speed, round its species' (some schools are lazier, some keener)
+		double Pace = 1;
 		FVector Home = FVector::ZeroVector, Goal = FVector::ZeroVector, HuntDir = FVector::ZeroVector;
+		FVector Center = FVector::ZeroVector, CenterV = FVector::ZeroVector, Heading = FVector(1, 0, 0);
 		double HomeTop = 0;
 		int64 Cell = 0;
 		int32 PreyId = -1;
-		bool bPinned = false;
-		FVector AnchorUE = FVector::ZeroVector;
-		TArray<FLeader> L;     // [0] is the main leader
-		TArray<float> Data;    // 8 custom floats per fish (see M_KR_Fish)
-		// the main leader's track (what the texture holds), for the sub-leaders to follow
-		TArray<FVector> TrackP, TrackF;
-		int32 TrackN = 0;
+		bool bPinned = false, bStepped = false;
+		TArray<FFish> Fish;
 		FRandomStream Rng;
 	};
 
@@ -83,7 +79,7 @@ public:
 	{
 		FVector P = FVector::ZeroVector, V = FVector::ZeroVector;
 		double R = 5, Power = 1;
-		uint8 Kind = 0;   // 0 diver, 1 boat, 2 predator, 3 startle
+		uint8 Kind = 0;   // 0 diver, 1 boat, 2 predator, 3 startle, 4 lure
 		int32 SchoolId = -1;
 	};
 
@@ -95,15 +91,12 @@ private:
 	FSchool* Spawn(int32 Sp, const FVector& Home, double HomeTop, int64 Cell, uint32 Seed, double NScale = 1);
 	int32 WrapCount = 0;   // schools that swam out of the bubble and came back in on the far side
 	void Despawn(int32 Index);
-	void StepSchool(FSchool& S, double Dt, double T);
-	void SteerLeader(FSchool& S, int32 K, double Dt);
+	void StepSchool(FSchool& S, double Dt);
+	void StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr);
 	void MainGoal(FSchool& S, double Dt);
-	void SenseShape(FSchool& S, double Dt);
-	FVector TrackAt(const FSchool& S, double Delay, FVector& OutFwd) const;
-	void WriteSample();
+	void BuildGrid();
+	void WriteInstances(FSchool& S);
 	void FlushPools();
-	void SetupTexture();
-	int32 AllocRow();
 	double TopAt(double X, double Z, double* OutFloor = nullptr);
 	const FTile* TileFor(int32 TX, int32 TZ);
 	int32 PoolFor(int32 Sp, int32 Lod);
@@ -116,28 +109,29 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> Pools;
 	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> Meshes;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> MID;
-	UPROPERTY() TObjectPtr<UTexture2D> Tex;
 
 	TArray<int32> PoolKey;          // Sp * 3 + Lod, per pool
-	TArray<bool> PoolDirty;
+	TArray<bool> PoolDirty;         // its instances must be laid out again (a school came, went or changed detail)
+	TArray<bool> PoolMoved;         // its instances were moved this frame
 	TArray<FSchool> Schools;
 	TArray<FThreat> Threats;
 	struct FStartle { FVector P; double R, Left; };
 	TArray<FStartle> Startles;
 	TMap<int64, int32> Cells;       // spawn cell -> school id (or -1: rolled, nothing there)
 	TMap<int64, TUniquePtr<FTile>> Tiles;
-	TArray<int32> FreeRows;
-	TArray<int32> FreshRows;        // rows whose whole history must be filled at the next sample
-	TArray<FLinearColor> Column;    // the sample being written: Rows x 4 texels
+	// the neighbour grid: every fish hashed by species and cell (cell size = its species' sight)
+	struct FRef { int32 School, Fish; };
+	TArray<FRef> GridItems;
+	TArray<int32> GridNext;
+	TMap<int64, int32> GridHead;
 	int32 TilesThisFrame = 0;
 	int32 NextId = 1, LastPut = -1;
-	int64 SampleIdx = 0;
-	double SampleT = 0, PopT = 0, PredT = 0, StatT = 0, NowT = 0;
+	double PopT = 0, PredT = 0, StatT = 0, NowT = 0;
 	FVector Cam = FVector::ZeroVector;   // game meters
 	FVector BoatP = FVector::ZeroVector, BoatV = FVector::ZeroVector;
 	bool bHaveBoat = false, bDiving = false, bScriptLog = false, bOff = false;
 	TArray<FVector4> LifePreds;
-	// rough timing for the log
-	double CpuAcc = 0, FrameAcc = 0;
-	int32 CpuN = 0, Uploads = 0, Rebuilds = 0, Rebases = 0;
+	// rough timing and behaviour for the log
+	double CpuAcc = 0, FrameAcc = 0, NbrAcc = 0;
+	int32 CpuN = 0, Rebuilds = 0, FishSteps = 0, Flashes = 0;
 };

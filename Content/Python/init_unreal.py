@@ -813,6 +813,96 @@ def _fish(mat):
     mel.connect_material_property(s, "Nrm", unreal.MaterialProperty.MP_NORMAL)
 
 
+
+# The schooling fish as boids (KeysSchools.cpp): every fish is an instance the C++ moves itself, so this only bends the
+# body and beats the tail. Per-instance custom data: 0 tail phase (rad) as of 2 the time it was written, 1 its rate
+# (rad/s, following the fish's speed), 3 amplitude, 4 body bend (the turn it's in), 5 flash, 6 shade, 7 seed. The
+# mesh runs nose (+X 50) to tail (-50) in its own units; the offset is sideways (local Y) and turned to world.
+BOID_WAVE = """
+float u = LP.x / 50.0;                                  // 1 at the nose, -1 at the tail
+float ph = Ph + Fr * (T - T0);
+float tailW = saturate((0.35 - u) / 1.35);
+float env = 0.05 + 0.95 * tailW * tailW;               // the wave grows toward the tail
+float wave = sin(ph - (1.0 - u) * 2.6);                // and runs back down the body
+float lat = Amp * 9.0 * env * wave;
+lat += Amp * 1.1 * sin(ph + 1.2) * saturate(u);         // the head's small counter-sway
+float b = (1.0 - u) * 0.5;
+lat += Bend * 13.0 * b * b;                             // the whole body curved into the turn
+float z = Amp * 0.6 * env * sin(ph * 2.0 + Seed * 6.28); // a little heave
+return float3(0.0, lat, z);
+"""
+
+
+def _boid(mat):
+    F1 = unreal.CustomMaterialOutputType.CMOT_FLOAT1
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    names = ["Ph", "Fr", "T0", "Amp", "Bend", "Flash", "Shade", "Seed"]
+    cd = {}
+    for i, n in enumerate(names):
+        c = mel.create_material_expression(mat, unreal.MaterialExpressionPerInstanceCustomData, -2400, 1500 + i * 80)
+        c.set_editor_property("data_index", i)
+        cd[n] = c
+    lp = mel.create_material_expression(mat, unreal.MaterialExpressionLocalPosition, -2400, 2200)
+    tm = mel.create_material_expression(mat, unreal.MaterialExpressionTime, -2400, 2300)
+    wv = _custom(mat, -1900, 1700, BOID_WAVE, F3, ["LP", "T", "Ph", "Fr", "T0", "Amp", "Bend", "Seed"], "Tail beat")
+    _link(lp, "", wv, "LP")
+    _link(tm, "", wv, "T")
+    for n in ("Ph", "Fr", "T0", "Amp", "Bend", "Seed"):
+        _link(cd[n], "", wv, n)
+    tw = mel.create_material_expression(mat, unreal.MaterialExpressionTransform, -1600, 1700)
+    tw.set_editor_property("transform_source_type", unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL)
+    tw.set_editor_property("transform_type", unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+    _link(wv, "", tw, "")
+    mel.connect_material_property(tw, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+    # flash and shade carried over to the pixel shader
+    fl = mel.create_material_expression(mat, unreal.MaterialExpressionVertexInterpolator, -1900, 1950)
+    _link(cd["Flash"], "", fl, "")
+    sh = mel.create_material_expression(mat, unreal.MaterialExpressionVertexInterpolator, -1900, 2050)
+    _link(cd["Shade"], "", sh, "")
+    # the everyday surface (as M_KR_VertexColor), the paint shaded per fish
+    mat.set_editor_property("tangent_space_normal", False)
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -1400, 0)
+    vct = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -1150, 0)
+    _link(vc, "", vct, "A")
+    _link(sh, "", vct, "B")
+    uv1 = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1400, 120)
+    uv1.set_editor_property("coordinate_index", 1)
+    vn = mel.create_material_expression(mat, unreal.MaterialExpressionVertexNormalWS, -1400, 360)
+    cv = mel.create_material_expression(mat, unreal.MaterialExpressionCameraVectorWS, -1400, 480)
+    dp = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -1400, 600)
+    ts = mel.create_material_expression(mat, unreal.MaterialExpressionTwoSidedSign, -1400, 1100)
+    axes = []
+    for i, v in enumerate(((1, 0, 0), (0, 1, 0), (0, 0, 1))):
+        c = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -1400, 720 + i * 120)
+        c.set_editor_property("constant", unreal.LinearColor(v[0], v[1], v[2], 1.0))
+        t = mel.create_material_expression(mat, unreal.MaterialExpressionTransform, -1150, 720 + i * 120)
+        t.set_editor_property("transform_source_type", unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL)
+        t.set_editor_property("transform_type", unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+        _link(c, "", t, "")
+        axes.append(t)
+    s = _custom(mat, -700, 0, SURFACE_FN, F3, ["VC", "K", "LP", "VN", "CV", "D", "AX", "AY", "AZ", "TS"], "Surface")
+    so = []
+    for name, ty in (("Rough", F1), ("Metal", F1), ("Spec", F1), ("Nrm", F3)):
+        o = unreal.CustomOutput()
+        o.set_editor_property("output_name", name)
+        o.set_editor_property("output_type", ty)
+        so.append(o)
+    s.set_editor_property("additional_outputs", so)
+    for src, out, pin in ((vct, "", "VC"), (uv1, "", "K"), (lp, "", "LP"), (vn, "", "VN"), (cv, "", "CV"), (dp, "", "D"), (axes[0], "", "AX"), (axes[1], "", "AY"), (axes[2], "", "AZ"), (ts, "", "TS")):
+        _link(src, out, s, pin)
+    mel.connect_material_property(s, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(s, "Rough", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(s, "Metal", unreal.MaterialProperty.MP_METALLIC)
+    mel.connect_material_property(s, "Spec", unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(s, "Nrm", unreal.MaterialProperty.MP_NORMAL)
+    # the flash: a fish rolled onto its side in fright throws back the light off its silver flank
+    fe = _custom(mat, -700, 400, "return float3(0.62, 0.72, 0.78) * Flash * (0.35 + 0.65 * pow(1.0 - saturate(abs(dot(normalize(VN), normalize(CV)))), 0.5)) * 1.4;", F3, ["Flash", "VN", "CV"], "Flash")
+    _link(fl, "", fe, "Flash")
+    _link(vn, "", fe, "VN")
+    _link(cv, "", fe, "CV")
+    mel.connect_material_property(fe, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
 OCEAN_SCATTER = """
 // Single Layer Water: per-meter scattering, boosted where light shines through the thin top of a crest,
 // and turned milky in the aerated prop wash. Returned per centimeter, which is what the water output wants.
@@ -1868,7 +1958,7 @@ def _sky(mat):
 
 BUILDERS = {
     "M_KR_Sky": _sky, "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
-    "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
+    "M_KR_Boid": _boid, "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
     "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble, "M_KR_Dash": _dash, "M_KR_Glass": _glass,
     "M_KR_GirlSkin": _girl(0), "M_KR_GirlHair": _girl(1), "M_KR_GirlSuit": _girl(2),
     "M_KR_Cloud": _cloud, "M_KR_Rain": _rain, "M_KR_Fish": _fish,

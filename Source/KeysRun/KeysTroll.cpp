@@ -399,6 +399,14 @@ static void AddLure(FKeysMesh& M, FKeysMesh& CM, const FVector& Nose, const FVec
 	M.AddTube(Pv, Pv + Fwd * .03 * Sc, .004 * Sc, .001, 4, Steel);
 }
 
+void AKeysBoatPawn::LureSpots(TArray<FVector4>& Out) const
+{
+	Out.Reset();
+	if (FState == EKeysFish::Waiting || FState == EKeysFish::Nibble || FState == EKeysFish::Bite) Out.Add(FVector4(Bob.X, -.6, Bob.Z, FState == EKeysFish::Waiting ? 0.0 : .5));
+	else if (FState == EKeysFish::Fight) Out.Add(FVector4(FX, -1.0, FZ, 1.0));
+	if (bSpreadOut) for (int32 i = 0; i < NumStations; i++) Out.Add(FVector4(Lures[i].X, FMath::Min(-.3, Lures[i].Y), Lures[i].Z, .7));
+}
+
 bool AKeysBoatPawn::LurePos(int32 Station, FVector& Out) const
 {
 	if (!bSpreadOut || Station < 0 || Station >= NumStations) return false;
