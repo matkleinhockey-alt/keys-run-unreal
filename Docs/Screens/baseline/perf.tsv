@@ -1,0 +1,12 @@
+marina	Medium	1920x1080	29.6 fps	frame 33.74 ms	game 18.00	draw 5.65	gpu 33.94	worst 35.8 ms	150 frames
+marina	High	1920x1080	13.7 fps	frame 73.25 ms	game 19.68	draw 6.56	gpu 73.12	worst 78.7 ms	69 frames
+reef_underwater	Medium	1920x1080	30.0 fps	frame 33.34 ms	game 20.64	draw 9.09	gpu 29.93	worst 33.4 ms	151 frames
+reef_underwater	High	1920x1080	15.1 fps	frame 66.34 ms	game 22.67	draw 11.04	gpu 66.18	worst 130.1 ms	77 frames
+bait_ball	Medium	1920x1080	30.0 fps	frame 33.34 ms	game 20.58	draw 9.18	gpu 29.44	worst 33.4 ms	151 frames
+bait_ball	High	1920x1080	17.6 fps	frame 56.93 ms	game 21.88	draw 11.09	gpu 56.29	worst 96.1 ms	89 frames
+offshore_trolling	Medium	1920x1080	30.0 fps	frame 33.34 ms	game 10.32	draw 5.36	gpu 27.36	worst 33.4 ms	151 frames
+offshore_trolling	High	1920x1080	15.4 fps	frame 64.87 ms	game 16.54	draw 10.53	gpu 64.76	worst 66.5 ms	78 frames
+oil_rig	Medium	1920x1080	30.0 fps	frame 33.34 ms	game 9.96	draw 5.90	gpu 24.30	worst 33.3 ms	151 frames
+oil_rig	High	1920x1080	17.8 fps	frame 56.22 ms	game 14.39	draw 10.73	gpu 56.10	worst 58.8 ms	90 frames
+rain_at_sea	Medium	1920x1080	30.0 fps	frame 33.34 ms	game 10.53	draw 5.57	gpu 27.51	worst 33.4 ms	151 frames
+rain_at_sea	High	1920x1080	16.1 fps	frame 61.94 ms	game 16.37	draw 10.65	gpu 61.85	worst 63.4 ms	81 frames

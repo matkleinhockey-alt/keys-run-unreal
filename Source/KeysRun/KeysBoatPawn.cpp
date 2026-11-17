@@ -47,6 +47,10 @@
 #include "UnrealClient.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
+#include "Engine/GameViewportClient.h"
+#include "Misc/App.h"
+#include "DynamicRHI.h"
+#include "RenderTimer.h"
 
 using namespace KeysGeo;
 using namespace KeysData;
@@ -596,6 +600,39 @@ void AKeysBoatPawn::RunTestScript(double T)
 			}
 		}
 	}
+	// perf=<label>: a second to settle, then five seconds of frame times (as stat unit: frame, game, draw, GPU), one line
+	// appended to Saved/PerfLog.txt per measurement (the perf bookmarks, Tools/perf_bookmarks.sh)
+	{
+		struct FPerfRun { FString Label; double Start = -1, End = -1, Frame = 0, Game = 0, Draw = 0, Gpu = 0, Worst = 0; int32 N = 0; };
+		static FPerfRun PR;
+		if (PR.Start >= 0 && T >= PR.Start)
+		{
+			const double Fm = FApp::GetDeltaTime() * 1000;
+			PR.Frame += Fm; PR.Worst = FMath::Max(PR.Worst, Fm);
+			PR.Game += FPlatformTime::ToMilliseconds(GGameThreadTime);
+			PR.Draw += FPlatformTime::ToMilliseconds(GRenderThreadTime);
+			PR.Gpu += FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles());
+			PR.N++;
+			if (T >= PR.End && PR.N > 0)
+			{
+				const double Ms = PR.Frame / PR.N;
+				int32 PVX = 0, PVY = 0;
+				if (GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport) { const FIntPoint Sz = GEngine->GameViewport->Viewport->GetSizeXY(); PVX = Sz.X; PVY = Sz.Y; }
+				const FString PLine = FString::Printf(TEXT("%s\t%s\t%dx%d\t%.1f fps\tframe %.2f ms\tgame %.2f\tdraw %.2f\tgpu %.2f\tworst %.1f ms\t%d frames\n"),
+					*PR.Label, *KeysGfx::QualityLabel(), PVX, PVY, 1000 / FMath::Max(.01, Ms), Ms, PR.Game / PR.N, PR.Draw / PR.N, PR.Gpu / PR.N, PR.Worst, PR.N);
+				FFileHelper::SaveStringToFile(PLine, *(FPaths::ProjectSavedDir() / TEXT("PerfLog.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+				UE_LOG(LogTemp, Log, TEXT("KRPerf %s"), *PLine);
+				PR.Start = -1;
+			}
+		}
+		if (Steps.Num() && T >= Steps[0].Key && Steps[0].Value.StartsWith(TEXT("perf=")))
+		{
+			PR = FPerfRun();
+			PR.Label = Steps[0].Value.Mid(5);
+			PR.Start = T + 1; PR.End = T + 6;
+			Steps.RemoveAt(0);
+		}
+	}
 	while (Steps.Num() && T >= Steps[0].Key)
 	{
 		const FString Cmd = Steps[0].Value;
@@ -668,6 +705,24 @@ void AKeysBoatPawn::RunTestScript(double T)
 			const double DvYaw = FMath::Atan2(-(BZ - Ez), -(BX - Ex)) + (Cmd.Contains(TEXT(",")) ? FCString::Atod(*Cmd.RightChop(Cmd.Find(TEXT(",")) + 1)) : 0);   // the mask's own yaw; lookrig=pitch,turn
 			if (Dv && Dv->IsDiving()) Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%f,%f"), DvYaw, LkPitch));
 			else CamYaw = FMath::UnwindRadians(Yaw - H + PI);
+		}
+		else if (Cmd == TEXT("bookmark=marina"))
+		{
+			// the perf bookmark: the boat just off the first marina, bow on to its docks
+			TArray<FRunDest> Ds;
+			RunDests(Ds, false);
+			for (const FRunDest& D : Ds)
+			{
+				if (!D.Name.Contains(TEXT("Marina"))) continue;
+				double NX, NZ;
+				if (!TeleportSpot(D, NX, NZ)) continue;
+				X = NX; Z = NZ;
+				H = FMath::Atan2(-(D.Z - Z), D.X - X);
+				Speed = Thr = DVX = DVZ = 0; bCamInit = false;
+				if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
+				UE_LOG(LogTemp, Log, TEXT("KRScript bookmark marina: %s at %.0f %.0f"), *D.Name, X, Z);
+				break;
+			}
 		}
 		else if (Cmd.StartsWith(TEXT("tp=")))
 		{
@@ -930,7 +985,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd.StartsWith(TEXT("ev:"))) { if (AKeysEvents* Ev = AKeysEvents::Get(this)) Ev->DebugCmd(Cmd.Mid(3)); }
 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
-		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *Lc->DebugCmd(Cmd.Mid(3))); }
+		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) { const FString R = Lc->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *R); } }
 		else if (Cmd.StartsWith(TEXT("give=")))
 		{
 			// give=safety.flare,3: consumables as if bought; give=handgun.dot: gear
@@ -1062,7 +1117,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd.StartsWith(TEXT("storm=")) || Cmd.StartsWith(TEXT("weather=")) || Cmd.StartsWith(TEXT("spout")) || Cmd.StartsWith(TEXT("bolt")) || Cmd.StartsWith(TEXT("wxskip=")))
 		{
 			// the weather's test hooks (KeysWeather.h DebugCmd)
-			if (AKeysWeather* Wx = AKeysWeather::Get(this)) UE_LOG(LogTemp, Log, TEXT("KRScript %s -> %s"), *Cmd, *Wx->DebugCmd(Cmd));
+			// (called outside the log: a shipping build compiles UE_LOG out, arguments and all)
+			if (AKeysWeather* Wx = AKeysWeather::Get(this)) { const FString R = Wx->DebugCmd(Cmd); UE_LOG(LogTemp, Log, TEXT("KRScript %s -> %s"), *Cmd, *R); }
 		}
 		else if (Cmd == TEXT("seasnap")) SnapSea();
 		else if (Cmd.StartsWith(TEXT("chart="))) ChartRange = Clamp(FCString::Atod(*Cmd.Mid(6)), 120, 2400);   // chart=2400: the plotter's half-range, m   // the sea jumps to what the wind would raise (no easing)
