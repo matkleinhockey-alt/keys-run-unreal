@@ -45,7 +45,7 @@ class KEYSRUN_API UCharterTuning : public UPrimaryDataAsset
 public:
 	// tips
 	UPROPERTY(EditAnywhere, Category = "Tips") float TipPercentPerMinuteLeft = 10.f;   // % of BasePay per whole minute left on the clock
-	UPROPERTY(EditAnywhere, Category = "Tips") float TimeTipCapPercent = 0.f;          // cap on that tip, % of BasePay (0 = no cap)
+	UPROPERTY(EditAnywhere, Category = "Tips") float TimeTipCapPercent = 100.f;        // cap on that tip, % of BasePay (0 = no cap)
 	UPROPERTY(EditAnywhere, Category = "Tips") float BigFishMargin = .25f;             // a fish this far over MinWeight (0.25 = 25%) earns...
 	UPROPERTY(EditAnywhere, Category = "Tips") int32 BigFishTip = 50;                  // ...this much, each
 	UPROPERTY(EditAnywhere, Category = "Tips") int32 ExtraFishTip = 75;                // each counted fish beyond RequiredCount
@@ -91,6 +91,7 @@ public:
 	FString MarinaName() const { return Marina; }
 	static FString MethodName(ECharterMethod M);
 	static FString TargetLine(const FCharterRequest& R);   // "2 x Mahi-Mahi over 8 lb, trolled"
+	static FString WhereLine(const FCharterRequest& R);    // "Where: Reef, or Hawk Channel"
 
 	void DebugCmd(const FString& Cmd);   // charter=board|take:N|cancel|leave
 

@@ -136,6 +136,8 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunGlove;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunHandL;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunWish;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunReel;   // the spool, flanges and crank: spins as the line pays out
+	double ReelAng = 0, ReelSpin = 0;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Lines;     // flying shaft, its tether, the float line and float
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FishOnLine;
 	UPROPERTY() TObjectPtr<class UPointLightComponent> FishFill;   // lights only the speared fish (lighting channel 1)

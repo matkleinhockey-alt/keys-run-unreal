@@ -303,6 +303,7 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 	case EMenu::Pause:
 	{
 		Add(TEXT("resume"), TEXT("Resume"));
+		Add(TEXT("mode"), TEXT("Mode"), bFreeFish ? TEXT("Free Fish - no clock, no charters, no pay") : TEXT("Charter Captain - clients, clocks, pay"), true);
 		const AKeysEvents* Ev = AKeysEvents::Get(this);
 		const bool bTour = Ev && Ev->InTourney() && Ev->TourneyPhase() != AKeysEvents::ETourney::Over;
 		const bool bRace = Ev && (Ev->RacePhase() == AKeysEvents::ERace::Countdown || Ev->RacePhase() == AKeysEvents::ERace::Racing);
@@ -370,7 +371,16 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 	else if (Id == TEXT("mode"))
 	{
 		bFreeFish = !bFreeFish;
-		if (bFreeFish) PickBestOwnedBoat();
+		if (Menu == EMenu::Pause)
+		{
+			// mid-run: keep the boat you're on; a charter in progress is called off going to Free Fish
+			AKeysCharter* Ch = AKeysCharter::Get(this);
+			const bool bHad = bFreeFish && Ch && Ch->HasActiveCharter();
+			if (bHad) Ch->CancelCharter();
+			ShowToast(bFreeFish ? (bHad ? TEXT("Free Fish - the charter's called off. No clock, no pay: just fish.") : TEXT("Free Fish - no clock, no charters, no pay."))
+				: TEXT("Charter Captain - pick up a charter at any marina's board."), 4);
+		}
+		else if (bFreeFish) PickBestOwnedBoat();
 		SaveEconomy();
 	}
 	else if (Id == TEXT("fuel")) { bUnlimitedFuel = !bUnlimitedFuel; bFuelOutMsg = false; SaveEconomy(); }
@@ -3520,7 +3530,6 @@ namespace
 void AddGripHand(FKeysMesh& M, const FVector& C, const FVector& A0, const FVector& N0, double R, double Curl, double IndexLift, bool bMirror,
 	const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve, const FLinearColor& Nail)
 {
-	if (AddModelHand(M, C, A0, !bMirror, Elbow, Skin, Sleeve)) return;
 	const FVector A = A0.GetSafeNormal();
 	const FVector N = (N0 - A * FVector::DotProduct(N0, A)).GetSafeNormal(UE_SMALL_NUMBER, FVector::CrossProduct(A, FVector::UpVector).GetSafeNormal());
 	const FVector B = bMirror ? FVector::CrossProduct(N, A) : FVector::CrossProduct(A, N);
@@ -3640,7 +3649,7 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 		const FVector A(V.X, V.Y * C - V.Z * Sn, V.Y * Sn + V.Z * C);
 		return FVector(A.X * Cy + A.Z * Sy, A.Y, -A.X * Sy + A.Z * Cy);
 	};
-	const FVector Base = FVector(.27, -.35, -.62) + FVector(.16, -.1, .05) * Jl;
+	const FVector Base = FVector(.25, -.33, -.54) + FVector(.16, -.1, .05) * Jl;   // pulled in a little so the hands fill more of the frame
 	const double Rx = VmRx - .3 * Jl;
 	auto S0 = [&](double A, double B, double C) { return Base + Rot(Rx, FVector(A, B, C)); };   // point in the butt section's frame
 	const FLinearColor RodC(FColor(0x1d, 0x21, 0x26)), Cork(FColor(0xb8, 0x92, 0x5e)), DarkC(FColor(0x22, 0x26, 0x2b)), GoldC(FColor(0xc9, 0xa2, 0x27)),
@@ -3671,12 +3680,15 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 	{
 		const FVector GripC = RP.Butt + RP.Dir * .76;
 		const FVector ElbowL = W(FVector(-.12, -.78, -.12));
-		AddGripHand(M, GripC, RP.Dir, RP.OutUp + (ElbowL - GripC).GetSafeNormal() * .5, .025, .8 + .2 * Squeeze, Lift, false, ElbowL, Skin, Sleeve, Nail);
+		// the realistic model hand (bare, the shirt cuff); the diver's gloved hands stay procedural
+		if (!AddModelHand(M, GripC, RP.Dir, true, ElbowL, Skin, Sleeve))
+			AddGripHand(M, GripC, RP.Dir, RP.OutUp + (ElbowL - GripC).GetSafeNormal() * .5, .025, .8 + .2 * Squeeze, Lift, false, ElbowL, Skin, Sleeve, Nail);
 	}
 	{
 		const double Cc = FMath::Cos(VmCrank), Sn = FMath::Sin(VmCrank);
 		const FVector ElbowR = W(FVector(.52 + .025 * Sn, -.74 + .03 * Cc, -.1 + .02 * Sn));
-		AddGripHand(M, RP.OutKnob, RP.OutKnobAxis, ElbowR - RP.OutKnob, .023, 1, 0, true, ElbowR, Skin, Sleeve, Nail);
+		if (!AddModelHand(M, RP.OutKnob, RP.OutKnobAxis, false, ElbowR, Skin, Sleeve))
+			AddGripHand(M, RP.OutKnob, RP.OutKnobAxis, ElbowR - RP.OutKnob, .023, 1, 0, true, ElbowR, Skin, Sleeve, Nail);
 	}
 	return TipW;
 }

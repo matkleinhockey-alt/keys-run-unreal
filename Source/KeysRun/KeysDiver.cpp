@@ -158,6 +158,7 @@ AKeysDiver::AKeysDiver()
 	GunBase = MakePMC(this, Root, TEXT("GunBase"));
 	GunBandL = MakePMC(this, GunBase, TEXT("GunBandL"));
 	GunBandR = MakePMC(this, GunBase, TEXT("GunBandR"));
+	GunReel = MakePMC(this, GunBase, TEXT("GunReel"));
 	GunShaft = MakePMC(this, GunBase, TEXT("GunShaft"));
 	GunGlove = MakePMC(this, GunBase, TEXT("GunGlove"));
 	GunHandL = MakePMC(this, GunBase, TEXT("GunHandL"));
@@ -272,18 +273,32 @@ void AKeysDiver::BeginPlay()
 		const FVector ReelC0(.05, 0, -.062);
 		M.Surf = SurfMetalPaint;
 		Tube(M, FVector(.05, 0, -.02), ReelC0, .006, .006, 6, ReelC);
-		Tube(M, ReelC0 + FVector(0, -.016, 0), ReelC0 + FVector(0, .016, 0), .036, .036, 18, ReelC, true);
-		M.Surf = SurfDefault;
-		Tube(M, ReelC0 + FVector(0, -.013, 0), ReelC0 + FVector(0, .0175, 0), .031, .031, 18, Mono, true);
-		M.Surf = SurfSteel;
-		M.Surf = SurfMetalPaint;
-		for (int32 Side = -1; Side <= 1; Side += 2)
-			Tube(M, ReelC0 + FVector(0, Side * .0165, 0), ReelC0 + FVector(0, Side * .0185, 0), .039, .039, 20, ReelC, true);   // flanges
-		M.Surf = SurfSteel;
-		Tube(M, ReelC0 + FVector(0, -.018, 0), ReelC0 + FVector(0, -.027, 0), .008, .008, 10, Grey, true);   // hub
-		Tube(M, ReelC0 + FVector(0, -.025, 0), ReelC0 + FVector(-.012, -.025, -.024), .0035, .0035, 6, Grey, true);   // crank arm
-		M.Surf = SurfRubber;
-		Tube(M, ReelC0 + FVector(-.012, -.026, -.024), ReelC0 + FVector(-.012, -.042, -.024), .0055, .005, 8, Band, true);   // knob
+		{
+			// the turning part on its own component, built about the axle (local Y), so it can spin as line pays out
+			FKeysMesh Rl;
+			const FVector O = FVector::ZeroVector;
+			Rl.Surf = SurfMetalPaint;
+			Tube(Rl, O + FVector(0, -.016, 0), O + FVector(0, .016, 0), .036, .036, 18, ReelC, true);
+			Rl.Surf = SurfDefault;
+			Tube(Rl, O + FVector(0, -.013, 0), O + FVector(0, .0175, 0), .031, .031, 18, Mono, true);
+			Rl.Surf = SurfMetalPaint;
+			for (int32 Side = -1; Side <= 1; Side += 2)
+				Tube(Rl, O + FVector(0, Side * .0165, 0), O + FVector(0, Side * .0185, 0), .039, .039, 20, ReelC, true);   // flanges
+			// three lightening holes in the outer flange (pale), so you can see it turn
+			for (int32 k = 0; k < 3; k++)
+			{
+				const double A = k * 2 * PI / 3;
+				const FVector Hc = O + FVector(FMath::Cos(A) * .025, -.0189, FMath::Sin(A) * .025);
+				Tube(Rl, Hc, Hc + FVector(0, -.0008, 0), .0055, .0055, 10, Grey, true);
+			}
+			Rl.Surf = SurfSteel;
+			Tube(Rl, O + FVector(0, -.018, 0), O + FVector(0, -.027, 0), .008, .008, 10, Grey, true);   // hub
+			Tube(Rl, O + FVector(0, -.025, 0), O + FVector(-.012, -.025, -.024), .0035, .0035, 6, Grey, true);   // crank arm
+			Rl.Surf = SurfRubber;
+			Tube(Rl, O + FVector(-.012, -.026, -.024), O + FVector(-.012, -.042, -.024), .0055, .005, 8, Band, true);   // knob
+			Rl.Commit(GunReel, 0, VC);
+			GunReel->SetRelativeLocation(ReelC0 * 100);
+		}
 		M.Surf = SurfSteel;
 		Tube(M, FVector(.09, -.004, -StockH * .5 - .002), FVector(.09, -.004, -StockH * .5 - .014), .0022, .0022, 6, Grey, true);   // line guide
 		// the line from the spool up to the muzzle, sagging a touch
@@ -363,7 +378,7 @@ void AKeysDiver::BeginPlay()
 		Gl.Commit(GunGlove, 0, VC);
 		GunBase->SetVisibility(false, true);
 		GunBase->SetCastShadow(false);
-		GunBandL->SetCastShadow(false); GunBandR->SetCastShadow(false); GunShaft->SetCastShadow(false); GunGlove->SetCastShadow(false); GunHandL->SetCastShadow(false); GunWish->SetCastShadow(false);
+		GunBandL->SetCastShadow(false); GunBandR->SetCastShadow(false); GunShaft->SetCastShadow(false); GunGlove->SetCastShadow(false); GunHandL->SetCastShadow(false); GunWish->SetCastShadow(false); GunReel->SetCastShadow(false);
 	}
 	// ---- the underwater look: extinction, visibility, lens wetting (world/underwater)
 	if (UMaterialInterface* UW = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Underwater.M_KR_Underwater")))
@@ -874,6 +889,14 @@ void AKeysDiver::UpdateGun(double Dt)
 	// the wishbone flicks up off the shaft as the bands slam forward
 	GunWish->SetRelativeLocation(FVector((BandAnchorX - BandLen) * 100, 0, (StockH * .5 + BandRad * 1.1 + .025 * FMath::Abs(Whip)) * 100));
 	GunWish->SetVisibility(bShow);
+	// the reel: the shaft rips line off it in a blur, then it's wound back in while the gun is reloaded
+	{
+		const double Want = Shot.bAlive ? 70.0 : (Gun.ReloadT > 0 && !Speared.bOn && FishMode == 0 ? -9.0 : 0.0);
+		ReelSpin += (Want - ReelSpin) * (1 - FMath::Exp(-Dt / (Shot.bAlive ? .04 : .35)));
+		ReelAng = FMath::Fmod(ReelAng + ReelSpin * Dt, 2 * PI);
+		GunReel->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(ReelAng), 0, 0));
+		GunReel->SetVisibility(bShow);
+	}
 	MuzzleG = U2G(PosUE + Q.RotateVector(FVector(BarrelLen, 0, RailY) * 100));
 }
 

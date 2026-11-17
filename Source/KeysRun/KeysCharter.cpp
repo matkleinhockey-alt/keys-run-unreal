@@ -140,6 +140,31 @@ FString AKeysCharter::TargetLine(const FCharterRequest& R)
 	return S;
 }
 
+FString AKeysCharter::WhereLine(const FCharterRequest& R)
+{
+	// where the target is likeliest: each zone scored by the target's share of what bites there, best two named
+	static const TCHAR* Zones[] = {TEXT("Flats"), TEXT("Backcountry"), TEXT("Creek"), TEXT("Bridge"), TEXT("Hawk Channel"), TEXT("Reef"), TEXT("Offshore")};
+	if (R.TargetSpecies.Num() == 0) return TEXT("Where: anywhere - the reef is a safe bet");
+	TArray<TPair<double, FString>> Score;
+	for (const TCHAR* Z : Zones)
+	{
+		double Tot = 0, Hit = 0;
+		for (const KeysData::FZoneRow& Row : KeysData::ZoneTable(Z))
+		{
+			Tot += Row.W;
+			if (R.TargetSpecies.Contains(FName(*Row.Key))) Hit += Row.W;
+		}
+		if (Hit > 0 && Tot > 0) Score.Add({Hit / Tot, Z});
+	}
+	if (!Score.Num()) return FString();
+	Score.Sort([](const TPair<double, FString>& A, const TPair<double, FString>& B) { return A.Key > B.Key; });
+	FString S = TEXT("Where: ") + Score[0].Value;
+	if (Score.Num() > 1 && Score[1].Key > Score[0].Key * .35) S += TEXT(", or ") + Score[1].Value;
+	if (R.Method == ECharterMethod::Troll) S += TEXT(" - troll the deep edge");
+	else if (R.Method == ECharterMethod::Spear) S += TEXT(" - dive it");
+	return S;
+}
+
 void AKeysCharter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

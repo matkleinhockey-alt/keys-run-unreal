@@ -193,7 +193,7 @@ void AKeysHUD::DrawCharter(AKeysBoatPawn* P)
 	}
 	if (Ch->IsBoardShown() && Ch->NumOffers())
 	{
-		const float BW = 520 * U, RowH = 92 * U, BH = 64 * U + RowH * Ch->NumOffers() + 30 * U, X = W - BW - 24 * U, Y = 285 * U;
+		const float BW = 520 * U, RowH = 114 * U, BH = 64 * U + RowH * Ch->NumOffers() + 30 * U, X = W - BW - 24 * U, Y = 285 * U;
 		DrawRect(Panel, X, Y, BW, BH);
 		DrawRect(Gold, X, Y, BW, 4 * U);
 		Text(FString::Printf(TEXT("CHARTER BOARD - %s"), *Ch->MarinaName()), X + 16 * U, Y + 14 * U, 1.05f, Gold);
@@ -207,18 +207,20 @@ void AKeysHUD::DrawCharter(AKeysBoatPawn* P)
 			Text(FString::Printf(TEXT("$%d"), R->BasePay), X + BW - 90 * U, RY + 6 * U, .9f, Gold);
 			Text(R->RequestText, X + 20 * U, RY + 30 * U, .72f, FLinearColor(.8f, .86f, .92f));
 			Text(FString::Printf(TEXT("%s  -  %.0f min"), *AKeysCharter::TargetLine(*R), R->TimeLimitMinutes), X + 20 * U, RY + 54 * U, .72f, FLinearColor(.6f, .85f, 1.f));
+			Text(AKeysCharter::WhereLine(*R), X + 20 * U, RY + 78 * U, .68f, FLinearColor(.55f, .95f, .7f));
 		}
 		Text(TEXT("F1 / F2 / F3 to take a charter"), X + 16 * U, Y + BH - 26 * U, .72f, FLinearColor(.7f, .75f, .8f));
 	}
 	if (Ch->HasActiveCharter())
 	{
 		const FCharterRequest& R = Ch->GetActiveCharter();
-		const float BW = 460 * U, BH = 128 * U, X = W - BW - 24 * U, Y = 285 * U;
+		const float BW = 460 * U, BH = 150 * U, X = W - BW - 24 * U, Y = 285 * U;
 		DrawRect(Panel, X, Y, BW, BH);
 		DrawRect(FLinearColor(.2f, .75f, .55f), X, Y, 4 * U, BH);
 		Text(FString::Printf(TEXT("CHARTER - %s"), *R.ClientName), X + 16 * U, Y + 10 * U, .9f, Gold);
 		Text(R.RequestText, X + 16 * U, Y + 36 * U, .72f, White);
 		Text(AKeysCharter::TargetLine(R), X + 16 * U, Y + 58 * U, .72f, FLinearColor(.6f, .85f, 1.f));
+		Text(AKeysCharter::WhereLine(R), X + 16 * U, Y + 124 * U, .66f, FLinearColor(.55f, .95f, .7f));
 		const int32 Sec = FMath::CeilToInt32(Ch->SecondsLeft());
 		if (Ch->IsFailed())
 			Text(FString::Printf(TEXT("Charter failed - %s"), *Ch->GetFailReason()), X + 16 * U, Y + 86 * U, 1.0f, FLinearColor(1.f, .4f, .35f));
