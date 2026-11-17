@@ -46,6 +46,7 @@
 #include "Misc/Parse.h"
 #include "UnrealClient.h"
 #include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
 
 using namespace KeysGeo;
 using namespace KeysData;
@@ -3405,9 +3406,121 @@ void AKeysBoatPawn::UpdateViewModel(double Dt)
 // palm. Four fingers stacked along the axis wrap round it joint by joint (Curl 1 is a full fist), the thumb comes round
 // the other way from the index side, and the wrist and forearm run back to the elbow, the sleeve over the forearm.
 // IndexLift lifts the index finger off the grip (feeling the line). Sc scales the whole hand (1 = an adult's).
+// the realistic hand (Content/KeysRun/Props/hand_grip.krfish, Tools/handglb.py from an Artlist model): a right fist closed
+// round the grip with the forearm and shirt cuff, in meters in the grip frame - x along the rod (thumb toward +x), z out
+// toward the forearm, y = z cross x, the origin on the rod axis in the middle of the fist
+namespace
+{
+	struct FGripHandModel
+	{
+		TArray<FVector> P, N;
+		TArray<FLinearColor> C;
+		TArray<bool> bCloth;
+		TArray<int32> T;
+		FVector CuffEnd = FVector::ZeroVector;   // the middle of the cuff's open end
+		double CuffR = .04;
+		bool bOk = false;
+	};
+
+	const FGripHandModel& GripHandModel()
+	{
+		static FGripHandModel M;
+		static bool bLoaded = false;
+		if (bLoaded) return M;
+		bLoaded = true;
+		TArray<uint8> B;
+		const FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Props/hand_grip.krfish");
+		if (!FFileHelper::LoadFileToArray(B, *Path) || B.Num() < 16 || FMemory::Memcmp(B.GetData(), "KRF1", 4)) return M;
+		uint32 NV, NT;
+		FMemory::Memcpy(&NV, B.GetData() + 8, 4); FMemory::Memcpy(&NT, B.GetData() + 12, 4);
+		if (16 + int64(NV) * 28 + int64(NT) * 12 > B.Num()) return M;
+		double ZMax = -1e9;
+		for (uint32 i = 0; i < NV; i++)
+		{
+			const uint8* R = B.GetData() + 16 + i * 28;
+			float F[6]; FMemory::Memcpy(F, R, 24);
+			M.P.Add(FVector(F[0], F[1], F[2]));
+			M.N.Add(FVector(F[3], F[4], F[5]).GetSafeNormal());
+			const bool bBlue = int32(R[26]) > int32(R[24]) + 38;
+			M.bCloth.Add(bBlue);
+			M.C.Add(FLinearColor(FColor(R[24], R[25], R[26], 255)));
+			if (bBlue) ZMax = FMath::Max(ZMax, double(F[2]));
+		}
+		const uint8* Tp = B.GetData() + 16 + int64(NV) * 28;
+		for (uint32 t = 0; t < NT; t++)
+		{
+			uint32 I[3]; FMemory::Memcpy(I, Tp + t * 12, 12);
+			if (I[0] < NV && I[1] < NV && I[2] < NV) M.T.Append({int32(I[0]), int32(I[1]), int32(I[2])});
+		}
+		// the cuff's open end: the cloth within a centimetre of the top
+		FVector Sum = FVector::ZeroVector; int32 Cnt = 0;
+		for (int32 i = 0; i < M.P.Num(); i++) if (M.bCloth[i] && M.P[i].Z > ZMax - .012) { Sum += M.P[i]; Cnt++; }
+		if (Cnt) M.CuffEnd = Sum / Cnt;
+		double Rs = 0;
+		for (int32 i = 0; i < M.P.Num(); i++) if (M.bCloth[i] && M.P[i].Z > ZMax - .012) Rs += FVector::Dist(M.P[i], M.CuffEnd);
+		if (Cnt) M.CuffR = Rs / Cnt;
+		M.bOk = M.T.Num() > 0;
+		UE_LOG(LogTemp, Log, TEXT("KeysRun: grip hand model %d verts %d tris, cuff end %s r %.3f"), M.P.Num(), M.T.Num() / 3, *M.CuffEnd.ToString(), M.CuffR);
+		return M;
+	}
+
+	// the model hand round the grip: thumb toward +A, the forearm turned toward the elbow; the left hand is the right
+	// one mirrored. The shirt sleeve carries on from the cuff to the elbow. False if there's no model.
+	bool AddModelHand(FKeysMesh& M, const FVector& C, const FVector& A0, bool bLeft, const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve)
+	{
+		const FGripHandModel& H = GripHandModel();
+		if (!H.bOk) return false;
+		const FVector A = A0.GetSafeNormal();
+		const FVector ToE = Elbow - C;
+		const FVector Z = (ToE - A * FVector::DotProduct(ToE, A)).GetSafeNormal(UE_SMALL_NUMBER, FVector::CrossProduct(A, FVector::UpVector).GetSafeNormal());
+		const FVector Y = FVector::CrossProduct(Z, A) * (bLeft ? -1.0 : 1.0);
+		auto Xf = [&](const FVector& P) { return C + A * P.X + Y * P.Y + Z * P.Z; };
+		auto Xn = [&](const FVector& N) { return (A * N.X + Y * N.Y + Z * N.Z).GetSafeNormal(); };
+		// tint: the skin toward the game's skin tone, the cloth to the game's shirt, keeping the model's own shading
+		const float SkinL = Skin.GetLuminance(), SleeveL = Sleeve.GetLuminance();
+		const uint8 Keep = M.Surf;
+		M.SyncKinds();
+		const int32 I0 = M.V.Num();
+		for (int32 i = 0; i < H.P.Num(); i++)
+		{
+			const FLinearColor Src = H.C[i];
+			const float L = Src.GetLuminance();
+			FLinearColor Col;
+			if (H.bCloth[i]) Col = Sleeve * FMath::Clamp(L / .35f, .55f, 1.35f);
+			else Col = FLinearColor::LerpUsingHSV(Src, Skin * FMath::Clamp(L / FMath::Max(SkinL, .05f), .4f, 1.4f), .35f);
+			Col.A = 1;
+			M.Surf = H.bCloth[i] ? SurfCloth : SurfSkin;
+			M.AddVert(Xf(H.P[i]), Xn(H.N[i]), Col);
+		}
+		for (int32 t = 0; t + 2 < H.T.Num(); t += 3)
+		{
+			const int32 a = I0 + H.T[t], b = I0 + H.T[t + 1], c = I0 + H.T[t + 2];
+			const FVector Nf = M.N[a] + M.N[b] + M.N[c];
+			const bool bSwap = FVector::DotProduct(FVector::CrossProduct(M.V[b] - M.V[a], M.V[c] - M.V[a]), Nf) > 0;
+			M.T.Append({a, bSwap ? c : b, bSwap ? b : c});
+		}
+		// the sleeve on up to the elbow, from just inside the cuff
+		M.Surf = SurfCloth;
+		const FVector S0 = Xf(H.CuffEnd - FVector(0, 0, .01));
+		const FVector Dir = (Elbow - S0).GetSafeNormal();
+		const double SL = FVector::Dist(Elbow, S0);
+		const int32 NS = 10;
+		for (int32 k = 0; k < NS; k++)
+		{
+			const double t0 = double(k) / NS, t1 = double(k + 1) / NS;
+			auto RR = [&](double t) { return FMath::Lerp(H.CuffR * 1.02, .047, t) * (1 + .03 * FMath::Exp(-t * 4) * FMath::Sin(t * 30 + 1.1)); };
+			M.AddTube(S0 + Dir * SL * t0, S0 + Dir * SL * t1, RR(t0), RR(t1), 14, Sleeve);
+		}
+		M.Surf = Keep;
+		(void)SleeveL;
+		return true;
+	}
+}
+
 void AddGripHand(FKeysMesh& M, const FVector& C, const FVector& A0, const FVector& N0, double R, double Curl, double IndexLift, bool bMirror,
 	const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve, const FLinearColor& Nail)
 {
+	if (AddModelHand(M, C, A0, !bMirror, Elbow, Skin, Sleeve)) return;
 	const FVector A = A0.GetSafeNormal();
 	const FVector N = (N0 - A * FVector::DotProduct(N0, A)).GetSafeNormal(UE_SMALL_NUMBER, FVector::CrossProduct(A, FVector::UpVector).GetSafeNormal());
 	const FVector B = bMirror ? FVector::CrossProduct(N, A) : FVector::CrossProduct(A, N);
