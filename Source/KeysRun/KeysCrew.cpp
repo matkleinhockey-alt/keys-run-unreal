@@ -345,10 +345,62 @@ void AKeysExtras::UpdateHose(double Dt, double T)
 	const bool bStage = P && (P->Stage.bOn || (P->FState == EKeysFish::Caught && !P->bCardSpeared));
 	if (bStage)
 	{
-		BloodAt = P->Stage.bOn ? P->Stage.Final : FVector(-Deck.L * .5 + 1.6, .25, 0);
+		// where the fish lies (held once the haul is over; a fish that never had a haul lands on the aft deck)
+		// under the fish itself once it's on the deck (while it's still coming over the side, where it will land)
+		const FVector Fl = P->LandedFishLocal();
+		if (!P->Stage.bOn || P->Stage.Pull > .98) BloodAt = FVector(Fl.X, Fl.Y, 0);
+		else BloodAt = P->Stage.Final;
+		if (FMath::Abs(BloodAt.Y) > Deck.InnerHB(BloodAt.X)) BloodAt.Y = FMath::Sign(BloodAt.Y) * (Deck.InnerHB(BloodAt.X) - .15);
 		BloodAt.Z = Deck.SoleAt(BloodAt.X);
 		BloodK = FMath::Min(1.0, BloodK + Dt * 1.5);
 		HoseT = -1;
+	}
+	const bool bAboard = bStage && P && (!P->Stage.bOn || P->Stage.Pull > .98);
+	const bool bNewAboard = bAboard && !bWasAboard;
+	bWasAboard = bAboard;
+	if (bNewAboard)
+	{
+		// a fresh landing: a few pools where the fish thrashed and a spray of drops round them
+		Pools.Reset(); Spatter.Reset();
+		FRandomStream R(int32(T * 1000));
+		const int32 NP = 6;
+		for (int32 k = 0; k < NP; k++)
+		{
+			FDeckPool D;
+			D.Home = D.P = FVector2D(BloodAt.X + R.FRandRange(-.4, .4), BloodAt.Y + R.FRandRange(-.28, .28));
+			D.V = FVector2D::ZeroVector;
+			D.R = R.FRandRange(.045, .1) * (k == 0 ? 1.8 : 1);
+			D.Seed = R.FRand() * 10;
+			Pools.Add(D);
+		}
+		for (int32 k = 0; k < 18; k++)
+		{
+			const double A = R.FRand() * 2 * PI, Dd = R.FRandRange(.2, .7);
+			Spatter.Add(FVector(BloodAt.X + FMath::Cos(A) * Dd, BloodAt.Y + FMath::Sin(A) * Dd * .7, R.FRandRange(.006, .016)));
+		}
+	}
+	// the pools run downhill: the boat's tilt puts gravity along the deck, the blood's own drag holds it back, and it
+	// leaves a thinning smear behind it. The hose pushes it aft toward the scuppers.
+	if (BloodK > .01 && P && Pools.Num())
+	{
+		const FVector G = P->GetActorTransform().InverseTransformVectorNoScale(FVector(0, 0, -9.8));
+		const FVector2D Down(G.X, G.Y);
+		TrailAcc += Dt;
+		const bool bDrop = TrailAcc > .12;
+		if (bDrop) TrailAcc = 0;
+		for (FDeckPool& D : Pools)
+		{
+			FVector2D A = Down * .55 / (1 + D.R * 6);
+			if (HoseT > 1.7 && HoseT < 7.4) A += FVector2D(-1.4, (SprayTo.Y - D.P.Y) * -.6);
+			D.V += A * Dt;
+			D.V *= FMath::Exp(-Dt * 2.8);
+			D.P += D.V * Dt;
+			const double Hb = FMath::Max(.1, Deck.InnerHB(D.P.X) - .06);
+			if (FMath::Abs(D.P.Y) > Hb) { D.P.Y = FMath::Sign(D.P.Y) * Hb; D.V.Y *= -.2; }
+			const double Aft = -Deck.L * .5 + .25;
+			if (D.P.X < Aft) { D.P.X = Aft; D.V.X *= -.2; }
+			if (bDrop && D.V.Size() > .02) { D.Trail.Add(D.P); if (D.Trail.Num() > 14) D.Trail.RemoveAt(0); }
+		}
 	}
 	if (bWasStage && !bStage && BloodK > 0) HoseT = 0;
 	bWasStage = bStage;
@@ -385,27 +437,48 @@ void AKeysExtras::UpdateHose(double Dt, double T)
 
 void AKeysExtras::DrawHose(FKeysMesh& M, double T)
 {
-	// the blood: dark splashes and a smear toward the scuppers, washing out to the deck colour
+	// the blood: wet, glossy pools with a darker clotted core and a thinner, redder rim, smears where they've run, and
+	// a spray of drops; it dilutes to pink and washes out to the deck colour under the hose
 	if (BloodK > .01)
 	{
-		const FLinearColor Deck0(.86f, .86f, .83f), Red(.36f, .04f, .04f);
-		const FLinearColor C = FMath::Lerp(Deck0, Red, float(FMath::Min(1.0, BloodK) * .8));
-		FRandomStream R(int32(BloodAt.X * 97 + BloodAt.Y * 31));
-		for (int32 k = 0; k < 5; k++)
+		const FLinearColor Deck0(.86f, .86f, .83f);
+		const float K = float(FMath::Min(1.0, BloodK));
+		const FLinearColor Core = FMath::Lerp(Deck0, FLinearColor(.09f, .006f, .008f), K * .95f);
+		const FLinearColor Rim = FMath::Lerp(Deck0, FLinearColor(.26f, .018f, .016f), K * .9f);
+		const FLinearColor Thin = FMath::Lerp(Deck0, FLinearColor(.4f, .05f, .045f), K * .7f);
+		const uint8 Keep = M.Surf;
+		M.Surf = SurfEye;   // wet and glossy
+		auto Blob = [&](double X, double Y, double Rr, double Seed, const FLinearColor& C, double Lift)
 		{
-			const double X = BloodAt.X + R.FRandRange(-.35, .35), Y = BloodAt.Y + R.FRandRange(-.25, .25);
-			const double Rr = R.FRandRange(.025, .07) * (k == 0 ? 1.6 : 1);
-			const double Z = Deck.SoleAt(X) + .012;
-			for (int32 j = 0; j < 12; j++)
+			const double Z = Deck.SoleAt(X) + .010 + Lift;
+			const int32 NS = 14;
+			for (int32 j = 0; j < NS; j++)
 			{
-				const double A0 = j * PI / 6, A1 = (j + 1) * PI / 6;
-				const double R0 = Rr * (.8 + .3 * FMath::Sin(j * 2.7 + k)), R1 = Rr * (.8 + .3 * FMath::Sin((j + 1) * 2.7 + k));
-				M.AddTri(FVector(X, Y, Z), FVector(X + FMath::Cos(A1) * R1, Y + FMath::Sin(A1) * R1, Z), FVector(X + FMath::Cos(A0) * R0, Y + FMath::Sin(A0) * R0, Z), C, FVector::UpVector);
+				const double A0 = j * 2 * PI / NS, A1 = (j + 1) * 2 * PI / NS;
+				auto Rad = [&](double A) { return Rr * (.78 + .22 * FMath::Sin(A * 3 + Seed) + .12 * FMath::Sin(A * 7 + Seed * 2.3)); };
+				M.AddTri(FVector(X, Y, Z), FVector(X + FMath::Cos(A1) * Rad(A1), Y + FMath::Sin(A1) * Rad(A1), Z), FVector(X + FMath::Cos(A0) * Rad(A0), Y + FMath::Sin(A0) * Rad(A0), Z), C, FVector::UpVector);
 			}
+		};
+		for (const FDeckPool& D : Pools)
+		{
+			// the smear: a thinning ribbon back along where it ran
+			for (int32 i = 1; i < D.Trail.Num(); i++)
+			{
+				const FVector2D A = D.Trail[i - 1], B = D.Trail[i];
+				const FVector2D Dir = (B - A).GetSafeNormal(), Side(-Dir.Y, Dir.X);
+				const double W0 = D.R * .55 * (i - 1) / D.Trail.Num(), W1 = D.R * .55 * i / D.Trail.Num();
+				const double Za = Deck.SoleAt(A.X) + .0095, Zb = Deck.SoleAt(B.X) + .0095;
+				M.AddQuad(FVector(A.X - Side.X * W0, A.Y - Side.Y * W0, Za), FVector(A.X + Side.X * W0, A.Y + Side.Y * W0, Za),
+					FVector(B.X + Side.X * W1, B.Y + Side.Y * W1, Zb), FVector(B.X - Side.X * W1, B.Y - Side.Y * W1, Zb), Thin, FVector::UpVector);
+			}
+			// stretched a little along the way it's running
+			const FVector2D Run = D.V.Size() > .01 ? D.V.GetSafeNormal() : FVector2D(1, 0);
+			const double Str = FMath::Min(.5, D.V.Size() * 2.5);
+			Blob(D.P.X - Run.X * D.R * Str * .5, D.P.Y - Run.Y * D.R * Str * .5, D.R * (1 + Str * .3), D.Seed, Rim, 0);
+			Blob(D.P.X, D.P.Y, D.R * .62, D.Seed + 1.7, Core, .0008);
 		}
-		// the smear running aft to the transom
-		const double Z = Deck.SoleAt(BloodAt.X) + .011;
-		M.AddQuad(FVector(BloodAt.X, BloodAt.Y - .05, Z), FVector(BloodAt.X, BloodAt.Y + .05, Z), FVector(BloodAt.X - .5, BloodAt.Y + .015, Z), FVector(BloodAt.X - .5, BloodAt.Y - .015, Z), C, FVector::UpVector);
+		for (const FVector& S : Spatter) Blob(S.X, S.Y, S.Z, S.X * 13 + S.Y * 7, Rim, 0);
+		M.Surf = Keep;
 	}
 	if (HoseT < 0) return;
 	// the hose: green, from the nozzle in his hands down to the deck and forward to the bib at the console

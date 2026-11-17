@@ -1245,6 +1245,17 @@ def _reef_card(mat):
 # and droplets on the mask right after crossing the surface).
 UNDERWATER = """
 float3 col = Col;
+// the speargun's pressure kick: a ring of bent light racing out from the muzzle, gone in half a second
+if (Shock > 0.002) {
+  float aspectS = View.ViewSizeAndInvSize.x / max(View.ViewSizeAndInvSize.y, 1.0);
+  float2 dv = (UV - ShockP.xy) * float2(aspectS, 1.0);
+  float r = length(dv);
+  float ring = exp(-pow((r - ShockP.z) / 0.035, 2.0));
+  float2 off = (r > 1e-4 ? dv / r : float2(0.0, 0.0)) * ring * Shock * 0.014;
+  off += sin(UV.yx * 70.0 + Time * 28.0) * 0.0016 * Shock * saturate(1.0 - r / (ShockP.z + 0.12));
+  off /= float2(aspectS, 1.0);
+  col = SceneTextureLookup(ViewportUVToBufferUV(UV + off), 14, false).rgb;
+}
 float camDepth = max(0.0, -Cam.z / 100.0);
 float d = Dist / 100.0;
 // the web game's path: object-to-eye plus the camera's own depth (the light coming down to it). The pixel's own depth
@@ -1354,7 +1365,7 @@ def _underwater(mat):
     sp = mel.create_material_expression(mat, unreal.MaterialExpressionScreenPosition, -1200, 450)
     ex = mel.create_material_expression(mat, unreal.MaterialExpressionEyeAdaptation, -1200, 550)
     params = {}
-    for i, (nm, dv) in enumerate((("Under", 0.0), ("Wet", 0.0), ("Bonus", 0.0), ("Haze", 1.0), ("Time", 0.0))):
+    for i, (nm, dv) in enumerate((("Under", 0.0), ("Wet", 0.0), ("Bonus", 0.0), ("Haze", 1.0), ("Time", 0.0), ("Shock", 0.0))):
         e = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1200, 700 + i * 100)
         e.set_editor_property("parameter_name", nm)
         e.set_editor_property("default_value", dv)
@@ -1363,7 +1374,11 @@ def _underwater(mat):
     sdir.set_editor_property("parameter_name", "SunDir")
     sdir.set_editor_property("default_value", unreal.LinearColor(0.55, -0.62, 0.56, 0.0))
     params["SunDir"] = sdir
-    uw = _custom(mat, -600, 0, UNDERWATER, F3, ["Col", "Dist", "Cam", "WP", "UV", "Ex", "Under", "Wet", "Bonus", "Haze", "Time", "SunDir"], "Underwater")
+    shp = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -1200, 1350)
+    shp.set_editor_property("parameter_name", "ShockP")
+    shp.set_editor_property("default_value", unreal.LinearColor(0.5, 0.5, 0.0, 0.0))
+    params["ShockP"] = shp
+    uw = _custom(mat, -600, 0, UNDERWATER, F3, ["Col", "Dist", "Cam", "WP", "UV", "Ex", "Under", "Wet", "Bonus", "Haze", "Time", "SunDir", "Shock", "ShockP"], "Underwater")
     wpp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1200, 1150)
     _link(wpp, "", uw, "WP")
     _link(cmask, "", uw, "Col")

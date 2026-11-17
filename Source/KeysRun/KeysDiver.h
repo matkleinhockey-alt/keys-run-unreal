@@ -98,7 +98,7 @@ private:
 	};
 	struct FBubble { FVector P, V; double Age = -1, R0 = .005, P0 = 1, WobA = 0, WobF = 0, WobP = 0; };
 	struct FPuff { FVector P, V; double Life = 0, Max = 1; };
-	struct FBlood { FVector P, V; double Age = -1, Life = 6, R = .1; };
+	struct FBlood { FVector P, V; double Age = -1, Life = 6, R = .1, Ph = 0, Tone = 0; };
 	struct FSnow { FVector P, V; double Seed; };
 	struct FSeep { int64 Key; FVector P; double Rate; double Acc = 0; };
 	struct FSeepB { FVector P, V; double Age = -1, Life = 1, Size = .02; int32 Slot = 0; };
@@ -199,5 +199,7 @@ private:
 	// surface crossing (world/underwater/transition.ts)
 	bool bCamUnder = false;
 	double UnderAmt = 0, Wet = 0;
+	double ShockT = 99;            // seconds since the gun's pressure ring went out from the muzzle
+	FVector2D ShockUV = FVector2D(.5, .5);
 	FVector CamGame = FVector::ZeroVector;
 };

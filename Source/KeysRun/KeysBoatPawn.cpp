@@ -2806,6 +2806,12 @@ void AKeysBoatPawn::ChooseFish()
 	BuildHookedMesh();
 }
 
+FVector AKeysBoatPawn::LandedFishLocal() const
+{
+	const FVector C = FishMesh ? FishMesh->Bounds.Origin : GetActorLocation();
+	return GetActorTransform().InverseTransformPosition(C) / 100.0;
+}
+
 void AKeysBoatPawn::BuildHookedMesh()
 {
 	FishLen = KeysMesh::FishLength(Weight);

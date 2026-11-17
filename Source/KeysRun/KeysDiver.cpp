@@ -18,6 +18,7 @@
 #include "MaterialDomain.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -576,6 +577,18 @@ bool AKeysDiver::TryFire()
 	}
 	Gun = StartReload();
 	KickT = 1;
+	// the pressure kick of the bands slamming shut: a brief wobble of the water across the mask
+	if (bCamUnder)
+	{
+		ShockT = 0;
+		ShockUV = FVector2D(.55, .62);
+		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+		{
+			FVector2D Scr; int32 VX = 0, VY = 0;
+			PC->GetViewportSize(VX, VY);
+			if (VX > 0 && VY > 0 && PC->ProjectWorldLocationToScreen(G2U(MuzzleG), Scr, true)) ShockUV = FVector2D(Scr.X / VX, Scr.Y / VY);
+		}
+	}
 	KickYaw = (FMath::FRand() - .5) * .05;
 	KickRoll = (FMath::FRand() - .5) * .07;
 	// a puff of air out of the muzzle as the bands snap forward
@@ -625,7 +638,21 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 		TArray<FTarget> Tg;
 		GetTargets(Tg);
 		FHit Hit;
-		if (StepSpear(Shot, Tg, Dt, Hit))
+		const FVector Tip0 = Shot.At(Shot.Dist);
+		const bool bHitNow = StepSpear(Shot, Tg, Dt, Hit);
+		// the shaft drags a seam of fine bubbles through the water behind it (the line, a thinner trickle)
+		if (bDiving)
+		{
+			const FVector Tip1 = Shot.At(Shot.Dist);
+			const double Seg = (Tip1 - Tip0).Size();
+			const int32 Nb = FMath::Min(24, int32(Seg * 9) + (FMath::FRand() < .5 ? 1 : 0));
+			for (int32 k = 0; k < Nb; k++)
+			{
+				const FVector Bp = FMath::Lerp(Tip0, Tip1, FMath::FRand()) - Shot.D * DvRand(.05, .9);
+				SpawnBubble(Bp + FVector(DvRand(-.012, .012), DvRand(-.012, .012), DvRand(-.012, .012)), DvRand(.0012, .0035));
+			}
+		}
+		if (bHitNow)
 		{
 			const FTarget* Target = Tg.FindByPredicate([&](const FTarget& X) { return X.Id == Hit.Id; });
 			if (Target && Hit.bHeld)
@@ -1060,6 +1087,10 @@ void AKeysDiver::UpdateUnderwaterLook(double Dt)
 		PostMID->SetScalarParameterValue(TEXT("Bonus"), float(ViewBonusM));   // the wide mask sees further
 		if (const AKeysWorld* Wd = AKeysWorld::Get(this)) { const FVector Sd = Wd->SunDir(); PostMID->SetVectorParameterValue(TEXT("SunDir"), FLinearColor(Sd.X, Sd.Y, Sd.Z, 0)); }
 		PostMID->SetScalarParameterValue(TEXT("Time"), float(GetWorld()->GetTimeSeconds()));
+		ShockT += Dt;
+		const double Sk = ShockT < .5 ? FMath::Square(1 - ShockT / .5) : 0;
+		PostMID->SetScalarParameterValue(TEXT("Shock"), float(Sk * UnderAmt));
+		PostMID->SetVectorParameterValue(TEXT("ShockP"), FLinearColor(ShockUV.X, ShockUV.Y, .02 + ShockT * .85, 0));
 	}
 	Post->bEnabled = UnderAmt > 0 || Wet > 0;
 	if (AKeysAudio* A = AKeysAudio::Get(this))
@@ -1092,14 +1123,15 @@ void AKeysDiver::Puff(int32 N, const FVector& P, double RMin, double RMax)
 // a clearing puff every 2.4 m of descent, a burst on surfacing and on blackout; bubbles grow as they rise
 void AKeysDiver::BleedAt(const FVector& G, int32 N, double Spread)
 {
-	for (int32 i = 0; i < N; i++)
+	for (int32 i = 0; i < N * 2; i++)
 	{
 		FBlood B;
 		B.P = G + FVector(DvRand(-1, 1), DvRand(-1, 1), DvRand(-1, 1)) * Spread;
 		B.V = FVector(DvRand(-1, 1), DvRand(-.3, .6), DvRand(-1, 1)) * .25;
-		B.Age = 0; B.Life = DvRand(4.5, 8); B.R = DvRand(.05, .12);
+		B.Age = 0; B.Life = DvRand(7, 13); B.R = DvRand(.035, .09);
+		B.Ph = DvRand(0, 2 * PI); B.Tone = FMath::FRand();
 		int32 Slot = Blood.IndexOfByPredicate([](const FBlood& X) { return X.Age < 0; });
-		if (Slot == INDEX_NONE) { if (Blood.Num() < 260) Slot = Blood.Add(B); else Slot = FMath::RandRange(0, Blood.Num() - 1); }
+		if (Slot == INDEX_NONE) { if (Blood.Num() < 420) Slot = Blood.Add(B); else Slot = FMath::RandRange(0, Blood.Num() - 1); }
 		Blood[Slot] = B;
 	}
 }
@@ -1114,7 +1146,12 @@ void AKeysDiver::UpdateBubbles(double Dt, double T)
 		if (B.Age > B.Life) { B.Age = -1; continue; }
 		const FVector2D Cur = KeysSea::CurrentAt(B.P.X, B.P.Z, T, FMath::Max(0.0, -B.P.Y));
 		B.V *= FMath::Max(0.0, 1 - Dt * 1.2);
-		B.P += (B.V + FVector(Cur.X, .03, Cur.Y)) * Dt;
+		// the swell's orbit: the water under the waves goes round and round, strongest near the surface, so the cloud
+		// rocks back and forth and up and down with it instead of only drifting
+		const double Orb = FMath::Exp(FMath::Min(0.0, B.P.Y) / 5.0) * .32;
+		const double W = T * 1.15 + B.Ph * .25 + B.P.X * .12;
+		const FVector Swell(FMath::Cos(W) * Orb, FMath::Sin(W) * Orb * .6, FMath::Cos(W * .8 + 1.3) * Orb * .5);
+		B.P += (B.V + FVector(Cur.X, .02, Cur.Y) + Swell) * Dt;
 	}
 	const double H = FMath::Min(.05, FMath::Max(0.0, Dt));
 	if (bDiving)
@@ -1302,8 +1339,15 @@ void AKeysDiver::DrawParticles()
 	for (const FBlood& B : Blood)
 		if (B.Age >= 0)
 		{
+			// blood under water reads dark: a deep maroon going brown-green as the reds are absorbed with depth; it
+			// blooms fast, then spreads slowly into a thin haze
 			const double U = B.Age / B.Life;
-			Quad(B.P, B.R * 2 * (1 + B.Age * .7), FLinearColor(.2f, .02f, .025f, float(FMath::Min(1.0, B.Age * 6) * FMath::Pow(1 - U, 1.8) * .3)), true);
+			const double Dep = DvClamp(-B.P.Y / 12.0, 0, 1);
+			const FLinearColor Fresh(.16f + .05f * float(B.Tone), .015f, .02f), Deep(.07f, .045f, .03f);
+			FLinearColor Col = FMath::Lerp(Fresh, Deep, float(Dep * .8));
+			const double Size = B.R * 2 * (1 + 2.2 * (1 - FMath::Exp(-B.Age * 1.4)) + B.Age * .12);
+			Col.A = float(FMath::Min(1.0, B.Age * 8) * FMath::Pow(1 - U, 1.5) * (.42 - .18 * U));
+			Quad(B.P, Size, Col, true);
 		}
 	for (const FPuff& P : Muzzle)
 		if (P.Life > 0) Quad(P.P, (.04 + (1 - P.Life / P.Max) * .05) * .6, FLinearColor(.85f, .95f, 1.f, float(DvClamp(P.Life / P.Max, 0, 1) * .8)), false);

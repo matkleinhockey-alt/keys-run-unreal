@@ -259,7 +259,9 @@ public:
 	// catch and lets it go; a fish you hook may be one somebody tagged, at its grown weight, with its history on the card
 	TArray<FKeysTagged> Tags;
 	int32 CurTag = -1;                 // the tagged fish on the card, or -1
-	bool bCardSpeared = false;         // the card is a speared fish (it can't be tagged)
+	bool bCardSpeared = false;
+	// the landed fish's middle in the hull's frame, meters (x forward, y, z up)
+	FVector LandedFishLocal() const;         // the card is a speared fish (it can't be tagged)
 	FString CardTagHead;
 	TArray<FString> CardTagLines;
 	void TagAndRelease();

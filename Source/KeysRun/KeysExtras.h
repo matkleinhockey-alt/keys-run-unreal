@@ -167,6 +167,12 @@ private:
 	FVector BloodAt = FVector::ZeroVector, CapHome = FVector::ZeroVector, Nozzle = FVector::ZeroVector, SprayTo = FVector::ZeroVector;
 	double BloodK = 0, HoseT = -1;
 	bool bWasStage = false;
+	// the blood as pools that run downhill as the boat rolls and pitches, smearing behind them, plus fixed spatter
+	struct FDeckPool { FVector2D P, V, Home; double R = .05, Seed = 0; TArray<FVector2D> Trail; };
+	TArray<FDeckPool> Pools;
+	TArray<FVector> Spatter;   // x, y on the deck, z = radius
+	double TrailAcc = 0;
+	bool bWasAboard = false;
 	void UpdateHose(double Dt, double T);
 	void DrawHose(FKeysMesh& M, double T);
 	void PoseLanding(double T);
