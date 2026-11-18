@@ -1,4 +1,5 @@
 #include "KeysLife.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "KeysFeed.h"
 #include "KeysWrecks.h"
 #include "KeysSea.h"
@@ -1077,6 +1078,7 @@ AKeysLife::AKeysLife()
 	SeaMesh = Make(TEXT("SeaLife"));
 	WeedMesh = Make(TEXT("Weeds"));
 	DropMesh = Make(TEXT("Spray"));
+	SprayMesh = Make(TEXT("SpraySoft"));
 }
 
 AKeysLife* AKeysLife::Get(const UObject* WorldContext)
@@ -1135,7 +1137,7 @@ void AKeysLife::Tick(float DeltaSeconds)
 	NowT = T;
 	ReadViewer(Dt);
 	bTunaClosing = false;
-	BirdBuf.Reset(); SeaBuf.Reset(); WeedBuf.Reset(); DropBuf.Reset();
+	BirdBuf.Reset(); SeaBuf.Reset(); WeedBuf.Reset(); DropBuf.Reset(); SprayBuf.Reset();
 	if (bHaveBoat)
 	{
 		if (!Pelicans.Num()) InitPelicans();
@@ -1150,6 +1152,27 @@ void AKeysLife::Tick(float DeltaSeconds)
 	Flush(SeaMesh, SeaBuf, SurfFish);
 	Flush(WeedMesh, WeedBuf);
 	Flush(DropMesh, DropBuf);
+	// the spray: soft, see-through and lit like the bright sky-facing water whatever the exposure
+	if (SprayMesh)
+	{
+		if (!SprayMID)
+			if (UMaterialInterface* BM = AKeysWorld::GlowMaterial())
+			{
+				SprayMID = UMaterialInstanceDynamic::Create(BM, this);
+				SprayMID->SetScalarParameterValue(TEXT("Bright"), .85f);
+			}
+		if (!SprayBuf.V.Num()) { if (SprayBuf.LastV != 0) { SprayMesh->ClearMeshSection(0); SprayBuf.LastV = 0; } }
+		else if (SprayMID)
+		{
+			if (SprayBuf.V.Num() != SprayBuf.LastV)
+			{
+				SprayMesh->CreateMeshSection_LinearColor(0, SprayBuf.V, SprayBuf.T, SprayBuf.N, SprayBuf.UV, SprayBuf.C, TArray<FProcMeshTangent>(), false);
+				SprayMesh->SetMaterial(0, SprayMID);
+				SprayBuf.LastV = SprayBuf.V.Num();
+			}
+			else SprayMesh->UpdateMeshSection_LinearColor(0, SprayBuf.V, SprayBuf.N, SprayBuf.UV, SprayBuf.C, TArray<FProcMeshTangent>());
+		}
+	}
 	static double LogT = 0; LogT += Dt;
 	if (LogT > 3 && FString(FCommandLine::Get()).Contains(TEXT("KRScript=")))
 	{
@@ -2149,15 +2172,25 @@ void AKeysLife::UpdateDrops(double Dt, double T)
 			const FVector Vel = D.Vel.GetSafeNormal(UE_SMALL_NUMBER, Up);
 			const FVector Along = (Vel - ToCam * FVector::DotProduct(Vel, ToCam)).GetSafeNormal(UE_SMALL_NUMBER, V);
 			const FVector Side = FVector::CrossProduct(ToCam, Along).GetSafeNormal(UE_SMALL_NUMBER, R);
-			// a rounded oval (six-sided), not a diamond: a diamond's points read as flying shards up close
-			const FVector N = (Up + ToCam * .5).GetSafeNormal();
-			FVector Rim[6];
-			for (int32 k = 0; k < 6; k++)
-			{
-				const double A = k * PI / 3;
-				Rim[k] = P + Along * (FMath::Cos(A) * S * (FMath::Cos(A) > 0 ? 1.5 : 1.0)) + Side * (FMath::Sin(A) * S * .62);
-			}
-			for (int32 k = 0; k < 6; k++) LifeBufTriN(DropBuf, P, Rim[k], Rim[(k + 1) % 6], N, Col);
+			// a soft, see-through streak (the bubble material's soft disc, stretched along its flight): it fades at the
+			// edges and thins out as it falls, so a burst of spray reads as water and mist, not white flakes
+			const double Fade = FMath::Clamp(1 - D.Age / D.Life, 0.0, 1.0);
+			const double Spd = D.Vel.Size();
+			const double Ln = S * (1.2 + FMath::Min(1.8, Spd * .1)), Wd = S * .75;
+			const FVector C0 = P - Along * Ln - Side * Wd, C1 = P + Along * Ln - Side * Wd, C2 = P + Along * Ln + Side * Wd, C3 = P - Along * Ln + Side * Wd;
+			FLinearColor Ca = Col;
+			// far off a drop is drawn bigger than it is (so the splash still reads): make up for it in faintness
+			const double Real = FMath::Clamp(D.Size / FMath::Max(S, 1e-4), .25, 1.0);
+			Ca.A = float(.8 * FMath::Sqrt(Fade) * (S > .06 ? .7 : 1.0) * Real);
+			const int32 I0 = SprayBuf.V.Num();
+			const FVector NU = LN2U(ToCam);
+			SprayBuf.V.Append({LG2U(C0), LG2U(C1), LG2U(C2), LG2U(C3)});
+			SprayBuf.UV.Append({FVector2D(2.001, 0.001), FVector2D(2.999, 0.001), FVector2D(2.999, 0.999), FVector2D(2.001, 0.999)});
+			for (int32 k = 0; k < 4; k++) { SprayBuf.N.Add(NU); SprayBuf.C.Add(Ca); }
+			const bool bSwap = FVector::DotProduct(FVector::CrossProduct(SprayBuf.V[I0 + 1] - SprayBuf.V[I0], SprayBuf.V[I0 + 2] - SprayBuf.V[I0]), NU) > 0;
+			if (bSwap) SprayBuf.T.Append({I0, I0 + 2, I0 + 1, I0, I0 + 3, I0 + 2});
+			else SprayBuf.T.Append({I0, I0 + 1, I0 + 2, I0, I0 + 2, I0 + 3});
+			(void)V; (void)R;
 		}
 		else
 		{

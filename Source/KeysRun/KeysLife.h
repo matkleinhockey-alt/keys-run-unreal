@@ -267,6 +267,8 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SeaMesh;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> WeedMesh;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> DropMesh;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SprayMesh;   // flying spray: soft translucent streaks (M_KR_Bubble)
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> SprayMID;
 	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> RigMeshes;
 	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> FlameMeshes;
 
@@ -287,7 +289,7 @@ private:
 	TArray<FKeysDrop> Drops;
 	TArray<FString> Toasts;
 
-	FKeysLifeBuf BirdBuf, SeaBuf, WeedBuf, DropBuf;
+	FKeysLifeBuf BirdBuf, SeaBuf, WeedBuf, DropBuf, SprayBuf;
 
 	int32 NextId = 1;
 	double PopT = 0, NowT = 0;

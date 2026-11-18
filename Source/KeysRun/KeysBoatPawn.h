@@ -287,6 +287,15 @@ public:
 	bool bFreeFish = true, bUnlimitedFuel = true, bFuelOutMsg = false;
 	// the rod answering the fish: kicks on head shakes (decaying), and leaning toward where it is
 	double RodKick = 0, VmYawPull = 0, VmLunge = 0, ChairIntroT = 0;
+	// no hard cuts: when the camera changes mode (chase, first person, the chair shot, the landing) it glides from where
+	// it was to the new shot (SmoothCameraCuts)
+	void SmoothCameraCuts(double Dt);
+	FVector CutFromLoc = FVector::ZeroVector, LastCamLoc = FVector::ZeroVector;
+	FQuat CutFromRot = FQuat::Identity, LastCamRot = FQuat::Identity;
+	float CutFromFov = 88.f, LastCamFov = 88.f;
+	double CutT = -1, CutDur = .8;
+	int32 LastCamMode = -1;
+	bool bHaveLastCam = false;
 	// the release: you lift the fish over the side and let it go, and it swims off (boat-local, meters)
 	double ReleaseT = -1, RelSide = 1;
 	FVector RelStart = FVector::ZeroVector, RelFish = FVector::ZeroVector;

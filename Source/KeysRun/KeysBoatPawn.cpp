@@ -2700,6 +2700,46 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 // On the hookset (never the bite: the strike window is the one skill check, and the camera stays with you for it), a
 // 2.3 s cut under the water: low and looking a little up so the surface is in frame, on the far side of the fish from
 // the boat, arcing round it and pushing in, with a little handheld drift, easing in and out so it never jump-cuts.
+void AKeysBoatPawn::SmoothCameraCuts(double Dt)
+{
+	// the diver and the walker place their own cameras; a jump into or out of them (and a teleport) stays a cut
+	if (IsDiving() || IsAshore() || !Camera) { bHaveLastCam = false; LastCamMode = -1; CutT = -1; return; }
+	const int32 Mode = (bExtCam ? 1 : 0) | (bFpOn ? 2 : 0) | (bDriveOn ? 4 : 0) | (FState == EKeysFish::Caught ? 8 : 0);
+	const FVector WantLoc = Camera->GetComponentLocation();
+	const FQuat WantRot = Camera->GetComponentQuat();
+	const float WantFov = Camera->FieldOfView;
+	// (and never through the surface: a shot that starts or ends under the water - the hooked fish's underwater cam -
+	// cuts, as a lens can't glide out of the sea)
+	auto Under = [this](const FVector& U) { return U.Z / 100.0 < WaveH(U.X / 100.0, U.Y / 100.0, GetWorld()->GetTimeSeconds(), AmpAt(U.X / 100.0, U.Y / 100.0)) - .05; };
+	if (bHaveLastCam && Mode != LastCamMode && FVector::Dist(WantLoc, LastCamLoc) < 6000 && !Under(WantLoc) && !Under(LastCamLoc))
+	{
+		// glide from wherever the lens was this instant (mid-glide too) to the new shot: quicker into the landing, which
+		// has its own fly-in, a touch longer into and out of the chair shot and first person
+		CutFromLoc = LastCamLoc; CutFromRot = LastCamRot; CutFromFov = LastCamFov;
+		CutT = 0;
+		CutDur = (Mode & 8) ? .55 : .85;
+	}
+	LastCamMode = Mode;
+	FVector Loc = WantLoc;
+	FQuat Rot = WantRot;
+	float Fov = WantFov;
+	if (CutT >= 0)
+	{
+		CutT += Dt;
+		const double U = FMath::Clamp(CutT / CutDur, 0.0, 1.0);
+		const double A = U * U * U * (U * (U * 6 - 15) + 10);   // smootherstep: no jolt at either end
+		// a little lift through the middle, so the lens rises over the gunwale and the T-top edge rather than through them
+		Loc = FMath::Lerp(CutFromLoc, WantLoc, A) + FVector(0, 0, 60 * FMath::Sin(A * PI) * FMath::Min(1.0, FVector::Dist(CutFromLoc, WantLoc) / 600));
+		Rot = FQuat::Slerp(CutFromRot, WantRot, float(A));
+		Fov = FMath::Lerp(CutFromFov, WantFov, float(A));
+		Camera->SetWorldLocationAndRotation(Loc, Rot);
+		Camera->SetFieldOfView(Fov);
+		if (U >= 1) CutT = -1;
+	}
+	LastCamLoc = Loc; LastCamRot = Rot; LastCamFov = Fov;
+	bHaveLastCam = true;
+}
+
 void AKeysBoatPawn::TriggerFishCam(double Hold)
 {
 	if (FishCamT >= 0 || Stage.bOn) return;
@@ -4018,6 +4058,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	UpdateCamera(Dt, T);
 	UpdateHelm(Dt, T);
 	UpdateJumpCam(Dt);
+	SmoothCameraCuts(Dt);
 	UpdateViewModel(Dt);
 	BeginShoreSwap();
 	{
