@@ -5,6 +5,7 @@
 #include "KeysGeo.h"
 #include "KeysTownData.h"
 #include "KeysTown.h"
+#include "KeysTownKit.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/DirectionalLightComponent.h"
@@ -327,7 +328,7 @@ void AKeysWorld::BuildScenery()
 	UInstancedStaticMeshComponent* Concrete = MakeISM(TEXT("TowersWhite"), Cube, Srgb(.88, .88, .86), .5);
 
 	// palms and mangroves (kept out of creeks, off the beach, and out of downtown)
-	int32 PalmCount = 0;
+	int32 PalmCount = 0, HouseCount = 0;
 	const double PS = 16;
 	for (double Z = WorldZ0; Z < WorldZ0 + WorldSize; Z += PS)
 		for (double X = WorldX0; X < WorldX0 + WorldSize; X += PS)
@@ -430,8 +431,29 @@ void AKeysWorld::BuildScenery()
 			B.M.Surf = SurfGlass;
 			B.Box(Bk.X, Base + 1.7, Bk.Y, 1.1, 1.2, .06, 0x27414f, 0, Ry);
 			B.M.Surf = SurfDefault;
+			// the town style kit: a fish mailbox, maybe a weathervane, a buoy on the porch, the salt and the peeling paint
+			{
+				KeysTownKit::FHouseSpots Hs;
+				const FVector2D FL = At(-W / 2, D / 2 + .04), PF = At(0, D / 2 + 2.3);
+				Hs.Front = KeysTownKit::FWall::Make(FVector(FL.X, Base, FL.Y), FVector(Sn, 0, Cs));
+				Hs.Width = W; Hs.DoorA = W * .18 + W / 2; Hs.WallH = WallH;
+				Hs.PorchFront = FVector(PF.X, Base + .21, PF.Y); Hs.PorchHalf = W / 2;
+				Hs.Ridge = FVector(JX, Base + WallH + Pitch * FMath::Min(W, D) * .25, JZ);
+				Hs.WallC = KeysTownPaint::Hex(Wall);
+				Hs.GroundY = H;
+				KeysTownKit::FKitDice Kd(KeysTownKit::SeedOf(JX, JZ));
+				KeysTownKit::DressHouse(B, Hs, Kd);
+				HouseCount++;
+				if (FMath::Abs(JX - KeysTown::OX()) < 700 && FMath::Abs(JZ - KeysTown::OZ()) < 700 && HouseCount % 7 == 0)
+				{
+					double HU, HV, CU, CV;
+					KeysTown::ToLocal(JX + Sn * (D / 2 + 9), JZ + Cs * (D / 2 + 9), HU, HV);
+					KeysTown::ToLocal(JX, JZ, CU, CV);
+					UE_LOG(LogTemp, Log, TEXT("Keys Run: house at %.0f %.0f, its front from town local %.1f %.1f, facing yaw %.2f"), JX, JZ, HU, HV, FMath::Atan2(CV - HV, CU - HU));
+				}
+			}
 		}
-	UE_LOG(LogTemp, Log, TEXT("Keys Run: %d island palms"), PalmCount);
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: %d island palms, %d conch houses"), PalmCount, HouseCount);
 	for (TPair<int32, FTownBatch>& C : ParcelBatches)
 	{
 		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);

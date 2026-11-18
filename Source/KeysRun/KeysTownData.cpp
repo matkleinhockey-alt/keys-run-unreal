@@ -39,7 +39,7 @@ namespace KeysTown
 	const FLook& LookOf(EStyle S)
 	{
 		static const FLook Looks[] = {
-			/* Diner */      {0xd7dde2, 0xc23a3a, 0xb8bcc2, 0x1d2430, 0xff5a4f, 0xe8edf1, 0xff4538, 3, 3, 0xc23a3a, 0xf4f4f2},
+			/* Diner */      {0x2b4a6a, 0xf0e6cc, 0xb8bcc2, 0x15263a, 0xf3d48a, 0xc9a24a, 0xf3d48a, 0, 0, 0x15263a, 0xf0e6cc},
 			/* Tackle */     {0x2f8f9d, 0xf4f1e8, 0x9aa4ab, 0xf4f1e8, 0x13495a, 0x1c7080, 0x38e0ff, 0, 0, 0x1f4f8c, 0xf4f1e8},
 			/* Guns */       {0x6a2f29, 0x16110f, 0x3b3b3e, 0x17120f, 0xf2ece0, 0xc32a2a, 0xff3b30, 1, 1, 0, 0},
 			/* Liquor */     {0xe0ac3c, 0x2a2a2a, 0x9a8f7a, 0xb3202a, 0xfff6c8, 0xfff6c8, 0xffd34a, 4, 0, 0, 0},
@@ -151,7 +151,7 @@ namespace KeysTown
 	const TArray<FPoint>& Benches()
 	{
 		static TArray<FPoint> A;
-		if (!A.Num()) for (double U : {-88, -64, -40, 40, 64, 88}) A.Add({U, 19.8});
+		if (!A.Num()) for (double U : {-88, -64, 40, 64, 88}) A.Add({U, 19.8});   // (the one at -40 made way for the Gutted Grouper's tables)
 		return A;
 	}
 
@@ -201,6 +201,9 @@ namespace KeysTown
 		if (!A.Num())
 		{
 			A = {{16, 24, 2.6, 2.6}, {-24, 77.4, 3.2, 1.6}, {30, 77.4, 3.2, 1.6}, {-55, 42.2, 2.4, 1.4}, {40, 98.5, .8, .8}};
+			// the Gutted Grouper: the shack, four picnic tables, the cleaning station out back by the seawall
+			A.Add({-48, 22.4, 6, 5}); A.Add({-41.5, 21, 2.1, 1.0}); A.Add({-37, 21, 2.1, 1.0}); A.Add({-41.5, 25.6, 2.1, 1.0}); A.Add({-37, 25.6, 2.1, 1.0});
+			A.Add({-48, 18.9, 2.2, .8});
 			for (const FPoint& B : Benches()) A.Add({B.U, B.V, 1.9, .6});
 		}
 		return A;
@@ -245,10 +248,21 @@ namespace KeysTown
 				{TEXT("bar-booth-2"), TEXT("bar"), 30, 33.4, 55.5, 59.5},
 				{TEXT("bar-pool"), TEXT("bar"), 10.5, 15.5, 50, 54.4},
 				{TEXT("diner-counter"), TEXT("diner"), -29, -14, 60, 61.8},
-				{TEXT("diner-booth-w1"), TEXT("diner"), -31.6, -28.4, 50, 54},
-				{TEXT("diner-booth-w2"), TEXT("diner"), -31.6, -28.4, 55.5, 59.5},
-				{TEXT("diner-booth-e1"), TEXT("diner"), -11.6, -8.4, 50, 54},
-				{TEXT("diner-booth-e2"), TEXT("diner"), -11.6, -8.4, 55.5, 59.5},
+				// Reel Fancy: the aquarium along the west wall, six white-cloth tables, the host stand
+				{TEXT("eat-fancy-tank"), TEXT("diner"), -31.6, -30.6, 47.4, 68.6},
+				{TEXT("eat-fancy-t1"), TEXT("diner"), -27.6, -25.4, 49.4, 51.6},
+				{TEXT("eat-fancy-t2"), TEXT("diner"), -22.6, -20.4, 49.4, 51.6},
+				{TEXT("eat-fancy-t3"), TEXT("diner"), -14.6, -12.4, 49.4, 51.6},
+				{TEXT("eat-fancy-t4"), TEXT("diner"), -27.6, -25.4, 54.4, 56.6},
+				{TEXT("eat-fancy-t5"), TEXT("diner"), -18.6, -16.4, 54.4, 56.6},
+				{TEXT("eat-fancy-t6"), TEXT("diner"), -12.6, -10.4, 54.4, 56.6},
+				{TEXT("eat-fancy-host"), TEXT("diner"), -17.4, -16.6, 47.2, 47.8},
+				// Bait & Brew: the jukebox, the old bait tank, three tables
+				{TEXT("eat-brew-juke"), TEXT("bar"), 26.2, 27.4, 46.5, 47.3},
+				{TEXT("eat-brew-baittank"), TEXT("bar"), 8.5, 9.7, 56.5, 59},
+				{TEXT("eat-brew-t1"), TEXT("bar"), 18.4, 19.8, 51.3, 52.7},
+				{TEXT("eat-brew-t2"), TEXT("bar"), 23.4, 24.8, 51.3, 52.7},
+				{TEXT("eat-brew-t3"), TEXT("bar"), 20.9, 22.3, 55.8, 57.2},
 				{TEXT("club-stage"), TEXT("club"), 42, 60, 64, 70},
 				{TEXT("club-bar"), TEXT("club"), 36, 40, 56, 68},
 				{TEXT("club-counter"), TEXT("club"), 48, 60, 52, 53.6},
@@ -359,7 +373,16 @@ namespace KeysTown
 				if (!C.bOccupied) A.Add({TEXT("slot"), TEXT("casino"), C.SU, C.SV, 1.15, TEXT("Play the slots"), FString()});
 			A.Add({TEXT("counter-casino"), TEXT("casino"), 17.9, 147, 2.4, TEXT("Visit the change booth"), FString()});
 			A.Add({TEXT("marlin"), FString(), 16, 22.2, 2.4, TEXT("Read the plaque"),
-				TEXT("BLUE MARLIN, 612 LB. Boated 1957 off Sombrero Reef. The plaque says \"released\" because the town got embarrassed.")});
+				TEXT("BIG TARP. World's largest fibreglass tarpon (probably). Cast in 1971 by a man who lost one at the bridge and never got over it.")});
+			// the restaurants: the Gutted Grouper's window, and something to read at each place
+			A.Add({TEXT("counter-grouper"), TEXT("grouper"), -43.8, 22.4, 2.0, TEXT("Order at the window"), FString()});
+			A.Add({TEXT("menu-grouper"), FString(), -43.6, 25.6, 1.3, TEXT("Read the chalkboard"), TEXT("MENU|grouper")});
+			A.Add({TEXT("menu-fancy"), FString(), -17, 48.4, 1.6, TEXT("Read the menu"), TEXT("MENU|fancy")});
+			A.Add({TEXT("menu-brew"), FString(), 15, 59.6, 1.4, TEXT("Read the menu board"), TEXT("MENU|brew")});
+			A.Add({TEXT("record-marlin"), FString(), -24.5, 59, 1.5, TEXT("Read the record plaque"),
+				TEXT("HOUSE RECORD - ATLANTIC BLUE MARLIN, 1,004 LB. Fought four hours off the Sombrero hump. The chef cried. The marlin did not.")});
+			A.Add({TEXT("brew-photos"), FString(), 8.9, 63.5, 1.6, TEXT("Look at the photos"),
+				TEXT("Faded snapshots of local catches: a kid with a snook twice his size, a 'record' mangrove snapper, and a tarpon photo nobody can explain.")});
 			for (const FEstateLot& E : HarborRow())
 			{
 				// the sign stands by the fence, clear of the cars parked nose-in along the back lot
@@ -381,8 +404,8 @@ namespace KeysTown
 				A.Add({Look, U, V, Yaw, Inside, Y, Var});
 			};
 			N(TEXT("bouncer"), 41.2, 44.6, -HP);
-			N(TEXT("tourist"), -41, 21.6, .4);
-			N(TEXT("woman"), -39.4, 21.9, PI + .4);
+			// the Gutted Grouper: the cook in the window, people eating at the picnic tables
+			N(TEXT("cook"), -45.8, 22.4, 0);
 			N(TEXT("local"), 6.2, 44.4, PI);
 			N(TEXT("angler"), 66, 20.8, -HP);
 			N(TEXT("bartender"), 21, 63.6, -HP, TEXT("bar"));
@@ -398,7 +421,8 @@ namespace KeysTown
 			N(TEXT("tourist"), 87.5, 75.8, HP + .2, TEXT("hammered"), 0, 1);
 			N(TEXT("patron"), 91, 75.8, HP - .15, TEXT("hammered"), 0, 3);
 			N(TEXT("angler"), 94.5, 75.8, HP + .25, TEXT("hammered"), 0, 2);
-			N(TEXT("cook"), -21.5, 63.6, -HP, TEXT("diner"));
+			N(TEXT("bartender"), -21.5, 62.9, -HP, TEXT("diner"), 0, 3);
+			N(TEXT("host"), -17, 47.9, HP, TEXT("diner"));
 			// the Pink Flamingo: two performers on the stage, an MC, a DJ on his riser and a few punters
 			const FInteriorBox* Stage = InteriorBox(TEXT("club-stage"));
 			(void)Stage;
@@ -410,7 +434,29 @@ namespace KeysTown
 			N(TEXT("woman"), 49.5, 56.4, -HP, TEXT("club"), 0, 3);
 			N(TEXT("local"), 56, 57.4, -HP, TEXT("club"), 0, 3);
 			N(TEXT("tourist"), 41, 53, -HP, TEXT("club"), 0, 2);
-			N(TEXT("patron"), -25, 57.6, HP, TEXT("diner"), 0, 5);
+			// diners: each table's people, what they're doing (1 eating, 2 drinking, 3 talking)
+			auto Sit = [&](const TCHAR* Look, double U, double V, double Yaw, const TCHAR* In, int32 Var, int32 Act)
+			{
+				FNpc Np{Look, U, V, Yaw, In, 0, Var};
+				Np.Act = Act; Np.bSit = true;
+				A.Add(Np);
+			};
+			// Reel Fancy (tables at t1..t6), facing across their table
+			Sit(TEXT("woman"), -26.5, 49.55, HP, TEXT("diner"), 4, 1); Sit(TEXT("patron"), -26.5, 51.45, -HP, TEXT("diner"), 6, 3);
+			Sit(TEXT("tourist"), -21.5, 49.55, HP, TEXT("diner"), 4, 2); Sit(TEXT("woman"), -21.5, 51.45, -HP, TEXT("diner"), 5, 1);
+			Sit(TEXT("local"), -13.5, 51.45, -HP, TEXT("diner"), 4, 1);
+			Sit(TEXT("patron"), -26.5, 54.55, HP, TEXT("diner"), 7, 3); Sit(TEXT("woman"), -26.5, 56.45, -HP, TEXT("diner"), 6, 3);
+			Sit(TEXT("angler"), -17.5, 54.55, HP, TEXT("diner"), 4, 2); Sit(TEXT("tourist"), -17.5, 56.45, -HP, TEXT("diner"), 5, 1);
+			Sit(TEXT("woman"), -11.5, 56.45, -HP, TEXT("diner"), 7, 2);
+			// Bait & Brew
+			Sit(TEXT("local"), 19.1, 51.15, HP, TEXT("bar"), 5, 2); Sit(TEXT("angler"), 19.1, 52.85, -HP, TEXT("bar"), 5, 3);
+			Sit(TEXT("patron"), 24.1, 51.15, HP, TEXT("bar"), 6, 3); Sit(TEXT("tourist"), 24.1, 52.85, -HP, TEXT("bar"), 6, 2);
+			Sit(TEXT("woman"), 21.6, 55.65, HP, TEXT("bar"), 6, 2); Sit(TEXT("local"), 21.6, 57.35, -HP, TEXT("bar"), 6, 1);
+			// the Gutted Grouper's picnic tables (benches along v either side)
+			Sit(TEXT("tourist"), -42.1, 20.0, HP, TEXT(""), 7, 1); Sit(TEXT("woman"), -40.9, 20.0, HP, TEXT(""), 7, 3); Sit(TEXT("local"), -41.5, 22.0, -HP, TEXT(""), 7, 3);
+			Sit(TEXT("angler"), -37.0, 22.0, -HP, TEXT(""), 6, 2);
+			Sit(TEXT("patron"), -42.1, 24.6, HP, TEXT(""), 8, 1); Sit(TEXT("woman"), -40.9, 26.6, -HP, TEXT(""), 8, 1);
+			Sit(TEXT("tourist"), -37.6, 24.6, HP, TEXT(""), 8, 3); Sit(TEXT("local"), -36.4, 26.6, -HP, TEXT(""), 8, 2);
 			int32 k = 0;
 			for (const FCounter& C : Counters())
 			{
@@ -848,8 +894,19 @@ namespace KeysTown
 				{TEXT("round"), TEXT("A round for the bar"), TEXT("Money out, reputation in."), 250, TEXT("bar.round")},
 				{TEXT("wings"), TEXT("Hot wings"), TEXT("Balances the cold one. Slightly."), 11, TEXT("bar.wings")},
 				{TEXT("shot-key-lime"), TEXT("Key lime shot"), TEXT("Local colour."), 8, TEXT("bar.shot")}};
-			A.Add({TEXT("bar"), TEXT("The Rusty Anchor"), TEXT("Cold beer - Hot wings - No shirt, no problem"),
-				{TEXT("What'll it be? And do not tell me about the one that got away, I have heard it."), TEXT("Kitchen closes when the cook gets bored.")}, Bar});
+			A.Add({TEXT("bar"), TEXT("Bait & Brew"), TEXT("Cold beer - Live bait (ask first) - Since 1962"),
+				{TEXT("This was a bait shop for forty years. The beer cooler used to be the shrimp tank. We cleaned it. Mostly."), TEXT("Sign a dollar and stick it up. That's the rent.")},
+				{{TEXT("beer"), TEXT("Cold one"), TEXT("Lowers your cast accuracy, raises the crowd's opinion of you."), 5, TEXT("bar.beer")},
+				 {TEXT("round"), TEXT("A round for the bar"), TEXT("Money out, reputation in."), 250, TEXT("bar.round")},
+				 {TEXT("wings"), TEXT("Conch fritters"), TEXT("Golden, greasy, gone in a minute. Balances the cold one. Slightly."), 11, TEXT("bar.wings")},
+				 {TEXT("shot-key-lime"), TEXT("Key lime shot"), TEXT("Local colour."), 8, TEXT("bar.shot")}}});
+			A.Add({TEXT("grouper"), TEXT("The Gutted Grouper"), TEXT("Fish shack - Dockside - Cash only"),
+				{TEXT("Window's open. Pelicans are not invited, whatever they tell you."), TEXT("Catch of the day is on the board. If you caught it, we'll cook it.")},
+				{{TEXT("tacos"), TEXT("Fish tacos"), TEXT("Blackened catch, slaw, lime. Stamina for the dive."), 12, TEXT("diner.mahi")},
+				 {TEXT("fritters"), TEXT("Conch fritters"), TEXT("A basket of six with key lime mayo. Balances a cold one."), 9, TEXT("bar.wings")},
+				 {TEXT("dip"), TEXT("Smoked fish dip"), TEXT("With saltines and hot sauce. A steadier hand on the line for a while."), 10, TEXT("diner.breakfast")},
+				 {TEXT("pie"), TEXT("Key lime pie"), TEXT("Morale. The gull will still call you a loser."), 6, TEXT("diner.pie")},
+				 {TEXT("beer"), TEXT("Bucket of beers"), TEXT("Lowers your cast accuracy, raises the crowd's opinion of you."), 5, TEXT("bar.beer")}}});
 			A.Add({TEXT("tarpon"), TEXT("The Tipsy Tarpon"), TEXT("Two for one - Fish tales told free - Mind the step"),
 				{TEXT("Two for one till the ice runs out. The ice ran out in 1994."), TEXT("Sit anywhere. Not there.")}, Bar});
 			A.Add({TEXT("hammered"), TEXT("Reel Hammered"), TEXT("Beer - Bait - Occasionally both"),
@@ -863,12 +920,12 @@ namespace KeysTown
 				{TEXT("Chips? Coffee? A long hard look at your choices?"), TEXT("Every machine pays the same published odds. Allegedly.")},
 				{{TEXT("chips"), TEXT("Sit down at a slot machine"), TEXT("Five lines, three reels of fish, bets $5 to $100. Pays 90.5 cents on the dollar, published."), 0, TEXT("casino.slot")},
 				 {TEXT("coffee"), TEXT("Free coffee (tip)"), TEXT("Tipped. Not free."), 2, TEXT("casino.coffee")}}});
-			A.Add({TEXT("diner"), TEXT("Salty Dog Diner"), TEXT("Breakfast all day - Fresh catch - Pie"),
-				{TEXT("Sit anywhere, hon. Coffee's on."), TEXT("Pie's key lime. It's always key lime.")},
-				{{TEXT("breakfast"), TEXT("Fisherman's breakfast"), TEXT("A steadier hand on the line for a while."), 14, TEXT("diner.breakfast")},
-				 {TEXT("coffee"), TEXT("Bottomless coffee"), TEXT("A longer, more forgiving strike window."), 3, TEXT("diner.coffee")},
-				 {TEXT("mahi-sand"), TEXT("Grilled mahi sandwich"), TEXT("Stamina for the dive."), 16, TEXT("diner.mahi")},
-				 {TEXT("pie"), TEXT("Key lime pie"), TEXT("Morale. The gull will still call you a loser."), 7, TEXT("diner.pie")}}});
+			A.Add({TEXT("diner"), TEXT("Reel Fancy"), TEXT("Fine seafood - Fresh from the reef - Shoes required (we checked)"),
+				{TEXT("Good evening. Table for one, or is the fish joining you?"), TEXT("Chef recommends the snapper. Chef always recommends the snapper.")},
+				{{TEXT("breakfast"), TEXT("Smoked fish dip, house style"), TEXT("A steadier hand on the line for a while."), 14, TEXT("diner.breakfast")},
+				 {TEXT("coffee"), TEXT("Cuban coffee"), TEXT("A longer, more forgiving strike window."), 4, TEXT("diner.coffee")},
+				 {TEXT("mahi-sand"), TEXT("Pan-seared mahi, mango salsa"), TEXT("Stamina for the dive."), 34, TEXT("diner.mahi")},
+				 {TEXT("pie"), TEXT("Key lime pie, torched meringue"), TEXT("Morale, plated."), 12, TEXT("diner.pie")}}});
 			A.Add({TEXT("dive"), TEXT("Scuba Steve's Dive & Spear"), TEXT("Fills - Gear - Charters"),
 				{TEXT("Steve. Yes, that Steve. No, not that one."), TEXT("Long fins, low heart rate, short stories.")},
 				{{TEXT("mask-wide"), TEXT("Wide-view mask"), TEXT("A little more peripheral vision down there."), 250, TEXT("dive.mask")},

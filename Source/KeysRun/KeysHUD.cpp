@@ -1,4 +1,5 @@
 #include "KeysHUD.h"
+#include "KeysEateries.h"
 #include "CanvasItem.h"
 #include "KeysFeed.h"
 #include "KeysGfx.h"
@@ -334,7 +335,7 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 	const TCHAR* Title = bMain ? TEXT("KEYS RUN") : P->Menu == EMenu::Pause ? TEXT("Paused") : P->Menu == EMenu::Settings ? TEXT("Settings") : TEXT("Controls");
 	Text(Title, X, 70 * U, bMain ? 4.2f : 2.8f, FLinearColor::White, Big);
 	if (bMain) Text(TEXT("Center console fishing  -  Marathon, Florida Keys"), X + 6 * U, 196 * U, 1.3f, Teal);
-	if (bMain) Text(TEXT("v1.38"), X + 6 * U, 232 * U, .8f, Dim);
+	if (bMain) Text(TEXT("v1.39"), X + 6 * U, 232 * U, .8f, Dim);
 
 	TArray<AKeysBoatPawn::FMenuItem> Items;
 	P->GetMenuItems(Items);
@@ -1475,6 +1476,24 @@ void AKeysHUD::DrawAshore(AKeysBoatPawn* P, AKeysWalker* W)
 		GetTextSize(W->Prompt(), TW, TH, GEngine->GetMediumFont(), 1.2f * U);
 		Panel(SW * .5f - TW * .5f - 20 * U, SH * .64f, TW + 40 * U, TH + 18 * U, .6f);
 		Text(W->Prompt(), SW * .5f, SH * .64f + 9 * U, 1.2f, FLinearColor::White, nullptr, true);
+	}
+	// a restaurant menu, read at the board, the stand or the bar (closes when you walk off or press F again)
+	if (!P->MenuOpen.IsEmpty() && W->NearText() != TEXT("MENU|") + P->MenuOpen) P->MenuOpen.Reset();
+	if (!P->MenuOpen.IsEmpty() && !W->bShopOpen)
+	{
+		FString Title, Sub, Foot;
+		TArray<FString> Lines;
+		if (KeysEateries::Menu(P->MenuOpen, P->Board(), Title, Sub, Lines, Foot))
+		{
+			const float PW = 720 * U, RH = 44 * U, X = SW * .5f - PW * .5f, Y = SH * .14f, PH = 170 * U + Lines.Num() * RH + 70 * U;
+			Panel(X, Y, PW, PH, .9f);
+			Text(Title, SW * .5f, Y + 20 * U, 1.4f, Gold, GEngine->GetLargeFont(), true);
+			Text(Sub, SW * .5f, Y + 78 * U, .9f, Teal, nullptr, true);
+			float RY = Y + 130 * U;
+			for (const FString& Ln : Lines) { Wrapped(Ln, X + 40 * U, RY, PW - 80 * U, 1.0f, FLinearColor::White); RY += RH; }
+			Wrapped(Foot, X + 40 * U, RY + 14 * U, PW - 80 * U, .85f, Dim);
+			Text(TEXT("F to close"), SW * .5f, Y + PH - 34 * U, .8f, Dim, nullptr, true);
+		}
 	}
 	if (!W->bShopOpen)
 	{

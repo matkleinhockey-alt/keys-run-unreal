@@ -3,6 +3,7 @@
 #include "KeysTownData.h"
 #include "KeysGeo.h"
 #include "KeysWorld.h"
+#include "KeysKit.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/PointLightComponent.h"
@@ -77,6 +78,8 @@ void AKeysTown::BeginPlay()
 	BuildCars(S);
 	BuildInteriors(I, G);
 	BuildCasinoInterior(I, G);
+	BuildKit(S, G, I);
+	BuildEateries(S, G, I);
 	BuildFar(F);
 
 	UMaterialInterface* VC = AKeysWorld::VertexColorMaterial();
@@ -117,7 +120,8 @@ void AKeysTown::BeginPlay()
 		Pp.Inside = N.Inside;
 		Pp.U = N.U; Pp.V = N.V; Pp.Y = P + N.Y; Pp.Yaw = N.Yaw;
 		Pp.bDancer = N.Look == TEXT("dancer");
-		Pp.bSeated = N.Look == TEXT("punter") || (N.Look == TEXT("patron") && N.Inside == TEXT("diner"));
+		Pp.bSeated = N.bSit || N.Look == TEXT("punter");
+		Pp.Act = N.Act;
 		Pp.H.Init(KeysTownPaint::LookFor(N.Look, N.Variant + k * 7), Pp.bSeated);
 		Folk.Add(MoveTemp(Pp));
 		k++;
@@ -311,7 +315,7 @@ void AKeysTown::BuildLot(const FLot& L, FTownBatch& S, FTownBatch& G)
 		S.Box(CX, Y - .32, FZ + 1.7, W - 1, .18, .05, Lk.Awn1);
 	}
 	if (L.Style == EStyle::Diner)
-		for (int32 i = 0; i < 6; i++) S.Box(L.Door - 2.5 + .5 + i * .83, P + 2.95, FZ + .8, .83, .06, 1.6, i % 2 ? 0xf4f4f2 : 0xc23a3a, .26);
+		for (int32 i = 0; i < 6; i++) S.Box(L.Door - 2.5 + .5 + i * .83, P + 2.95, FZ + .8, .83, .06, 1.6, i % 2 ? 0xf0e6cc : 0x15263a, .26);
 
 	S.M.Surf = SurfDefault;
 	// the hero sign on the roof: the thing that tells you what the place is from across the harbour
@@ -362,6 +366,7 @@ void AKeysTown::BuildLot(const FLot& L, FTownBatch& S, FTownBatch& G)
 		}
 		case EStyle::Bar:
 		{
+			if (FString(L.Id) == TEXT("bar")) break;   // Bait & Brew has its neon jumping fish (KeysEateries.cpp)
 			// a beer mug over the door, foam and all
 			const double Bx = L.U0 + 4.2, By = P + L.H + 1.0;
 			S.Box(Bx, By - .4, HZ + .3, .12, 1.6, .12, 0x2d3136);
@@ -375,7 +380,7 @@ void AKeysTown::BuildLot(const FLot& L, FTownBatch& S, FTownBatch& G)
 			S.Box(CX, HY + 1.0, HZ, 9.5, 2.0, .3, 0x1d2430);
 			S.Box(CX, HY + 1.0, HZ - .02, 9.8, 2.3, .26, 0xe8edf1);
 			for (double DX : {-3.0, 3.0}) S.Box(CX + DX, Top + .5, HZ, .12, 1.0, .12, 0x2d3136);
-			AddSign(TEXT("DINER"), CX, HY + 1.0, L.V0 + .6 - .2, 1.3, Hex(0xff5a4f), 0, false, 9);
+			AddSign(TEXT("REEL FANCY"), CX, HY + 1.0, L.V0 + .6 - .2, 1.2, Hex(0xf3d48a), 0, false, 9);
 			break;
 		}
 		case EStyle::IceCream:
@@ -499,7 +504,7 @@ void AKeysTown::BuildLot(const FLot& L, FTownBatch& S, FTownBatch& G)
 			break;
 		}
 		case EStyle::Diner:
-			S.Span(L.U0 - .05, L.U1 + .05, P, P + .5, FZ, FZ + .12, 0xc23a3a);
+			S.Span(L.U0 - .05, L.U1 + .05, P, P + .5, FZ, FZ + .12, 0x15263a);
 			break;
 		case EStyle::Motel:
 		{
@@ -703,7 +708,7 @@ void AKeysTown::BuildNotices(const FLot& L, const TArray<FVector>& Panes, double
 }
 
 // ---------------------------------------------------------------- a TextRender sign in the town's local frame
-void AKeysTown::AddSign(const FString& Text, double U, double Y, double V, double Size, const FLinearColor& Color, double YawDeg, bool bInterior, double Width)
+UTextRenderComponent* AKeysTown::AddSign(const FString& Text, double U, double Y, double V, double Size, const FLinearColor& Color, double YawDeg, bool bInterior, double Width)
 {
 	UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
 	T->SetupAttachment(Root);
@@ -719,6 +724,7 @@ void AKeysTown::AddSign(const FString& Text, double U, double Y, double V, doubl
 	T->SetText(FText::FromString(Text));
 	T->SetCastShadow(false);
 	(bInterior ? InteriorSigns : Signs).Add(T);
+	return T;
 }
 
 // ---------------------------------------------------------------- palms, lamps, benches, bins, the marlin statue, dumpsters, the motel sign
@@ -752,21 +758,12 @@ void AKeysTown::BuildProps(FTownBatch& S, FTownBatch& G)
 		for (double DX : {-.8, .8}) S.Box(X + DX, P + .22, Z, .08, .44, .4, 0x2d3136);
 	}
 	for (const FPoint& C : TrashCans()) { S.Cyl(C.U, P, Zf(C.V), .3, .26, .9, 0x5d7364, 8); S.Cyl(C.U, P + .9, Zf(C.V), .32, .32, .06, 0x3a4044, 8); }
-	// the blue marlin on its plinth (props.ts marlinStatue)
+	// the town square's plinth (the giant fibreglass tarpon on it is the style kit's: KeysTownDress.cpp)
 	{
 		const double X = 16, Z = Zf(24);
 		S.Span(X - 1.3, X + 1.3, P, P + .9, Z - 1.3, Z + 1.3, 0xb7b2a6);
 		S.Span(X - 1.1, X + 1.1, P + .9, P + 1.1, Z - 1.1, Z + 1.1, 0x8d8a82);
 		S.Box(X, P + .6, Z + 1.32, .9, .35, .04, 0xc9a24a);
-		for (int32 i = 0; i < 9; i++)
-		{
-			const double T = i / 8.0, Ang = -.2 + T * 1.9;
-			const double Px = X - 1.1 + T * 2.0, Py = P + 1.7 + FMath::Sin(T * PI * .85) * 3.6 + T * .8, Th = .55 - T * .3;
-			S.Box(Px, Py, Z, .9, Th, Th, i < 8 ? 0x1f6fb0 : 0xdfe6ea, 0, 0, Ang * .7);
-		}
-		S.Box(X + 1.1, P + 5.6, Z, 1.3, .1, .1, 0x1f6fb0, 0, 0, .8);
-		S.Box(X - .2, P + 4.4, Z, .1, 1.2, .5, 0x134a7a);
-		S.Box(X - 1.2, P + 1.6, Z, .12, 1.1, .7, 0x134a7a, 0, 0, .5);
 	}
 	for (double U : {-24.0, 30.0})
 	{
@@ -959,6 +956,8 @@ void AKeysTown::Tick(float DeltaSeconds)
 	}
 	if (Tier == 0)
 		for (UTextRenderComponent* T : Signs) if (T && T->IsVisible() != (Dist < 600)) T->SetVisibility(Dist < 600);
+	// the Gutted Grouper's chalkboard follows today's catches
+	if (Tier == 0 && (CatchBoardT += DeltaSeconds) > 2) { CatchBoardT = 0; UpdateCatchBoard(); }
 	const bool bIn = Tier == 0 && Dist < 160;
 	if (bIn != bInsideOn)
 	{
@@ -1077,6 +1076,46 @@ void AKeysTown::UpdatePeople(double T, double Dt, const FVector& CamGame)
 			H.PoseLegs(FKeysHuman::J(-.12, .085, .02), FKeysHuman::J(.12, .085 + FMath::Max(0.0, FMath::Sin(G * .5)) * .15, .1));
 			H.Pose(FKeysHuman::J(-.22 + FMath::Sin(G) * .1, H.HipY + .95 + FMath::Sin(G * .5) * .1, .1), FKeysHuman::J(.22 + FMath::Sin(G) * .1, H.HipY + .9 - FMath::Sin(G * .5) * .1, .1));
 		}
+		else if (Pp.Act > 0)
+		{
+			H.DefaultPose();
+			const double Tt = T + Pp.U * 7.3 + Pp.V * 3.1;
+			const FVector Rest = FKeysHuman::J(.17, H.HipY + .3, .4), RestL = FKeysHuman::J(-.17, H.HipY + .3, .38);
+			if (Pp.Act == 1)
+			{
+				// a forkful every few seconds: up to the mouth, a chew, back down
+				const double C = FMath::Fmod(Tt / 5.5, 1.0);
+				const double K = C < .18 ? FMath::SmoothStep(0., .18, C) : C < .32 ? 1 : C < .48 ? 1 - FMath::SmoothStep(.32, .48, C) : 0;
+				H.Pose(RestL, FMath::Lerp(Rest + FKeysHuman::J(0, FMath::Sin(Tt * 4) * .015, 0), H.Mouth() + FKeysHuman::J(.04, -.03, .06), K));
+				if (!H.bHoldHead) H.HeadNod = .25 - K * .2;
+			}
+			else if (Pp.Act == 2)
+			{
+				// a can (or a glass) and a long pull now and then
+				H.bBeer = Pp.Inside != TEXT("diner");
+				const double C = FMath::Fmod(Tt / 7.0, 1.0);
+				H.SipAmt = C < .15 ? FMath::SmoothStep(0., .15, C) : C < .3 ? 1 : C < .42 ? 1 - FMath::SmoothStep(.3, .42, C) : 0;
+				H.Pose(RestL, FMath::Lerp(Rest + FKeysHuman::J(.02, .05, -.02), H.Mouth() + FKeysHuman::J(.05, -.04, .05), H.SipAmt));
+			}
+			else
+			{
+				// talking with their hands, turning to whoever's beside them
+				H.Pose(FKeysHuman::J(-.2 + FMath::Sin(Tt * 2.3) * .05, H.HipY + .36 + FMath::Max(0.0, FMath::Sin(Tt * 3.1)) * .1, .32),
+					FKeysHuman::J(.2 + FMath::Sin(Tt * 1.9 + 1) * .06, H.HipY + .38 + FMath::Max(0.0, FMath::Sin(Tt * 2.6 + 2)) * .12, .34));
+				H.HeadYaw = FMath::Sin(Tt * .6) * .35;
+				H.HeadNod = FMath::Sin(Tt * 3.3) * .06;
+			}
+			// say something when the player walks past
+			if (bWalkerAshore && T - Pp.TalkT > 9)
+			{
+				double WU, WV;
+				ToLocal(WalkerPos.X, WalkerPos.Z, WU, WV);
+				if (FMath::Square(WU - U) + FMath::Square(WV - V) < 36 && FMath::Fmod(Tt, 9.0) < Dt * 1.5)
+					Pp.TalkT = T;
+			}
+			if (T - Pp.TalkT < 3.2 && Pp.TalkT > 0)
+				KeysTags::Add(WorldPos(U, V, Pp.Y + 1.35), TableTalk(Pp.Inside, Pp.Act, int32(Pp.U * 13 + Pp.TalkT)), 14, true);
+		}
 		else
 		{
 			H.DefaultPose();
@@ -1101,6 +1140,27 @@ void AKeysTown::UpdatePeople(double T, double Dt, const FVector& CamGame)
 			const double Ry = S < 23 ? PI / 2 : -PI / 2;
 			Fish.Box(Uu, Yy, Zf(Vv), Sz * .4, Sz * .7, Sz * 1.6, FC[i % 6], 0, Ry);
 			Fish.Box(Uu, Yy, Zf(Vv) + (S < 23 ? Sz * .9 : -Sz * .9), .03, Sz * .6, Sz * .5, FC[i % 6], 0, Ry);
+		}
+		// Reel Fancy's reef tank down its west wall: tangs, angelfish, a grunt school, a slow grouper
+		{
+			static const uint32 RC[] = {0x2a6fd6, 0xf2d43a, 0xf28a2e, 0x8fd0e8, 0xe8e2c8, 0x7a4fb0, 0xd94a6a};
+			const double VA = 47.8, VB = 68.2, Len = VB - VA;
+			for (int32 i = 0; i < 22; i++)
+			{
+				const double Ph = Hash1(i * 2.9 + 4) * 100, Sp = (i == 0 ? .18 : .35 + Hash1(i * 4.1) * .6);
+				const double S = FMath::Fmod(Ph + T * Sp, 2 * Len);
+				const bool bOut = S < Len;
+				const double Vv = VA + (bOut ? S : 2 * Len - S);
+				const double Yy = P + .07 + .85 + Hash1(i * 6.7) * 1.8 + FMath::Sin(T * 1.1 + i) * .06;
+				const double Uu = FMath::Lerp(-31.42, -30.82, Hash1(i * 8.3));
+				const double Sz = i == 0 ? .55 : .1 + Hash1(i * 3.3) * .14;
+				const double Ry = bOut ? -PI / 2 : PI / 2;
+				const uint32 Cc = i == 0 ? 0x6b5c3e : RC[i % 7];
+				const double Wag = FMath::Sin(T * (6 + Hash1(i) * 4) + i) * .25;
+				Fish.Box(Uu, Yy, Zf(Vv), Sz * .3, Sz * (i % 3 == 1 ? 1.0 : .6), Sz * 1.2, Cc, 0, Ry);
+				Fish.Box(Uu, Yy, Zf(Vv) + (bOut ? Sz * .75 : -Sz * .75), .02, Sz * .55, Sz * .4, Cc, 0, Ry + Wag);
+				Fish.Box(Uu, Yy + Sz * .35, Zf(Vv), .015, Sz * .25, Sz * .6, Cc, 0, Ry);
+			}
 		}
 		Fish.M.Commit(Tank, 0, AKeysWorld::VertexColorMaterial());
 	}

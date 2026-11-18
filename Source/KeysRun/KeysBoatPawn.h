@@ -146,6 +146,8 @@ public:
 	int32 LoginField = 0;      // 0 name, 1 crew code
 	FString LoginName, LoginCrew;
 	UKeysSave* Board() const;
+	// the menu being read (a MENU|<id> plaque at a restaurant), empty when none; the HUD draws it while you stand there
+	FString MenuOpen;
 
 	// ---- for other systems (game meters, y up; see KeysGeo.h)
 	double GetSpeed() const { return Speed; }        // m/s along the heading, negative in reverse (game speed, includes SpeedScale)

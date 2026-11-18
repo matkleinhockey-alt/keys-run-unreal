@@ -64,6 +64,7 @@ public:
 	UPROPERTY() int32 Count = 0;
 	UPROPERTY() int64 BestScore = 0;
 	UPROPERTY() TArray<FKeysBoardCatch> TopCatches;   // heaviest first, at most MaxTop
+	UPROPERTY() TArray<FKeysBoardCatch> TodayCatches; // everything landed today (local date), newest last
 
 	// online login, remembered so the game reconnects next time
 	UPROPERTY() FString OnlineName;

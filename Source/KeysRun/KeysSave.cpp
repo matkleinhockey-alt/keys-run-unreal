@@ -30,6 +30,10 @@ void UKeysSave::Record(const FString& Key, double Weight, const FString& Boat)
 	C.Weight = Weight;
 	C.Boat = Boat;
 	C.Date = FDateTime::Now().ToString(TEXT("%Y-%m-%d"));
+	// today's catches (the Gutted Grouper's chalkboard reads them): drop other days, keep the last 30
+	TodayCatches.RemoveAll([&C](const FKeysBoardCatch& T) { return T.Date != C.Date; });
+	TodayCatches.Add(C);
+	if (TodayCatches.Num() > 30) TodayCatches.RemoveAt(0, TodayCatches.Num() - 30);
 	int32 At = 0;
 	while (At < TopCatches.Num() && TopCatches[At].Weight >= Weight) At++;
 	if (At < MaxTop)

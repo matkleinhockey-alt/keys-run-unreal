@@ -65,7 +65,8 @@ namespace KeysTown
 	};
 
 	// a figure that stands (or sits, or dances) at a fixed spot; Look picks the outfit (people.ts humanOptionsFor)
-	struct FNpc { FString Look; double U, V, Yaw; FString Inside; double Y = 0; int32 Variant = 0; };
+	// Act: what they're doing at a table (0 nothing, 1 eating, 2 drinking, 3 talking); bSit: on a chair or bench
+	struct FNpc { FString Look; double U, V, Yaw; FString Inside; double Y = 0; int32 Variant = 0; int32 Act = 0; bool bSit = false; };
 
 	// the casino's slot cabinets (world/casino.ts)
 	struct FCabinet { double U, V, FU, FV; int32 Theme; double SU, SV; bool bOccupied; };

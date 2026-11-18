@@ -62,6 +62,7 @@ namespace KeysTownPaint
 		else if (Look == TEXT("woman")) { L.bLongHair = true; L.HairStyle = i % 4; L.Shirt = Hex(Shirts[(i + 2) % 8]); L.Bottom = Hex(0x3d5a8a); }
 		else if (Look == TEXT("bouncer")) { L.Shirt = Hex(0x111114); L.Bottom = Hex(0x111114); L.bShortsLong = true; L.bGlasses = true; L.Shoes = Hex(0x111114); L.Skin = Hex(0xb87a55); }
 		else if (Look == TEXT("bartender")) { L.Shirt = Hex(0xf3efe5); L.Bottom = Hex(0x2b2118); L.Hair = Hex(0x7a3a1c); L.bLongHair = true; L.HairStyle = 3; }
+		else if (Look == TEXT("host")) { L.Shirt = Hex(0xf4f4f2); L.Bottom = Hex(0x15171a); L.bShortsLong = true; L.bShoes = true; L.Shoes = Hex(0x15171a); }
 		else if (Look == TEXT("cook")) { L.Shirt = Hex(0xffffff); Cap(0xffffff); L.Bottom = Hex(0x23262a); }
 		else if (Look == TEXT("patron")) { Cap(0x5a7bd6); L.Bottom = Hex(0x6b5a3a); }
 		else if (Look == TEXT("dancer"))
@@ -94,6 +95,15 @@ void FTownBatch::Tri3(const FVector& A3, const FVector& B3, const FVector& C3, c
 	const FVector A = ToUEL(A3), B = ToUEL(B3), C = ToUEL(C3), N = ToUEL(N3).GetSafeNormal();
 	const double D = FVector::DotProduct(FVector::CrossProduct(B - A, C - A), N);
 	const int32 I0 = M.AddVert(A, N, Col), I1 = M.AddVert(B, N, Col), I2 = M.AddVert(C, N, Col);
+	if (D * WindSign() > 0) M.T.Append({I0, I1, I2});
+	else M.T.Append({I0, I2, I1});
+}
+
+void FTownBatch::TriCol(const FVector& A3, const FVector& B3, const FVector& C3, const FVector& N3, const FLinearColor& CA, const FLinearColor& CB, const FLinearColor& CC)
+{
+	const FVector A = ToUEL(A3), B = ToUEL(B3), C = ToUEL(C3), N = ToUEL(N3).GetSafeNormal();
+	const double D = FVector::DotProduct(FVector::CrossProduct(B - A, C - A), N);
+	const int32 I0 = M.AddVert(A, N, CA), I1 = M.AddVert(B, N, CB), I2 = M.AddVert(C, N, CC);
 	if (D * WindSign() > 0) M.T.Append({I0, I1, I2});
 	else M.T.Append({I0, I2, I1});
 }

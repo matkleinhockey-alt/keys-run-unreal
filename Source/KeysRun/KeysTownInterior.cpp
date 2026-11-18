@@ -22,7 +22,7 @@ namespace
 	{
 		static const FRoom Rooms[] = {
 			{TEXT("bar"), 0x9a7048, 0x4a3524, 0x4a3826, 0, 99, 0x2f6b4a}, {TEXT("tarpon"), 0x7d5a3a, 0x3a2a1a, 0x3c2e20, 0, 99, 0x2f6b4a},
-			{TEXT("hammered"), 0x8e9aa0, 0x2b3338, 0x4a5257, 1, 4.6, 0xd9342b}, {TEXT("diner"), 0xf1e8d6, 0xc23a3a, 0xe6e2d6, 2, 99, 0xc23a3a},
+			{TEXT("hammered"), 0x8e9aa0, 0x2b3338, 0x4a5257, 1, 4.6, 0xd9342b}, {TEXT("diner"), 0x2c4356, 0x3a2a1c, 0x1c2a36, 0, 99, 0xc9a24a},
 			{TEXT("dive"), 0x4aa6b8, 0xf1f4f5, 0xe6f0f2, 3, 4.4, 0x1ea5b8}, {TEXT("tackle"), 0xd8c9a0, 0x1f4f8c, 0xe9e4d4, 0, 4.6, 0x1f4f8c},
 			{TEXT("guns"), 0x7a4a3c, 0x16110f, 0x3a3532, 1, 4.4, 0x2a2d31}, {TEXT("liquor"), 0xe8c868, 0xb3202a, 0xeee6c8, 2, 4.0, 0xb3202a},
 			{TEXT("gifts"), 0xf6b8a8, 0x2bb3a8, 0xfff2dc, 0, 4.2, 0x2bb3a8}, {TEXT("pawn"), 0x8a8860, 0xf0c64a, 0x6a665a, 1, 4.4, 0xb3202a},
@@ -131,14 +131,14 @@ void AKeysTown::BuildInteriors(FTownBatch& I, FTownBatch& G)
 		{TEXT("bar"), {0x6b3a1a, 0x2a6b2a, 0xe0b34a, 0xd9d4c0}},
 		{TEXT("tarpon"), {0x6b3a1a, 0x2a6b2a, 0xe0b34a, 0xd9d4c0}},
 		{TEXT("hammered"), {0x6b3a1a, 0x2a6b2a, 0xe0b34a, 0xd9d4c0}},
-		{TEXT("diner"), {0xf4f4f2, 0xc23a3a, 0xe0b34a}},
+		{TEXT("diner"), {0x2a6b2a, 0xe0b34a, 0x6b1a1a, 0xd9d4c0, 0x1d2430}},
 		{TEXT("club"), {0xff3ea5, 0x8a3cff, 0xe0b34a, 0x38e0ff}},
 	};
 	int32 Seed = 1;
 	for (const FInteriorBox& B : InteriorBoxes())
 	{
 		const FString Id = B.Id, LotId = B.Lot;
-		if (LotId == TEXT("casino")) continue;
+		if (LotId == TEXT("casino") || Id.StartsWith(TEXT("eat-"))) continue;   // the restaurants draw their own (KeysEateries.cpp)
 		const FLot* L = Lot(LotId);
 		const FRoom* R = RoomOf(LotId);
 		if (!L || !R) continue;
@@ -146,14 +146,14 @@ void AKeysTown::BuildInteriors(FTownBatch& I, FTownBatch& G)
 		const double Y0 = P + .07, H = FMath::Min(L->H, R->CeilMax);
 		const double U0 = B.U0, U1 = B.U1, ZA = Zf(B.V1), ZB = Zf(B.V0), UC = (U0 + U1) / 2, ZC = (ZA + ZB) / 2;
 		Seed += 13;
-		const bool bBarLike = L->Style == EStyle::Bar || L->Style == EStyle::Club;
+		const bool bBarLike = L->Style == EStyle::Bar || L->Style == EStyle::Club || LotId == TEXT("diner");
 		if (Id.Contains(TEXT("counter")) || Id.Contains(TEXT("desk")))
 		{
 			// a counter: body, a top that overhangs on the customer's side, and the shelf wall behind the keeper
 			const uint32 BodyC = bBarLike ? 0x5a3a22 : R->Trim, TopC = bBarLike ? 0x8a5a36 : 0xe8e4d8;
 			I.Span(U0, U1, Y0, Y0 + 1.0, ZA, ZB, BodyC);
 			I.Span(U0 - .05, U1 + .05, Y0 + 1.0, Y0 + 1.07, ZA + .05, ZB + .15, TopC);
-			if (Id != TEXT("club-counter") && !Id.Contains(TEXT("tarpon")) && !Id.Contains(TEXT("hammered")))
+			if (Id != TEXT("club-counter") && !Id.Contains(TEXT("tarpon")) && !Id.Contains(TEXT("hammered")) && LotId != TEXT("diner"))
 			{
 				const double BackV = FMath::Min(L->V1 - WallT - .05, B.V1 + 2.6);
 				const double SU0 = FMath::Max(L->U0 + WallT + .1, U0), SU1 = FMath::Min(L->U1 - WallT - .1, U1);
@@ -173,7 +173,7 @@ void AKeysTown::BuildInteriors(FTownBatch& I, FTownBatch& G)
 				for (double U = U0 + .6; U < U1 - .3; U += 1.1)
 				{
 					I.Cyl(U, Y0, ZB + .55, .05, .06, .66, 0x9aa0a6, 6);
-					I.Cyl(U, Y0 + .66, ZB + .55, .22, .22, .1, LotId == TEXT("diner") ? 0xc23a3a : 0x2b2118, 10);
+					I.Cyl(U, Y0 + .66, ZB + .55, .22, .22, .1, LotId == TEXT("diner") ? 0x15263a : 0x2b2118, 10);
 				}
 			else
 			{

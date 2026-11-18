@@ -34,6 +34,8 @@ struct FTownBatch
 	// a vertical rectangle in the plane x = X, facing +x or -x
 	void SideFace(double Z0, double Z1, double Y0, double Y1, double X, bool bPlus, const FLinearColor& Color);
 	void Tri3(const FVector& A3, const FVector& B3, const FVector& C3, const FVector& N3, const FLinearColor& Col);
+	// a flat triangle with its own colour at each corner (for wear that fades out: salt, rust streaks)
+	void TriCol(const FVector& A3, const FVector& B3, const FVector& C3, const FVector& N3, const FLinearColor& CA, const FLinearColor& CB, const FLinearColor& CC);
 	void Quad3(const FVector& A3, const FVector& B3, const FVector& C3, const FVector& D3, const FVector& N3, const FLinearColor& Col);
 	void Tube3(const FVector& A3, const FVector& B3, double RA, double RB, int32 Sides, uint32 Color);
 	// a hip roof over a W x D rectangle turned RY about the vertical, eaves at Y0, ridge Rise above them
@@ -91,7 +93,19 @@ private:
 	void BuildCars(FTownBatch& S);
 	void BuildEstates();
 	void BuildFar(FTownBatch& F);
-	void AddSign(const FString& Text, double U, double Y, double V, double Size, const FLinearColor& Color, double YawDeg = 0, bool bInterior = false, double Width = 0);
+	// the town style kit's set dressing on every lot, its side walls and interiors, and the town square statue (KeysTownDress.cpp)
+	void BuildKit(FTownBatch& S, FTownBatch& G, FTownBatch& I);
+	UTextRenderComponent* AddSign(const FString& Text, double U, double Y, double V, double Size, const FLinearColor& Color, double YawDeg = 0, bool bInterior = false, double Width = 0);
+	// the three restaurants (KeysEateries.cpp): Reel Fancy in the old diner, Bait & Brew in the old bait shop (the bar),
+	// and the Gutted Grouper's shack on the promenade
+	void BuildEateries(FTownBatch& S, FTownBatch& G, FTownBatch& I);
+	// the Gutted Grouper's chalkboard: today's catch of the day, from what the player has actually caught today
+	void UpdateCatchBoard();
+	UPROPERTY() TArray<TObjectPtr<UTextRenderComponent>> CatchBoard;
+	double CatchBoardT = 0;
+	FString CatchBoardShown;
+	// what the people at the tables say when you walk past (KeysEateries.cpp)
+	static FString TableTalk(const FString& Inside, int32 Act, int32 Pick);
 	void UpdatePeople(double T, double Dt, const FVector& CamGame);
 	// the room you are in gets real lights at its ceiling lamps (a small pool moved from room to room): warm white in the
 	// shops, amber in the bars, pink in the Pink Flamingo with a key light on its stage (KeysTownInterior.cpp)
@@ -121,6 +135,8 @@ private:
 		TArray<FVector2D> Path;
 		double Speed = 0, S0 = 0, Len = 0;
 		bool bDancer = false, bSeated = false;
+		int32 Act = 0;            // at a table: 1 eating, 2 drinking, 3 talking
+		double TalkT = 0;         // when they last said something
 		double Gait = 0;
 	};
 	TArray<FPerson> Folk;

@@ -858,6 +858,16 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (!IsAshore()) ToggleAshore();
 		}
 		else if (Cmd == TEXT("ashore")) { if (!IsAshore()) ToggleAshore(); }
+		else if (Cmd == TEXT("towndock"))
+		{
+			// tie up at the town marina's first deck and step off (for shots of the town)
+			if (KeysTown::DeckBoxes().Num() && !IsAshore())
+			{
+				const KeysTown::FDeckBox& D = KeysTown::DeckBoxes()[0];
+				X = D.CX; Z = D.CZ; Speed = Thr = DVX = DVZ = 0; bCamInit = false;
+				ToggleAshore();
+			}
+		}
 		else if (Cmd == TEXT("board")) { if (IsAshore()) ToggleAshore(); }
 		else if (Cmd.StartsWith(TEXT("walk=")))
 		{
@@ -1272,7 +1282,7 @@ void AKeysBoatPawn::ToggleAshore()
 	{
 		if (FState == EKeysFish::Caught) { ShowToast(TEXT("Finish with your catch first.")); return; }
 		FString Why;
-		if (!W->TryEnter(X, Z, H, Speed, Spec().Len, Why)) { ShowToast(Why); return; }
+		if (!W->TryEnter(X, Z, H, Speed, Spec().Len, Why)) { UE_LOG(LogTemp, Warning, TEXT("KeysRun: can't go ashore at %.0f %.0f: %s"), X, Z, *Why); ShowToast(Why); return; }
 		if (bCharging || IsLineOut()) ReelIn(FString());
 		bCharging = false;
 		bReelKey = bFwd = bBack = bLeft = bRight = bTrimUp = bTrimDn = bAction = false;
@@ -1377,6 +1387,7 @@ void AKeysBoatPawn::WalkInteract()
 {
 	AKeysWalker* W = AKeysWalker::Get(this);
 	if (!W) return;
+	if (W->NearText().StartsWith(TEXT("MENU|"))) { MenuOpen = MenuOpen.IsEmpty() ? W->NearText().Mid(5) : FString(); return; }
 	if (!W->NearText().IsEmpty()) { ShowToast(W->NearText(), 7); return; }
 	const FString V = W->NearVenue();
 	if (V.IsEmpty()) { ShowToast(TEXT("Nothing to do here. Walk up to a counter, a slot machine or a For Sale sign.")); return; }
@@ -3578,7 +3589,8 @@ namespace
 
 	// the model hand round the grip: thumb toward +A, the forearm turned toward the elbow; the left hand is the right
 	// one mirrored. The shirt sleeve carries on from the cuff to the elbow. False if there's no model.
-	bool AddModelHand(FKeysMesh& M, const FVector& C, const FVector& A0, bool bLeft, const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve)
+	bool AddModelHand(FKeysMesh& M, const FVector& C, const FVector& A0, bool bLeft, const FVector& Elbow, const FLinearColor& Skin, const FLinearColor& Sleeve,
+		const FLinearColor* Glove = nullptr, const FVector* Shoulder = nullptr)
 	{
 		const FGripHandModel& H = GripHandModel();
 		if (!H.bOk) return false;
@@ -3598,10 +3610,16 @@ namespace
 			const FLinearColor Src = H.C[i];
 			const float L = Src.GetLuminance();
 			FLinearColor Col;
-			if (H.bCloth[i]) Col = Sleeve * FMath::Clamp(L / .35f, .55f, 1.35f);
+			if (Glove)
+			{
+				// a black fishing glove: the hand in the glove's colour with the model's shading, the shirt cuff its cuff
+				const float Sh = H.bCloth[i] ? FMath::Clamp(L / .35f, .7f, 1.25f) : FMath::Clamp(FMath::Pow(L / FMath::Max(SkinL, .05f), 1.6f), .35f, 2.2f);
+				Col = *Glove * Sh * (H.bCloth[i] ? 1.15f : 1.f);
+			}
+			else if (H.bCloth[i]) Col = Sleeve * FMath::Clamp(L / .35f, .55f, 1.35f);
 			else Col = FLinearColor::LerpUsingHSV(Src, Skin * FMath::Clamp(L / FMath::Max(SkinL, .05f), .4f, 1.4f), .35f);
 			Col.A = 1;
-			M.Surf = H.bCloth[i] ? SurfCloth : SurfSkin;
+			M.Surf = Glove ? SurfVinyl : H.bCloth[i] ? SurfCloth : SurfSkin;
 			M.AddVert(Xf(H.P[i]), Xn(H.N[i]), Col);
 		}
 		for (int32 t = 0; t + 2 < H.T.Num(); t += 3)
@@ -3610,6 +3628,51 @@ namespace
 			const FVector Nf = M.N[a] + M.N[b] + M.N[c];
 			const bool bSwap = FVector::DotProduct(FVector::CrossProduct(M.V[b] - M.V[a], M.V[c] - M.V[a]), Nf) > 0;
 			M.T.Append({a, bSwap ? c : b, bSwap ? b : c});
+		}
+		if (Glove)
+		{
+			// the bare forearm out of the glove's cuff: narrow at the wrist, swelling to the muscle below the elbow, a
+			// little flattened, sun-tanned and darker (hairier) along the top; then the elbow and the upper arm on back
+			const FVector W0 = Xf(H.CuffEnd - FVector(0, 0, .035));
+			// a straight forearm on along the cuff's own axis (no bend), long enough to run out of the frame
+			// the wrist bends inside the cuff: the forearm runs straight from there to Elbow (out of the frame)
+			const double FL = FMath::Max(.3, FVector::Dist(W0, Elbow));
+			const FVector Fa = (Elbow - W0).GetSafeNormal();
+			const FVector TopRef = Y * (bLeft ? -1.0 : 1.0);
+			const FVector Top = (TopRef - Fa * FVector::DotProduct(TopRef, Fa)).GetSafeNormal(UE_SMALL_NUMBER, A);
+			const FVector Side = FVector::CrossProduct(Fa, Top).GetSafeNormal();
+			const int32 NU = 20, NV = 18;
+			TArray<FVector> G;
+			for (int32 v = 0; v < NV; v++)
+			{
+				const double t = double(v) / (NV - 1);
+				const double Dm = t * FL;                       // meters from the wrist
+				const FVector Cn = W0 + Fa * Dm;
+				// the wrist inside the cuff, swelling to the muscle about 18 cm up, then steady
+				const double Rw = FMath::Lerp(H.CuffR * .93, .033, FMath::SmoothStep(0., .07, Dm));
+				const double R = Rw + .011 * FMath::SmoothStep(.06, .2, Dm);
+				for (int32 u = 0; u < NU; u++)
+				{
+					const double a = 2 * PI * u / NU;
+					G.Add(Cn + Top * FMath::Cos(a) * R * .86 + Side * FMath::Sin(a) * R * 1.08);
+				}
+			}
+			const int32 F0 = M.V.Num();
+			M.Surf = SurfSkin;
+			M.AddGrid(G, NU, NV, true, Skin, W0 + (Elbow - W0) * .5);
+			// mottle: hair and freckles darken the top of the arm, the underside is paler
+			for (int32 i = F0; i < M.V.Num(); i++)
+			{
+				const double Up = FVector::DotProduct(M.N[i].GetSafeNormal(), TopRef);
+				const double Nz = FMath::Frac(FMath::Sin(FVector::DotProduct(M.V[i], FVector(127.1, 311.7, 74.7)) * 1000.0) * 43758.5);
+				const float Dk = float(1 - .16 * FMath::Max(0., Up) - .1 * Nz * FMath::Max(0., Up + .3));
+				const float Pale = float(1 + .08 * FMath::Max(0., -Up));
+				FLinearColor Cc = M.C[i] * Dk * Pale; Cc.A = 1;
+				M.C[i] = Cc;
+			}
+			(void)Shoulder;
+			M.Surf = Keep;
+			return true;
 		}
 		// the sleeve on up to the elbow, from just inside the cuff
 		M.Surf = SurfCloth;
@@ -3782,8 +3845,11 @@ FVector AKeysBoatPawn::BuildViewModel(FKeysMesh& M)
 	{
 		const FVector GripC = RP.Butt + RP.Dir * .76;
 		const FVector ElbowL = W(FVector(-.12, -.78, -.12));
-		// the realistic model hand (bare, the shirt cuff); the diver's gloved hands stay procedural
-		if (!AddModelHand(M, GripC, RP.Dir, true, ElbowL, Skin, Sleeve))
+		// the realistic model hand in a black fishing glove, the bare tanned forearm running straight up from the bottom
+		// of the frame, the wrist bending inside the glove's cuff. The diver's gloved hands stay procedural.
+		const FVector ElbowFa = W(FVector(-.36, -.62, .05));
+		const FLinearColor GloveC(FColor(0x44, 0x45, 0x4a)), Tan(FColor(0xb2, 0x86, 0x6c));
+		if (!AddModelHand(M, GripC, RP.Dir, true, ElbowFa, Tan, Sleeve, &GloveC, nullptr))
 			AddGripHand(M, GripC, RP.Dir, RP.OutUp + (ElbowL - GripC).GetSafeNormal() * .5, .025, .8 + .2 * Squeeze, Lift, false, ElbowL, Skin, Sleeve, Nail);
 	}
 	{
