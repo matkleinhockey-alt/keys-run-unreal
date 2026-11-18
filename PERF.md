@@ -64,6 +64,7 @@ Apple M4 (10-core GPU), macOS, 4K display, game window 1920x1080, Shipping build
 |---|---|---|---|---|
 | 2026-11-17 | Baseline (v1.36) | baseline | 29.6 | GPU bound 24-34 ms; game thread up to 21 ms |
 | 2026-11-17 | Boids schooling (v1.37) | boids | 30.0 | GPU down underwater (reef 29.9 -> 24.8 ms, bait ball 29.4 -> 23.0 ms; High bait ball 56 -> 51 ms); game thread about the same (+1.4 ms marina, -1.9 ms reef); boids CPU ~0.8-1.0 ms for ~3,000 fish. No regression; Medium still GPU bound at 30 |
+| 2026-11-18 | Town style kit, three restaurants, gloved rod hand (v1.39) | towncafe | 30.0 | Medium still GPU-locked at 30 everywhere; GPU about the same (marina 31.3 -> 32.1 ms). Game thread at the marina up 2.8 ms (19.4 -> 22.2), from about 20 more seated, animated people in town (rebuilt each frame). Elsewhere unchanged. To claw back when Medium-60 work starts: draw seated diners only within ~60 m |
 
 ### Boids (v1.37) vs baseline, Medium
 
