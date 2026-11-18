@@ -63,3 +63,15 @@ Apple M4 (10-core GPU), macOS, 4K display, game window 1920x1080, Shipping build
 | Date | Change | Tag | Medium worst-case fps | Notes |
 |---|---|---|---|---|
 | 2026-11-17 | Baseline (v1.36) | baseline | 29.6 | GPU bound 24-34 ms; game thread up to 21 ms |
+| 2026-11-17 | Boids schooling (v1.37) | boids | 30.0 | GPU down underwater (reef 29.9 -> 24.8 ms, bait ball 29.4 -> 23.0 ms; High bait ball 56 -> 51 ms); game thread about the same (+1.4 ms marina, -1.9 ms reef); boids CPU ~0.8-1.0 ms for ~3,000 fish. No regression; Medium still GPU bound at 30 |
+
+### Boids (v1.37) vs baseline, Medium
+
+| Bookmark | fps | GPU ms (was) | game ms (was) |
+|---|---|---|---|
+| marina | 30.0 | 31.3 (33.9) | 19.4 (18.0) |
+| reef_underwater | 30.0 | 24.8 (29.9) | 18.7 (20.6) |
+| bait_ball | 32.8 | 23.0 (29.4) | 21.1 (20.6) |
+| offshore_trolling | 30.0 | 27.1 (27.4) | 9.2 (10.3) |
+| oil_rig | 30.0 | 24.3 (24.3) | 10.8 (10.0) |
+| rain_at_sea | 30.0 | 27.3 (27.5) | 8.4 (10.5) |
