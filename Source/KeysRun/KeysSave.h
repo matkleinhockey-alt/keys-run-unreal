@@ -65,6 +65,8 @@ public:
 	UPROPERTY() int64 BestScore = 0;
 	UPROPERTY() TArray<FKeysBoardCatch> TopCatches;   // heaviest first, at most MaxTop
 	UPROPERTY() TArray<FKeysBoardCatch> TodayCatches; // everything landed today (local date), newest last
+	UPROPERTY() TArray<FKeysBoardCatch> RecentCatches; // the last MaxRecent landed, any day, newest last (town talk, chalkboard)
+	UPROPERTY() FKeysBoardCatch MonthBest;            // the heaviest fish this calendar month (the town derby board)
 
 	// online login, remembered so the game reconnects next time
 	UPROPERTY() FString OnlineName;
@@ -100,6 +102,7 @@ public:
 	UPROPERTY() TArray<FString> SpotsFound;
 
 	static constexpr int32 MaxTop = 12;
+	static constexpr int32 MaxRecent = 24;
 
 	// lbRecord: count it, keep the species record and the overall best, then write the slot
 	void Record(const FString& Key, double Weight, const FString& Boat);

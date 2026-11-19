@@ -42,11 +42,12 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> StaticMesh;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> LiveMesh;
 
-	struct FPerson { FString Id, Look, Prop, Group; FScript S; double Scale = 1; int32 Bench = -1; FKeysHuman Hm; double Gait = 0; };
+	struct FPerson { FString Id, Look, Prop, Group; FScript S; double Scale = 1; int32 Bench = -1; FKeysHuman Hm; double Gait = 0; double BarkT = -100; FString Bark; };
 	TArray<FPerson> People;
 	struct FDog { FString Id, Breed, Owner; double Ahead = 0, Dv = 0; bool bLeash = false; FScript S; bool bTie = false; double TieU = 0, TieV = 0; double Step = 0; };
 	TArray<FDog> Dogs;
 	struct FCritter { FString Id; uint8 Kind; FScript S; double PalmU = 0, PalmV = 0; };   // 0 squirrel, 1 skunk
 	TArray<FCritter> Critters;
 	double LiveT = 0;
+	double LastBarkT = -100;   // when anyone on the street last spoke to you (one at a time)
 };

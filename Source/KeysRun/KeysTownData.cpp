@@ -204,6 +204,8 @@ namespace KeysTown
 			// the Gutted Grouper: the shack, four picnic tables, the cleaning station out back by the seawall
 			A.Add({-48, 22.4, 6, 5}); A.Add({-41.5, 21, 2.1, 1.0}); A.Add({-37, 21, 2.1, 1.0}); A.Add({-41.5, 25.6, 2.1, 1.0}); A.Add({-37, 25.6, 2.1, 1.0});
 			A.Add({-48, 18.9, 2.2, .8});
+			// the Wall of Fame and the derby board either side of the top of the ramp (KeysTownFame.cpp)
+			A.Add({-5.9, 22.32, 3.8, .35}); A.Add({5.9, 22.32, 3.8, .35});
 			for (const FPoint& B : Benches()) A.Add({B.U, B.V, 1.9, .6});
 		}
 		return A;

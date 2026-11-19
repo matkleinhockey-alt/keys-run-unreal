@@ -438,6 +438,11 @@ void AKeysStreet::Draw(double T, double Dt, const FVector& CamGame)
 	const double Clock = GetWorld()->GetTimeSeconds();
 	FKeysMesh M;
 	TMap<FString, FLifePose> Poses;
+	const AKeysTown* Town = AKeysTown::Get(this);
+	FVector WalkG;
+	const bool bAshore = Town && Town->WalkerAshore(WalkG);
+	double WU = 1e9, WV = 1e9;
+	if (bAshore) ToLocal(WalkG.X, WalkG.Z, WU, WV);
 	// people
 	for (int32 i = 0; i < People.Num(); i++)
 	{
@@ -446,6 +451,13 @@ void AKeysStreet::Draw(double T, double Dt, const FVector& CamGame)
 		Sample(P.S, T, Pz);
 		Poses.Add(P.Id, Pz);
 		if (Pz.bHidden || !Near(Pz.U, Pz.V, PeopleRange) || CY > PadY + 40) continue;
+		// someone you walk right past says something: your fish, or the weather (KeysFame::Bark)
+		if (Town && bAshore && Clock - P.BarkT > 45 && Clock - LastBarkT > 5 && FMath::Square(Pz.U - WU) + FMath::Square(Pz.V - WV) < 3.0 * 3.0)
+		{
+			P.BarkT = LastBarkT = Clock;
+			P.Bark = Town->BarkLine(int32(Clock * 3.7) + i * 11);
+		}
+		if (Clock - P.BarkT < 3.6) KeysTags::Add(WorldPos(Pz.U, Pz.V, PadY + Pz.Y + 2.0), P.Bark, 14, true);
 		FKeysHuman& Hm = P.Hm;
 		Hm.Pos = At(Pz.U, Pz.V, Pz.Y + (Hm.bSeated ? .02 : 0)) + FVector(0, 0, 0);
 		Hm.Yaw = -Pz.Yaw;

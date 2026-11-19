@@ -34,6 +34,9 @@ void UKeysSave::Record(const FString& Key, double Weight, const FString& Boat)
 	TodayCatches.RemoveAll([&C](const FKeysBoardCatch& T) { return T.Date != C.Date; });
 	TodayCatches.Add(C);
 	if (TodayCatches.Num() > 30) TodayCatches.RemoveAt(0, TodayCatches.Num() - 30);
+	RecentCatches.Add(C);
+	if (RecentCatches.Num() > MaxRecent) RecentCatches.RemoveAt(0, RecentCatches.Num() - MaxRecent);
+	if (MonthBest.Date.Left(7) != C.Date.Left(7) || Weight > MonthBest.Weight) MonthBest = C;
 	int32 At = 0;
 	while (At < TopCatches.Num() && TopCatches[At].Weight >= Weight) At++;
 	if (At < MaxTop)

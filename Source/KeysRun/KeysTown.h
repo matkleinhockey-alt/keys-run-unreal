@@ -5,6 +5,7 @@
 #include "KeysMesh.h"
 #include "KeysHuman.h"
 #include "KeysDancers.h"
+#include "KeysFame.h"
 #include "KeysTown.generated.h"
 
 class UProceduralMeshComponent;
@@ -80,6 +81,9 @@ public:
 	void SetOwnedEstates(const TArray<FString>& Owned);
 	// set from the time-of-day blend: 0 day .. 1 sunset/night (neon brightness)
 	void SetDusk(double K);
+	// a line for someone the player walks past: their recent catches or the weather (KeysFame::Bark)
+	FString BarkLine(int32 Pick) const;
+	bool WalkerAshore(FVector& OutPosGame) const { OutPosGame = WalkerPos; return bWalkerAshore; }
 
 private:
 	void BuildGround(FTownBatch& S);
@@ -107,6 +111,27 @@ private:
 	// what the people at the tables say when you walk past (KeysEateries.cpp)
 	static FString TableTalk(const FString& Inside, int32 Act, int32 Pick);
 	void UpdatePeople(double T, double Dt, const FVector& CamGame);
+	// the town reacting to your fishing (KeysTownFame.cpp): the Wall of Fame and the derby board at the top of the ramp,
+	// pelicans on the pilings, string lights and OPEN neon; the critters (iguanas, the dock cat, wind chimes)
+	void BuildFame(FTownBatch& S, FTownBatch& G);
+	void UpdateFame();
+	void UpdateCritters(double T, double Dt, const FVector& CamGame);
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> FameMesh;   // the polaroids (rebuilt when your fish change)
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Critters;   // rebuilt every frame you're near
+	UPROPERTY() TArray<TObjectPtr<UTextRenderComponent>> FameCaps;
+	UPROPERTY() TArray<TObjectPtr<UTextRenderComponent>> DerbyTexts;
+	uint32 FameSigShown = 0;
+	FString DerbyShown;
+	KeysFame::FWx BarkWx;
+	TWeakObjectPtr<const class UKeysSave> BarkSave;
+	struct FIguana { FVector2D Home, Pos, To; double Yaw = 0, HomeYaw = 0, Size = 1, T = 0, Wait = 0; uint32 Col = 0; int32 Mode = 0; };
+	TArray<FIguana> Iguanas;
+	TArray<FVector2D> CatPath;
+	FVector2D CatAt = FVector2D::ZeroVector;
+	double CatYaw = 0, CatT = 0, CatGait = 0, CatSayT = 0;
+	int32 CatMode = 0, CatWp = 0, CatDir = 1;
+	struct FChime { FVector Top; double NextT; int32 Kind; };
+	TArray<FChime> Chimes;
 	// the room you are in gets real lights at its ceiling lamps (a small pool moved from room to room): warm white in the
 	// shops, amber in the bars, pink in the Pink Flamingo with a key light on its stage (KeysTownInterior.cpp)
 	void UpdateRoomLights(const KeysTown::FLot* L, const FVector& StageAt);

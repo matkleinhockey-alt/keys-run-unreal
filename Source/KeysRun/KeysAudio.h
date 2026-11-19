@@ -130,6 +130,9 @@ private:
 	double StrikeT = 99, ReelLoopVol = 0, EngDuck = 0;
 	void UpdateReelSample(double Dt, bool& bOutHandled);
 	UPROPERTY() TObjectPtr<UKeysMusicSynth> Music;
+	// the band at Bait & Brew: the island station playing out of the bar's door, heard across the street
+	UPROPERTY() TObjectPtr<UKeysMusicSynth> BarMusic;
+	bool bBarOn = false;
 
 	FKeysBoatAudioState Boat;
 	bool bReady = false;       // AUD.ready: sound starts with the game (the JS starts it on the Go button)

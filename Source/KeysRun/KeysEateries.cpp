@@ -148,19 +148,42 @@ FString AKeysTown::TableTalk(const FString& Inside, int32 Act, int32 Pick)
 // ==================================================================== the menus (read with F)
 namespace KeysEateries
 {
-	FString CatchOfTheDay(const UKeysSave* Sv, FString* OutKey)
+	FString CatchOfTheDay(const UKeysSave* Sv, FString* OutKey, double* OutWeight, int32* OutDaysAgo)
 	{
 		if (!Sv) return FString();
-		const FString Today = FDateTime::Now().ToString(TEXT("%Y-%m-%d"));
-		for (int32 i = Sv->TodayCatches.Num() - 1; i >= 0; i--)
+		// the newest fish from the last three days (the recent list; today's list for saves from before it)
+		const TArray<FKeysBoardCatch>& L = Sv->RecentCatches.Num() ? Sv->RecentCatches : Sv->TodayCatches;
+		const FDateTime N = FDateTime::Now(), D0(N.GetYear(), N.GetMonth(), N.GetDay());
+		for (int32 i = L.Num() - 1; i >= 0; i--)
 		{
-			const FKeysBoardCatch& C = Sv->TodayCatches[i];
-			if (C.Date != Today) continue;
+			const FKeysBoardCatch& C = L[i];
+			FDateTime Dt;
+			if (!FDateTime::ParseIso8601(*C.Date, Dt)) continue;
+			const int32 Ago = int32((D0 - Dt).GetTotalDays());
+			if (Ago < 0 || Ago > 3) continue;
 			if (OutKey) *OutKey = C.Key;
+			if (OutWeight) *OutWeight = C.Weight;
+			if (OutDaysAgo) *OutDaysAgo = Ago;
 			const KeysData::FSpecies* Sp = KeysData::Species(C.Key);
 			return Sp ? Sp->Name : C.Key;
 		}
 		return FString();
+	}
+
+	FString AlsoFresh(const UKeysSave* Sv)
+	{
+		if (!Sv) return FString();
+		const TArray<FKeysBoardCatch>& L = Sv->RecentCatches.Num() ? Sv->RecentCatches : Sv->TodayCatches;
+		TArray<FString> Out, Seen;
+		for (int32 i = L.Num() - 2; i >= 0 && Out.Num() < 3; i--)
+		{
+			const FKeysBoardCatch& C = L[i];
+			if (Seen.Contains(C.Key) || (L.Num() && C.Key == L.Last().Key)) continue;
+			Seen.Add(C.Key);
+			const KeysData::FSpecies* Sp = KeysData::Species(C.Key);
+			Out.Add(FString::Printf(TEXT("%s %d"), *(Sp ? Sp->Name : C.Key).ToUpper(), FMath::Max(1, FMath::RoundToInt(C.Weight))));
+		}
+		return Out.Num() ? TEXT("ALSO FRESH: ") + FString::Join(Out, TEXT(" - ")) : FString();
 	}
 
 	bool Menu(const FString& Id, const UKeysSave* Sv, FString& Title, FString& Sub, TArray<FString>& Lines, FString& Foot)
@@ -170,9 +193,13 @@ namespace KeysEateries
 		{
 			Title = TEXT("The Gutted Grouper");
 			Sub = TEXT("Fish shack - Dockside - Cash only");
-			const FString Cd = CatchOfTheDay(Sv, nullptr);
+			double Wt = 0;
+			int32 Ago = 0;
+			const FString Cd = CatchOfTheDay(Sv, nullptr, &Wt, &Ago);
 			Lines.Add(Cd.IsEmpty() ? TEXT("CATCH OF THE DAY - nothing yet. Bring us one, we'll cook it.")
-				: FString::Printf(TEXT("CATCH OF THE DAY - %s, caught by you today. Fried, blackened or grilled - $14"), *Cd));
+				: FString::Printf(TEXT("CATCH OF THE DAY - %s (%.0f lb), caught by you %s. Fried, blackened or grilled - $14"), *Cd, Wt, Ago == 0 ? TEXT("today") : Ago == 1 ? TEXT("yesterday") : TEXT("this week")));
+			const FString Also = AlsoFresh(Sv);
+			if (!Also.IsEmpty()) Lines.Add(Also.Replace(TEXT("ALSO FRESH: "), TEXT("Also fresh, from your boat: ")).Replace(TEXT(" - "), TEXT(", ")));
 			Lines.Add(TEXT("Fish tacos - blackened catch, slaw, lime - $12"));
 			Lines.Add(TEXT("Conch fritters - six, key lime mayo - $9"));
 			Lines.Add(TEXT("Smoked fish dip - saltines and hot sauce - $10"));
@@ -213,13 +240,20 @@ namespace KeysEateries
 // ==================================================================== the Gutted Grouper's chalkboard
 void AKeysTown::UpdateCatchBoard()
 {
-	if (CatchBoard.Num() < 2) return;
+	if (CatchBoard.Num() < 3) return;
 	const AKeysBoatPawn* Pn = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0));
-	const FString Cd = KeysEateries::CatchOfTheDay(Pn ? Pn->Board() : nullptr, nullptr);
-	if (Cd == CatchBoardShown && !CatchBoardShown.IsEmpty()) return;
-	CatchBoardShown = Cd.IsEmpty() ? FString(TEXT("-")) : Cd;
+	const UKeysSave* Sv = Pn ? Pn->Board() : nullptr;
+	double Wt = 0;
+	int32 Ago = 0;
+	const FString Cd = KeysEateries::CatchOfTheDay(Sv, nullptr, &Wt, &Ago);
+	const FString Also = KeysEateries::AlsoFresh(Sv);
+	const FString Sig = Cd + FString::Printf(TEXT("%.1f%d"), Wt, Ago) + Also;
+	if (Sig == CatchBoardShown) return;
+	CatchBoardShown = Sig;
+	const FString When = Ago == 0 ? TEXT("today") : Ago == 1 ? TEXT("yesterday") : TEXT("this week");
 	if (CatchBoard[0]) CatchBoard[0]->SetText(FText::FromString(Cd.IsEmpty() ? FString(TEXT("NOTHING YET")) : Cd.ToUpper()));
-	if (CatchBoard[1]) CatchBoard[1]->SetText(FText::FromString(Cd.IsEmpty() ? FString(TEXT("bring us one - we'll cook it")) : FString(TEXT("caught by you today - fried, blackened or grilled"))));
+	if (CatchBoard[1]) CatchBoard[1]->SetText(FText::FromString(Cd.IsEmpty() ? FString(TEXT("bring us one - we'll cook it")) : FString::Printf(TEXT("%.0f lb - caught by you %s - fried, blackened or grilled"), Wt, *When)));
+	if (CatchBoard[2]) CatchBoard[2]->SetText(FText::FromString(Also));
 }
 
 // ==================================================================== building them
@@ -593,7 +627,8 @@ void AKeysTown::BuildEateries(FTownBatch& S, FTownBatch& G, FTownBatch& I)
 			auto Chalk = [&](const FString& Txt, double Y, double Sz, uint32 Col) { return AddSign(Txt, TxU + (P + .62 - Y) * FMath::Tan(Ang) * -1 + .03, Y, CV, Sz, Hx(Col), YawOf(Face), false, .7); };
 			Chalk(TEXT("CATCH OF THE DAY"), P + 1.08, .06, 0xf2d86a);
 			CatchBoard.Add(Chalk(TEXT("NOTHING YET"), P + .97, .085, 0xf6f4ee));
-			CatchBoard.Add(Chalk(TEXT("bring us one - we'll cook it"), P + .89, .035, 0xd8e8e0));
+			CatchBoard.Add(Chalk(TEXT("bring us one - we'll cook it"), P + .895, .032, 0xd8e8e0));
+			CatchBoard.Add(Chalk(TEXT(""), P + .835, .03, 0xf2d86a));
 			Chalk(TEXT("FISH TACOS ........ 12"), P + .76, .04, 0xf6f4ee);
 			Chalk(TEXT("CONCH FRITTERS ..... 9"), P + .68, .04, 0xf6f4ee);
 			Chalk(TEXT("SMOKED FISH DIP ... 10"), P + .6, .04, 0xf6f4ee);

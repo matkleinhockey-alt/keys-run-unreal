@@ -51,6 +51,8 @@ AKeysTown::AKeysTown()
 	Estates = Make(TEXT("TownEstates"), true);
 	Tank = Make(TEXT("TownTank"), false);
 	Halos = Make(TEXT("TownHalos"), false);
+	FameMesh = Make(TEXT("TownFame"), false);
+	Critters = Make(TEXT("TownCritters"), true);
 }
 
 AKeysTown* AKeysTown::Get(const UObject* WorldContext)
@@ -80,6 +82,7 @@ void AKeysTown::BeginPlay()
 	BuildCasinoInterior(I, G);
 	BuildKit(S, G, I);
 	BuildEateries(S, G, I);
+	BuildFame(S, G);
 	BuildFar(F);
 
 	UMaterialInterface* VC = AKeysWorld::VertexColorMaterial();
@@ -957,7 +960,10 @@ void AKeysTown::Tick(float DeltaSeconds)
 	if (Tier == 0)
 		for (UTextRenderComponent* T : Signs) if (T && T->IsVisible() != (Dist < 600)) T->SetVisibility(Dist < 600);
 	// the Gutted Grouper's chalkboard follows today's catches
-	if (Tier == 0 && (CatchBoardT += DeltaSeconds) > 2) { CatchBoardT = 0; UpdateCatchBoard(); }
+	if (Tier == 0 && (CatchBoardT += DeltaSeconds) > 2) { CatchBoardT = 0; UpdateCatchBoard(); UpdateFame(); }
+	FameMesh->SetVisibility(Tier == 0 && Dist < 600);
+	if (Tier == 0) UpdateCritters(GetWorld()->GetTimeSeconds(), FMath::Min(double(DeltaSeconds), .1), CamGame);
+	else Critters->SetVisibility(false);
 	const bool bIn = Tier == 0 && Dist < 160;
 	if (bIn != bInsideOn)
 	{
@@ -1114,7 +1120,11 @@ void AKeysTown::UpdatePeople(double T, double Dt, const FVector& CamGame)
 					Pp.TalkT = T;
 			}
 			if (T - Pp.TalkT < 3.2 && Pp.TalkT > 0)
-				KeysTags::Add(WorldPos(U, V, Pp.Y + 1.35), TableTalk(Pp.Inside, Pp.Act, int32(Pp.U * 13 + Pp.TalkT)), 14, true);
+			{
+				// half the time it's about you: your fish, or the weather
+				const int32 Pick = int32(Pp.U * 13 + Pp.TalkT);
+				KeysTags::Add(WorldPos(U, V, Pp.Y + 1.35), Pick % 2 ? BarkLine(Pick / 2) : TableTalk(Pp.Inside, Pp.Act, Pick), 14, true);
+			}
 		}
 		else
 		{

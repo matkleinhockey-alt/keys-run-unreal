@@ -10,6 +10,7 @@
 #include "KeysMusicSynth.h"
 #include "KeysSynth.h"
 #include "KeysGeo.h"
+#include "KeysTownData.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
@@ -34,6 +35,8 @@ AKeysAudio::AKeysAudio()
 	Sfx->SetupAttachment(Root);
 	Music = CreateDefaultSubobject<UKeysMusicSynth>(TEXT("Music"));
 	Music->SetupAttachment(Root);
+	BarMusic = CreateDefaultSubobject<UKeysMusicSynth>(TEXT("BarMusic"));
+	BarMusic->SetupAttachment(Root);
 }
 
 AKeysAudio* AKeysAudio::Get(const UObject* WorldContext)
@@ -60,6 +63,12 @@ void AKeysAudio::BeginPlay()
 		Music->SetOutGain(0.f, .2f);
 		Music->SetSpatial(1.f, 1.f, 0.f);
 		Music->Start();
+	}
+	if (BarMusic)
+	{
+		BarMusic->SetOutGain(0.f, .2f);
+		BarMusic->SetSpatial(1.f, 1.f, 0.f);
+		BarMusic->Start();
 	}
 }
 
@@ -582,6 +591,27 @@ void AKeysAudio::UpdateMusic(double Dt, double Now)
 	{
 		DuckUntil = -1;
 		if (bMusicOn) Music->SetOutGain(.85f, .4f);
+	}
+
+	// the band at Bait & Brew (steel pan and strummed guitar: the island station), from inside its door, only when you're near
+	if (BarMusic)
+	{
+		float BL = 0.f, BR = 0.f;
+		bool bOn = false;
+		if (const KeysTown::FLot* Lt = KeysTown::Lot(TEXT("bar")))
+		{
+			const FVector G = KeysTown::WorldPos(Lt->Door, Lt->V0 + 3, KeysTown::PadY + 1.6);
+			const FVector Src = KeysGeo::ToUE(G.X, G.Y, G.Z);
+			bOn = FVector::Dist(Src, ListenerPos) / 100 < 110 && UwLevel < .5;
+			if (bOn) KeysDSP::Spatialize(ListenerPos, ListenerRight, Src, 7.f, 1.2f, BL, BR);
+		}
+		if (bOn != bBarOn)
+		{
+			bBarOn = bOn;
+			BarMusic->PlayStation(bOn ? 0 : -1);
+			BarMusic->SetOutGain(bOn ? .85f : 0.f, .6f);
+		}
+		BarMusic->SetSpatial(BL, BR, (bReady && bSoundOn && bOn) ? .5f : 0.f);
 	}
 
 	// the boat stereo plays through the speakers on the console
