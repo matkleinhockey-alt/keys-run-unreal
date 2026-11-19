@@ -88,6 +88,10 @@ namespace KeysGeo
 	const FIsland* FindIsland(const TCHAR* Name);
 	// the town's fill pad, US-1's causeway fill, the golf courses and the runway (web depth.ts inFill)
 	bool InFill(double X, double Z);
+	// real map: mangroves. On: standing on mangrove ground. Near: 0..1, how close this water is to mangrove (1 under
+	// the branches, fading to 0 some 35 m off) - the tannin stain, and what makes it a mangrove creek to the fish
+	bool OnMangrove(double X, double Z);
+	double MangroveNear(double X, double Z);
 	bool InMarkedChannel(double X, double Z);      // real map: in (or on the edge of) a channel marked by daybeacons
 	bool InTownPad(double X, double Z);            // on the town's raised pad (its top is 2.35 m)
 	constexpr double TownUS1V = 132;               // real map: how far in from the town marina US-1 crosses the pad
@@ -108,7 +112,7 @@ namespace KeysGeo
 	const FMarina* NearMarina(double X, double Z);
 	FLinearColor DepthRGB(double D);
 	FLinearColor DepthColorFast(double X, double Z);
-	// 0 natural ground, 1 golf course, 2 airport runway, 3 city
+	// 0 natural ground, 1 golf course, 2 airport runway, 3 city, 4 mangrove
 	int32 SurfaceKind(double X, double Z);
 	bool InCity(double X, double Z);
 

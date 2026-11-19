@@ -35,6 +35,14 @@ namespace KeysGeoReal
 	};
 	const TArray<FPlatLot>& Plat();
 
+	// mangrove cover on the height grid's cells (Tools/geo/bake_mangrove.py): 0 none, 1..127 the fringe wading in the
+	// shallows, 200..255 mangrove on (low) ground
+	uint8 MangroveCell(int32 I, int32 J);
+	uint8 MangroveAt(double X, double Z);
+	int32 NX();
+	int32 NZ();
+	double Cell();
+
 	bool Load(const TCHAR* Phase);
 	bool Loaded();
 	double X0();

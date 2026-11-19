@@ -198,6 +198,7 @@ void AKeysWorld::BeginPlay()
 
 	BuildTerrain();
 	BuildScenery();
+	BuildMangroves();
 	UpdateWater();
 }
 
@@ -251,6 +252,7 @@ void AKeysWorld::BuildTerrain()
 			case 1: return H > .9 ? Golf : Sand;
 			case 2: return H > .9 ? Runway : Sand;
 			case 3: return H > .9 ? City : Sand;
+			case 4: return FMath::Lerp(Srgb(.25, .21, .15), Mangrove, float(SStep(.2, .9, H)));   // mud and leaf litter under the mangroves
 			default: break;
 		}
 		if (H < .35) return FMath::Lerp(WetSand, Sand, float(SStep(-1.2, .35, H)));

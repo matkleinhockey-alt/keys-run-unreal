@@ -95,3 +95,7 @@ Tiling = the land as one mesh per 512 m tile (was one mesh for the whole map, dr
 view) and the marinas, piers, estates, daybeacons and US-1 road as one mesh per 1200 m square with a 3.5 km draw
 distance. It also helped the old map (offshore 19.3 -> 20.1, bridge 19.4 -> 20.3). The real map is still 5-13% behind:
 the town now looks at a dense real Vaca Key (1219 houses, 5744 palms on 98 islands) and two bridges stand side by side.
+
+Mangroves v1 on the real map (2026-11-20, same editor-build method): marina 14.5 fps (was 14.6), alongside the Boot Key
+mangroves 14.9, bridge 18.2 (was 17.8). 16.5k rooted trees and 10.6k crowns in 62 tiles; roots and trunks are drawn
+within 700 m only, canopy to 4.5 km.

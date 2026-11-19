@@ -559,6 +559,9 @@ namespace KeysGeo
 						S = FMath::Lerp(S, FLinearColor(S.R * 1.18f + .06f, S.G * .96f + .01f, S.B * .74f), float(Bay));
 						ColorG[K] = FLinearColor(FMath::Pow(S.R, 2.2f), FMath::Pow(S.G, 2.2f), FMath::Pow(S.B, 2.2f));
 					}
+					// tannin: the water round the mangroves is stained the colour of tea
+					const double Tan = MangroveNear(X, Z) * SS(5, 1.5, D);
+					if (Tan > 0) ColorG[K] = FMath::Lerp(ColorG[K], FLinearColor(.105f, .075f, .022f), float(Tan * .72));
 				}
 			}
 		});
@@ -788,6 +791,20 @@ namespace KeysGeo
 		return Clamp(1 - (Best - NavHalfW) / NavFeather, 0, 1);
 	}
 
+	bool OnMangrove(double X, double Z) { return GReal && KeysGeoReal::MangroveAt(X, Z) >= 200; }
+	double MangroveNear(double X, double Z)
+	{
+		if (!GReal) return 0;
+		double Best = 0;
+		for (int32 r = 0; r < 4 && Best < 1; r++)
+		{
+			const double R = r * 12.0, K = 1 - r * .28;
+			if (K <= Best) break;
+			for (int32 a = 0; a < (r ? 8 : 1); a++)
+				if (KeysGeoReal::MangroveAt(X + R * FMath::Cos(a * PI / 4), Z + R * FMath::Sin(a * PI / 4)) > 0) { Best = K; break; }
+		}
+		return Best;
+	}
 	bool InMarkedChannel(double X, double Z) { return GReal && GNavSegs.Num() && NavChannelK(X, Z) > .3; }
 
 	// the real bottom: NOAA's soundings, easing up to the shoreline, with the marinas dredged
@@ -891,6 +908,7 @@ namespace KeysGeo
 	{
 		const double D = DepthAt(X, Z), DZ = DZAt(X, Z);
 		if (CreekDist(X, Z) < 0) return TEXT("Creek");
+		if (GReal && D < 3.2 && MangroveNear(X, Z) > .4) return TEXT("Creek");   // under and along the mangroves
 		if (NearBridge(X, Z) && D >= 2 && ShoreInfo(X, Z).D > 6) return TEXT("Bridge");
 		if (D < (GReal ? 1.5 : 2.6)) return TEXT("Flats");   // the real bay is 2-3 m all over; its flats are the banks
 		if (DZ < 0) return TEXT("Backcountry");
@@ -919,6 +937,7 @@ namespace KeysGeo
 		double LX, LZ;
 		IslandLocal(*S.Isl, X, Z, LX, LZ);
 		if (GReal && OnRealRunway(X, Z, 0)) return 2;
+		if (OnMangrove(X, Z) && !InFill(X, Z)) return 4;
 		if (!GReal && S.Isl == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW) return 2;
 		return OnCourse(S.Isl, LX, LZ) ? 1 : 0;
 	}

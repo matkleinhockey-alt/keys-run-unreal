@@ -63,6 +63,7 @@ public:
 private:
 	void BuildTerrain();
 	void BuildScenery();
+	void BuildMangroves();   // KeysMangrove.cpp: the real map's red mangroves
 	void UpdateWater();
 	void ApplySun(double K);
 	void ApplyWeather();

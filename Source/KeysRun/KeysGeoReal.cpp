@@ -13,6 +13,7 @@ namespace KeysGeoReal
 	static TArray<FIsl> GIslands;
 	static TArray<FNavMark> GMarks;
 	static TArray<FPlatLot> GPlat;
+	static TArray<uint8> GMangrove;
 
 	namespace
 	{
@@ -130,6 +131,11 @@ namespace KeysGeoReal
 			for (int32 k = 0; k + 1 < Q.Num(); k += 2) Lot.Poly.Add(FVector2D(FCString::Atod(*Q[k]), FCString::Atod(*Q[k + 1])));
 			if (Lot.Poly.Num() >= 3) GPlat.Add(MoveTemp(Lot));
 		}
+		// mangrove cover: 'KMGV', nx, nz, bytes
+		GMangrove.Reset();
+		TArray<uint8> MB;
+		if (FFileHelper::LoadFileToArray(MB, *(FPaths::ProjectContentDir() / TEXT("KeysRun/Geo") / (FString(Phase) + TEXT("_mangrove.bin"))), FILEREAD_Silent) && MB.Num() == 12 + GNX * GNZ)
+			GMangrove.Append(MB.GetData() + 12, GNX * GNZ);
 		GLoaded = true;
 		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: %s, %d x %d cells of %.0f m from (%.0f, %.0f), %d islands, %d marks, 1:%.1f"), Phase, GNX, GNZ, GCell, GX0, GZ0, GIslands.Num(), GMarks.Num(), GScale);
 		return true;
@@ -138,6 +144,11 @@ namespace KeysGeoReal
 	bool Loaded() { return GLoaded; }
 	const TArray<FNavMark>& Marks() { return GMarks; }
 	const TArray<FPlatLot>& Plat() { return GPlat; }
+	int32 NX() { return GNX; }
+	int32 NZ() { return GNZ; }
+	double Cell() { return GCell; }
+	uint8 MangroveCell(int32 I, int32 J) { return GMangrove.Num() && I >= 0 && J >= 0 && I < GNX && J < GNZ ? GMangrove[int64(J) * GNX + I] : 0; }
+	uint8 MangroveAt(double X, double Z) { return MangroveCell(FMath::RoundToInt32((X - GX0) / GCell), FMath::RoundToInt32((Z - GZ0) / GCell)); }
 	double X0() { return GX0; }
 	double Z0() { return GZ0; }
 	double SizeX() { return (GNX - 1) * GCell; }
