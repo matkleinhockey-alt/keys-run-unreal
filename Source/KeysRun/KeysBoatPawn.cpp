@@ -2486,7 +2486,8 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	if (FState == EKeysFish::Caught)
 	{
 		// the landing, shot like a film: you and the mate haul the fish in, over the gunwale and onto the cockpit sole,
-		// or (too long for the cockpit) heave it through the tuna door in three pulls, the tail still out over the water.
+		// or (too long for the cockpit) heave it up over the gunwale all the same and lay it across the cockpit head first,
+		// the tail left hanging back over the rail.
 		// The lens starts outboard and low to see it come up out of the sea and cranes up over the cockpit once it's in;
 		// a long lens wide open, the boat around it soft; the lower third waits until the fish is aboard.
 		const double Age0 = T - CaughtT;
@@ -2506,18 +2507,18 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 			const double CX = KeysMesh::FightChairBase(BS).X, AftRoom = CX - .8 - Aft, ForeRoom = Fore - (CX + .8);
 			if (AftRoom >= Lv + .05 || AftRoom >= ForeRoom) Fore = FMath::Min(Fore, CX - .8); else Aft = FMath::Max(Aft, CX + .8);
 		}
-		const bool bDoor = Lv > (Fore - Aft) * .95 + .35;   // a little overhang is fine on the open deck
+		const bool bLong = Lv > (Fore - Aft) * .95 + .35;   // a little overhang is fine on the open deck
 		const double Sd = ShowSgn >= 0 ? 1 : -1, HB = BS.Beam * .5;
 		double LX, LY, LYaw = 0;
 		const double DoorX = FMath::Max(Aft + .4, (Aft + Fore) * .5 - .3);   // the side door in the gunwale, by that deck
-		if (bDoor) { LX = DoorX; LY = 0; }
+		if (bLong) { LX = DoorX; LY = 0; }
 		else { LX = FMath::Min((Aft + Fore) * .5, Aft + Lv * .5 + .1); LY = -Sd * BS.Beam * .06; LYaw = .22 * Sd; }   // aft, a little askew
 		const double SoleZ = KeysMesh::SoleAt(BS, FMath::Max(LX, -BS.Len * .5 + .3));
 		double Haul = 0, Done = 2.3, Land = 0;
 		FVector PosL;
 		FQuat Q;
 		const double Kick = FMath::Sin(Age0 * 6.1) * (Age0 < .7 ? 1.6 : FMath::Exp(-FMath::Max(0.0, Age0 - 1.5) * .5)) + FMath::Sin(Age0 * 1.3) * .08;
-		if (!bDoor)
+		if (!bLong)
 		{
 			// thrashing beside the hull, then two pulls: up out of the water head first, then over the gunwale and down
 			const FVector P0(LX + .1, Sd * (HB + .6), SoleZ - 1.0), P1(LX + .05, Sd * (HB + .02), SoleZ + 1.0 + Lv * .3), P2(LX, LY, SoleZ);
@@ -2530,20 +2531,20 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		}
 		else
 		{
-			// too big to lift: alongside, head to the side door, and slid in through it in three heaves, swinging round
-			// to lie across the cockpit toward the bow, whatever doesn't fit still out of the door
-			Done = 4.4;
-			for (const double T0 : {.5, 1.7, 2.9}) Haul += Ease((Age0 - T0) / .8) / 3;
-			const double Yaw0 = -Sd * PI / 2, Yaw1 = -Sd * (PI / 2 - .55);
-			const double Yaw = FMath::Lerp(Yaw0, Yaw1, Ease((Haul - .3) / .7));
-			const FVector Dir(FMath::Cos(Yaw), FMath::Sin(Yaw), 0);
-			const FVector Nose0(DoorX, Sd * (HB + .35), SoleZ - .55), Nose1(DoorX + .6, -Sd * (HB - .45), SoleZ);
-			FVector Nose = FMath::Lerp(Nose0, Nose1, Haul);
-			Nose.Z = FMath::Lerp(Nose0.Z, Nose1.Z, Ease(Haul * 2.2));
-			PosL = Nose - Dir * Lv * .45;
-			Q = FRotator(FMath::Lerp(12.0, 0.0, Ease(Haul * 2)), FMath::RadiansToDegrees(Yaw), 90 + Kick * (Haul >= 1 ? 14 : 7)).Quaternion();
-			Land = Ease((Haul - .55) / .45);
-			LX = PosL.X; LY = PosL.Y;
+			// too long for the cockpit: up the side on the gaff in two heavy pulls, over the gunwale, and laid across the
+			// cockpit head first toward the far side; what doesn't fit lies back over the rail, the tail toward the water
+			Done = 3.2;
+			const double RailZ = KeysMesh::SheerAt(BS, LX) + .03, Inn = KeysMesh::InnerHalfBeam(BS, LX);
+			const FVector NoseF(LX + .3, -Sd * FMath::Max(.3, Inn - .22), SoleZ), Rail(LX - .15, Sd * (HB - .04), RailZ);
+			const FVector Ax = (NoseF - Rail).GetSafeNormal();
+			const FVector P0(LX + .1, Sd * (HB + .6), SoleZ - 1.0), P1(LX + .05, Sd * (HB + .05), RailZ + Lv * .32), P2 = NoseF - Ax * Lv * .45;
+			Haul = .5 * Ease((Age0 - .6) / .8) + .5 * Ease((Age0 - 1.6) / .9);
+			PosL = Haul < .5 ? FMath::Lerp(P0, P1, Ease(Haul / .5)) : FMath::Lerp(P1, P2, Ease((Haul - .5) / .5));
+			const FQuat Hang = FRotator(78, FMath::RadiansToDegrees(-Sd * PI / 2), Kick * 12).Quaternion();   // nose up, side to the boat
+			const FQuat Lay = FRotator(FMath::RadiansToDegrees(FMath::Asin(FMath::Clamp(Ax.Z, -1.0, 1.0))), FMath::RadiansToDegrees(FMath::Atan2(Ax.Y, Ax.X)), 90 + Kick * 14).Quaternion();
+			Q = FQuat::Slerp(Hang, Lay, float(Ease((Haul - .45) / .55)));
+			Land = Ease((Haul - .85) / .15);
+			LX = P2.X; LY = P2.Y;
 		}
 		// spray as it breaks the surface, and water streaming off it while it comes up
 		if (Age0 < .05) { bLandSplash = false; LandShedT = 0; }
@@ -2558,8 +2559,8 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		PosL.Z += LB.BoxExtent.Y / 100 * .8 * Land;
 		const FTransform CompT(HullT.GetRotation() * Q, HullT.TransformPosition(PosL * 100.0));
 		// the fish isn't a plank: it beats its tail, hard while it thrashes at the side and hangs on the gaff, then in
-		// slowing bursts as it lies on the deck. And it lies on what's under it: through the side door, what is past the
-		// sill has nothing under it, so it bends down over the edge toward the water instead of sticking out stiff.
+		// slowing bursts as it lies on the deck. And it lies on what's under it: a long fish's tail past the gunwale has
+		// nothing under it, so it bends down over the rail toward the water instead of sticking out stiff.
 		{
 			const double Aboard = Ease((Haul - .9) / .1);
 			const double Thrash = Age0 < .7 ? 1.6 : 1.1;
@@ -2571,9 +2572,9 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 			const double Scale = 1.35 * FMath::Clamp(FMath::Pow(Weight / ((Sp->Min + Sp->Max) / 2), 1.0 / 3), .75, 1.5);
 			if (AKeysLife::BuildCreatureMeshBent(Key, FM, Scale, LandFlopPh, Amp))
 			{
-				if (bDoor && Land > 0)
+				if (bLong && Land > 0)
 				{
-					const double Sill = HB - .04, SillZ = SoleZ + .02;   // the door's outer edge, boat meters
+					const double Sill = HB - .04, SillZ = KeysMesh::SheerAt(BS, LX) + .03;   // the gunwale's outer edge, boat meters
 					for (FVector& V : FM.V)
 					{
 						const FVector Bm = HullT.InverseTransformPosition(CompT.TransformPosition(V)) / 100;
@@ -2594,10 +2595,10 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		const FTransform FT = FishMesh->GetComponentTransform();
 		const FBoxSphereBounds B = FishMesh->CalcBounds(FT);
 		const FVector NoseU = FT.TransformPosition(FVector(LB.Origin.X + LB.BoxExtent.X * .72, 0, 0));
-		Stage.bOn = true; Stage.bDoor = bDoor; Stage.Age = Age0; Stage.Lv = Lv; Stage.Side = Sd; Stage.Pull = Haul; Stage.Done = Done; Stage.DoorX = DoorX;
+		Stage.bOn = true; Stage.bDoor = false; Stage.Age = Age0; Stage.Lv = Lv; Stage.Side = Sd; Stage.Pull = Haul; Stage.Done = Done; Stage.DoorX = DoorX;
 		Stage.Fish = HullT.InverseTransformPosition(B.Origin) / 100; Stage.Grip = HullT.InverseTransformPosition(NoseU) / 100; Stage.Final = FVector(LX, LY, SoleZ);
 		// while it's coming aboard, frame the rail too, where you two are hauling on it
-		const FVector RailU = HullT.TransformPosition(FVector(bDoor ? DoorX : LX, Sd * (HB - .25), SoleZ + 1.1) * 100.0);
+		const FVector RailU = HullT.TransformPosition(FVector(LX, Sd * (HB - .25), SoleZ + 1.1) * 100.0);
 		const FVector CtrU = FMath::Lerp(FMath::Lerp(B.Origin, NoseU, .25), RailU, .55 * (1 - Land));
 		ShowPos = FVector(CtrU.X / 100, CtrU.Z / 100, CtrU.Y / 100);
 		CatchFov = 34.f;
@@ -2605,11 +2606,11 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		// cockpit once the fish is in; it arcs a little all the while
 		const double Crane = Ease((Age0 - Done + .6) / 1.2);
 		const double Arc = FMath::Lerp(-.15, .12, Ease(Age0 / (Done + 4))) + FMath::Max(0.0, Age0 - Done - 4) * .01;
-		const FVector D0 = bDoor ? FVector(-.3, Sd, .7) : FVector(-.35, Sd, .85), D1 = bDoor ? FVector(-.5, -Sd * .55, 1.0) : FVector(-.4, -Sd * .62, .95);   // in: a three-quarter view from the far rail, the crew behind it
+		const FVector D0(-.35, Sd, .85), D1(-.4, -Sd * .62, .95);   // in: a three-quarter view from the far rail, the crew behind it
 		const FVector DirL = FQuat(FVector::UpVector, Arc).RotateVector(FMath::Lerp(D0.GetSafeNormal(), D1.GetSafeNormal(), Crane).GetSafeNormal());
 		const FVector DirU = HullT.GetRotation().RotateVector(DirL).GetSafeNormal();
 		const double Span = FMath::Max(Lv, FMath::Lerp(3.2, 2.4, Land));   // the fish and the two of you
-		const double Fit = Span / FMath::Lerp(.55, bDoor ? .48 : .42, Crane) * .5 / FMath::Tan(FMath::DegreesToRadians(CatchFov * .5));
+		const double Fit = Span / FMath::Lerp(.55, bLong ? .48 : .42, Crane) * .5 / FMath::Tan(FMath::DegreesToRadians(CatchFov * .5));
 		const double Dist = Fit * FMath::Lerp(1.08, .98, Ease(Age0 / (Done + 5)));
 		const FVector PosU = CtrU + DirU * Dist * 100;
 		const FVector FwU = (CtrU - PosU).GetSafeNormal(), RightU = FVector::CrossProduct(FVector::UpVector, FwU).GetSafeNormal();
