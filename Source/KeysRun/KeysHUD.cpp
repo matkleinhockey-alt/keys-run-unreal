@@ -40,7 +40,7 @@ using namespace KeysGeo;
 namespace
 {
 	const FLinearColor Teal(.35f, .85f, .85f), Gold(1.f, .82f, .35f), Red(1.f, .3f, .25f), Dim(.75f, .8f, .85f);
-	constexpr int32 ChartN = 320;
+	int32 ChartN = 320;   // chart texture size (the real map's chart is drawn finer, for its depth bands)
 	constexpr int32 GpsW = 256, GpsH = 148;      // GPS texture, covering a little more than the screen so it can scroll between redraws
 	constexpr double GpsMargin = 1.15;
 	constexpr int32 NumSonarCols = 85;             // 256 px canvas / 3 px per ping in the JS
@@ -104,6 +104,7 @@ void AKeysHUD::Bar(float X, float Y, float W, float H, float Fill, const FLinear
 void AKeysHUD::BuildChart()
 {
 	KeysGeo::Init();
+	ChartN = RealMap() ? 1024 : 320;
 	Chart = UTexture2D::CreateTransient(ChartN, ChartN, PF_B8G8R8A8);
 	if (!Chart) return;
 	Chart->SRGB = true;
@@ -129,6 +130,49 @@ void AKeysHUD::BuildChart()
 			}
 			Px[j * ChartN + i] = FColor(uint8(C.R * 255), uint8(C.G * 255), uint8(C.B * 255), 255);
 		}
+	if (RealMap())
+	{
+		// the real map's chart is a proper chart: depth bands (the flats green, the shoals turquoise, then paler and bluer
+		// with depth) with a contour inked where one band meets the next
+		static const double BandM[] = {.6, 1.2, 1.8, 3.7, 9, 18, 45, 150};
+		static const FLinearColor BandC[] = {FLinearColor(.74f, .80f, .60f), FLinearColor(.45f, .80f, .74f), FLinearColor(.60f, .87f, .88f), FLinearColor(.74f, .92f, .96f),
+			FLinearColor(.66f, .86f, .95f), FLinearColor(.54f, .77f, .92f), FLinearColor(.40f, .63f, .84f), FLinearColor(.26f, .46f, .72f), FLinearColor(.14f, .30f, .55f)};
+		TArray<int8> Band;
+		Band.SetNumUninitialized(ChartN * ChartN);
+		for (int32 j = 0; j < ChartN; j++)
+			for (int32 i = 0; i < ChartN; i++)
+			{
+				const double X = ChartX0() + (i + .5) / ChartN * ChartSize(), Z = ChartZ0() + (j + .5) / ChartN * ChartSize();
+				int8 B = -2;   // off the chart
+				if (X >= WorldX0 && X <= WorldX0 + WorldSizeX && Z >= WorldZ0 && Z <= WorldZ0 + WorldSizeZ)
+				{
+					B = -1;   // land
+					if (LandH(X, Z) <= .1)
+					{
+						const double D = DepthFast(X, Z);
+						B = 0;
+						while (B < 8 && D >= BandM[B]) B++;
+					}
+				}
+				Band[j * ChartN + i] = B;
+			}
+		for (int32 j = 0; j < ChartN; j++)
+			for (int32 i = 0; i < ChartN; i++)
+			{
+				const int8 B = Band[j * ChartN + i];
+				if (B < 0)
+				{
+					// the shoreline inked round the land
+					if (B == -1 && ((i + 1 < ChartN && Band[j * ChartN + i + 1] >= 0) || (j + 1 < ChartN && Band[(j + 1) * ChartN + i] >= 0) || (i > 0 && Band[j * ChartN + i - 1] >= 0) || (j > 0 && Band[(j - 1) * ChartN + i] >= 0)))
+						Px[j * ChartN + i] = FColor(96, 84, 60, 255);
+					continue;
+				}
+				FLinearColor C = BandC[B];
+				const int8 R = i + 1 < ChartN ? Band[j * ChartN + i + 1] : B, Dn = j + 1 < ChartN ? Band[(j + 1) * ChartN + i] : B;
+				if ((R >= 0 && R != B) || (Dn >= 0 && Dn != B)) C = C * .8f;
+				Px[j * ChartN + i] = FColor(uint8(C.R * 255), uint8(C.G * 255), uint8(C.B * 255), 255);
+			}
+	}
 	FTexture2DMipMap& Mip = Chart->GetPlatformData()->Mips[0];
 	void* Data = Mip.BulkData.Lock(LOCK_READ_WRITE);
 	FMemory::Memcpy(Data, Px.GetData(), Px.Num() * sizeof(FColor));
@@ -578,7 +622,8 @@ void AKeysHUD::DrawGauges(AKeysBoatPawn* P)
 	Panel(X, GY, 340 * U, 180 * U);
 	Text(FString::Printf(TEXT("%.0f"), P->KnotsNow()), X + 18 * U, GY + 4 * U, 3.0f, FLinearColor::White, GEngine->GetLargeFont());
 	Text(TEXT("knots"), X + 18 * U, GY + 96 * U, .85f, Dim);
-	const int32 Hdg = (FMath::RoundToInt(-P->Heading() * 180 / PI) % 360 + 360) % 360;
+	// (on the real map the chart is turned, so the compass heading is the game's less that turn)
+	const int32 Hdg = (FMath::RoundToInt(-P->Heading() * 180 / PI - (RealMap() ? FMath::RadiansToDegrees(KeysGeoReal::Theta()) : 0.0)) % 360 + 360) % 360;
 	Text(FString::Printf(TEXT("Gear %s   HDG %03d"), *P->GearName(), Hdg), X + 150 * U, GY + 14 * U, 1.0f, P->Gear == 2 ? Red : FLinearColor::White);
 	Text(FString::Printf(TEXT("%.1f ft"), P->DepthHere() * 3.28), X + 150 * U, GY + 44 * U, 1.0f, Teal);
 	{
@@ -605,12 +650,19 @@ void AKeysHUD::DrawGauges(AKeysBoatPawn* P)
 void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 {
 	if (!Chart) return;
-	const float Size = (P->bBigMap ? 760 : 250) * U;
-	const float X = P->bBigMap ? Canvas->SizeX * .5f - Size * .5f : Canvas->SizeX - Size - 24 * U;
-	const float Y = P->bBigMap ? Canvas->SizeY * .5f - Size * .5f : 24 * U;
-	DrawRect(FLinearColor(0, 0, 0, .5f), X - 4 * U, Y - 4 * U, Size + 8 * U, Size + 8 * U);
-	DrawTexture(Chart, X, Y, Size, Size, 0, 0, 1, 1, FLinearColor::White, BLEND_Opaque);
-	DrawWxBlobs([&](double GX, double GZ) { return ChartXY(GX, GZ, X, Y, Size); }, Size / ChartSize(), X, Y, X + Size, Y + Size);
+	// the chart texture is square; the real map is wider than tall, so only its own band of the square is shown
+	const bool bReal = RealMap(), bBig = P->bBigMap;
+	const float V0 = float((WorldZ0 - ChartZ0()) / ChartSize()), VH = float(WorldSizeZ / ChartSize());
+	float Size = (bBig ? (bReal ? 1240 : 760) : (bReal ? 330 : 250)) * U;
+	if (bBig && bReal) Size = FMath::Min3(Size, Canvas->SizeX - 60 * U, (Canvas->SizeY - 110 * U) / VH);
+	const float VisH = Size * VH;
+	const float X = bBig ? Canvas->SizeX * .5f - Size * .5f : Canvas->SizeX - Size - 24 * U;
+	const float VisY = bBig ? Canvas->SizeY * .5f - VisH * .5f : 24 * U;
+	const float Y = VisY - V0 * Size;
+	DrawRect(FLinearColor(0, 0, 0, .5f), X - 4 * U, VisY - 4 * U, Size + 8 * U, VisH + 8 * U);
+	DrawTexture(Chart, X, VisY, Size, VisH, 0, V0, 1, VH, FLinearColor::White, BLEND_Opaque);
+	DrawWxBlobs([&](double GX, double GZ) { return ChartXY(GX, GZ, X, Y, Size); }, Size / ChartSize(), X, VisY, X + Size, VisY + VisH);
+	if (bReal) DrawRealChart(P, X, Y, Size, VisY, VisH);
 	// marinas
 	for (const FMarina& M : Marinas())
 	{
@@ -751,8 +803,86 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 		}
 		Text(TEXT("YOU"), B.X + 15 * U, B.Y - 18 * U, .65f, FLinearColor(1.f, 1.f, 1.f));
 	}
-	Text(TEXT("N"), X + Size * .5f, Y + 4 * U, .7f, FLinearColor(.1f, .15f, .25f), nullptr, true);
-	if (!P->bBigMap) Text(TEXT("M - chart"), X + Size - 76 * U, Y + Size + 6 * U, .7f, Dim);
+	if (!bReal) Text(TEXT("N"), X + Size * .5f, Y + 4 * U, .7f, FLinearColor(.1f, .15f, .25f), nullptr, true);
+	if (!P->bBigMap) Text(TEXT("M - chart"), X + Size - 76 * U, VisY + VisH + 6 * U, .7f, Dim);
+}
+
+// What the real map's chart carries on top of its depth bands: the bridges, the red and green daybeacons, soundings in
+// feet, the keys' names, a north arrow (the chart is turned so the island chain runs across it) and the data credits.
+void AKeysHUD::DrawRealChart(AKeysBoatPawn* P, float X, float Y, float Size, float VisY, float VisH)
+{
+	const bool bBig = P->bBigMap;
+	const FLinearColor Ink(.08f, .1f, .16f);
+	// US-1 where it is a bridge, the old Seven Mile Bridge and the old Bahia Honda bridge
+	auto Line = [&](double AX, double AZ, double BX, double BZ, const FLinearColor& C, float W)
+	{
+		const FVector2D A = ChartXY(AX, AZ, X, Y, Size), B = ChartXY(BX, BZ, X, Y, Size);
+		DrawLine(A.X, A.Y, B.X, B.Y, C, W);
+	};
+	auto Runs = [&](double X0, double X1, double DZ, double GapA, double GapB, const FLinearColor& C, float W)
+	{
+		double Start = 1e18;
+		for (double Gx = X0; Gx <= X1 + 1; Gx += 30)
+		{
+			const double Gz = ChainZ(Gx) + DZ;
+			const bool bOn = Gx <= X1 && !(Gx > GapA && Gx < GapB) && KeysGeoReal::Shore(Gx, Gz) > -2;
+			if (bOn && Start > 1e17) Start = Gx;
+			if (Start < 1e17 && (!bOn || Gx - Start >= 240))
+			{
+				Line(Start, ChainZ(Start) + DZ, Gx, Gz, C, W);
+				Start = bOn ? Gx : 1e18;
+			}
+		}
+	};
+	Runs(WBX0, WBX1, 0, 0, 0, Ink, (bBig ? 2.5f : 1.5f) * U);
+	if (OldBridgeX1 > OldBridgeX0) Runs(OldBridgeX0, OldBridgeX1, OldBridgeDZ, OldBridgeGap0, OldBridgeGap1, FLinearColor(.36f, .33f, .3f), (bBig ? 1.6f : 1.f) * U);
+	if (const FTruss* Tr = BahiaHonda())
+		for (int32 i = 0; i < Tr->Spans; i++)
+			if (i < Tr->Gap0 || i >= Tr->Gap1)
+				Line(FMath::Lerp(Tr->X0, Tr->X1, double(i) / Tr->Spans), FMath::Lerp(Tr->Z0, Tr->Z1, double(i) / Tr->Spans), FMath::Lerp(Tr->X0, Tr->X1, double(i + 1) / Tr->Spans), FMath::Lerp(Tr->Z0, Tr->Z1, double(i + 1) / Tr->Spans), FLinearColor(.36f, .33f, .3f), (bBig ? 1.6f : 1.f) * U);
+	// the daybeacons: red triangles, green squares
+	const float Ms = (bBig ? 3.2f : 1.6f) * U;
+	for (const KeysGeoReal::FNavMark& K : KeysGeoReal::Marks())
+	{
+		const FVector2D A = ChartXY(K.X, K.Z, X, Y, Size);
+		if (K.bRed)
+		{
+			FCanvasTriangleItem Tr(FVector2D(A.X - Ms, A.Y + Ms * .8f), FVector2D(A.X + Ms, A.Y + Ms * .8f), FVector2D(A.X, A.Y - Ms), GWhiteTexture);
+			Tr.SetColor(FLinearColor(.85f, .1f, .08f));
+			Canvas->DrawItem(Tr);
+		}
+		else DrawRect(FLinearColor(.05f, .5f, .2f), A.X - Ms * .8f, A.Y - Ms * .8f, Ms * 1.6f, Ms * 1.6f);
+	}
+	// north: the chart is turned so the keys run across it, so north lies a little right of straight up
+	{
+		const double Th = KeysGeoReal::Theta();
+		const FVector2D C(X + Size - (bBig ? 34 : 18) * U, VisY + (bBig ? 40 : 22) * U), D(FMath::Sin(Th), -FMath::Cos(Th)), Rt(-D.Y, D.X);
+		const float L = (bBig ? 24 : 13) * U;
+		DrawLine(C.X - D.X * L, C.Y - D.Y * L, C.X + D.X * L, C.Y + D.Y * L, Ink, 1.5f * U);
+		FCanvasTriangleItem Tr(C + D * L * 1.25f, C + D * L * .55f + Rt * L * .28f, C + D * L * .55f - Rt * L * .28f, GWhiteTexture);
+		Tr.SetColor(Ink);
+		Canvas->DrawItem(Tr);
+		Text(TEXT("N"), C.X + D.X * L * 1.25f + 5 * U, C.Y + D.Y * L * 1.25f - 6 * U, bBig ? .7f : .5f, Ink);
+	}
+	if (!bBig) return;
+	// soundings in feet, on a grid, clear of the land and of the edge
+	const FLinearColor Snd(.16f, .25f, .42f, .85f);
+	for (double Gz = WorldZ0 + 300; Gz < WorldZ0 + WorldSizeZ - 200; Gz += 560)
+		for (double Gx = WorldX0 + 300 + (int32((Gz - WorldZ0) / 560) % 2) * 280; Gx < WorldX0 + WorldSizeX - 200; Gx += 560)
+		{
+			if (KeysGeoReal::Shore(Gx, Gz) < 45) continue;
+			const FVector2D A = ChartXY(Gx, Gz, X, Y, Size);
+			Text(FString::FromInt(FMath::RoundToInt(DepthFast(Gx, Gz) * 3.28)), A.X, A.Y - 7 * U, .62f, Snd, nullptr, true);
+		}
+	// the keys by name
+	for (const KeysGeoReal::FIsl& I : KeysGeoReal::Islands())
+	{
+		if (I.Name.IsEmpty() || I.Area < 30000) continue;
+		const FVector2D A = ChartXY(I.X, I.Z, X, Y, Size);
+		Text(I.Name, A.X, A.Y - 8 * U, .72f, FLinearColor(.22f, .13f, .04f), nullptr, true);
+	}
+	Text(TEXT("Soundings in feet at low water. Red triangles and green squares are the daybeacons: red, right, returning."), X, VisY + VisH + 8 * U, .8f, FLinearColor::White);
+	Text(TEXT("Not for navigation. Depths and elevation: NOAA NCEI / USGS. Aids to navigation: NOAA ENC. Coastline (c) OpenStreetMap contributors, ODbL."), X, VisY + VisH + 30 * U, .7f, Dim);
 }
 
 // the race and tournament boards (web game/race/index.ts renderHud, game/tournament/index.ts)

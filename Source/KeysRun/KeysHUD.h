@@ -55,6 +55,7 @@ private:
 	static FVector2D ScriptLookDelta;
 
 	void BuildChart();
+	void DrawRealChart(class AKeysBoatPawn* P, float X, float Y, float Size, float VisY, float VisH);
 	void DrawMenu(AKeysBoatPawn* P);
 	void DrawControlsTable(float X, float Y, float W);
 	// a clickable rectangle: draws the panel and registers a hit box named Box
