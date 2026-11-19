@@ -335,7 +335,10 @@ namespace KeysGeo
 			// the Seven Mile Bridge's high span stands over Moser Channel (x about -2820), on the bent grid
 			BridgeArchX0 = WBX0 + FMath::RoundToDouble((-2856 - WBX0) / BridgeBentStep) * BridgeBentStep;
 			BridgeArchX1 = BridgeArchX0 + 2 * BridgeBentStep;
-			OldBridgeX0 = OldBridgeX1 = OldBridgeGap0 = OldBridgeGap1 = 0;   // the old bridge comes back with the real one's line
+			// the old Seven Mile Bridge: from Knight's Key across Pigeon Key to Little Duck Key, 58 m on the bay side of the
+			// new one (as it really is at this scale), with its span over Moser Channel gone
+			OldBridgeX1 = -1300; OldBridgeX0 = OldBridgeX1 - 30 * 123;
+			OldBridgeGap0 = BridgeArchX0 + BridgeBentStep - 60; OldBridgeGap1 = OldBridgeGap0 + 120;
 			// the drop-off: going south from US-1, the first water 45 m deep
 			const int32 ND = FMath::CeilToInt(WorldSizeX / 50) + 1;
 			TArray<double> Raw;
