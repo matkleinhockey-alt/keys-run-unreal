@@ -71,6 +71,7 @@ private:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Terrain;
+	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> TerrainTiles;   // the land, a mesh per 512 m tile
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Water;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> WaterMID;
 	UPROPERTY() TObjectPtr<class UTexture2D> SimTex[2];

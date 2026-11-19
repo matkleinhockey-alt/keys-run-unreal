@@ -122,7 +122,7 @@ namespace
 	struct FChunk { FTownBatch Near, Far; double X0 = 0, X1 = 0, ZOff = 0; };
 }
 
-void AKeysLandmarks::BuildBridges(FTownBatch& Road)
+void AKeysLandmarks::BuildBridges(FTownBatch&)
 {
 	TArray<FChunk> NewCh, OldCh;
 	const int32 NNew = FMath::CeilToInt((WBX1 - WBX0) / ChunkLen), NOld = FMath::CeilToInt((OldBridgeX1 - OldBridgeX0) / ChunkLen);
@@ -148,6 +148,7 @@ void AKeysLandmarks::BuildBridges(FTownBatch& Road)
 			// across the keys it is road on the ground (the vertex-colour batch, as before)
 			// (through the town it lies on the pad, as one of its streets)
 			auto RoadH = [](double RX, double RZ) { return InTownPad(RX, RZ) ? 2.25 : LandH(RX, RZ); };
+			FTownBatch& Road = LmAt(MX, MZ);
 			const double LA = RoadH(XA, ZA), LB = RoadH(XB, ZB), LH = (LA + LB) / 2, RPt = FMath::Atan2(LB - LA, Len);
 			Road.Box(MX, LH + .08, MZ, Len + .3, .16, 9, 0x3e4146, 0, -Ang, RPt);
 			Road.Box(MX, LH + .17, MZ, Len + .3, .02, .2, 0xe8c43a, 0, -Ang, RPt);

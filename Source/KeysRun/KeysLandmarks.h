@@ -31,6 +31,8 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 private:
+	TMap<int64, struct FTownBatch*> LmChunks;                // while building: the spread-out landmarks by 1200 m square
+	struct FTownBatch& LmAt(double X, double Z);
 	void BuildMarinas(struct FTownBatch& B);
 	void BuildLighthouse(struct FTownBatch& B, struct FTownBatch& G);
 	void BuildPiers(struct FTownBatch& B);

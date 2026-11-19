@@ -66,6 +66,22 @@ void AKeysLandmarks::BeginPlay()
 	BuildEstates(B);
 	BuildDaymarks(B, G);
 	B.M.Commit(Static, 0, AKeysWorld::VertexColorMaterial());
+	// everything that is spread along the keys (marinas, piers, estates, daybeacons, the road) is one mesh per 1200 m
+	// square, drawn only when it is in view and within 3.5 km
+	int32 LmTris = 0;
+	for (TPair<int64, FTownBatch*>& C : LmChunks)
+	{
+		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
+		PM->SetupAttachment(Root);
+		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PM->RegisterComponent();
+		C.Value->M.Commit(PM, 0, AKeysWorld::VertexColorMaterial());
+		PM->SetCachedMaxDrawDistance(350000.f);
+		LmTris += C.Value->Tris();
+		delete C.Value;
+	}
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: landmarks in %d tiles, %d tris (plus %d always drawn)"), LmChunks.Num(), LmTris, B.Tris());
+	LmChunks.Empty();
 	UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineDebugMaterials/VertexColorMaterial.VertexColorMaterial"));
 	G.M.Commit(Lamps, 0, GlowMat ? GlowMat : AKeysWorld::VertexColorMaterial());
 	BuildBuoys();
@@ -107,7 +123,14 @@ void AKeysLandmarks::BeginPlay()
 }
 
 // ---------------------------------------------------------------- the marinas (world/marinas.ts)
-void AKeysLandmarks::BuildMarinas(FTownBatch& B)
+FTownBatch& AKeysLandmarks::LmAt(double X, double Z)
+{
+	FTownBatch*& P = LmChunks.FindOrAdd((int64(FMath::FloorToInt(X / 1200)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 1200))));
+	if (!P) P = new FTownBatch();
+	return *P;
+}
+
+void AKeysLandmarks::BuildMarinas(FTownBatch&)
 {
 	const uint32 Wood = 0x9c7a55, Pile = 0x6e5a44;
 	static const uint32 ShedC[] = {0xa8e0d8, 0xfde2a7, 0xf7c6d0, 0xb9d4f5};
@@ -115,6 +138,7 @@ void AKeysLandmarks::BuildMarinas(FTownBatch& B)
 	const TArray<KeysGeo::FMarina>& Ms = KeysGeo::Marinas();
 	for (int32 mi = 0; mi < Ms.Num(); mi++)
 	{
+		FTownBatch& B = LmAt(Ms[mi].SX, Ms[mi].SZ);
 		const KeysGeo::FMarina& M = Ms[mi];
 		auto Zo = [&](double O) { return M.SZ + M.Dir * O; };
 		for (int32 i = 0; i < 8; i++)
@@ -241,10 +265,11 @@ void AKeysLandmarks::BuildLighthouse(FTownBatch& B, FTownBatch& G)
 }
 
 // ---------------------------------------------------------------- public fishing piers (world/piers.ts)
-void AKeysLandmarks::BuildPiers(FTownBatch& B)
+void AKeysLandmarks::BuildPiers(FTownBatch&)
 {
 	for (const FPier& Pp : Piers())
 	{
+		FTownBatch& B = LmAt(Pp.X0, Pp.Z0);
 		const double Ry = YawTo(Pp.NX, Pp.NZ);
 		auto At = [&](double A, double C) { return FVector2D(Pp.X0 + Pp.NX * A - Pp.NZ * C, Pp.Z0 + Pp.NZ * A + Pp.NX * C); };
 		// the walkway, as planks across it
@@ -287,10 +312,11 @@ void AKeysLandmarks::BuildPiers(FTownBatch& B)
 }
 
 // ---------------------------------------------------------------- waterfront estates (world/waterfront.ts)
-void AKeysLandmarks::BuildEstates(FTownBatch& B)
+void AKeysLandmarks::BuildEstates(FTownBatch&)
 {
 	for (const FEstateSite& E : WaterfrontEstates())
 	{
+		FTownBatch& B = LmAt(E.X, E.Z);
 		const double Ry = YawTo(E.NX, E.NZ);
 		auto At = [&](double A, double C) { return FVector2D(E.X + E.NX * A - E.NZ * C, E.Z + E.NZ * A + E.NX * C); };
 		const double G = KeysGeo::LandH(E.X, E.Z);
@@ -419,7 +445,7 @@ UStaticMesh* AKeysLandmarks::LoadPropMesh(UObject* Outer, const TCHAR* Key)
 // The real map's marked channels: every charted daybeacon (NOAA ENC, baked by Tools/geo/bake_marks.py) as a pile with its
 // boards - a red triangle with an even number to starboard coming in from sea, a green square with an odd one to port
 // ("red, right, returning"). Two boards crossed on each pile so one always faces you; the lit ones carry a lantern.
-void AKeysLandmarks::BuildDaymarks(FTownBatch& B, FTownBatch& G)
+void AKeysLandmarks::BuildDaymarks(FTownBatch&, FTownBatch& G)
 {
 	if (!KeysGeo::RealMap()) return;
 	static const uint8 Seg[10] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f};   // bits a..g
@@ -427,6 +453,7 @@ void AKeysLandmarks::BuildDaymarks(FTownBatch& B, FTownBatch& G)
 	const FVector Up(0, 1, 0);
 	for (const KeysGeoReal::FNavMark& K : KeysGeoReal::Marks())
 	{
+		FTownBatch& B = LmAt(K.X, K.Z);
 		const double Bed = -FMath::Clamp(KeysGeo::DepthAt(K.X, K.Z) + .6, 1.0, 8.0), Top = 5.1, By = 4.0, S = .8;   // board centre height, half size
 		const double Yaw = Hc(int32(K.X), int32(K.Z)) * PI;
 		B.Cyl(K.X, Bed, K.Z, .15, .19, Top - Bed, 0x6a5a48, 8);

@@ -224,6 +224,7 @@ void AKeysWorld::BuildTerrain()
 	using namespace KeysGeo;
 	const double Cell = 8;
 	const int32 CH = 64;
+	const float TerrainDrawDist = 900000.f;   // 9 km: an island is a line on the horizon well before that
 	const int32 NCX = FMath::CeilToInt(WorldSizeX / Cell / CH), NCZ = FMath::CeilToInt(WorldSizeZ / Cell / CH);
 	const int32 GN = NCX * CH + 1, GNZ = NCZ * CH + 1;   // GN across (the row length), GNZ rows
 	TArray<float> HG;
@@ -301,8 +302,16 @@ void AKeysWorld::BuildTerrain()
 			// the ground shader (sand ripples and grain; grass where it's green)
 			TArray<FVector2D> K;
 			K.Init(FVector2D(SurfSand, 0), V.Num());
-			Terrain->CreateMeshSection_LinearColor(Section, V, T, N, UV, K, TArray<FVector2D>(), TArray<FVector2D>(), C, TArray<FProcMeshTangent>(), false);
-			Terrain->SetMaterial(Section, VertexColorMaterial());
+			// each 512 m tile of land is its own mesh, so the tiles behind you and the ones over the horizon are not drawn
+			// (one mesh for the whole map was drawn whole whenever any of it was in view)
+			UProceduralMeshComponent* Tile = NewObject<UProceduralMeshComponent>(this);
+			Tile->SetupAttachment(Root);
+			Tile->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Tile->RegisterComponent();
+			Tile->CreateMeshSection_LinearColor(0, V, T, N, UV, K, TArray<FVector2D>(), TArray<FVector2D>(), C, TArray<FProcMeshTangent>(), false);
+			Tile->SetMaterial(0, VertexColorMaterial());
+			Tile->SetCachedMaxDrawDistance(TerrainDrawDist);
+			TerrainTiles.Add(Tile);
 			Section++;
 		}
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: terrain built with %d chunks"), Section);

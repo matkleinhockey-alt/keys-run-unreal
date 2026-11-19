@@ -78,3 +78,20 @@ Apple M4 (10-core GPU), macOS, 4K display, game window 1920x1080, Shipping build
 | offshore_trolling | 30.0 | 27.1 (27.4) | 9.2 (10.3) |
 | oil_rig | 30.0 | 24.3 (24.3) | 10.8 (10.0) |
 | rain_at_sea | 30.0 | 27.3 (27.5) | 8.4 (10.5) |
+
+### Real Keys map vs the old map (2026-11-19, editor build `-game`, 1920x1080, Medium) - not bookmark numbers
+
+Measured with the same `perf=` command but in the editor build, not the packaged app, so the absolute numbers are well
+under the bookmark table's; only old-vs-real is meaningful. No shipping build was made (release hold). The six bookmarks
+still have to be run on the real map from a packaged build before it becomes the default.
+
+| Spot | Old map fps (GPU ms) | Real map fps (GPU ms) | Real map before tiling |
+|---|---|---|---|
+| marina (`bookmark=marina`) | 16.8 (57.4) | 14.6 (66.9) | 14.5 (67.2) |
+| offshore, trolling speed | 20.1 (45.4) | 19.1 (50.2) | 18.0 (50.5) |
+| Seven Mile Bridge, `tp=-2700,-560,2.6` | 20.3 (47.5) | 17.8 (54.3) | 16.6 (57.6) |
+
+Tiling = the land as one mesh per 512 m tile (was one mesh for the whole map, drawn whole whenever any of it was in
+view) and the marinas, piers, estates, daybeacons and US-1 road as one mesh per 1200 m square with a 3.5 km draw
+distance. It also helped the old map (offshore 19.3 -> 20.1, bridge 19.4 -> 20.3). The real map is still 5-13% behind:
+the town now looks at a dense real Vaca Key (1219 houses, 5744 palms on 98 islands) and two bridges stand side by side.
