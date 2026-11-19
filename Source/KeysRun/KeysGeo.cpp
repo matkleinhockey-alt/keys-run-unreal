@@ -25,6 +25,7 @@ namespace KeysGeo
 	double BridgeArchX0 = -3178, BridgeArchX1 = -3106;
 	double OldBridgeX0 = -3820, OldBridgeX1 = -2010, OldBridgeGap0 = -3200, OldBridgeGap1 = -3080;
 
+	static void BuildNavSegs();
 	bool RealMap() { return GReal; }
 	double ChainZ(double X) { return GReal ? KeysGeoReal::ChainZ(X) : 0.000012 * X * X; }
 	double ChainAngle(double X) { return FMath::Atan(GReal ? KeysGeoReal::ChainSlope(X) : 0.000024 * X); }
@@ -510,6 +511,7 @@ namespace KeysGeo
 			Snake(TEXT("Little River"), 3650, -2640, 3950, -3700, 70, 2, 26)};
 
 		if (GReal) GCreeks.Reset();   // the real creeks are in the coastline itself
+		if (GReal) BuildNavSegs();
 
 		GSea = {{TEXT("Calm"), .8, .5, TEXT("glassy, a long, lazy ground swell."), 1.5},
 				{TEXT("Choppy"), 1.3, 1.2, TEXT("a steady trade wind, swells with afternoon chop on top."), 7},
@@ -716,11 +718,66 @@ namespace KeysGeo
 
 	double OffshoreF(double X, double Z) { return Clamp((DZAt(X, Z) - 1650) / 2200, 0, 1); }
 
+	// the marked channels on the real map: the line through each channel's daybeacons in number order
+	struct FNavSeg { double AX, AZ, BX, BZ, X0, X1, Z0, Z1; };
+	static TArray<FNavSeg> GNavSegs;
+	static constexpr double NavHalfW = 16, NavFeather = 20, NavDepth = 2.7;
+	static void BuildNavSegs()
+	{
+		GNavSegs.Reset();
+		TMap<FString, TArray<const KeysGeoReal::FNavMark*>> Ch;
+		for (const KeysGeoReal::FNavMark& M : KeysGeoReal::Marks())
+		{
+			FString N = M.Name;
+			for (const TCHAR* Cut : {TEXT(" Daybeacon"), TEXT(" Light"), TEXT(" Buoy")})
+			{
+				const int32 At = N.Find(Cut, ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+				if (At > 0) N.LeftInline(At);
+			}
+			Ch.FindOrAdd(N).Add(&M);
+		}
+		for (TPair<FString, TArray<const KeysGeoReal::FNavMark*>>& C : Ch)
+		{
+			C.Value.Sort([](const KeysGeoReal::FNavMark& A, const KeysGeoReal::FNavMark& B) { return A.Num < B.Num; });
+			for (int32 i = 0; i + 1 < C.Value.Num(); i++)
+			{
+				const KeysGeoReal::FNavMark &A = *C.Value[i], &B = *C.Value[i + 1];
+				if (FMath::Square(B.X - A.X) + FMath::Square(B.Z - A.Z) > 420.0 * 420.0) continue;   // marks miles apart across open water
+				const double Pad = NavHalfW + NavFeather;
+				GNavSegs.Add({A.X, A.Z, B.X, B.Z, FMath::Min(A.X, B.X) - Pad, FMath::Max(A.X, B.X) + Pad, FMath::Min(A.Z, B.Z) - Pad, FMath::Max(A.Z, B.Z) + Pad});
+			}
+		}
+		UE_LOG(LogTemp, Log, TEXT("Keys Run: %d marked channels, %d channel legs"), Ch.Num(), GNavSegs.Num());
+	}
+	// how far inside a marked channel: 1 in it, fading to 0 over the feather
+	static double NavChannelK(double X, double Z)
+	{
+		double Best = 1e9;
+		for (const FNavSeg& S : GNavSegs)
+		{
+			if (X < S.X0 || X > S.X1 || Z < S.Z0 || Z > S.Z1) continue;
+			const double VX = S.BX - S.AX, VZ = S.BZ - S.AZ, L2 = FMath::Max(1e-6, VX * VX + VZ * VZ);
+			const double T = Clamp(((X - S.AX) * VX + (Z - S.AZ) * VZ) / L2, 0, 1);
+			Best = FMath::Min(Best, FMath::Sqrt(FMath::Square(X - S.AX - VX * T) + FMath::Square(Z - S.AZ - VZ * T)));
+		}
+		return Clamp(1 - (Best - NavHalfW) / NavFeather, 0, 1);
+	}
+
 	// the real bottom: NOAA's soundings, easing up to the shoreline, with the marinas dredged
 	static double RealDepthAt(double X, double Z)
 	{
 		const double SD = KeysGeoReal::Shore(X, Z);
 		double D = FMath::Max(.3, -KeysGeoReal::Height(X, Z));
+		// the banks: the survey grid averages a bank's crown away (hardly anything reads under a metre), so what it has
+		// under 2.4 m is drawn down toward a low-tide flat - a bank charted at 1.3 m plays as 0.7 m, one at 1 m as 0.45 m.
+		// Deeper water is as surveyed.
+		if (D < 2.4) D = .25 + 2.15 * FMath::Pow((D - .3) / 2.1, 2.2);
+		// the marked channels are kept open between their daybeacons
+		if (SD > 1 && D < NavDepth && GNavSegs.Num())
+		{
+			const double K = NavChannelK(X, Z) * FMath::Min(1.0, (SD - 1) / 8);
+			if (K > 0) D = Lerp(D, NavDepth, K * K * (3 - 2 * K));
+		}
 		if (SD < 25) { const double T = FMath::Max(0.0, SD) / 25; D = FMath::Min(D, .35 + T * (2 - T) * (D - .35)); }
 		const double DZ = Z - ChainZ(X);
 		for (const FHump& H : GHumps)

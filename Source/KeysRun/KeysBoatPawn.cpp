@@ -2217,7 +2217,32 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	Speed += (Target - Speed) * Dt * (FMath::Abs(Thr) < 1e-3 ? S.Accel * .5 : S.Accel * TrimHoleK);
 
 	const double D = DepthFast(X, Z), HullDraft = TrimProfile().HullDraftM;
-	if (D < HullDraft) Speed = Clamp(Speed, -1.2, 1.5);
+	if (D < HullDraft)
+	{
+		// run aground: she fetches up hard, mud boils up, and from there she only creeps (back off the way you came)
+		if (!bAgroundPrev && FMath::Abs(Speed) > 3)
+		{
+			const double Hit = FMath::Min(1.0, FMath::Abs(Speed) / 14);
+			Shake = FMath::Max(Shake, .35 + .55 * Hit);
+			VP -= .5 * Hit;
+			const double Now = GetWorld()->GetTimeSeconds();
+			if (Now - AgroundMsgT > 8)
+			{
+				AgroundMsgT = Now;
+				ShowToast(FString::Printf(TEXT("Hard aground in %.0f ft - she draws %.1f. Ease her back off the way you came, or tilt up and pole out."), D * 3.28, HullDraft * 3.28), 6);
+			}
+			if (AKeysLife* L = AKeysLife::Get(this))
+			{
+				const double BFx = -FMath::Sin(H), BFz = -FMath::Cos(H);
+				for (const double Sd : {-1.0, 1.0})
+					L->BowSpray(FVector(X + BFx * S.Len * .35, .1, Z + BFz * S.Len * .35), FVector2D(BFz * Sd, -BFx * Sd), FVector2D(BFx * Speed, BFz * Speed), int32(30 + 40 * Hit), 1.2);
+			}
+			Speed *= .25;
+		}
+		Speed = Clamp(Speed, -1.2, .9);
+		bAgroundPrev = true;
+	}
+	else if (D > HullDraft + .08) bAgroundPrev = false;
 	const double St = bAc ? AcSteer : bCanDrive ? (bLeft ? 1 : bRight ? -1 : ScriptSteer) : 0;
 	Steer += (St - Steer) * FMath::Min(1.0, Dt * 4);
 	const double F = FMath::Abs(Speed) / TopMs;
