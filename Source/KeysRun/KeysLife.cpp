@@ -2615,7 +2615,9 @@ const TArray<FZoneRow>& AKeysLife::FishTable(const FString& Zone)
 FString AKeysLife::PickSpecies(const FKeysFishSpot& S, double BobX, double BobZ) const
 {
 	const FHump* Hump = NearHump(BobX, BobZ);
-	const TArray<FZoneRow>& Tbl = FishTable(S.Zone);
+	// (on the real map a flat on the bay side of the keys is a redfish and trout flat; on the ocean side, bonefish and permit)
+	const bool bBayFlat = S.Zone == TEXT("Flats") && KeysGeo::RealMap() && KeysGeo::DZAt(BobX, BobZ) < 0;
+	const TArray<FZoneRow>& Tbl = bBayFlat ? KeysData::ZoneTable(TEXT("Bay Flats")) : FishTable(S.Zone);
 	const double Of = S.Zone == TEXT("Offshore") ? OffshoreF(BobX, BobZ) : 0;
 	auto Big = [](const FString& K) { return K == TEXT("marlin") || K == TEXT("swordfish") || K == TEXT("bluefin") ? 1.0 : K == TEXT("yellowfin") ? .6 : K == TEXT("wahoo") ? .5 : K == TEXT("sailfish") ? .3 : 0.0; };
 	TArray<double> W;

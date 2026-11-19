@@ -778,6 +778,20 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (Save) for (const TPair<FString, double>& B : Save->SpeciesBest) UE_LOG(LogTemp, Log, TEXT("KRFree best %s %.1f lb"), *B.Key, B.Value);
 			(void)Best;
 		}
+		else if (Cmd == TEXT("picks"))
+		{
+			// what bites here: 400 draws from the table for the water under the boat
+			if (const AKeysLife* L = AKeysLife::Get(this))
+			{
+				const FKeysFishSpot Here = L->SpotAt(X, Z);
+				TMap<FString, int32> Tally;
+				for (int32 i = 0; i < 400; i++) Tally.FindOrAdd(L->PickSpecies(Here, X, Z))++;
+				Tally.ValueSort([](int32 A, int32 B) { return A > B; });
+				FString Out;
+				for (const TPair<FString, int32>& K : Tally) Out += FString::Printf(TEXT(" %s %d%%"), *K.Key, K.Value / 4);
+				UE_LOG(LogTemp, Log, TEXT("KRPicks at %.0f, %.0f zone %s depth %.1f m:%s"), X, Z, *Here.Zone, DepthAt(X, Z), *Out);
+			}
+		}
 		else if (Cmd == TEXT("spots"))
 		{
 			TArray<FRunDest> All, Found;

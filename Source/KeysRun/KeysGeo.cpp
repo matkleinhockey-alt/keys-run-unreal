@@ -26,6 +26,7 @@ namespace KeysGeo
 	double OldBridgeX0 = -3820, OldBridgeX1 = -2010, OldBridgeGap0 = -3200, OldBridgeGap1 = -3080;
 
 	static void BuildNavSegs();
+	static FLinearColor DepthRGBSrgb(double D);
 	bool RealMap() { return GReal; }
 	double ChainZ(double X) { return GReal ? KeysGeoReal::ChainZ(X) : 0.000012 * X * X; }
 	double ChainAngle(double X) { return FMath::Atan(GReal ? KeysGeoReal::ChainSlope(X) : 0.000024 * X); }
@@ -539,6 +540,18 @@ namespace KeysGeo
 				InletG[K] = float((D > 3 && FMath::Abs(DZ) < 85) ? (1 - FMath::Abs(DZ) / 85)
 					: (D > 3 && X > OldBrX0 && X < OldBrX1 && FMath::Abs(DZ - OldBrDZ) < 50) ? .5 * (1 - FMath::Abs(DZ - OldBrDZ) / 50) : 0);
 				ColorG[K] = DepthRGB(D);
+				if (GReal)
+				{
+					// the two sides of the keys: Florida Bay is green and a little milky over its grass and marl; the Atlantic
+					// side is clear aqua over sand. The tint fades out with depth and across the channels between the keys.
+					const double Bay = SS(120, -260, DZ) * SS(9, 3, D);
+					if (Bay > 0)
+					{
+						FLinearColor S = DepthRGBSrgb(D);
+						S = FMath::Lerp(S, FLinearColor(S.R * 1.18f + .06f, S.G * .96f + .01f, S.B * .74f), float(Bay));
+						ColorG[K] = FLinearColor(FMath::Pow(S.R, 2.2f), FMath::Pow(S.G, 2.2f), FMath::Pow(S.B, 2.2f));
+					}
+				}
 			}
 		});
 
