@@ -188,7 +188,8 @@ namespace KeysTown
 			const double BU[] = {-84, -66, -48, -30, 30, 48, 66, 84};
 			const ECar BK[] = {ECar::Sedan, ECar::Pickup, ECar::Suv, ECar::Sedan};
 			static const TCHAR* BId[] = {TEXT("bk-0"), TEXT("bk-1"), TEXT("bk-2"), TEXT("bk-3"), TEXT("bk-4"), TEXT("bk-5"), TEXT("bk-6"), TEXT("bk-7")};
-			for (int32 i = 0; i < 8; i++) A.Add({BId[i], BU[i], 134, PI / 2, BK[i % 4], C(i + 2), false});
+			// (on the real map US-1 runs where these stalls were)
+			if (!KeysGeo::RealMap()) for (int32 i = 0; i < 8; i++) A.Add({BId[i], BU[i], 134, PI / 2, BK[i % 4], C(i + 2), false});
 			A.Add({TEXT("trailer-1"), -60, 150, PI / 2, ECar::Pickup, C(1), true});
 			A.Add({TEXT("trailer-2"), 60, 150, PI / 2, ECar::Pickup, C(4), true});
 		}

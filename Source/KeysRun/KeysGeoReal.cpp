@@ -140,6 +140,15 @@ namespace KeysGeoReal
 		return GChain[I] + (GChain[I + 1] - GChain[I]) * (F - I);
 	}
 
+	void FlattenChain(double XA, double XB, double Z)
+	{
+		for (int32 i = 0; i < GChain.Num(); i++)
+		{
+			const double X = GChainX0 + i * GChainStep;
+			if (X >= XA - 1 && X <= XB + 1) GChain[i] = float(Z);
+		}
+	}
+
 	double ChainSlope(double X)
 	{
 		const double F = FMath::Clamp((X - GChainX0) / GChainStep, 0.0, GChain.Num() - 1.001);

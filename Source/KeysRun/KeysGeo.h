@@ -88,6 +88,8 @@ namespace KeysGeo
 	const FIsland* FindIsland(const TCHAR* Name);
 	// the town's fill pad, US-1's causeway fill, the golf courses and the runway (web depth.ts inFill)
 	bool InFill(double X, double Z);
+	bool InTownPad(double X, double Z);            // on the town's raised pad (its top is 2.35 m)
+	constexpr double TownUS1V = 132;               // real map: how far in from the town marina US-1 crosses the pad
 	// how far inside the dredged cut of a marina basin (web depth.ts marinaCutDepth): > 0 inside
 	double MarinaCutDepth(double X, double Z);
 	double CreekDist(double X, double Z);

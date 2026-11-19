@@ -463,6 +463,9 @@ namespace KeysGeo
 				else if (bLand && D >= 3.6 && KeysGeoReal::Shore(M.SX, Z + M.Dir * 30) >= 18) { SZ = Z; break; }
 			}
 			GMarinas.Add({M.Name, M.SX, SZ, SZ + M.Dir * 48, M.Dir});
+			// the real key is only some 200 m across here at this scale, so the town straddles the highway: US-1 runs
+			// dead straight through it as the street between Sombrero Boulevard's row and the casino lot
+			if (GMarinas.Num() == 1) KeysGeoReal::FlattenChain(M.SX - 100, M.SX + 100, SZ - M.Dir * TownUS1V);
 		}
 		else for (const FMar& M : MarsOld)
 		{
@@ -621,6 +624,14 @@ namespace KeysGeo
 	// ground height: beaches slope into the water, creeks carve through, golf courses and the runway are graded flat
 	// the town is built on fill (web depth.ts TOWN_FILL, in the frame of MARINAS[0]): the ground under the pad is raised to
 	// at least 1.6 m and kept under the pad's 2.35 m top so it never pokes through the streets
+	bool InTownPad(double X, double Z)
+	{
+		if (!GMarinas.Num()) return false;
+		const FMarina& M = GMarinas[0];
+		const double U = M.Dir * (X - M.SX), V = M.Dir * (M.SZ - Z);
+		return U >= -104 && U <= 104 && V >= 18 && V <= 172;
+	}
+
 	bool InFill(double X, double Z)
 	{
 		if (FMath::Abs(Z - ChainZ(X)) <= 9)

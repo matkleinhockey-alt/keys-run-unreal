@@ -26,6 +26,7 @@ namespace KeysGeoReal
 	int32 IslandAt(double X, double Z);  // the nearest island's index
 	double ChainZ(double X);             // US-1's line
 	double ChainSlope(double X);
+	void FlattenChain(double XA, double XB, double Z);   // run US-1 straight along z = Z between XA and XB (through the town)
 	const TArray<FIsl>& Islands();
 	// game point <-> real position
 	void ToLonLat(double X, double Z, double& Lon, double& Lat);

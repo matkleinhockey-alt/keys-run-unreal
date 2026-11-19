@@ -146,10 +146,12 @@ void AKeysLandmarks::BuildBridges(FTownBatch& Road)
 		if (OnLand(MX, MZ))
 		{
 			// across the keys it is road on the ground (the vertex-colour batch, as before)
-			const double LH = LandH(MX, MZ);
-			Road.Box(MX, LH + .08, MZ, Len + .3, .16, 9, 0x3e4146, 0, -Ang);
-			Road.Box(MX, LH + .17, MZ, Len + .3, .02, .2, 0xe8c43a, 0, -Ang);
-			for (int32 sg = -1; sg <= 1; sg += 2) Road.Box(MX + PX * 3.9 * sg, LH + .17, MZ + PZ * 3.9 * sg, Len + .3, .02, .18, 0xf4f1e8, 0, -Ang);
+			// (through the town it lies on the pad, as one of its streets)
+			auto RoadH = [](double RX, double RZ) { return InTownPad(RX, RZ) ? 2.25 : LandH(RX, RZ); };
+			const double LA = RoadH(XA, ZA), LB = RoadH(XB, ZB), LH = (LA + LB) / 2, RPt = FMath::Atan2(LB - LA, Len);
+			Road.Box(MX, LH + .08, MZ, Len + .3, .16, 9, 0x3e4146, 0, -Ang, RPt);
+			Road.Box(MX, LH + .17, MZ, Len + .3, .02, .2, 0xe8c43a, 0, -Ang, RPt);
+			for (int32 sg = -1; sg <= 1; sg += 2) Road.Box(MX + PX * 3.9 * sg, LH + .17, MZ + PZ * 3.9 * sg, Len + .3, .02, .18, 0xf4f1e8, 0, -Ang, RPt);
 			continue;
 		}
 		const double HA = NewDeckH(XA), HB = NewDeckH(XB), Pt = FMath::Atan2(HB - HA, Len), H = (HA + HB) / 2;

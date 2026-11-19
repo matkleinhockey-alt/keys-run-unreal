@@ -218,7 +218,7 @@ void AKeysTown::BuildGround(FTownBatch& S)
 	Zebra(-10.5, -7.6, 85, 95.5, false);
 	Zebra(7.6, 10.5, 85, 95.5, false);
 	// the back lot's parking stalls
-	for (double U = -96; U <= 96; U += 6) if (FMath::Abs(U) > 26) S.Flat(U - .06, U + .06, Zf(137), Zf(131), MY, Hex(0xe9e9e4));
+	if (!KeysGeo::RealMap()) for (double U = -96; U <= 96; U += 6) if (FMath::Abs(U) > 26) S.Flat(U - .06, U + .06, Zf(137), Zf(131), MY, Hex(0xe9e9e4));
 	// grass verges at the pad's back corners and the planted alley in row 3
 	S.Flat(-24, 24, Zf(139.8), Zf(126.2), P + .03, Hex(0x5d8f3a));
 }
