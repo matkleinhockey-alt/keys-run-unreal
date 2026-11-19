@@ -171,6 +171,10 @@ namespace KeysGeo
 	struct FPillar { double X, Z, R; bool bOld; };
 	// US-1's bents stand every BridgeBentStep m from WBX0; over the boat channel a concrete arch spans from the pier at
 	// BridgeArchX0 to the one at BridgeArchX1 with nothing in between (KeysBridges.cpp builds it to match)
+	// the old Bahia Honda rail bridge (real map only): steel through-trusses on concrete piers from (X0, Z0) on Bahia
+	// Honda Key to (X1, Z1), the road laid over the top of them; spans Gap0 .. Gap1 - 1 were cut out for boats
+	struct FTruss { double X0, Z0, X1, Z1; int32 Spans, Gap0, Gap1; };
+	const FTruss* BahiaHonda();
 	constexpr double BridgeBentStep = 36;
 	extern double BridgeArchX0, BridgeArchX1;
 	// the old bridge: piers every 30 m from OldBridgeX0 to OldBridgeX1, at ChainZ + OldBridgeDZ, with the swing span gone

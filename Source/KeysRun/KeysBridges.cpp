@@ -406,6 +406,139 @@ void AKeysLandmarks::BuildBridges(FTownBatch& Road)
 			if (Lod == 0) Barnacles(B, F, X, Z, .9, 1.3, 0, 30, X);
 		}
 
+	// ================================================================ the old Bahia Honda bridge: steel trusses, the road on top
+	TArray<FChunk> TrussCh;
+	if (const FTruss* Tr = BahiaHonda())
+	{
+		const double DX = Tr->X1 - Tr->X0, DZ = Tr->Z1 - Tr->Z0, Len = FMath::Sqrt(DX * DX + DZ * DZ), SpanL = Len / Tr->Spans;
+		FBrFrame F(0);
+		F.Ang = FMath::Atan2(DZ, DX); F.AX = DX / Len; F.AZ = DZ / Len; F.PX = -F.AZ; F.PZ = F.AX;
+		constexpr int32 PerChunk = 4, Panels = 6;
+		constexpr double BotY = 7.4, HalfT = 2.9, DeckHalf = 3.6;
+		TrussCh.SetNum((Tr->Spans + PerChunk - 1) / PerChunk);
+		for (int32 c = 0; c < TrussCh.Num(); c++)
+		{
+			const double T = FMath::Min(1.0, (c + .5) * PerChunk / Tr->Spans);
+			TrussCh[c].X0 = TrussCh[c].X1 = Tr->X0 + DX * T;
+			TrussCh[c].ZOff = Tr->Z0 + DZ * T - ChainZ(TrussCh[c].X0);
+		}
+		// the trusses stand taller toward the middle of the crossing, where the water is deepest; the road humps over them
+		auto TrussH = [&](int32 Sp) { const double M = FMath::Abs((Sp + .5) / Tr->Spans - .5) * 2; return 7.0 + 3.2 * SS(.75, .2, M); };
+		auto At = [&](double Along, double Y, double Off) { return F.At(Tr->X0, Tr->Z0, Y, Along, Off); };
+		const FLinearColor Steel = Hex(0x54463a), SteelLt = Hex(0x6e5a48), RustC = Hex(0x7a4424);
+		// a steel member between two points in the bridge's own frame (along, height) at one offset across
+		auto Member = [&](FTownBatch& B, double A0, double Y0, double A1, double Y1, double Off, double Tk, double Wd, const FLinearColor& C)
+		{
+			const double L = FMath::Sqrt(FMath::Square(A1 - A0) + FMath::Square(Y1 - Y0));
+			const FVector P = At((A0 + A1) / 2, (Y0 + Y1) / 2, Off);
+			B.BoxC(P.X, P.Y, P.Z, L, Tk, Wd, C, 0, -F.Ang, FMath::Atan2(Y1 - Y0, A1 - A0));
+		};
+		auto Cross = [&](FTownBatch& B, double A, double Y, double HalfLen, double Tk, double Wd, const FLinearColor& C)
+		{
+			const FVector P = At(A, Y, 0);
+			B.BoxC(P.X, P.Y, P.Z, Wd, Tk, HalfLen * 2, C, 0, -F.Ang);
+		};
+		for (int32 i = 0; i <= Tr->Spans; i++)
+		{
+			const double A = i * SpanL;
+			const FVector Pp = At(A, 0, 0);
+			FChunk& Ch = TrussCh[FMath::Min(i / PerChunk, TrussCh.Num() - 1)];
+			const bool bWater = LandH(Pp.X, Pp.Z) < -.3;
+			const double Floor = bWater ? -FMath::Clamp(DepthAt(Pp.X, Pp.Z) + .5, 1.5, 12.0) : LandH(Pp.X, Pp.Z) - .3, Shift = (Hb(A, 3.0) - .5) * .25;
+			const FLinearColor PC = OldC * float(.82 + .2 * Hb(A, 5.0));
+			for (int32 Lod = 0; Lod < 2; Lod++)
+			{
+				FTownBatch& B = Lod == 0 ? Ch.Near : Ch.Far;
+				B.M.Surf = SurfConcrete;
+				// the pier: a tall tapered-looking block with a wider footing and a cap
+				BandedBlock(B, F, Pp.X, Pp.Z, 1.9, 4.6, Floor, .9, PC * .94f, Shift, true);
+				BandedBlock(B, F, Pp.X, Pp.Z, 1.3, 3.8, .9, BotY - .5, PC, Shift, false);
+				BandedBlock(B, F, Pp.X, Pp.Z, 1.6, 4.2, BotY - .5, BotY - .15, PC * 1.04f, Shift, true);
+				if (Lod == 0 && bWater) Barnacles(B, F, Pp.X, Pp.Z, 1.9, 4.6, Shift, 90, A * 1.7);
+				if (i == Tr->Spans || (i >= Tr->Gap0 && i < Tr->Gap1)) continue;
+				// ---- the span from this pier to the next
+				const double H = TrussH(i), TopY = BotY + H, PanL = SpanL / Panels;
+				const float Tone = float(.86 + .22 * Hb(i, 9.0));
+				for (int32 sg = -1; sg <= 1; sg += 2)
+				{
+					const double Off = sg * HalfT;
+					Member(B, A, BotY, A + SpanL, BotY, Off, .5, .45, Steel * Tone);          // bottom chord
+					Member(B, A, TopY, A + SpanL, TopY, Off, .55, .5, Steel * Tone);          // top chord
+					for (int32 k = 0; k <= Panels; k++)
+					{
+						const double Ak = A + k * PanL;
+						const bool bEnd = k == 0 || k == Panels;
+						if (Lod == 0 || k % 2 == 0) Member(B, Ak + (bEnd ? (k == 0 ? .25 : -.25) : 0), BotY, Ak + (bEnd ? (k == 0 ? .25 : -.25) : 0) + .001, TopY, Off, bEnd ? .5 : .3, bEnd ? .5 : .34, (bEnd ? Steel : SteelLt) * Tone);
+						if (k == Panels) continue;
+						// the diagonals lean in toward the middle of the span (a Pratt truss); far away one in two is enough
+						const bool bLeft = k < Panels / 2;
+						if (Lod == 0 || k % 2 == 0)
+							Member(B, Ak, bLeft ? TopY : BotY, Ak + PanL, bLeft ? BotY : TopY, Off, .22, .26, FMath::Lerp(SteelLt, RustC, float(Hb(i * 7.0 + k, sg + 3.0)) * .6f) * Tone);
+					}
+				}
+				// floor beams, the top struts and the sway bracing between the two trusses
+				for (int32 k = 0; k <= Panels && Lod == 0; k++)
+				{
+					const double Ak = A + k * PanL;
+					Cross(B, Ak, BotY, HalfT, .4, .3, Steel * Tone);
+					Cross(B, Ak, TopY - .1, HalfT, .35, .3, Steel * Tone);
+					if (k == Panels) continue;
+					for (int32 sg = -1; sg <= 1; sg += 2)
+					{
+						const FVector P0 = At(Ak, TopY - .2, -HalfT * sg), P1 = At(Ak + PanL, TopY - .2, HalfT * sg), Mid = (P0 + P1) / 2;
+						B.BoxC(Mid.X, Mid.Y, Mid.Z, FMath::Sqrt(PanL * PanL + 4 * HalfT * HalfT), .12, .16, SteelLt * Tone, 0, -(F.Ang + sg * FMath::Atan2(2 * HalfT, PanL)));
+					}
+				}
+				// the road over the top: slab on stringers, curbs and a pipe rail, sloping to meet the next span's height
+				const double HA = i > 0 && !(i - 1 >= Tr->Gap0 && i - 1 < Tr->Gap1) ? (TrussH(i - 1) + H) / 2 : H;
+				const double HB = i + 1 < Tr->Spans && !(i + 1 >= Tr->Gap0 && i + 1 < Tr->Gap1) ? (TrussH(i + 1) + H) / 2 : H;
+				const double YA = BotY + HA + .75, YB = BotY + HB + .75;
+				Member(B, A, YA, A + SpanL, YB, 0, .35, DeckHalf * 2, OldC * Tone);
+				for (int32 sg = -1; sg <= 1; sg += 2)
+				{
+					Member(B, A, YA - .4, A + SpanL, YB - .4, sg * HalfT, .5, .4, Steel * Tone);
+					Member(B, A, YA + .32, A + SpanL, YB + .32, sg * (DeckHalf - .15), .3, .3, OldC * Tone * .95f);
+					if (Lod == 0)
+					{
+						Member(B, A, YA + 1.25, A + SpanL, YB + 1.25, sg * (DeckHalf - .15), .07, .07, Galv);
+						for (int32 k = 0; k <= Panels * 2; k++)
+						{
+							const double Ak = A + k * PanL / 2, Yk = FMath::Lerp(YA, YB, double(k) / (Panels * 2));
+							const FVector P = At(Ak, Yk + .85, sg * (DeckHalf - .15));
+							B.BoxC(P.X, P.Y, P.Z, .1, .8, .1, Galv * .9f, 0, -F.Ang);
+						}
+					}
+				}
+				B.M.Surf = SurfAsphalt;
+				Member(B, A, YA + .19, A + SpanL, YB + .19, 0, .04, DeckHalf * 2 - .9, Asphalt * Tone);
+				// where a span was cut away the road just stops: a barrier across the broken end
+				B.M.Surf = SurfConcrete;
+				if (i + 1 == Tr->Gap0) Cross(B, A + SpanL - .3, YB + .7, DeckHalf, 1.0, .35, OldC * .9f);
+				if (i == Tr->Gap1) Cross(B, A + .3, YA + .7, DeckHalf, 1.0, .35, OldC * .9f);
+			}
+		}
+		// the approach at each end: an earth ramp faced in concrete, down from the road to the ground
+		for (int32 e = 0; e < 2; e++)
+		{
+			const double A0 = e == 0 ? 0 : Len, Dir = e == 0 ? -1 : 1, Top = BotY + TrussH(e == 0 ? 0 : Tr->Spans - 1) + .75, Run = 70;
+			FChunk& Ch = TrussCh[e == 0 ? 0 : TrussCh.Num() - 1];
+			for (int32 Lod = 0; Lod < 2; Lod++)
+			{
+				FTownBatch& B = Lod == 0 ? Ch.Near : Ch.Far;
+				B.M.Surf = SurfConcrete;
+				const FVector Pe = At(A0 + Dir * Run, 0, 0);
+				const double Gy = FMath::Max(.4, LandH(Pe.X, Pe.Z));
+				const FVector Q[4] = {At(A0, Top + .17, -DeckHalf), At(A0, Top + .17, DeckHalf), At(A0 + Dir * Run, Gy, DeckHalf), At(A0 + Dir * Run, Gy, -DeckHalf)};
+				const FVector Lo[4] = {At(A0, -1, -DeckHalf - 1.5), At(A0, -1, DeckHalf + 1.5), At(A0 + Dir * Run, -1, DeckHalf + 1.5), At(A0 + Dir * Run, -1, -DeckHalf - 1.5)};
+				const FVector Up(0, 1, 0), Sd(F.PX, 0, F.PZ), Al(F.AX * -Dir, 0, F.AZ * -Dir);
+				if (Dir < 0) { B.Quad3(Q[0], Q[1], Q[2], Q[3], Up, Asphalt); } else { B.Quad3(Q[3], Q[2], Q[1], Q[0], Up, Asphalt); }
+				GradQuad(B, Lo[1], Lo[2], Q[2], Q[1], Sd, OldC * .8f, OldC);
+				GradQuad(B, Lo[3], Lo[0], Q[0], Q[3], -Sd, OldC * .8f, OldC);
+				GradQuad(B, Lo[0], Lo[1], Q[1], Q[0], Al, OldC * .8f, OldC);
+			}
+		}
+	}
+
 	// ---- commit every chunk as two components
 	UMaterialInterface* Conc = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Concrete.M_KR_Concrete"));
 	if (!Conc) Conc = AKeysWorld::VertexColorMaterial();
@@ -437,6 +570,7 @@ void AKeysLandmarks::BuildBridges(FTownBatch& Road)
 	};
 	Commit(NewCh, TEXT("US1_"));
 	Commit(OldCh, TEXT("Old_"));
+	Commit(TrussCh, TEXT("BahiaHonda_"));
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: bridges built - %d chunks, %d tris near, %d tris far, material %s"), Made, NearTris, FarTris, *GetNameSafe(Conc));
 }
 

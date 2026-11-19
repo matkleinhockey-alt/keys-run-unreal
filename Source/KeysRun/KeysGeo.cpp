@@ -311,6 +311,9 @@ namespace KeysGeo
 		return C;
 	}
 
+	static FTruss GTruss{-6925, -58, -7520, -250, 16, 2, 4};
+	const FTruss* BahiaHonda() { return GReal ? &GTruss : nullptr; }
+
 	static void AddPillar(double X, double Z, double R, bool bOld)
 	{
 		const int32 Idx = GPillars.Add({X, Z, R, bOld});
@@ -555,6 +558,12 @@ namespace KeysGeo
 			AddPillar(X + NX * 4.5, Z + NZ * 4.5, .8, false);
 			AddPillar(X - NX * 4.5, Z - NZ * 4.5, .8, false);
 		}
+		if (const FTruss* Tr = BahiaHonda())
+			for (int32 i = 0; i <= Tr->Spans; i++)
+			{
+				const double PX = Lerp(Tr->X0, Tr->X1, double(i) / Tr->Spans), PZ = Lerp(Tr->Z0, Tr->Z1, double(i) / Tr->Spans);
+				if (LandH(PX, PZ) < -.3) AddPillar(PX, PZ, 2.2, true);
+			}
 		if (OldBrX1 > OldBrX0) for (double X = OldBrX0; X <= OldBrX1; X += 30)
 		{
 			if (X > OldGap0 && X < OldGap1) continue;
