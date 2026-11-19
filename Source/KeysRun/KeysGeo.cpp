@@ -84,6 +84,14 @@ namespace KeysGeo
 	static double &OldBrX0 = OldBridgeX0, &OldBrX1 = OldBridgeX1, &OldGap0 = OldBridgeGap0, &OldGap1 = OldBridgeGap1;
 	// runway on Vaca Key, in island-local coordinates
 	static constexpr double RunLX0 = 700, RunLX1 = 1420, RunLZ = 80, RunW = 34;
+	// on the real map: Marathon's airport, where it really is (OSM aeroway=runway through the bake), as a strip from A to B
+	static constexpr double RealRunAX = 1016.7, RealRunAZ = -21.4, RealRunBX = 1524.4, RealRunBZ = -55.1, RealRunHalfW = 15;
+	static bool OnRealRunway(double X, double Z, double Margin)
+	{
+		const double VX = RealRunBX - RealRunAX, VZ = RealRunBZ - RealRunAZ, L = FMath::Sqrt(VX * VX + VZ * VZ);
+		const double Al = ((X - RealRunAX) * VX + (Z - RealRunAZ) * VZ) / L, Pp = ((X - RealRunAX) * -VZ + (Z - RealRunAZ) * VX) / L;
+		return Al > -20 && Al < L + 20 && FMath::Abs(Pp) < RealRunHalfW + Margin;
+	}
 
 	// fast depth lookup grid (10 m) so the water surface can follow the boat
 	static constexpr double DG = 10;
@@ -628,6 +636,7 @@ namespace KeysGeo
 	{
 		for (const FGolf& G : GGolf)
 			if (G.I == I && FMath::Sqrt(FMath::Square((LX - G.LX) / G.RA) + FMath::Square((LZ - G.LZ) / G.RB)) < 1.06) return true;
+		if (GReal) return false;   // (the real runway is asked for by world position: OnRealRunway)
 		return !GReal && I == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW;
 	}
 
@@ -680,7 +689,8 @@ namespace KeysGeo
 			IslandLocal(*G.I, X, Z, LX, LZ);
 			if (FMath::Sqrt(FMath::Square((LX - G.LX) / G.RA) + FMath::Square((LZ - G.LZ) / G.RB)) < 1.03) return true;
 		}
-		if (!GVaca || GReal) return false;
+		if (GReal) return OnRealRunway(X, Z, 6) && KeysGeoReal::Shore(X, Z) < -2;
+		if (!GVaca) return false;
 		double LX, LZ;
 		IslandLocal(*GVaca, X, Z, LX, LZ);
 		return LX > RunLX0 - 30 && LX < RunLX1 + 30 && LZ > RunLZ - RunW / 2 - 4 && LZ < RunLZ + 95;
@@ -712,8 +722,10 @@ namespace KeysGeo
 		double LX, LZ;
 		IslandLocal(*S.Isl, X, Z, LX, LZ);
 		if (OnCourse(S.Isl, LX, LZ)) H = FMath::Min(H, 1.85);
+		const bool bRealRun = GReal && E < 1 && OnRealRunway(X, Z, 4);
 		// the real ground: mostly a metre or two, with the odd rise (the old railway grades, the hammocks)
-		if (GReal && E < .9) H += Clamp(KeysGeoReal::Height(X, Z) - 1.65, 0, 2.5) * SS(.9, .7, E);
+		if (GReal && E < .9 && !bRealRun) H += Clamp(KeysGeoReal::Height(X, Z) - 1.65, 0, 2.5) * SS(.9, .7, E);
+		if (bRealRun) H = FMath::Min(H, 1.85);
 		const double CD = CreekDist(X, Z);
 		if (CD < 10) H = FMath::Min(H, Lerp(-1.6, H, SS(-2, 10, CD)));
 		const double MC = GReal ? -1e9 : MarinaCutDepth(X, Z);   // on the real map the basins are already water
@@ -775,6 +787,8 @@ namespace KeysGeo
 		}
 		return Clamp(1 - (Best - NavHalfW) / NavFeather, 0, 1);
 	}
+
+	bool InMarkedChannel(double X, double Z) { return GReal && GNavSegs.Num() && NavChannelK(X, Z) > .3; }
 
 	// the real bottom: NOAA's soundings, easing up to the shoreline, with the marinas dredged
 	static double RealDepthAt(double X, double Z)
@@ -904,6 +918,7 @@ namespace KeysGeo
 		const FShore S = ShoreInfo(X, Z);
 		double LX, LZ;
 		IslandLocal(*S.Isl, X, Z, LX, LZ);
+		if (GReal && OnRealRunway(X, Z, 0)) return 2;
 		if (!GReal && S.Isl == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW) return 2;
 		return OnCourse(S.Isl, LX, LZ) ? 1 : 0;
 	}

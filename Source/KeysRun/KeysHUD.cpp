@@ -384,6 +384,12 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 	Text(Title, X, 70 * U, bMain ? 4.2f : 2.8f, FLinearColor::White, Big);
 	if (bMain) Text(TEXT("Center console fishing  -  Marathon, Florida Keys"), X + 6 * U, 196 * U, 1.3f, Teal);
 	if (bMain) Text(TEXT("v1.42"), X + 6 * U, 232 * U, .8f, Dim);
+	// credits for the real map's data, on the title and the pause screens
+	if ((bMain || P->Menu == EMenu::Pause) && RealMap())
+	{
+		Text(TEXT("Map data: elevation and bathymetry NOAA NCEI / USGS; aids to navigation NOAA ENC (public domain)."), X + 6 * U, H - 112 * U, .7f, Dim);
+		Text(TEXT("Coastlines (c) OpenStreetMap contributors, Open Database License (ODbL) - openstreetmap.org/copyright"), X + 6 * U, H - 92 * U, .7f, Dim);
+	}
 
 	TArray<AKeysBoatPawn::FMenuItem> Items;
 	P->GetMenuItems(Items);

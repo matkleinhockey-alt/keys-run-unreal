@@ -5,6 +5,7 @@
 #include "KeysCharter.h"
 #include "KeysSpeech.h"
 #include "KeysGeo.h"
+#include "KeysGeoReal.h"
 #include "KeysSea.h"
 #include "KeysData.h"
 #include "KeysWorld.h"
@@ -495,7 +496,7 @@ void AKeysBoatPawn::DebugFinal(const FString& Cmd)
 		if (AKeysWorld* W = World()) W->SceneryParcels(L);
 		L.Sort();
 		const int32 N = FCString::Atoi(*A);
-		if (L.IsValidIndex(N)) UE_LOG(LogTemp, Log, TEXT("KRScript lot %d of %d: %s"), N, L.Num(), KeysPlat::Parcels[L[N]].Id);
+		if (L.IsValidIndex(N)) UE_LOG(LogTemp, Log, TEXT("KRScript lot %d of %d: %s"), N, L.Num(), KeysGeo::RealMap() ? *KeysGeoReal::Plat()[L[N]].Id : KeysPlat::Parcels[L[N]].Id);
 	}
 	else if (C == TEXT("say")) KeysSpeech::Speak(A, 1.08f, 1.9f);   // say=text: Caelen's voice
 	else if (C == TEXT("radio")) { if (AKeysAudio* Au = AKeysAudio::Get(this)) { Au->MusicToggle(); UE_LOG(LogTemp, Log, TEXT("KRScript radio: %s"), *Au->GetRadioLabel()); } }

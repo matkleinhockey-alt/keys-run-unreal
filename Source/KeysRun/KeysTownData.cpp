@@ -596,7 +596,7 @@ namespace KeysTown
 					for (double R = Len; R <= Len + PierHeadD && !bBad; R += 2) bBad = KeysGeo::LandH(SX + NX * R, SZ + NZ * R) > -.3;
 					for (double R = -Root; R <= Len + PierHeadD && !bBad; R += 3)
 						for (double C : {-PierHeadW / 2, 0.0, PierHeadW / 2})
-							if (UnderBridge(SX + NX * R - NZ * C, SZ + NZ * R + NX * C, 16)) { bBad = true; break; }
+							if (UnderBridge(SX + NX * R - NZ * C, SZ + NZ * R + NX * C, 16) || KeysGeo::InMarkedChannel(SX + NX * R - NZ * C, SZ + NZ * R + NX * C)) { bBad = true; break; }   // not under a bridge, not across a marked channel
 					if (bBad) continue;
 					Cands.Add({SX - NX * Root, SZ - NZ * Root, NX, NZ, Len + Root, D, I.Name});
 				}

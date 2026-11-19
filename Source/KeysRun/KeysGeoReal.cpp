@@ -12,6 +12,7 @@ namespace KeysGeoReal
 	static TArray<float> GChain;
 	static TArray<FIsl> GIslands;
 	static TArray<FNavMark> GMarks;
+	static TArray<FPlatLot> GPlat;
 
 	namespace
 	{
@@ -111,6 +112,24 @@ namespace KeysGeoReal
 			for (int32 k = 5; k < P.Num(); k++) M.Name += (k > 5 ? TEXT(" ") : TEXT("")) + P[k];
 			GMarks.Add(MoveTemp(M));
 		}
+		// the estates plat: "id|name|island|tier|side|cx|cz|area|frontage|x0 z0 x1 z1 ..." a line
+		GPlat.Reset();
+		Lines.Reset();
+		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectContentDir() / TEXT("KeysRun/Geo") / (FString(Phase) + TEXT("_plat.txt"))));
+		for (const FString& L : Lines)
+		{
+			if (L.StartsWith(TEXT("#"))) continue;
+			TArray<FString> P;
+			L.ParseIntoArray(P, TEXT("|"));
+			if (P.Num() < 10) continue;
+			FPlatLot Lot;
+			Lot.Id = P[0]; Lot.Name = P[1]; Lot.Island = P[2]; Lot.Tier = FCString::Atoi(*P[3]); Lot.Side = P[4];
+			Lot.CX = FCString::Atod(*P[5]); Lot.CZ = FCString::Atod(*P[6]); Lot.Area = FCString::Atod(*P[7]); Lot.Frontage = FCString::Atod(*P[8]);
+			TArray<FString> Q;
+			P[9].ParseIntoArray(Q, TEXT(" "));
+			for (int32 k = 0; k + 1 < Q.Num(); k += 2) Lot.Poly.Add(FVector2D(FCString::Atod(*Q[k]), FCString::Atod(*Q[k + 1])));
+			if (Lot.Poly.Num() >= 3) GPlat.Add(MoveTemp(Lot));
+		}
 		GLoaded = true;
 		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: %s, %d x %d cells of %.0f m from (%.0f, %.0f), %d islands, %d marks, 1:%.1f"), Phase, GNX, GNZ, GCell, GX0, GZ0, GIslands.Num(), GMarks.Num(), GScale);
 		return true;
@@ -118,6 +137,7 @@ namespace KeysGeoReal
 
 	bool Loaded() { return GLoaded; }
 	const TArray<FNavMark>& Marks() { return GMarks; }
+	const TArray<FPlatLot>& Plat() { return GPlat; }
 	double X0() { return GX0; }
 	double Z0() { return GZ0; }
 	double SizeX() { return (GNX - 1) * GCell; }

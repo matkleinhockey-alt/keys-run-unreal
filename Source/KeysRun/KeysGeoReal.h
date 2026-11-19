@@ -25,6 +25,16 @@ namespace KeysGeoReal
 	};
 	const TArray<FNavMark>& Marks();
 
+	// a lot of the Keys Run Estates plat surveyed on the real islands (Tools/geo/plat.py); Tier as AKeysEstates::ETier
+	struct FPlatLot
+	{
+		FString Id, Name, Island, Side;
+		int32 Tier = 4;
+		double CX = 0, CZ = 0, Area = 0, Frontage = 0;
+		TArray<FVector2D> Poly;
+	};
+	const TArray<FPlatLot>& Plat();
+
 	bool Load(const TCHAR* Phase);
 	bool Loaded();
 	double X0();

@@ -2,6 +2,7 @@
 #include "KeysPlatData.h"
 #include "KeysKit.h"
 #include "KeysGeo.h"
+#include "KeysGeoReal.h"
 #include "KeysMesh.h"
 #include "KeysHuman.h"
 #include "KeysData.h"
@@ -107,8 +108,34 @@ void AKeysEstates::BeginPlay()
 {
 	Super::BeginPlay();
 	SetActorLocation(FVector::ZeroVector);
-	// (the plat was surveyed on the old map's islands; the real islands get their own, so there it is Harbor Row only)
-	if (!KeysGeo::RealMap()) for (const KeysPlat::FRaw& R : KeysPlat::Parcels)
+	// the real map has its own plat, surveyed on the real islands; the four Harbor Row lots stand in the town as ever
+	if (KeysGeo::RealMap())
+	{
+		auto Add = [this](FParcel&& P)
+		{
+			P.X0 = P.Z0 = 1e18; P.X1 = P.Z1 = -1e18;
+			for (const FVector2D& Q : P.Poly) { P.X0 = FMath::Min(P.X0, Q.X); P.X1 = FMath::Max(P.X1, Q.X); P.Z0 = FMath::Min(P.Z0, Q.Y); P.Z1 = FMath::Max(P.Z1, Q.Y); }
+			Index.Add(P.Id, All.Num());
+			All.Add(MoveTemp(P));
+		};
+		for (const KeysGeoReal::FPlatLot& R : KeysGeoReal::Plat())
+		{
+			FParcel P;
+			P.Id = R.Id; P.Name = R.Name; P.Island = R.Island; P.Side = R.Side; P.Tier = ETier(R.Tier);
+			P.CX = R.CX; P.CZ = R.CZ; P.Area = R.Area; P.Frontage = R.Frontage; P.Poly = R.Poly;
+			Add(MoveTemp(P));
+		}
+		for (const KeysTown::FEstateLot& L : KeysTown::HarborRow())
+		{
+			const KeysTown::FRect Rc = KeysTown::WorldRect(L.U0, L.U1, L.V0, L.V1);
+			FParcel P;
+			P.Id = L.Id; P.Name = L.Name; P.Island = TEXT("Marathon (Vaca Key)"); P.Side = TEXT("Town"); P.Tier = ETier::Harbor;
+			P.CX = (Rc.X0 + Rc.X1) / 2; P.CZ = (Rc.Z0 + Rc.Z1) / 2; P.Area = (Rc.X1 - Rc.X0) * (Rc.Z1 - Rc.Z0); P.Frontage = Rc.X1 - Rc.X0;
+			P.Poly = {FVector2D(Rc.X0, Rc.Z0), FVector2D(Rc.X1, Rc.Z0), FVector2D(Rc.X1, Rc.Z1), FVector2D(Rc.X0, Rc.Z1)};
+			Add(MoveTemp(P));
+		}
+	}
+	else for (const KeysPlat::FRaw& R : KeysPlat::Parcels)
 	{
 		FParcel P;
 		P.Id = R.Id; P.Name = R.Name; P.Island = R.Island; P.Side = R.Side; P.Tier = ETier(R.Tier);
@@ -148,7 +175,21 @@ int32 AKeysEstates::PlatParcelAt(double X, double Z)
 	struct FBox2 { double X0, X1, Z0, Z1; };
 	static TArray<FBox2> Boxes;
 	static TArray<TArray<FVector2D>> Polys;
-	if (KeysGeo::RealMap()) return -1;
+	if (KeysGeo::RealMap())
+	{
+		// the real plat, in the same order BeginPlay lists it (so the index is the parcel's)
+		if (!Boxes.Num())
+			for (const KeysGeoReal::FPlatLot& R : KeysGeoReal::Plat())
+			{
+				FBox2 B{1e18, -1e18, 1e18, -1e18};
+				for (const FVector2D& Q : R.Poly) { B.X0 = FMath::Min(B.X0, Q.X); B.X1 = FMath::Max(B.X1, Q.X); B.Z0 = FMath::Min(B.Z0, Q.Y); B.Z1 = FMath::Max(B.Z1, Q.Y); }
+				Boxes.Add(B);
+				Polys.Add(R.Poly);
+			}
+		for (int32 i = 0; i < Boxes.Num(); i++)
+			if (X >= Boxes[i].X0 && X <= Boxes[i].X1 && Z >= Boxes[i].Z0 && Z <= Boxes[i].Z1 && InPoly(Polys[i], X, Z)) return i;
+		return -1;
+	}
 	if (!Boxes.Num())
 		for (const KeysPlat::FRaw& R : KeysPlat::Parcels)
 		{
