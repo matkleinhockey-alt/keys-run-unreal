@@ -11,6 +11,7 @@ namespace KeysGeoReal
 	static TArray<uint8> GIsland;
 	static TArray<float> GChain;
 	static TArray<FIsl> GIslands;
+	static TArray<FNavMark> GMarks;
 
 	namespace
 	{
@@ -94,12 +95,29 @@ namespace KeysGeoReal
 			UE_LOG(LogTemp, Warning, TEXT("KeysGeoReal: %s is cut short"), *Path);
 			return false;
 		}
+		// the marks: "x z kind number lit name" a line (Tools/geo/bake_marks.py)
+		GMarks.Reset();
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectContentDir() / TEXT("KeysRun/Geo") / (FString(Phase) + TEXT("_marks.txt"))));
+		for (const FString& L : Lines)
+		{
+			if (L.StartsWith(TEXT("#"))) continue;
+			TArray<FString> P;
+			L.ParseIntoArray(P, TEXT(" "));
+			if (P.Num() < 5 || (P[2] != TEXT("R") && P[2] != TEXT("G"))) continue;
+			FNavMark M;
+			M.X = FCString::Atod(*P[0]); M.Z = FCString::Atod(*P[1]);
+			M.bRed = P[2] == TEXT("R"); M.Num = FCString::Atoi(*P[3]); M.bLit = P[4] == TEXT("1");
+			for (int32 k = 5; k < P.Num(); k++) M.Name += (k > 5 ? TEXT(" ") : TEXT("")) + P[k];
+			GMarks.Add(MoveTemp(M));
+		}
 		GLoaded = true;
-		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: %s, %d x %d cells of %.0f m from (%.0f, %.0f), %d islands, 1:%.1f"), Phase, GNX, GNZ, GCell, GX0, GZ0, GIslands.Num(), GScale);
+		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: %s, %d x %d cells of %.0f m from (%.0f, %.0f), %d islands, %d marks, 1:%.1f"), Phase, GNX, GNZ, GCell, GX0, GZ0, GIslands.Num(), GMarks.Num(), GScale);
 		return true;
 	}
 
 	bool Loaded() { return GLoaded; }
+	const TArray<FNavMark>& Marks() { return GMarks; }
 	double X0() { return GX0; }
 	double Z0() { return GZ0; }
 	double SizeX() { return (GNX - 1) * GCell; }

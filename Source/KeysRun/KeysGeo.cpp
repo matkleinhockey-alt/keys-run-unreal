@@ -558,6 +558,7 @@ namespace KeysGeo
 			AddPillar(X + NX * 4.5, Z + NZ * 4.5, .8, false);
 			AddPillar(X - NX * 4.5, Z - NZ * 4.5, .8, false);
 		}
+		if (GReal) for (const KeysGeoReal::FNavMark& M : KeysGeoReal::Marks()) AddPillar(M.X, M.Z, .35, false);   // a daybeacon's pile
 		if (const FTruss* Tr = BahiaHonda())
 			for (int32 i = 0; i <= Tr->Spans; i++)
 			{

@@ -1,0 +1,147 @@
+# aids to navigation: NOAA ENC Direct to GIS (public domain). x z kind number lit name
+-7518.7 -399.3 R 2 0 Scout Key Daybeacon 2
+-7580.4 -368.5 G 3 0 Scout Key Daybeacon 3
+-7674.4 -369.3 R 4 0 Scout Key Daybeacon 4
+-5726.3 -347.0 R 4 0 Ohio Key Channel Daybeacon 4
+-5832.3 1484.6 G 49 1 Bahia Honda Key Light 49A
+-5710.5 -329.5 G 3 0 Ohio Key Channel Daybeacon 3
+-7521.9 -2529.1 R 34 0 Big Spanish Channel Daybeacon 34
+-7771.7 -2974.3 R 36 0 Big Spanish Channel Daybeacon 36
+-6722.6 -1784.2 R 32 1 Big Spanish Channel Light 32
+-6235.7 -1461.2 G 29 0 Friend Key Bank Daybeacon 29
+-5008.8 -1143.6 G 27 1 Little Money Key Light 27
+-5666.3 -463.0 G 1 0 Ohio Key Channel Daybeacon 1
+-5690.9 -466.3 R 2 1 Ohio Key Light 2
+-6139.8 -1618.1 R 30 0 Friend Key Bank Daybeacon 30
+-4067.3 -700.9 G 25 1 Little Money Key Light 25
+-2563.2 -1223.4 R 8 1 Moser Channel Light 8
+-2444.0 -1616.2 R 10 1 Moser Channel Light 10
+-2756.2 -1748.6 G 9 0 Moser Channel Daybeacon 9
+-2887.5 -11.8 R 4 0 Moser Channel South Daybeacon 4
+-2023.7 -953.0 R 22 0 Pigeon Key Daybeacon 22
+-2772.0 -197.9 R 6 0 Moser Channel South Daybeacon 6
+-2888.4 114.4 R 2 0 Moser Channel South Daybeacon 2
+-2858.9 -179.2 G 5 0 Moser Channel South Daybeacon 5
+-2058.7 -757.2 G 21 1 Pigeon Key Light 21
+-3251.6 -1051.1 R 24 0 Little Money Key Daybeacon 24
+-4476.2 -1135.8 R 26 0 Little Money Key Daybeacon 26
+-299.5 -1123.8 R 18 0 Rachel Bank Daybeacon 18
+-341.1 879.9 G 3 0 Sister Creek Daybeacon 3
+-467.2 205.3 R 18 0 Boot Key Harbor Daybeacon 18
+-597.3 174.7 R 16 0 Boot Key Harbor Daybeacon 16
+-781.7 147.3 R 12 0 Boot Key Harbor Daybeacon 12
+-1114.2 587.4 R 2 0 Boot Key Channel Daybeacon 2
+-1052.3 -775.2 G 19 0 Bethel Bank Daybeacon 19
+685.7 -1025.5 G 15 0 Rachel Bank Daybeacon 15
+-334.3 815.7 R 6 0 Sister Creek Daybeacon 6
+-325.4 861.3 R 4 0 Sister Creek Daybeacon 4
+-222.3 271.0 G 1 0 Boot Key East Channel Daybeacon 1A
+-287.9 -152.9 G 1 0 Marathon Park Daybeacon 1
+-279.9 -984.5 G 17 1 Wildflower Light 17
+-1134.3 551.0 G 1 0 Boot Key Channel Daybeacon 1
+-1079.4 120.1 G 5 0 Boot Key Harbor Daybeacon 5
+-1150.6 129.7 G 3 0 Boot Key Harbor Daybeacon 3
+-26.7 201.8 G 5 0 Boot Key East Channel Daybeacon 5A
+-320.9 936.7 R 2 1 Sister Creek Light 2
+-757.4 140.5 R 14 0 Boot Key Harbor Daybeacon 14
+-939.0 128.7 R 10 0 Boot Key Harbor Daybeacon 10
+-1238.3 158.2 R 2 0 Boot Key Harbor Daybeacon 2
+-1044.8 -949.6 R 20 1 Bethel Bank light 20
+-204.6 183.7 R 4 0 Boot Key North Channel Daybeacon 4B
+-441.7 210.2 G 19 0 Boot Key Harbor Daybeacon 19
+-942.1 112.9 G 9 0 Boot Key Harbor Daybeacon 9
+-338.2 305.9 G 21 0 Boot Key Harbor Daybeacon 21
+-1015.1 113.4 G 7 0 Boot Key Harbor Daybeacon 7
+-121.1 229.7 G 3 0 Boot Key East Channel Daybeacon 3A
+-209.3 239.4 R 2 0 Boot Key North Channel Daybeacon 2B
+-332.4 324.0 R 20 0 Boot Key Harbor Daybeacon 20
+-1240.5 138.5 G 1 1 Boot Key Harbor Light 1
+-319.8 771.4 R 8 0 Sister Creek Daybeacon 8
+1674.0 -607.1 G 1 0 Stirrup Key Channel Daybeacon 1
+2377.1 365.4 G 7 0 Bonefish Bay Channel Daybeacon 7
+2356.2 324.6 G 11 0 Bonefish Bay Channel Daybeacon 11
+1407.6 164.2 R 8 0 Ninety-Seventh Street Channel Daybeacon 8
+2157.8 238.2 G 3 0 Shelter Bay Daybeacon 3
+1910.5 289.3 R 8 0 Vaca Cut Daybeacon 8
+2410.4 381.2 G 5 0 Bonefish Bay Channel Daybeacon 5
+2336.2 -115.8 R 14 0 Vaca Cut Daybeacon 14
+1925.0 221.2 G 9 0 Vaca Cut Daybeacon 9A
+1944.8 -143.3 R 6 0 Indigo Reef Daybeacon 6
+2398.6 274.8 G 13 0 Bonefish Bay Channel Daybeacon 13
+2296.3 -152.4 G 13 0 Vaca Cut Daybeacon 13
+1700.2 1463.8 R 48 0 Fat Deer Key Daybeacon 48
+1925.4 576.7 G 5 0 Vaca Cut Daybeacon 5
+1851.4 302.7 G 7 0 Vaca Cut Daybeacon 7A
+1990.8 -211.8 G 1 0 Indigo Reef Daybeacon 1
+2446.4 409.8 R 4 0 Bonefish Bay Channel Daybeacon 4
+2298.0 699.6 G 1 0 Vaca Cut Daybeacon 1
+1948.5 -141.8 G 5 0 Indigo Reef Daybeacon 5
+1328.7 404.5 R 6 0 Ninety-Seventh Street Channel Daybeacon 6
+1626.9 -512.7 R 2 0 Stirrup Key Channel Daybeacon 2
+2506.7 534.4 R 2 0 Bonefish Bay Channel Daybeacon 2
+2174.4 -74.5 G 11 0 Vaca Cut Daybeacon 11
+1976.6 -221.9 R 2 0 Indigo Reef Daybeacon 2
+2110.4 234.9 G 1 0 Shelter Bay Daybeacon 1
+1859.0 459.0 G 5 0 Vaca Cut Daybeacon 5A
+1849.9 367.6 G 7 0 Vaca Cut Daybeacon 7
+1960.2 -181.1 G 3 0 Indigo Reef Daybeacon 3
+2045.7 679.1 G 3 0 Vaca Cut Daybeacon 3
+1263.2 609.6 R 2 0 Ninety-Seventh Street Channel Daybeacon 2
+1299.1 502.3 R 4 0 Ninety-Seventh Street Channel Daybeacon 4
+3312.8 506.3 G 5 0 Coco Plum Channel Daybeacon 5
+5022.9 1313.3 G 45 1 East Turtle Shoal Light 45
+3326.3 504.3 R 6 0 Coco Plum Channel Daybeacon 6
+4028.1 320.1 R 4 0 Little Crawl Key Channel Daybeacon 4
+3879.5 315.0 R 8 0 Little Crawl Key Channel Daybeacon 8
+3579.9 1779.2 G 47 0 West Turtle Shoal Daybeacon 47
+3739.3 294.7 G 13 0 Little Crawl Key Channel Daybeacon 13
+3439.1 661.8 G 1 0 Coco Plum Channel Daybeacon 1
+3256.7 384.7 G 7 0 Coco Plum Channel Daybeacon 7
+4052.7 374.6 R 2 0 Little Crawl Key Channel Daybeacon 2
+3787.3 283.3 R 12 0 Little Crawl Key Channel Daybeacon 12
+3775.0 232.9 R 14 0 Little Crawl Key Channel Daybeacon 14
+3842.5 418.5 G 9 0 Little Crawl Key Channel Daybeacon 9
+3278.0 378.6 R 8 0 Coco Plum Channel Daybeacon 8
+4000.0 387.5 G 1 0 Little Crawl Key Channel Daybeacon 1
+3939.4 286.5 R 6 0 Little Crawl Key Channel Daybeacon 6
+3738.2 365.9 G 11 0 Little Crawl Key Channel Daybeacon 11
+3456.4 658.6 R 2 0 Coco Plum Channel Daybeacon 2
+3372.6 618.3 G 3 0 Coco Plum Channel Daybeacon 3
+3963.7 356.1 G 3 0 Little Crawl Key Channel Daybeacon 3
+3796.0 346.9 R 10 0 Little Crawl Key Channel Daybeacon 10
+3733.6 237.6 G 15 0 Little Crawl Key Channel Daybeacon 15
+3386.7 609.4 R 4 0 Coco Plum Channel Daybeacon 4
+-512.7 -3693.1 R 16 0 Moser Channel Daybeacon 16
+3646.7 -1627.4 R 12 0 Bamboo Key Daybeacon 12
+2490.5 -1434.5 G 13 1 Bamboo Key Light 13
+1407.3 -1375.0 R 14 0 Rachael Bank Daybeacon  14
+3757.7 -419.7 G 3 0 Burnt Point Channel Daybeacon 3
+5574.3 -230.4 R 8 0 Toms Harbor Channel Daybeacon 8
+5509.1 -164.6 G 7 0 Toms Harbor Channel Daybeacon 7
+5758.0 -320.9 G 11 0 Toms Harbor Channel Daybeacon 11
+5432.1 7.3 G 3 0 Toms Harbor Channel Daybeacon 3
+5418.1 -58.6 R 4 0 Toms Harbor Channel Daybeacon 4
+6043.2 -1119.8 G 9 1 Channel Key Light 9
+5389.2 114.6 G 1 0 Toms Harbor Channel Daybeacon 1
+5441.8 -93.0 R 6 0 Toms Harbor Channel Daybeacon 6
+5026.2 -1375.6 G 11 1 Grassy Key Light 11
+5644.0 -286.1 R 10 0 Toms Harbor Channel Daybeacon 10
+5420.7 109.1 R 2 0 Toms Harbor Channel Daybeacon 2
+5880.8 -312.4 R 12 0 Toms Harbor Channel Daybeacon 12
+6207.2 186.3 R 2 0 Duck Key Inlet Channel Daybeacon 2
+6205.3 160.0 R 4 0 Duck Key Inlet Channel Daybeacon 4
+7336.6 -1677.2 R 4 0 Channel Key Daybeacon 4
+6204.7 140.7 R 6 0 Duck Key Inlet Channel Daybeacon 6
+6202.1 128.0 R 8 0 Duck Key Inlet Channel Daybeacon 8
+6196.4 141.2 G 5 0 Duck Key Inlet Channel Daybeacon 5
+6728.8 -1532.1 R 8 0 Channel Key Daybeacon 8
+5816.2 -1.8 R 4 0 Duck Key Channel Daybeacon 4
+6806.1 -1500.3 G 5 1 Channel Key Light 5
+6190.8 106.4 G 7 0 Duck Key Inlet Channel 7
+6751.2 -1515.3 G 7 0 Channel Key Daybeacon 7
+5825.1 67.4 R 1 0 Duck Key Channel Daybeacon 1
+6197.4 158.7 G 3 0 Duck Key Inlet Channel Daybeacon 3
+-128.8 1804.2 G 49 1 East Washerwoman Shoal Light 49
+-1624.1 -3754.3 G 15 0 Moser Channel Daybeacon 15
+-2154.4 -2731.8 G 13 1 Moser Channel Light 13
+-2206.2 -2332.6 R 12 1 Moser Channel Light 12

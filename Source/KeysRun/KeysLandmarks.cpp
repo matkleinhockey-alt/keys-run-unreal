@@ -4,6 +4,7 @@
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysGeo.h"
+#include "KeysGeoReal.h"
 #include "KeysWorld.h"
 #include "KeysData.h"
 #include "ProceduralMeshComponent.h"
@@ -63,6 +64,7 @@ void AKeysLandmarks::BeginPlay()
 	BuildLighthouse(B, G);
 	BuildPiers(B);
 	BuildEstates(B);
+	BuildDaymarks(B, G);
 	B.M.Commit(Static, 0, AKeysWorld::VertexColorMaterial());
 	UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineDebugMaterials/VertexColorMaterial.VertexColorMaterial"));
 	G.M.Commit(Lamps, 0, GlowMat ? GlowMat : AKeysWorld::VertexColorMaterial());
@@ -414,6 +416,75 @@ UStaticMesh* AKeysLandmarks::LoadPropMesh(UObject* Outer, const TCHAR* Key)
 }
 
 // ---------------------------------------------------------------- channel marks and mooring balls (channel-marks.ts, channel-buoys.ts, landmarks.ts)
+// The real map's marked channels: every charted daybeacon (NOAA ENC, baked by Tools/geo/bake_marks.py) as a pile with its
+// boards - a red triangle with an even number to starboard coming in from sea, a green square with an odd one to port
+// ("red, right, returning"). Two boards crossed on each pile so one always faces you; the lit ones carry a lantern.
+void AKeysLandmarks::BuildDaymarks(FTownBatch& B, FTownBatch& G)
+{
+	if (!KeysGeo::RealMap()) return;
+	static const uint8 Seg[10] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f};   // bits a..g
+	const FLinearColor Red = Hex(0xc8281e), Green = Hex(0x1c8a48), White = Hex(0xf2f2ec), Pile = Hex(0x6a5a48);
+	const FVector Up(0, 1, 0);
+	for (const KeysGeoReal::FNavMark& K : KeysGeoReal::Marks())
+	{
+		const double Bed = -FMath::Clamp(KeysGeo::DepthAt(K.X, K.Z) + .6, 1.0, 8.0), Top = 5.1, By = 4.0, S = .8;   // board centre height, half size
+		const double Yaw = Hc(int32(K.X), int32(K.Z)) * PI;
+		B.Cyl(K.X, Bed, K.Z, .15, .19, Top - Bed, 0x6a5a48, 8);
+		B.Cyl(K.X, -.5, K.Z, .2, .2, 1.1, 0x2c3326, 8);                    // the weed and barnacle band at the waterline
+		const FLinearColor C = K.bRed ? Red : Green;
+		for (int32 f = 0; f < 4; f++)
+		{
+			// four faces: two boards at right angles, each seen from both sides
+			const double A = Yaw + f * PI / 2;
+			const FVector N(FMath::Cos(A), 0, FMath::Sin(A)), R(-N.Z, 0, N.X);
+			const FVector O = FVector(K.X, By, K.Z) + N * .17;
+			if (K.bRed)
+			{
+				B.TriCol(O - R * S - Up * S * .75, O + R * S - Up * S * .75, O + Up * S * .98, N, C, C, C);
+				const double I = .82;   // the reflective border is the board itself; a darker field inside it
+				B.TriCol(O + N * .004 - R * S * I - Up * S * .66, O + N * .004 + R * S * I - Up * S * .66, O + N * .004 + Up * S * .76, N, C * .82f, C * .82f, C * .82f);
+			}
+			else
+			{
+				B.Quad3(O - R * S * .8 - Up * S * .8, O + R * S * .8 - Up * S * .8, O + R * S * .8 + Up * S * .8, O - R * S * .8 + Up * S * .8, N, C);
+				B.Quad3(O + N * .004 - R * S * .68 - Up * S * .68, O + N * .004 + R * S * .68 - Up * S * .68, O + N * .004 + R * S * .68 + Up * S * .68, O + N * .004 - R * S * .68 + Up * S * .68, N, C * .82f);
+			}
+			// the number, in seven-segment strokes (read from in front: the first digit is to the viewer's left)
+			if (K.Num <= 0) continue;
+			const FString Txt = FString::FromInt(K.Num % 100);
+			const double Dh = K.bRed ? .42 : .56, Dw = Dh * .52, St = Dh * .15, Gap = Dw * .35;
+			const double Total = Txt.Len() * Dw + (Txt.Len() - 1) * Gap;
+			const FVector L = -R;   // the viewer's left-to-right runs against R when looking back along N
+			const FVector Oc = O + N * .01 - Up * (K.bRed ? S * .28 : 0);
+			for (int32 d = 0; d < Txt.Len(); d++)
+			{
+				const uint8 Bits = Seg[Txt[d] - TEXT('0')];
+				const FVector Dc = Oc + L * (-Total / 2 + Dw / 2 + d * (Dw + Gap));
+				auto Stroke = [&](double CX, double CY, double W, double Hh)
+				{
+					const FVector P = Dc + L * CX + Up * CY;
+					B.Quad3(P - L * W / 2 - Up * Hh / 2, P + L * W / 2 - Up * Hh / 2, P + L * W / 2 + Up * Hh / 2, P - L * W / 2 + Up * Hh / 2, N, White);
+				};
+				if (Bits & 1) Stroke(0, Dh / 2 - St / 2, Dw, St);
+				if (Bits & 2) Stroke(Dw / 2 - St / 2, Dh / 4, St, Dh / 2);
+				if (Bits & 4) Stroke(Dw / 2 - St / 2, -Dh / 4, St, Dh / 2);
+				if (Bits & 8) Stroke(0, -Dh / 2 + St / 2, Dw, St);
+				if (Bits & 16) Stroke(-Dw / 2 + St / 2, -Dh / 4, St, Dh / 2);
+				if (Bits & 32) Stroke(-Dw / 2 + St / 2, Dh / 4, St, Dh / 2);
+				if (Bits & 64) Stroke(0, 0, Dw, St);
+			}
+		}
+		if (K.bLit)
+		{
+			// the lantern: a little solar panel and the lens, red or green
+			B.Box(K.X, Top + .1, K.Z, .5, .05, .4, 0x1c2430, .5, Yaw);
+			B.Cyl(K.X, Top + .12, K.Z, .11, .13, .3, 0xd8d8d0, 8);
+			G.Ball(K.X, Top + .5, K.Z, .16, K.bRed ? 0xff3a2a : 0x3aff7a, 1, 6);
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: %d daybeacons on the real channels"), KeysGeoReal::Marks().Num());
+}
+
 void AKeysLandmarks::BuildBuoys()
 {
 	// marks down the long sides of every dredged cut, red on the right coming in from seaward

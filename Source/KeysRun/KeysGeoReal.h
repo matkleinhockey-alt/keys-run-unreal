@@ -15,6 +15,16 @@ namespace KeysGeoReal
 		TArray<double> Ring;   // x0, z0, x1, z1, ... (not repeated at the end)
 	};
 
+	// a real aid to navigation (NOAA ENC): a red (even, triangle) or green (odd, square) daybeacon on a pile
+	struct FNavMark
+	{
+		double X = 0, Z = 0;
+		bool bRed = false, bLit = false;
+		int32 Num = 0;
+		FString Name;
+	};
+	const TArray<FNavMark>& Marks();
+
 	bool Load(const TCHAR* Phase);
 	bool Loaded();
 	double X0();
