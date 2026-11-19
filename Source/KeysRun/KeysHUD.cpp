@@ -335,7 +335,7 @@ void AKeysHUD::DrawMenu(AKeysBoatPawn* P)
 	const TCHAR* Title = bMain ? TEXT("KEYS RUN") : P->Menu == EMenu::Pause ? TEXT("Paused") : P->Menu == EMenu::Settings ? TEXT("Settings") : TEXT("Controls");
 	Text(Title, X, 70 * U, bMain ? 4.2f : 2.8f, FLinearColor::White, Big);
 	if (bMain) Text(TEXT("Center console fishing  -  Marathon, Florida Keys"), X + 6 * U, 196 * U, 1.3f, Teal);
-	if (bMain) Text(TEXT("v1.41"), X + 6 * U, 232 * U, .8f, Dim);
+	if (bMain) Text(TEXT("v1.42"), X + 6 * U, 232 * U, .8f, Dim);
 
 	TArray<AKeysBoatPawn::FMenuItem> Items;
 	P->GetMenuItems(Items);
@@ -577,7 +577,17 @@ void AKeysHUD::DrawGauges(AKeysBoatPawn* P)
 	const int32 Hdg = (FMath::RoundToInt(-P->Heading() * 180 / PI) % 360 + 360) % 360;
 	Text(FString::Printf(TEXT("Gear %s   HDG %03d"), *P->GearName(), Hdg), X + 150 * U, GY + 14 * U, 1.0f, P->Gear == 2 ? Red : FLinearColor::White);
 	Text(FString::Printf(TEXT("%.1f ft"), P->DepthHere() * 3.28), X + 150 * U, GY + 44 * U, 1.0f, Teal);
-	Text(FString::Printf(TEXT("Trim %d%%%s"), FMath::RoundToInt(P->TrimV * 100), P->bTrimMode ? TEXT("  (trim mode)") : TEXT("")), X + 150 * U, GY + 74 * U, .9f, P->bTrimMode ? Gold : Dim);
+	{
+		// trim in degrees (TILT past the trim range), the tabs when either is down, and how she's riding
+		const FString TrimS = P->IsTilted() ? FString::Printf(TEXT("TILT %d°"), FMath::RoundToInt(P->TrimDeg)) : FString::Printf(TEXT("Trim %+d°"), FMath::RoundToInt(P->TrimDeg));
+		const FString TabS = P->TabL > .02 || P->TabR > .02 ? FString::Printf(TEXT("  Tabs P%d S%d"), FMath::RoundToInt(P->TabL * 10), FMath::RoundToInt(P->TabR * 10)) : FString();
+		Text(TrimS + TabS + (P->bTrimMode ? TEXT("  (trim mode)") : TEXT("")), X + 150 * U, GY + 74 * U, .9f, P->bTrimMode ? Gold : Dim);
+		if (!P->TrimRide.IsEmpty())
+		{
+			const bool bGood = P->TrimRide == TEXT("Sweet spot");
+			Text(P->TrimRide, X + 150 * U, GY + 96 * U, .8f, bGood ? Teal : P->TrimRide == TEXT("Tilted up") ? Dim : Red);
+		}
+	}
 	Text(TEXT("Throttle"), X + 18 * U, GY + 124 * U, .8f, Dim);
 	if (!P->bUnlimitedFuel) Text(FString::Printf(TEXT("Fuel %d%%"), FMath::RoundToInt(P->Fuel * 100)), X + 250 * U, GY + 104 * U, .8f, P->Fuel < .15 ? Red : Dim);
 	Bar(X + 100 * U, GY + 130 * U, 220 * U, 10 * U, float(FMath::Max(0.0, P->Throttle())), Teal);
@@ -1412,17 +1422,6 @@ void AKeysHUD::DrawExtras(AKeysBoatPawn* P)
 	if (TActorIterator<AKeysExtras> It(GetWorld()); It) E = *It;
 	if (!E) return;
 
-	// Luigi haze: a warm wash over the screen with a darker rim
-	const double Haze = E->GetHazeAlpha();
-	if (Haze > .01)
-	{
-		DrawRect(FLinearColor(1.f, .84f, .59f, float(Haze) * .22f), 0, 0, W, H);
-		const float Rim = 90 * U;
-		const FLinearColor Edge(.47f, .35f, .24f, float(Haze) * .35f);
-		DrawRect(Edge, 0, 0, W, Rim); DrawRect(Edge, 0, H - Rim, W, Rim);
-		DrawRect(Edge, 0, Rim, Rim, H - 2 * Rim); DrawRect(Edge, W - Rim, Rim, Rim, H - 2 * Rim);
-	}
-
 	// labels over the buddy boat and Caelen
 	APlayerController* PC = GetOwningPlayerController();
 	FVector CamLoc; FRotator CamRot;
@@ -1441,24 +1440,6 @@ void AKeysHUD::DrawExtras(AKeysBoatPawn* P)
 		Panel(S.X - TW * .5f - 8 * U, S.Y - TH - 14 * U, TW + 16 * U, TH + 6 * U, .45f);
 		Text(Tg.Text, S.X, S.Y - TH - 11 * U, .9f, FLinearColor::White, GEngine->GetSmallFont(), true);
 	}
-
-	// LUIGI MODE banner and hype callouts
-	float A = 0, Sc = 1, Rot = 0;
-	if (E->GetLuigiBanner(A, Sc, Rot))
-	{
-		const FLinearColor BannerGold(1.f, .78f, .25f, A * .6f);
-		const float Y = H * .28f;
-		for (int32 i = 0; i < 4; i++)
-		{
-			const float Ox = (i & 1 ? 3.f : -3.f) * U, Oy = (i & 2 ? 3.f : -3.f) * U;
-			Text(TEXT("LUIGI MODE"), W * .5f + Ox, Y + Oy, 4.f * Sc, BannerGold, GEngine->GetLargeFont(), true);
-		}
-		Text(TEXT("LUIGI MODE"), W * .5f, Y, 4.f * Sc, FLinearColor(1, 1, 1, A), GEngine->GetLargeFont(), true);
-		Text(TEXT("NECKKKK FUCK"), W * .5f, Y + 90 * U * Sc, 1.6f * Sc, FLinearColor(1.f, .92f, .65f, A), GEngine->GetLargeFont(), true);
-	}
-	const FString Call = E->GetCallout();
-	if (!Call.IsEmpty())
-		Text(Call, W * .5f, H * .4f, 2.2f, FLinearColor(1.f, .95f, .75f), GEngine->GetLargeFont(), true);
 }
 
 // ================================================================ ashore: where you are, what F does here, the counter panel

@@ -318,7 +318,7 @@ void AKeysExtras::UpdateCrew(double Dt, double T)
 	if (bHasShower) ShowerH.IdleUpdate(T, Sp);
 	if (bHasPole) PoleH.IdleUpdate(T, Sp);
 
-	// the captain drives and the crew sits; Luigi mode overrides the right hands with a beer. His right hand rests on
+	// the captain drives and the crew sits. His right hand rests on
 	// the throttle and goes with it (KeysDash.cpp)
 	FVector Grip;
 	if (const AKeysBoatPawn* P = PawnRef.Get(); P && P->ThrottleGrip(Grip) && Captain.Yaw == 0 && !(Deck.Spec && Deck.Spec->Id == TEXT("viking"))) HelmR = Grip + FVector(-.07, 0, -.07) - Captain.Pos;   // the wrist aft of and under the grip, the hand over it
@@ -899,13 +899,11 @@ void AKeysExtras::UpdateParty(double Dt, double T)
 		}
 		else
 		{
-			// running: hang on to the T-top, and raise a beer in Luigi mode
+			// running: hang on to the T-top
 			H.Roll = 0;
 			H.Pitch = 0;
 			H.PoseLegs(XJ(-.14, .085, 0), XJ(.14, .085, 0));
-			const FVector R = bLuigiOn
-				? FMath::Lerp(XJ(.3, H.HipY + 1.08 + .06 * FMath::Sin(T * 2.4 + G.S), .04), H.Mouth(), H.SipAmt)
-				: XJ(.22, H.HipY + 1.0, .14);
+			const FVector R = XJ(.22, H.HipY + 1.0, .14);
 			H.Pose(XJ(-.2, H.HipY + 1.0, .14), R);
 		}
 		// up on the casting deck she is forward of the open deck's limit: keep her inside the gunwales only

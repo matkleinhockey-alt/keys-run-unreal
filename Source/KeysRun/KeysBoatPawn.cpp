@@ -31,6 +31,7 @@
 #include "KeysTownData.h"
 #include "KeysEvents.h"
 #include "KeysGfx.h"
+#include "KeysTrim.h"
 #include "AudioMixerBlueprintLibrary.h"
 #include "ProceduralMeshComponent.h"
 #include "Camera/CameraComponent.h"
@@ -820,7 +821,8 @@ void AKeysBoatPawn::RunTestScript(double T)
 			const FString W = Cmd.Mid(5);
 			double DMin = 1, DMax = 2.2;
 			FString Zn = TEXT("Flats");
-			if (W == TEXT("bay")) { Zn = TEXT("Backcountry"); DMin = 2.6; DMax = 4; }
+			if (W == TEXT("skinny")) { DMin = .5; DMax = .62; }   // ankle-deep flats: the props touch bottom unless tilted
+			else if (W == TEXT("bay")) { Zn = TEXT("Backcountry"); DMin = 2.6; DMax = 4; }
 			else if (W == TEXT("hawk")) { Zn = TEXT("Hawk Channel"); DMin = 6; DMax = 9; }
 			else if (W == TEXT("reef")) { Zn = TEXT("Reef"); DMin = 4; DMax = 7; }
 			else if (W == TEXT("wall")) { Zn = TEXT("Reef"); DMin = 12; DMax = 20; }
@@ -1097,6 +1099,14 @@ void AKeysBoatPawn::RunTestScript(double T)
 			ScriptThr = FCString::Atod(*Cmd.Mid(9));
 		}
 		else if (Cmd.StartsWith(TEXT("reel="))) { bScriptReelAuto = Cmd.Mid(5) == TEXT("auto"); bScriptReel = !bScriptReelAuto && FCString::Atoi(*Cmd.Mid(5)) != 0; }   // reel=1 holds S; reel=auto reels like a player watching the bar
+		else if (Cmd == TEXT("engines")) { if (AKeysAudio* Au = AKeysAudio::Get(this)) Au->ToggleEngines(); }   // the I key
+		else if (Cmd.StartsWith(TEXT("trim="))) { TrimDeg = FCString::Atod(*Cmd.Mid(5)); bScriptLog = true; }   // trim=<degrees>, logs KRTrim twice a second
+		else if (Cmd.StartsWith(TEXT("tabs=")))
+		{
+			// tabs=<port>,<starboard> 0..1
+			FString A, B;
+			if (Cmd.Mid(5).Split(TEXT(","), &A, &B)) { TabL = FMath::Clamp(FCString::Atod(*A), 0.0, 1.0); TabR = FMath::Clamp(FCString::Atod(*B), 0.0, 1.0); }
+		}
 		else if (Cmd.StartsWith(TEXT("steer="))) ScriptSteer = FCString::Atod(*Cmd.Mid(6));   // steer=0.3 (left positive)
 		else if (Cmd.StartsWith(TEXT("catch=")))
 		{
@@ -1532,7 +1542,7 @@ void AKeysBoatPawn::UpdateFuel(double Dt)
 {
 	if (bUnlimitedFuel) { Fuel = 1; return; }
 	const double Burn = (.05 + .95 * FMath::Pow(FMath::Abs(Thr), 1.5)) / 1500.0;
-	if (bRunning) Fuel = FMath::Max(0.0, Fuel - Burn * Dt);
+	if (bRunning) Fuel = FMath::Max(0.0, Fuel - Burn * TrimFuelK * Dt);   // trim near the sweet spot saves fuel
 	if (NearMarina(X, Z) && FMath::Abs(Speed) < 1.5 && Fuel < 1)
 	{
 		Fuel = FMath::Min(1.0, Fuel + Dt / 12);
@@ -1931,8 +1941,10 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	// reel on the down arrow (it backs the boat down only with no line out); S is the throttle astern
 	bReelKey = (IsLineOut() && Down(EKeys::Down)) || bScriptReel || bAutoReelOn;
 	bBack = Down(EKeys::S) || (!bTrimMode && !IsLineOut() && Down(EKeys::Down));
-	bLeft = Down(EKeys::A) || Down(EKeys::Left);
-	bRight = Down(EKeys::D) || Down(EKeys::Right);
+	bLeft = Down(EKeys::A) || (!bTrimMode && Down(EKeys::Left));
+	bRight = Down(EKeys::D) || (!bTrimMode && Down(EKeys::Right));
+	bTabLeft = bTrimMode && Down(EKeys::Left);     // trim mode: the arrows work the tabs, A/D still steer
+	bTabRight = bTrimMode && Down(EKeys::Right);
 	if (FParse::Param(FCommandLine::Get(), TEXT("KRDemo")))
 	{
 		// full throttle, with a gentle turn every so often so the wake curves
@@ -1987,7 +1999,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		else
 		{
 			bTrimMode = !bTrimMode;
-			ShowToast(bTrimMode ? TEXT("Trim mode on - Up trims up, Down trims down. Throttle holds where you left it; W/S still change it. T to exit.") : TEXT("Trim mode off."));
+			ShowToast(bTrimMode ? TEXT("Trim mode on - Up/Down trim the motors (slow down to tilt them up), Left/Right lift that side with the tabs. A/D steer, W/S throttle. T to exit.") : TEXT("Trim mode off."));
 		}
 	}
 	if (Hit(EKeys::K) && T - CaughtT > .7) KeepFish();
@@ -2118,8 +2130,20 @@ bool AKeysBoatPawn::AutoChase(double TopMs, bool bCanDrive, double& OutThr, doub
 
 void AKeysBoatPawn::Slam(double V)
 {
-	const double K = Clamp(-V / 6, 0, 1);
+	// trimmed out she lands harder, trimmed in she knifes through (UpdateTrim's TrimSlamK); the hull takes the strain
+	const double K = Clamp(-V / 6 * TrimSlamK, 0, 1);
 	if (AKeysAudio* A = AKeysAudio::Get(this)) A->Slam(K);
+	HullStress += K * K * .065 * TrimSlamK;
+	if (bScriptLog) UE_LOG(LogTemp, Log, TEXT("KRTrim slam k %.2f trimK %.2f stress %.2f"), K, TrimSlamK, HullStress);
+	if (HullStress > 1)
+	{
+		HullStress = .35;
+		const int32 Cost = TrimProfile().StressRepairCost;
+		FString Msg = TEXT("CRACK - you've cracked a stringer slamming her. Trim down and ease off in a head sea.");
+		if (!bFreeFish && Cost > 0) { const int64 Bill = FMath::Min<int64>(Cost, Cash); Cash -= Bill; SaveEconomy(); Msg += FString::Printf(TEXT(" Repair: $%lld."), Bill); }
+		ShowToast(Msg, 6);
+	}
+	else if (HullStress > .7 && GetWorld()->GetTimeSeconds() - StressMsgT > 20) { StressMsgT = GetWorld()->GetTimeSeconds(); ShowToast(TEXT("The hull's taking a beating - trim down and back off a little.")); }
 	Shake = FMath::Max(Shake, K);
 	Speed *= 1 - .06 * K;
 	// sheets of spray thrown off both bow chines, bigger the harder she hit
@@ -2170,23 +2194,18 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	UpdateFuel(Dt);
 	UpdateDiscovery(Dt);
 
-	// trim: the sweet spot moves out as you get on plane; too far in plows the bow, too far out blows the props out
-	if (bTrimUp) TrimV = FMath::Min(1.0, TrimV + Dt * .35);
-	if (bTrimDn) TrimV = FMath::Max(0.0, TrimV - Dt * .35);
-	const double Fr = FMath::Abs(Speed) / TopMs, Opt = Fr < .35 ? .15 : .15 + .55 * FMath::Min(1.0, (Fr - .35) / .5), Off = TrimV - Opt;
-	TrimVent = Fr > .4 && TrimV > .82 ? FMath::Min(1.0, (TrimV - .82) / .18 * (Fr - .4) / .4 * 1.6) : 0;
-	const double TrimK = (1 + .06 - .35 * Off * Off) * (1 - .25 * TrimVent);
-	const double Target = Thr * TopMs * TrimK;
-	const double HoleShot = Fr < .4 && Thr > .5 ? 1 + .45 * (.3 - TrimV) : 1;
-	Speed += (Target - Speed) * Dt * (FMath::Abs(Thr) < 1e-3 ? S.Accel * .5 : S.Accel * HoleShot);
-	if (TrimVent > .2 && T - TrimMsgT > 5) { TrimMsgT = T; ShowToast(TEXT("Relax, Chum Lee - your props are out of the water!")); }
+	// trim, tilt and tabs (KeysTrimPhysics.cpp): the sweet spot moves out as you get on plane; too far in plows the bow,
+	// too far out porpoises and blows the props out; tilted up in the shallows it barely pushes
+	UpdateTrim(Dt, T, TopMs);
+	const double Target = Clamp(Thr * TopMs * TrimSpeedK, -TrimCapMs, TrimCapMs);
+	Speed += (Target - Speed) * Dt * (FMath::Abs(Thr) < 1e-3 ? S.Accel * .5 : S.Accel * TrimHoleK);
 
-	const double D = DepthFast(X, Z);
-	if (D < S.Draft) Speed = Clamp(Speed, -1.2, 1.5);
+	const double D = DepthFast(X, Z), HullDraft = TrimProfile().HullDraftM;
+	if (D < HullDraft) Speed = Clamp(Speed, -1.2, 1.5);
 	const double St = bAc ? AcSteer : bCanDrive ? (bLeft ? 1 : bRight ? -1 : ScriptSteer) : 0;
 	Steer += (St - Steer) * FMath::Min(1.0, Dt * 4);
 	const double F = FMath::Abs(Speed) / TopMs;
-	H += S.Turn * Steer * (.3 + FMath::Min(1.0, FMath::Abs(Speed) / 8) * .9) * (1 - .35 * F) * (1.15 - .35 * TrimV) * (Speed < -.2 ? -1 : 1) * Dt;
+	H += S.Turn * Steer * (.3 + FMath::Min(1.0, FMath::Abs(Speed) / 8) * .9) * (1 - .35 * F) * (1.05 - .2 * TrimV) * TrimSteerK * (Speed < -.2 ? -1 : 1) * Dt + TrimYaw * Dt;
 	const double Fx = -FMath::Sin(H), Fz = -FMath::Cos(H);
 	double NX = X + Fx * Speed * Dt, NZ = Z + Fz * Speed * Dt;
 
@@ -2229,7 +2248,8 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 
 	// ride on the waves
 	const double Amp = AmpAt(X, Z), Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
-	const double Plane = .11 * FMath::Sin(FMath::Min(F * 2.6, 1.0) * PI) * (1.25 - .5 * TrimV) + .035 * F + (TrimV - .3) * .11 * FMath::Min(1.0, F * 2) + TrimVent * .05 * FMath::Sin(T * 9);
+	// the planing hump (bow up as she climbs onto plane), the running attitude, and everything trim adds (UpdateTrim)
+	const double Plane = .085 * FMath::Sin(FMath::Min(F * 2.6, 1.0) * PI) + .035 * F + TrimPitch + TrimVent * .03 * FMath::Sin(T * 9);
 	// rollers push the hull: running down the back of a swell speeds you up, climbing a face slows you, and a stopped boat surges with the swell
 	const FVector2D Sl = WaveSlope(X, Z, T, Amp);
 	const double Along = Sl.X * Fx + Sl.Y * Fz, BeamSl = Sl.X * Rx + Sl.Y * Rz;
@@ -2295,7 +2315,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 		Y += VY * HDt;
 		VP += (Tp / Ip + Plane * WP * WP * (Wet ? 1 : 0) - (Wet ? 0 : .5) - 2 * Zeta * WP * VP * InW) * HDt;
 		Pitch += VP * HDt;
-		VR += (Tr / Ir + Steer * F * (S.bCat ? .05 : .16) * WR * WR * (Wet ? 1 : 0) - 2 * ZetaR * WR * VR * InW) * HDt;
+		VR += (Tr / Ir + (Steer * F * (S.bCat ? .05 : .16) + TrimRoll) * WR * WR * (Wet ? 1 : 0) - 2 * ZetaR * WR * VR * InW) * HDt;
 		Roll += VR * HDt;
 	}
 	Pitch = Clamp(Pitch, -.6, .75);
@@ -2304,12 +2324,12 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	bAir = Wet == 0;
 	if (bWasAir && !bAir && VY < -2.2) Slam(VY);
 	// running fast into a steep face: the bow buries and slams without ever leaving the water (stuffing it into chop)
-	else if (!bAir && F > .35 && BowSub > Dk * .9 && BowRise > 2.0 && T - BowSlamT > .45)
+	else if (!bAir && F > .35 && BowSub > Dk * .9 && BowRise > 2.0 / FMath::Sqrt(TrimSlamK) && T - BowSlamT > .45)
 	{
 		BowSlamT = T;
 		Slam(-(BowRise - 1.2) * (.8 + .6 * F) * (S.bCat ? .75 : 1));
 	}
-	if (D < S.Draft && Y < -.15) { Y = -.15; VY = FMath::Max(0.0, VY); }
+	if (D < HullDraft && Y < -.15) { Y = -.15; VY = FMath::Max(0.0, VY); }
 	RideNow = Ride;
 	DkNow = Dk;
 
@@ -2323,7 +2343,8 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	{
 		SprayT = 0;
 		const double Vs = FMath::Abs(Speed);
-		const double Sk = bAir ? 0 : FMath::SmoothStep(7.0, 22.0, Vs) * Clamp(WaveRms() * 3.2 + .15, 0, 1.4) * (.6 + .4 * FMath::Abs(FMath::Sin(T * 2.7)));
+		// plowing throws it even in flat water; a lean (wrong tabs, wind) throws it off the low side
+		const double Sk = bAir ? 0 : FMath::SmoothStep(7.0, 22.0, Vs) * (Clamp(WaveRms() * 3.2 + .15, 0, 1.4) + (TrimSprayK - 1) * .25) * (.6 + .4 * FMath::Abs(FMath::Sin(T * 2.7)));
 		if (Sk > .08)
 			if (AKeysLife* L = AKeysLife::Get(this))
 			{
@@ -2331,7 +2352,8 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 				for (const double Sd : {-1.0, 1.0})
 				{
 					const double BX = X + Fx * S.Len * .22 + Rx * Sd * S.Beam * .48, BZ = Z + Fz * S.Len * .22 + Rz * Sd * S.Beam * .48;
-					L->BowSpray(FVector(BX, WaveH(BX, BZ, T, AmpAt(BX, BZ)) + .05, BZ), FVector2D(Rx * Sd, Rz * Sd), BV, 3 + int32(Sk * 12), .3 + .5 * Sk);
+					const double SideK = FMath::Max(.15, 1 + TrimSpraySide * Sd * 1.4);   // TrimSpraySide + = starboard low
+					L->BowSpray(FVector(BX, WaveH(BX, BZ, T, AmpAt(BX, BZ)) + .05, BZ), FVector2D(Rx * Sd, Rz * Sd), BV, 3 + int32(Sk * 12 * SideK), (.3 + .5 * Sk) * FMath::Min(1.6, SideK));
 				}
 			}
 	}
@@ -2348,10 +2370,11 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 
 	// pose the hull: bow up for positive pitch, starboard up for positive roll, lifted as she gets on plane
 	const FVector Fw(Fx, Fz, 0), Rt(Rx, Rz, 0), Up(0, 0, 1);
-	const FVector Fp = Fw * FMath::Cos(Pitch) + Up * FMath::Sin(Pitch);
+	const double PosePitch = Pitch + TrimPorpPose;   // porpoising rides on top of the hull's pitch (UpdateTrim)
+	const FVector Fp = Fw * FMath::Cos(PosePitch) + Up * FMath::Sin(PosePitch);
 	const FVector Rr = Rt * FMath::Cos(Roll) + Up * FMath::Sin(Roll);
 	const FRotator Rot = FRotationMatrix::MakeFromXY(Fp, Rr).Rotator();
-	SetActorLocationAndRotation(ToUE(X, Y + (Dk - Ride) * 1.6, Z), Rot);
+	SetActorLocationAndRotation(ToUE(X, Y + (Dk - Ride) * 1.6 + TrimPorpLift, Z), Rot);
 }
 
 // ================================================================ camera
@@ -4033,7 +4056,7 @@ FString AKeysBoatPawn::Hint() const
 		if (const AKeysCharter* Ch = AKeysCharter::Get(this); Ch && Ch->IsPendingRelease())
 			return TEXT("Charter: SPACE releases it and it counts (T tags and releases) - keeping it fails the charter");
 	if (FState == EKeysFish::Caught) return bCardSpeared || CurTag >= 0 ? TEXT("K keeps it in the cooler - Space releases it") : TEXT("K keeps it in the cooler - Space releases it - T tags it and lets it go");
-	if (bTrimMode && FState == EKeysFish::Idle && !bCharging) return TEXT("Trim mode: Up trims up, Down trims down - W/S throttle - T to exit");
+	if (bTrimMode && FState == EKeysFish::Idle && !bCharging) return TEXT("Trim mode: Up/Down trim and tilt - Left/Right tabs - A/D steer - W/S throttle - T to exit");
 	if (bCharging) return TEXT("Release to cast - hold longer to throw farther");
 	if (bTrolling && FState == EKeysFish::Idle)
 		return TResume > 0 ? FString(TEXT("Clearing the lines - back on the troll in a moment"))
@@ -4054,7 +4077,9 @@ FString AKeysBoatPawn::Hint() const
 FString AKeysBoatPawn::Warning() const
 {
 	const double D = DepthAt(X, Z);
-	if (D < Spec().Draft) return TEXT("Aground - back off to deeper water");
+	const double Hull = TrimProfile().HullDraftM;
+	if (D < Hull) return TEXT("Aground - back off to deeper water");
+	if (D < PropDepthNow + .1 && PropDepthNow > .05) return TEXT("Props in the bottom - trim up / tilt (trim mode, Up)");
 	if (D < Spec().Draft + .4 && KnotsNow() > 5) return TEXT("Shallow water ahead");
 	return FString();
 }

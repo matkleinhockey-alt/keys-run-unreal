@@ -9,7 +9,6 @@
 #include "KeysMesh.h"
 #include "KeysWorld.h"
 #include "ProceduralMeshComponent.h"
-#include "Components/PostProcessComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
@@ -61,30 +60,10 @@ AKeysExtras::AKeysExtras()
 	RootComponent = Root;
 
 	CrewMesh = EMakeMesh(this, Root, TEXT("Crew"), false);
-	RoosterMesh = EMakeMesh(this, Root, TEXT("Rooster"), false);
-	RoosterMesh->SetCastShadow(false);
 	BuddyMesh = EMakeMesh(this, Root, TEXT("Buddy"), true);
 	BuddyMesh->SetCastShadow(false);
 	BuddyFish = EMakeMesh(this, Root, TEXT("BuddyFish"), true);
 	GullMesh = EMakeMesh(this, Root, TEXT("Caelen"), true);
-
-	// Luigi mode haze: a warm, oversaturated, fringed, vignetted screen, faded in by blend weight
-	PostFX = CreateDefaultSubobject<UPostProcessComponent>(TEXT("LuigiHaze"));
-	PostFX->SetupAttachment(Root);
-	PostFX->bUnbound = true;
-	PostFX->BlendWeight = 0.f;
-	PostFX->Priority = 10.f;
-	FPostProcessSettings& S = PostFX->Settings;
-	S.bOverride_ColorSaturation = true;
-	S.ColorSaturation = FVector4(1.35, 1.35, 1.35, 1.0);
-	S.bOverride_SceneFringeIntensity = true;
-	S.SceneFringeIntensity = 4.f;
-	S.bOverride_VignetteIntensity = true;
-	S.VignetteIntensity = 1.1f;
-	S.bOverride_BloomIntensity = true;
-	S.BloomIntensity = 2.5f;
-	S.bOverride_SceneColorTint = true;
-	S.SceneColorTint = FLinearColor(1.08f, 1.0f, .86f);
 }
 
 AKeysExtras* AKeysExtras::Get(const UObject* WorldContext)
@@ -102,7 +81,6 @@ void AKeysExtras::BeginPlay()
 	BuddyMesh->SetVisibility(false);
 	BuddyFish->SetVisibility(false);
 	GullMesh->SetVisibility(false);
-	RoosterMesh->SetVisibility(false);
 }
 
 AKeysBoatPawn* AKeysExtras::FindPawn()
@@ -145,7 +123,6 @@ void AKeysExtras::Tick(float DeltaSeconds)
 	{
 		const FAttachmentTransformRules Rules(EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, false);
 		CrewMesh->AttachToComponent(P->GetRootComponent(), Rules);
-		RoosterMesh->AttachToComponent(P->GetRootComponent(), Rules);
 		AddTickPrerequisiteActor(P);
 		bAttached = true;
 	}
@@ -164,9 +141,7 @@ void AKeysExtras::Tick(float DeltaSeconds)
 		}
 
 	UpdateCrew(Dt, T);
-	UpdateLuigi(Dt, T);
 	CommitCrew(T);
-	BuildRooster(Dt, T);
 	UpdateBuddy(Dt, T);
 	UpdateCaelen(Dt, T);
 }
@@ -241,146 +216,6 @@ void AKeysExtras::GetTags(TArray<FKeysExtrasTag>& Out) const
 			Tg.MaxDist = 160;
 		}
 	}
-}
-
-bool AKeysExtras::GetLuigiBanner(float& OutAlpha, float& OutScale, float& OutRotDeg) const
-{
-	// CSS @keyframes luigiIn over 3.2 s
-	const double Age = Now() - LuigiStartT;
-	if (Age < 0 || Age > 3.2) return false;
-	const double P = Age / 3.2;
-	struct FBannerKey { double T, Op, Sc, Rot; };
-	static const FBannerKey Keys[5] = {{0, 0, .4, -6}, {.12, 1, 1.15, 2}, {.22, 1, 1, 0}, {.8, 1, 1.03, 0}, {1, 0, 1.25, 0}};
-	int32 i = 0;
-	while (i < 3 && P > Keys[i + 1].T) i++;
-	const double U = FMath::Clamp((P - Keys[i].T) / (Keys[i + 1].T - Keys[i].T), 0.0, 1.0);
-	OutAlpha = float(FMath::Lerp(Keys[i].Op, Keys[i + 1].Op, U));
-	OutScale = float(FMath::Lerp(Keys[i].Sc, Keys[i + 1].Sc, U));
-	OutRotDeg = float(FMath::Lerp(Keys[i].Rot, Keys[i + 1].Rot, U));
-	return true;
-}
-
-FString AKeysExtras::GetCallout() const
-{
-	// the hype man (JS speechSynthesis in hypeCallout), 0.7 s after the horn
-	const double Age = Now() - LuigiStartT;
-	if (Age >= .7 && Age < 1.7) return TEXT("Luigi mode!");
-	if (Age >= 1.7 && Age < 3.0) return TEXT("Neeeeeck!");
-	if (Age >= 3.0 && Age < 3.8) return TEXT("Fuck!");
-	return FString();
-}
-
-// ================================================================ Luigi mode
-void AKeysExtras::LuigiStart()
-{
-	bLuigiOn = true;
-	LuigiHeld = 0;
-	LuigiStartT = Now();
-	// hypeCallout: an air horn, a crowd roar, and the music dips while the hype man shouts
-	Sound(TEXT("AirHorn"));
-	Sound(TEXT("CrowdRoar"));
-	Sound(TEXT("MusicDuck"));
-	Sound(TEXT("HypeVoice"));
-	// everyone grabs a beer
-	Captain.bBeer = true;
-	Crew.bBeer = true;
-	for (FKeysPartyGoer& G : Party) G.H.bBeer = true;
-}
-
-void AKeysExtras::LuigiEnd()
-{
-	bLuigiOn = false;
-	LuigiHeld = 6;
-}
-
-void AKeysExtras::LuigiCleanup()
-{
-	auto Clean = [](FKeysHuman& H) { H.bBeer = false; H.Sip = H.SipAmt = 0; H.bHoldHead = false; H.HeadNod = 0; };
-	Clean(Captain);
-	Clean(Crew);
-	for (FKeysPartyGoer& G : Party) Clean(G.H);
-}
-
-void AKeysExtras::UpdateLuigi(double Dt, double T)
-{
-	AKeysBoatPawn* P = PawnRef.Get();
-	if (!P) return;
-	const double Sp = FMath::Abs(PawnSpeed());
-	const bool bLineOut = P->IsLineOut();
-	const bool bWant = P->bRunning && P->TrimV >= .97 && Sp > 8 && !bLineOut && P->FState != EKeysFish::Caught;
-	LuigiCool = FMath::Max(0.0, LuigiCool - Dt);
-	if (bWant && !bLuigiOn && LuigiCool <= 0) LuigiStart();
-	if (bLuigiOn && (P->TrimV < .9 || Sp < 5 || bLineOut || !P->bRunning)) { LuigiEnd(); LuigiCool = 3; }
-	if (!bLuigiOn && LuigiHeld > 0) { LuigiHeld -= Dt; if (LuigiHeld <= 0) LuigiCleanup(); }
-	LuigiK = FMath::Lerp(LuigiK, bLuigiOn ? 1.0 : 0.0, FMath::Min(1.0, Dt * (bLuigiOn ? .8 : .5)));
-
-	// beers in hand: raised for a toast, and every few seconds a pull off the can (head tips back, can tilts up)
-	int32 Idx = 0;
-	auto Drink = [&](FKeysHuman& H, int32 Kind)
-	{
-		const int32 I = Idx++;
-		if (!H.bBeer) return;
-		H.SipT -= Dt;
-		if (H.SipT <= 0 && !(H.Sip > 0)) { H.Sip = 1.4; H.SipT = ERand(2.2, 4.5); }
-		if (H.Sip > 0) H.Sip = FMath::Max(0.0, H.Sip - Dt);
-		const double Sa = H.Sip > 0 ? FMath::Sin(PI * (1 - H.Sip / 1.4)) : 0;
-		H.SipAmt = Sa;
-		const double Up = .06 * FMath::Sin(T * 2.2 + I) * (1 - Sa);
-		const FVector Mouth = H.Mouth();
-		if (Kind == 0) H.Pose(HelmL, FMath::Lerp(EJ(.24, H.HipY + .62 + Up, .18), Mouth, Sa));
-		else if (Kind == 1) H.Pose(EJ(-.18, H.HipY + .2, .25), FMath::Lerp(EJ(.26, H.HipY + .95 + Up, .12), Mouth, Sa));
-		H.bHoldHead = true;
-		H.HeadNod = -.4 * Sa;
-	};
-	Drink(Captain, 0);
-	Drink(Crew, 1);
-	for (FKeysPartyGoer& G : Party) Drink(G.H, 2);
-
-	// the screen goes hazy and swims a little
-	PostFX->BlendWeight = LuigiK > .02 ? float(LuigiK) : 0.f;
-	if (LuigiK > .02)
-		if (UCameraComponent* Cam = P->FindComponentByClass<UCameraComponent>())
-		{
-			// the pawn sets its camera rotation from scratch every tick, and we tick after it, so this never accumulates
-			const double K = LuigiK;
-			Cam->AddLocalRotation(FRotator(FMath::RadiansToDegrees(FMath::Sin(T * .53 + 1) * .012 * K), FMath::RadiansToDegrees(FMath::Sin(T * .43) * .02 * K), FMath::RadiansToDegrees(FMath::Sin(T * .7) * .035 * K)));
-		}
-}
-
-void AKeysExtras::BuildRooster(double Dt, double T)
-{
-	// rooster tail: a solid white sheet of water thrown up off the props in a tight arc, falling back down (JS makeRooster)
-	const double Sp = FMath::Abs(PawnSpeed());
-	const double KK = LuigiK * FMath::Clamp((Sp - 6) / 14, 0.0, 1.0);
-	if (KK <= .02)
-	{
-		if (RoosterMesh->IsVisible()) { RoosterMesh->SetVisibility(false); RoosterMesh->ClearAllMeshSections(); }
-		return;
-	}
-	RoosterScroll += Dt * (1.2 + Sp * .06);
-	const int32 NU = 28, NV = 8;
-	const double Hh = (2.5 + 6 * FMath::Clamp(Sp / 32, 0.0, 1.0)) * KK, Dl = 8 + Sp * .55, WS = 1 + .4 * KK, X0 = Deck.L * .5 + .55;
-	auto YAt = [](double U) { const double A = FMath::Min(1.0, U / .42); return U < .42 ? FMath::Sin(A * PI / 2) * (1 - .05 * (1 - A)) : FMath::Max(0.0, 1 - FMath::Pow((U - .42) / .58, 2.0) * 1.02); };
-	auto WAt = [](double U) { return .12 + 1.1 * FMath::Pow(U, .8); };
-	auto Pt = [&](int32 i, int32 j)
-	{
-		const double U = double(i) / NU, V = double(j) / NV - .5;
-		return FVector(-X0 - Dl * U, V * 2 * WAt(U) * WS, -.15 + Hh * YAt(U));
-	};
-	const FLinearColor Sea(.42f, .6f, .64f), Foam(.93f, .96f, .98f);
-	FKeysMesh M;
-	for (int32 i = 0; i < NU; i++)
-		for (int32 j = 0; j < NV; j++)
-		{
-			const double U = (i + .5) / NU;
-			// no translucency here: fade into the sea color at the props and where it rains back down
-			const double A = FMath::Min(1.0, U / .06) * (U > .7 ? FMath::Max(0.0, 1 - (U - .7) / .3) : 1);
-			const double Streak = EHash(j * 3.1 + 1, FMath::FloorToDouble(U * 12 + RoosterScroll * 2));
-			const FLinearColor C = FMath::Lerp(Sea, Foam * float(.86 + .14 * Streak), float(FMath::Clamp(A * (.55 + .45 * KK), 0.0, 1.0)));
-			M.AddQuad(Pt(i, j), Pt(i + 1, j), Pt(i + 1, j + 1), Pt(i, j + 1), C, FVector(0, 0, 1));
-		}
-	M.Commit(RoosterMesh, 0, AKeysWorld::VertexColorMaterial());
-	RoosterMesh->SetVisibility(true);
 }
 
 // ================================================================ buddy boat

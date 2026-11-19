@@ -252,7 +252,7 @@ void AKeysHUD::DrawTouch(AKeysBoatPawn* P)
 		if (D.Size() > Radius) D = D.GetSafeNormal() * Radius;
 		StickKnob = D / Radius;
 		const bool bUp = StickKnob.Y < -.35f, bDn = StickKnob.Y > .35f, bL = StickKnob.X < -.35f, bR = StickKnob.X > .35f;
-		if (C.Label == TEXT("arrows")) { if (bUp) Want.Add(EKeys::Up); if (bDn) Want.Add(EKeys::Down); if (bL) Want.Add(EKeys::Left); if (bR) Want.Add(EKeys::Right); }
+		if (C.Label == TEXT("arrows")) { if (bUp) Want.Add(EKeys::Up); if (bDn) Want.Add(EKeys::Down); if (bL) Want.Add(EKeys::A); if (bR) Want.Add(EKeys::D); }   // A/D: the stick still steers in trim mode (the arrows work the tabs there)
 		else
 		{
 			if (bUp) Want.Add(EKeys::W);

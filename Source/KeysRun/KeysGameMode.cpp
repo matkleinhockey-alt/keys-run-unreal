@@ -86,7 +86,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	AKeysAudio* Au = SpawnOnce<AKeysAudio>(W);
 	if (Ex && Au)
 	{
-		// the buddy boat, Luigi mode and Caelen make noise through the audio actor
+		// the buddy boat and Caelen make noise through the audio actor
 		TWeakObjectPtr<AKeysAudio> WA(Au);
 		Ex->OnSound.AddLambda([WA](FName Id, FVector Pos, float Power)
 		{

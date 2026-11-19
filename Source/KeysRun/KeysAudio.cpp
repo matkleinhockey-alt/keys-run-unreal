@@ -228,6 +228,20 @@ void AKeysAudio::GearShift()
 	Burst(A);
 }
 
+void AKeysAudio::PropStrike()
+{
+	if (bSoundOn)
+	{
+		// the skeg and blades hitting rock and sand: a heavy thud, a metal clank, a ringing blade and the grind
+		FKeysBurst A; A.Filter = KeysDSP::EFilter::Lowpass; A.Freq = 240; A.FreqTo = 90; A.Dur = .4f; A.Gain = .7f; A.Att = .004f;
+		FKeysBurst B; B.bTone = true; B.Wave = KeysDSP::EWave::Square; B.Tone = 330; B.ToneTo = 170; B.Dur = .22f; B.Gain = .06f; B.Att = .003f;
+		FKeysBurst C; C.bTone = true; C.Tone = 1240; C.Dur = .7f; C.Gain = .035f; C.Att = .003f; C.Delay = .02f;
+		FKeysBurst D; D.Filter = KeysDSP::EFilter::Bandpass; D.Freq = 1100; D.FreqTo = 500; D.Q = 1.4f; D.Dur = .45f; D.Gain = .22f; D.Att = .02f; D.Delay = .05f;
+		Burst(A); Burst(B); Burst(C); Burst(D);
+	}
+	StopEngines();
+}
+
 void AKeysAudio::Gull(double X, double Z)
 {
 	FKeysBurst A; A.bGull = true; A.Dur = .5f;
@@ -290,7 +304,7 @@ void AKeysAudio::UpdateEngine(double Dt, double Now)
 	const double F = FMath::Min(1.0, FMath::Abs(S.Speed) / TopMs), Thr = FMath::Abs(S.Thr);
 
 	// your engines: rpm follows throttle, over-revs when the props come out of the water
-	double Target = EngIdle + (EngMax - EngIdle) * FMath::Clamp(Thr * .82 + F * .25 + (S.TrimV - .4) * .08 * Thr + S.TrimVent * .22, 0.0, 1.1);
+	double Target = EngIdle + (EngMax - EngIdle) * FMath::Clamp(Thr * .82 + F * .25 + (S.TrimV - .4) * .08 * Thr + S.TrimVent * .4, 0.0, 1.2);
 	if (S.Thr < 0) Target = EngIdle + (EngMax - EngIdle) * .25 * Thr / .35;
 	GearRev = FMath::Lerp(GearRev, (S.Gear == 1 && bEngineOn && S.bFwd) ? 1.0 : 0.0, FMath::Min(1.0, Dt * (S.bFwd ? 2.2 : 1.4)));
 	if (GearRev > .01) Target = FMath::Max(Target, EngIdle + (EngMax - EngIdle) * .72 * GearRev);   // revving in neutral
@@ -323,6 +337,14 @@ void AKeysAudio::UpdateEngine(double Dt, double Now)
 		}
 	}
 	PrevThr = Thr;
+	// ventilating props: the motors scream up and a thin whine rides on top
+	if (S.TrimVent > .15 && bEngineOn && bSoundOn && (WhineT -= Dt) <= 0)
+	{
+		WhineT = .2;
+		FKeysBurst W; W.bTone = true; W.Wave = KeysDSP::EWave::Sine; W.Tone = float(1600 + 900 * S.TrimVent + Rand(-40, 40)); W.ToneTo = W.Tone * 1.05f;
+		W.Dur = .32f; W.Att = .08f; W.Gain = float(.008 + .022 * S.TrimVent);
+		Burst(W);
+	}
 	const double Load = FMath::Clamp(Thr - F * .7 + .25, 0.0, 1.0) * (S.bAir ? .2 : 1);
 	PushEngine(Rpm, Load, S.bRunning ? 1 : .6, 1, Now);
 }
@@ -653,16 +675,6 @@ void AKeysAudio::PlayExtra(FName Id, const FVector& GamePos, float Power)
 			FKeysBurst B; B.Filter = KeysDSP::EFilter::Bandpass; B.Freq = 1100; B.Q = .6f;
 			B.Gain = Gains[i]; B.Att = i == 0 ? .4f : .1f; B.Dur = 1.f; B.Delay = Steps[i];
 			Burst(B);
-		}
-	}
-	else if (Id == TEXT("HypeVoice"))
-	{
-		// the Luigi-mode hype man, shouting over the horn and the crowd (web dj.ts hypeCallout)
-		if (bSoundOn)
-		{
-			KeysSpeech::Speak(TEXT("Luigi mode!"), 1.05f, 1.05f, 1.f, .7f);
-			KeysSpeech::Speak(TEXT("Neeeeeck!"), .7f, .85f, 1.f, .71f);
-			KeysSpeech::Speak(TEXT("Fuck!"), 1.15f, .7f, 1.f, .72f);
 		}
 	}
 	else if (Id == TEXT("MusicDuck"))

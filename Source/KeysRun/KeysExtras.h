@@ -7,13 +7,12 @@
 #include "KeysExtras.generated.h"
 
 class UProceduralMeshComponent;
-class UPostProcessComponent;
 class AKeysBoatPawn;
 struct FKeysMesh;
 namespace KeysData { struct FBoatSpec; }
 
 // Sound cues for the audio actor. Id is one of: AirHorn, CrowdRoar, MusicDuck (dip the radio to 35% for 3.6 s),
-// HypeVoice, CaelenSquawk, CaelenVoice, Splash. Pos is in game meters (x, y up, z south; zero when not positional), Power 0..2.
+// CaelenSquawk, CaelenVoice, Splash. Pos is in game meters (x, y up, z south; zero when not positional), Power 0..2.
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnKeysExtrasSound, FName, FVector, float);
 
 // A floating label for the HUD to project (Unreal world position).
@@ -55,7 +54,7 @@ struct FKeysPartyGoer
 	bool bSpot = false;
 };
 
-// The side features from the JS game: the buddy boat (Y), Luigi mode (trim all the way up on plane),
+// The side features from the JS game: the buddy boat (Y),
 // Caelen the seagull, and the people, party, shower (J), dance pole and flags on your own boat.
 UCLASS()
 class KEYSRUN_API AKeysExtras : public AActor
@@ -84,13 +83,6 @@ public:
 
 	// ---- for the HUD
 	void GetTags(TArray<FKeysExtrasTag>& Out) const;
-	bool IsLuigiOn() const { return bLuigiOn; }
-	double GetLuigiK() const { return LuigiK; }
-	double GetHazeAlpha() const { return LuigiK * .85; }
-	// the big "LUIGI MODE" / "NECKKKK FUCK" banner: false when hidden
-	bool GetLuigiBanner(float& OutAlpha, float& OutScale, float& OutRotDeg) const;
-	// the hype-man lines shouted over the air horn (stands in for speech synthesis); empty when quiet
-	FString GetCallout() const;
 	bool IsBuddyOn() const { return bBuddyOn; }
 	// Caelen as a pistol target (entities/life/caelen.ts): his capsule while he is here, and what a shot did
 	bool CaelenHitbox(FVector& OutA, FVector& OutB, double& OutR) const;
@@ -119,13 +111,6 @@ private:
 	void BuildFlag(FKeysMesh& M, double T, double Wind) const;
 	void CommitCrew(double T);
 
-	// Luigi mode
-	void UpdateLuigi(double Dt, double T);
-	void LuigiStart();
-	void LuigiEnd();
-	void LuigiCleanup();
-	void BuildRooster(double Dt, double T);
-
 	// buddy boat
 	void BuddyBuild();
 	void BuddyPlaceNear();
@@ -142,11 +127,9 @@ private:
 	TArray<FKeysDancerFig> PartyFigs;
 	bool PartyModelsReady();
 	void UpdatePartyModels();
-	UPROPERTY() TObjectPtr<UProceduralMeshComponent> RoosterMesh;   // attached to the player's boat
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BuddyMesh;     // 0 hull, 1 rod
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BuddyFish;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GullMesh;
-	UPROPERTY() TObjectPtr<UPostProcessComponent> PostFX;
 	UPROPERTY() TWeakObjectPtr<AKeysBoatPawn> PawnRef;
 
 	bool bAttached = false;
@@ -211,10 +194,6 @@ private:
 	FString CosFlag;
 	FVector FlagTop = FVector::ZeroVector;
 	double FlagW = 1.5, FlagH = .79;
-
-	// ---- Luigi mode
-	bool bLuigiOn = false;
-	double LuigiK = 0, LuigiCool = 0, LuigiHeld = 0, LuigiStartT = -99, RoosterScroll = 0;
 
 	// ---- buddy
 	bool bBuddyOn = false;

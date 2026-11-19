@@ -60,6 +60,7 @@ public:
 	void Snap();                                             // AUD.snap(): the line breaks
 	void Land();                                             // AUD.land(): fish landed chime
 	void GearShift();                                        // the clunk in shiftGear()
+	void PropStrike();                                       // the lower unit hits bottom: a clunk and grind, and the motors stall
 	void Gull(double X, double Z);
 	// the weather around the listener: rain 0..1 (a hiss on the water and the boat) and the wind, m/s
 	void SetWeather(double Rain, double Wind) { WxRain = Rain; WxWind = Wind; }
@@ -144,7 +145,7 @@ private:
 	TArray<FCyl> Cyl;
 	int32 PlayerBoat = -1;
 	bool bEngineOn = true;
-	double Rpm = 700, PrevThr = 0, GearRev = 0;
+	double Rpm = 700, PrevThr = 0, GearRev = 0, WhineT = 0;
 	double LastSplash = -1;
 	FKeysLoopParams Loops;
 

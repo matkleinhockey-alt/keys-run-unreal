@@ -8,6 +8,8 @@
 #include "KeysMesh.h"
 #include "KeysBoatPawn.generated.h"
 
+struct FKeysTrimProfile;
+
 class UProceduralMeshComponent;
 class UStaticMeshComponent;
 class UCameraComponent;
@@ -93,7 +95,14 @@ public:
 	bool bCanKeep = false;
 
 	bool bTrimMode = false;
-	double TrimV = .2;
+	double TrimV = .2;         // trim as 0..1 of the trim range (gauges, sound); the real value is TrimDeg
+	// outboard trim/tilt and trim tabs (KeysTrimPhysics.cpp, numbers per hull in KeysTrim.h / DA_TrimTuning)
+	double TrimDeg = -2;       // degrees: TrimMinDeg..TrimMaxDeg is trim, above that up to TiltMaxDeg is tilt
+	double TabL = 0, TabR = 0; // trim tabs, 0 up .. 1 fully down
+	FString TrimRide;          // "Sweet spot", "Plowing", "Porpoising", "Blowing out!", "Tilted up", "Bow high" or empty
+	double TrimEff = 1, TrimIdeal = 0, TrimLean = 0, HullStress = 0, PropDepthNow = 1;
+	const FKeysTrimProfile& TrimProfile() const;
+	bool IsTilted() const;
 	int32 Gear = 0;   // 0 drive, 1 neutral, 2 reverse
 	FString GearName() const { return Gear == 0 ? TEXT("D") : Gear == 1 ? TEXT("N") : TEXT("R"); }
 	bool bAutoChase = true, bAutoOn = false;
@@ -445,6 +454,12 @@ private:
 	int32 BaitCasts = 0;                            // live shrimp left: quicker bites
 	double PinX = 0, PinZ = 0, PinH = 0;            // where the boat is tied up while you are ashore
 	bool bAir = false;
+	void UpdateTrim(double Dt, double T, double TopMs);
+	// what UpdateTrim worked out this frame, for UpdateBoat / UpdateFuel / Slam
+	double TrimSpeedK = 1, TrimFuelK = 1, TrimHoleK = 1, TrimSteerK = 1, TrimYaw = 0, TrimPitch = 0, TrimRoll = 0, TrimSlamK = 1;
+	double TrimSprayK = 1, TrimSpraySide = 0, TrimCapMs = 1e9, TrimPorpPose = 0, TrimPorpLift = 0;
+	double PorpPh = 0, PorpPrevPh = 0, PorpAmp = 0, BowSteerPh = 0, PropStrikeT = -99, TrimWarnT = -99, TabMsgT = -99, StressMsgT = -99, TrimLogT = 0;
+	bool bTabLeft = false, bTabRight = false;
 	double TrimVent = 0, TrimMsgT = -99, CollideMsgT = -99, SlamT = -99, AcMsgT = -99, BowSlamT = -99, SprayT = 0;
 	bool bTrimUp = false, bTrimDn = false;
 	bool bFwd = false, bBack = false, bLeft = false, bRight = false, bAction = false;

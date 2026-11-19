@@ -42,7 +42,7 @@ struct FKeysHuman
 	double Ph = 0;
 	bool bVisible = true;
 
-	// Luigi mode: a can in the right hand
+	// a can in the right hand
 	bool bBeer = false;
 	double Sip = 0, SipT = -1, SipAmt = 0;
 
