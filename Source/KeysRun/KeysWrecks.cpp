@@ -47,7 +47,11 @@ namespace
 	{
 		const uint32 Seed = KeysWrecks::WorldSeed;
 		const double X = S.X0 + (S.X1 - S.X0) * KeysSea::HashCell(Seed, i, k, SaltX);
-		const double DZ = S.DZ0 + (S.DZ1 - S.DZ0) * KeysSea::HashCell(Seed, i, k, SaltDZ);
+		// the old map's reef slope was a ruled ramp, so a narrow band of it pinned the depth; the real slope is not, so
+		// there the whole fore reef is searched and the depth band alone picks the spot
+		const bool bSlope = RealMap() && S.DZ0 >= 1400 && S.DZ1 < 1650;
+		const double DZ0 = bSlope ? 1300 : S.DZ0, DZ1 = bSlope ? 1700 : S.DZ1;
+		const double DZ = DZ0 + (DZ1 - DZ0) * KeysSea::HashCell(Seed, i, k, SaltDZ);
 		const double Z = LegacyZ(X, DZ);
 		if (LandH(X, Z) > -.3) return false;
 		const double D = DepthAt(X, Z);
