@@ -2,6 +2,9 @@
 #include "KeysOcean.h"
 #include "Async/ParallelFor.h"
 #include "KeysCoastData.h"
+#include "KeysGeoReal.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 namespace KeysGeo
 {
@@ -15,6 +18,53 @@ namespace KeysGeo
 	struct FGolf { const FIsland* I; double LX, LZ, RA, RB; };
 
 	static bool GInit = false;
+	static bool GReal = false;
+
+	double WorldX0 = -4300, WorldZ0 = -3100, WorldSizeX = 8600, WorldSizeZ = 8600;
+	double WBX0 = -4150, WBX1 = 4150, WBZ0 = -2950, WBZ1 = 5350;
+	double BridgeArchX0 = -3178, BridgeArchX1 = -3106;
+	double OldBridgeX0 = -3820, OldBridgeX1 = -2010, OldBridgeGap0 = -3200, OldBridgeGap1 = -3080;
+
+	bool RealMap() { return GReal; }
+	double ChainZ(double X) { return GReal ? KeysGeoReal::ChainZ(X) : 0.000012 * X * X; }
+	double ChainAngle(double X) { return FMath::Atan(GReal ? KeysGeoReal::ChainSlope(X) : 0.000024 * X); }
+
+	// the real drop-off: z of the 45 m line at x (every 50 m, smoothed), found in Init
+	static TArray<double> GDropZ;
+	static double DropZ(double X)
+	{
+		const double F = Clamp((X - WorldX0) / 50, 0, GDropZ.Num() - 1.001);
+		const int32 I = int32(F);
+		return GDropZ[I] + (GDropZ[I + 1] - GDropZ[I]) * (F - I);
+	}
+	// original cross-shore distance <-> the fraction of the way from US-1 out to the drop-off: Hawk Channel's deep
+	// middle, the back reef, the crest, the wall. Past the wall and in the bay it is a plain stretch.
+	static const double LegOld[] = {0, 520, 1300, 1460, 1650}, LegFrac[] = {0, .27, .71, .86, 1};
+	static constexpr double LegSeaK = 1.15, LegBayK = 1.33;
+
+	double LegacyZ(double X, double DZ)
+	{
+		const double C = ChainZ(X);
+		if (!GReal) return C + DZ;
+		const double Span = DropZ(X) - C;
+		if (DZ <= 0) return C + DZ * LegBayK;
+		if (DZ >= LegOld[4]) return C + Span + (DZ - LegOld[4]) * LegSeaK;
+		for (int32 i = 0; i < 4; i++)
+			if (DZ <= LegOld[i + 1]) return C + Span * (LegFrac[i] + (LegFrac[i + 1] - LegFrac[i]) * (DZ - LegOld[i]) / (LegOld[i + 1] - LegOld[i]));
+		return C + Span;
+	}
+
+	double DZAt(double X, double Z)
+	{
+		const double C = ChainZ(X), D = Z - C;
+		if (!GReal) return D;
+		if (D <= 0) return D / LegBayK;
+		const double Span = DropZ(X) - C, F = D / Span;
+		if (F >= 1) return LegOld[4] + (D - Span) / LegSeaK;
+		for (int32 i = 0; i < 4; i++)
+			if (F <= LegFrac[i + 1]) return LegOld[i] + (LegOld[i + 1] - LegOld[i]) * (F - LegFrac[i]) / (LegFrac[i + 1] - LegFrac[i]);
+		return LegOld[4];
+	}
 	static TArray<FIsland> GIslands;
 	static TArray<FMarina> GMarinas;
 	static TArray<FHump> GHumps;
@@ -28,13 +78,14 @@ namespace KeysGeo
 	static constexpr double PCell = 32;
 
 	// old Seven Mile Bridge, with the swing-span gap
-	static constexpr double OldBrX0 = -3820, OldBrX1 = -2010, OldBrDZ = -58, OldGap0 = -3200, OldGap1 = -3080;
+	static constexpr double OldBrDZ = OldBridgeDZ;
+	static double &OldBrX0 = OldBridgeX0, &OldBrX1 = OldBridgeX1, &OldGap0 = OldBridgeGap0, &OldGap1 = OldBridgeGap1;
 	// runway on Vaca Key, in island-local coordinates
 	static constexpr double RunLX0 = 700, RunLX1 = 1420, RunLZ = 80, RunW = 34;
 
 	// fast depth lookup grid (10 m) so the water surface can follow the boat
 	static constexpr double DG = 10;
-	static int32 DGN = 0;
+	static int32 DGNX = 0, DGNZ = 0;
 	static TArray<float> DepthG, InletG;
 	static TArray<FLinearColor> ColorG;
 
@@ -275,6 +326,35 @@ namespace KeysGeo
 		int64 Seed = 11;
 		auto SRand = [&Seed]() { Seed = (Seed * 16807) % 2147483647; return double(Seed) / 2147483647.0; };
 
+		// the real Keys (NOAA / USGS / OpenStreetMap, baked by Tools/geo/bake.py) when asked for; else the original map
+		GReal = FParse::Param(FCommandLine::Get(), TEXT("KRRealMap")) && KeysGeoReal::Load(TEXT("p1"));
+		if (GReal)
+		{
+			WorldX0 = KeysGeoReal::X0(); WorldZ0 = KeysGeoReal::Z0(); WorldSizeX = KeysGeoReal::SizeX(); WorldSizeZ = KeysGeoReal::SizeZ();
+			WBX0 = WorldX0 + 150; WBX1 = WorldX0 + WorldSizeX - 150; WBZ0 = WorldZ0 + 150; WBZ1 = WorldZ0 + WorldSizeZ - 150;
+			// the Seven Mile Bridge's high span stands over Moser Channel (x about -2820), on the bent grid
+			BridgeArchX0 = WBX0 + FMath::RoundToDouble((-2856 - WBX0) / BridgeBentStep) * BridgeBentStep;
+			BridgeArchX1 = BridgeArchX0 + 2 * BridgeBentStep;
+			OldBridgeX0 = OldBridgeX1 = OldBridgeGap0 = OldBridgeGap1 = 0;   // the old bridge comes back with the real one's line
+			// the drop-off: going south from US-1, the first water 45 m deep
+			const int32 ND = FMath::CeilToInt(WorldSizeX / 50) + 1;
+			TArray<double> Raw;
+			Raw.SetNumUninitialized(ND);
+			for (int32 i = 0; i < ND; i++)
+			{
+				const double X = WorldX0 + i * 50;
+				double Z = KeysGeoReal::ChainZ(X) + 1200;
+				while (Z < WorldZ0 + WorldSizeZ - 600 && KeysGeoReal::Height(X, Z) > -45) Z += 10;
+				Raw[i] = Z;
+			}
+			GDropZ.SetNumUninitialized(ND);
+			for (int32 i = 0; i < ND; i++)
+			{
+				double Sum = 0; int32 Cnt = 0;
+				for (int32 k = FMath::Max(0, i - 12); k <= FMath::Min(ND - 1, i + 12); k++) { Sum += Raw[k]; Cnt++; }
+				GDropZ[i] = Sum / Cnt;
+			}
+		}
 		struct FDef { const TCHAR* Name; double X, DZ, A, B; };
 		const FDef Defs[] = {
 			{TEXT("Little Duck Key"), -3860, 10, 230, 120}, {TEXT("Pigeon Key"), -2650, -62, 70, 42}, {TEXT("Knight's Key"), -2080, 0, 170, 110},
@@ -284,7 +364,7 @@ namespace KeysGeo
 			{TEXT("Rachel Key"), -1250, -950, 95, 55}, {TEXT("Bamboo Key"), 350, -1350, 140, 70}, {TEXT("Money Key"), 1450, -850, 80, 50},
 			{TEXT("Bay mangroves"), -2600, -1500, 120, 70}, {TEXT("Florida mainland (Miami)"), 0, -3500, 6600, 760}};
 		GIslands.Reset();
-		for (const FDef& D : Defs)
+		if (!GReal) for (const FDef& D : Defs)
 		{
 			FIsland I;
 			I.Name = D.Name;
@@ -292,7 +372,7 @@ namespace KeysGeo
 			I.Z = ChainZ(D.X) + D.DZ;
 			I.A = D.A;
 			I.B = D.B;
-			I.Th = FMath::Atan2(0.000024 * D.X, 1.0) + (D.A < 150 ? (SRand() - .5) * 1.2 : 0);
+			I.Th = ChainAngle(D.X) + (D.A < 150 ? (SRand() - .5) * 1.2 : 0);
 			I.C = FMath::Cos(I.Th);
 			I.S = FMath::Sin(I.Th);
 			I.bSmall = D.A < 150;
@@ -309,7 +389,7 @@ namespace KeysGeo
 			{TEXT("Fisher Island"), 2200, -1865, 112, 87}, {TEXT("Miami Beach"), 3280, -1690, 900, 150},
 			{TEXT("Venetian Islands"), 2950, -2540, 30, 55}, {TEXT("Venetian Islands"), 2950, -2390, 30, 55}, {TEXT("Venetian Islands"), 2950, -2240, 30, 55}, {TEXT("Venetian Islands"), 2950, -2090, 30, 55},
 			{TEXT("Virginia Key"), 1425, -2040, 275, 225}, {TEXT("Key Biscayne"), 380, -1790, 740, 250}};
-		for (const FMDef& D : MDefs)
+		if (!GReal) for (const FMDef& D : MDefs)
 		{
 			FIsland I;
 			I.Name = D.Name;
@@ -323,7 +403,27 @@ namespace KeysGeo
 		}
 		// the real outlines (web chain.ts: every island but the mainland)
 		GCoasts.Reset();
-		for (int32 i = 0; i < GIslands.Num() && i < KeysCoastData::NumIslands; i++)
+		if (GReal)
+		{
+			// every island in the baked data, biggest first, with its real outline
+			for (const KeysGeoReal::FIsl& R : KeysGeoReal::Islands())
+			{
+				FIsland I;
+				I.Name = R.Name.IsEmpty() ? FString(TEXT("a mangrove key")) : R.Name;
+				I.X = R.X; I.Z = R.Z;
+				I.A = FMath::Max(8.0, (R.MaxX - R.MinX) * .5); I.B = FMath::Max(8.0, (R.MaxZ - R.MinZ) * .5);
+				I.Th = 0; I.C = 1; I.S = 0;
+				I.bSmall = I.A < 150 && I.B < 150;
+				I.bMainland = false; I.bMiami = false;
+				I.bNoHouses = R.Name.IsEmpty() || R.Area < 9000;   // mangrove keys and rocks
+				const KeysCoastData::FRing Ring{R.Ring.GetData(), R.Ring.Num()};
+				const KeysCoastData::FIsl Src{&Ring, 1};
+				I.Coast = GCoasts.Num();
+				GCoasts.Add(BuildCoast(Src));
+				GIslands.Add(I);
+			}
+		}
+		else for (int32 i = 0; i < GIslands.Num() && i < KeysCoastData::NumIslands; i++)
 			if (KeysCoastData::Islands[i].Rings)
 			{
 				GIslands[i].Coast = GCoasts.Num();
@@ -336,12 +436,35 @@ namespace KeysGeo
 		GMiamiCh = {{2312, 2380, -2010, -1420, 13}, {2376, 2480, -2640, -1950, 11}, {2140, 2224, -2640, -1960, 9}, {2224, 2380, -2740, -2640, 8}};
 		GChannels = {{-1700, -480, 200, 430, 3.8}, {-2000, -1560, 150, 800, 4.2}, {-1750, -1350, -420, -180, 3.4}, {-800, -420, -420, -180, 3.4}};
 		GHumps = {{TEXT("Marathon Hump"), -500, 3350, false}, {TEXT("West Hump"), -2700, 3650, false}, {TEXT("Coffins Patch"), 2700, 1050, true}, {TEXT("Delta Shoal"), 1250, 1300, true}};
+		if (GReal)
+		{
+			// the real bottom has its own channels and patch reefs; the golf courses and the runway wait for their real sites
+			GGolf.Reset();
+			GMiamiCh.Reset();
+			GChannels.Reset();
+			for (FHump& H : GHumps) H.DZ = LegacyZ(H.X, H.DZ) - ChainZ(H.X);   // kept as real metres south of the chain
+		}
 
 		// marinas: two in Boot Key Harbor, two on the Gulf side
 		struct FMar { const TCHAR* Name; double SX; int32 Dir; };
-		const FMar Mars[] = {{TEXT("Boot Key Harbor City Marina"), -900, 1}, {TEXT("Burdines Waterfront"), -1400, 1}, {TEXT("Faro Blanco Marina"), -1560, -1}, {TEXT("Keys Fisheries"), -600, -1}};
+		const FMar MarsOld[] = {{TEXT("Boot Key Harbor City Marina"), -900, 1}, {TEXT("Burdines Waterfront"), -1400, 1}, {TEXT("Faro Blanco Marina"), -1560, -1}, {TEXT("Keys Fisheries"), -600, -1}};
+		// on the real map: two on the north shore of the real Boot Key Harbor, two on the Gulf side of Vaca Key
+		const FMar MarsReal[] = {{TEXT("Boot Key Harbor City Marina"), -500, 1}, {TEXT("Burdines Waterfront"), -330, 1}, {TEXT("Faro Blanco Marina"), -625, -1}, {TEXT("Keys Fisheries"), -300, -1}};
 		GMarinas.Reset();
-		for (const FMar& M : Mars)
+		if (GReal) for (const FMar& M : MarsReal)
+		{
+			// walk out from US-1 until past the shore with open water ahead (so a canal doesn't count)
+			double SZ = ChainZ(M.SX);
+			bool bLand = false;
+			for (int32 k = 0; k < 1200; k++)
+			{
+				const double Z = ChainZ(M.SX) + M.Dir * k * .5, D = KeysGeoReal::Shore(M.SX, Z);
+				if (D < 0) bLand = true;
+				else if (bLand && D >= 3.6 && KeysGeoReal::Shore(M.SX, Z + M.Dir * 30) >= 18) { SZ = Z; break; }
+			}
+			GMarinas.Add({M.Name, M.SX, SZ, SZ + M.Dir * 48, M.Dir});
+		}
+		else for (const FMar& M : MarsOld)
 		{
 			// walk out from the island's middle until past the real shore (land first, so a canal doesn't count)
 			const FIsland& I = *GVaca;
@@ -358,7 +481,7 @@ namespace KeysGeo
 
 		// US-1's causeway fill across the keys it runs over (web depth.ts US1_RUNS)
 		GUS1Runs.Reset();
-		for (const TCHAR* Name : {TEXT("Little Duck Key"), TEXT("Knight's Key"), TEXT("Marathon (Vaca Key)"), TEXT("Fat Deer Key"), TEXT("Crawl Key"), TEXT("Grassy Key")})
+		if (!GReal) for (const TCHAR* Name : {TEXT("Little Duck Key"), TEXT("Knight's Key"), TEXT("Marathon (Vaca Key)"), TEXT("Fat Deer Key"), TEXT("Crawl Key"), TEXT("Grassy Key")})
 		{
 			const FIsland* I = FindIsl(Name);
 			if (!I || I->Coast < 0) continue;
@@ -377,6 +500,8 @@ namespace KeysGeo
 			Snake(TEXT("Mangrove river"), -2400, -2620, -2950, -4100, 150, 3, 32),
 			Snake(TEXT("Little River"), 3650, -2640, 3950, -3700, 70, 2, 26)};
 
+		if (GReal) GCreeks.Reset();   // the real creeks are in the coastline itself
+
 		GSea = {{TEXT("Calm"), .8, .5, TEXT("glassy, a long, lazy ground swell."), 1.5},
 				{TEXT("Choppy"), 1.3, 1.2, TEXT("a steady trade wind, swells with afternoon chop on top."), 7},
 				{TEXT("Haulover"), 1.6, 2.2, TEXT("blowing 20 - steep, stacked chop and whitecaps. Trim up and hang on."), 11},
@@ -387,16 +512,17 @@ namespace KeysGeo
 		for (FTrailPt& P : TrailP) P = FTrailPt();
 
 		// depth, inlet and color grids
-		DGN = FMath::CeilToInt(WorldSize / DG) + 1;
-		DepthG.SetNumUninitialized(DGN * DGN);
-		InletG.SetNumUninitialized(DGN * DGN);
-		ColorG.SetNumUninitialized(DGN * DGN);
-		ParallelFor(DGN, [](int32 j)
+		DGNX = FMath::CeilToInt(WorldSizeX / DG) + 1;
+		DGNZ = FMath::CeilToInt(WorldSizeZ / DG) + 1;
+		DepthG.SetNumUninitialized(DGNX * DGNZ);
+		InletG.SetNumUninitialized(DGNX * DGNZ);
+		ColorG.SetNumUninitialized(DGNX * DGNZ);
+		ParallelFor(DGNZ, [](int32 j)
 		{
-			for (int32 i = 0; i < DGN; i++)
+			for (int32 i = 0; i < DGNX; i++)
 			{
 				const double X = WorldX0 + i * DG, Z = WorldZ0 + j * DG, D = DepthAt(X, Z);
-				const int32 K = j * DGN + i;
+				const int32 K = j * DGNX + i;
 				DepthG[K] = float(D);
 				const double DZ = Z - ChainZ(X);
 				InletG[K] = float((D > 3 && FMath::Abs(DZ) < 85) ? (1 - FMath::Abs(DZ) / 85)
@@ -413,7 +539,7 @@ namespace KeysGeo
 			const double Z = ChainZ(X);
 			if (LandH(X, Z) > -.5) continue;
 			if (X > BridgeArchX0 + 1 && X < BridgeArchX1 - 1) continue;   // the arch's clear span over the channel
-			const double Th = FMath::Atan2(0.000024 * X, 1.0), NX = -FMath::Sin(Th), NZ = FMath::Cos(Th);
+			const double Th = ChainAngle(X), NX = -FMath::Sin(Th), NZ = FMath::Cos(Th);
 			if (FMath::Abs(X - BridgeArchX0) < 1 || FMath::Abs(X - BridgeArchX1) < 1)
 			{
 				// the arch piers: one massive block across the whole deck
@@ -423,7 +549,7 @@ namespace KeysGeo
 			AddPillar(X + NX * 4.5, Z + NZ * 4.5, .8, false);
 			AddPillar(X - NX * 4.5, Z - NZ * 4.5, .8, false);
 		}
-		for (double X = OldBrX0; X <= OldBrX1; X += 30)
+		if (OldBrX1 > OldBrX0) for (double X = OldBrX0; X <= OldBrX1; X += 30)
 		{
 			if (X > OldGap0 && X < OldGap1) continue;
 			const double Z = ChainZ(X) + OldBrDZ;
@@ -451,6 +577,13 @@ namespace KeysGeo
 	{
 		double Best = 1e9, BE = 9;
 		const FIsland* BI = nullptr;
+		if (GReal)
+		{
+			// the baked distance-to-shore grid and its nearest island
+			const double D = KeysGeoReal::Shore(X, Z);
+			const FIsland& I = GIslands[FMath::Min(KeysGeoReal::IslandAt(X, Z), GIslands.Num() - 1)];
+			return {D, &I, 1 + D / FMath::Min((I.A + I.B) * .5, ShoreScale)};
+		}
 		for (const FIsland& I : GIslands)
 		{
 			const double D = IslandDist(I, X, Z);
@@ -464,7 +597,7 @@ namespace KeysGeo
 	{
 		for (const FGolf& G : GGolf)
 			if (G.I == I && FMath::Sqrt(FMath::Square((LX - G.LX) / G.RA) + FMath::Square((LZ - G.LZ) / G.RB)) < 1.06) return true;
-		return I == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW;
+		return !GReal && I == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW;
 	}
 
 	double CreekDist(double X, double Z)
@@ -491,7 +624,10 @@ namespace KeysGeo
 	bool InFill(double X, double Z)
 	{
 		if (FMath::Abs(Z - ChainZ(X)) <= 9)
+		{
+			if (GReal && KeysGeoReal::Shore(X, Z) < -4) return true;   // US-1's roadbed wherever it runs over land
 			for (const FVector2D& R : GUS1Runs) if (X >= R.X && X <= R.Y) return true;
+		}
 		if (GMarinas.Num())
 		{
 			const FMarina& M = GMarinas[0];
@@ -505,7 +641,7 @@ namespace KeysGeo
 			IslandLocal(*G.I, X, Z, LX, LZ);
 			if (FMath::Sqrt(FMath::Square((LX - G.LX) / G.RA) + FMath::Square((LZ - G.LZ) / G.RB)) < 1.03) return true;
 		}
-		if (!GVaca) return false;
+		if (!GVaca || GReal) return false;
 		double LX, LZ;
 		IslandLocal(*GVaca, X, Z, LX, LZ);
 		return LX > RunLX0 - 30 && LX < RunLX1 + 30 && LZ > RunLZ - RunW / 2 - 4 && LZ < RunLZ + 95;
@@ -537,9 +673,11 @@ namespace KeysGeo
 		double LX, LZ;
 		IslandLocal(*S.Isl, X, Z, LX, LZ);
 		if (OnCourse(S.Isl, LX, LZ)) H = FMath::Min(H, 1.85);
+		// the real ground: mostly a metre or two, with the odd rise (the old railway grades, the hammocks)
+		if (GReal && E < .9) H += Clamp(KeysGeoReal::Height(X, Z) - 1.65, 0, 2.5) * SS(.9, .7, E);
 		const double CD = CreekDist(X, Z);
 		if (CD < 10) H = FMath::Min(H, Lerp(-1.6, H, SS(-2, 10, CD)));
-		const double MC = MarinaCutDepth(X, Z);
+		const double MC = GReal ? -1e9 : MarinaCutDepth(X, Z);   // on the real map the basins are already water
 		if (MC > -CutFeather) H = FMath::Min(H, Lerp(H, -1.6, Clamp((MC + CutFeather) / CutFeather, 0, 1)));
 		if (bFill) H = FMath::Max(H, 1.6);
 		if (GMarinas.Num())
@@ -552,10 +690,33 @@ namespace KeysGeo
 		return H;
 	}
 
-	double OffshoreF(double X, double Z) { return Clamp((Z - ChainZ(X) - 1650) / 2200, 0, 1); }
+	double OffshoreF(double X, double Z) { return Clamp((DZAt(X, Z) - 1650) / 2200, 0, 1); }
+
+	// the real bottom: NOAA's soundings, easing up to the shoreline, with the marinas dredged
+	static double RealDepthAt(double X, double Z)
+	{
+		const double SD = KeysGeoReal::Shore(X, Z);
+		double D = FMath::Max(.3, -KeysGeoReal::Height(X, Z));
+		if (SD < 25) { const double T = FMath::Max(0.0, SD) / 25; D = FMath::Min(D, .35 + T * (2 - T) * (D - .35)); }
+		const double DZ = Z - ChainZ(X);
+		for (const FHump& H : GHumps)
+			if (!H.bPatch) D = FMath::Min(D, 40 + FMath::Sqrt(FMath::Square(X - H.X) + FMath::Square(DZ - H.DZ)) * .32);
+		if (SD > 2)
+		{
+			for (const FMarina& M : GMarinas)
+			{
+				const double R = (Z - M.SZ) * M.Dir;
+				if (FMath::Abs(X - M.SX) < 34 && R > -2 && R < 78) D = FMath::Max(D, 3.2);
+			}
+			const double MC = MarinaCutDepth(X, Z);
+			if (MC > 0) D = FMath::Max(D, .35 + (CutD - .35) * FMath::Min(1.0, MC / CutFeather) * FMath::Min(1.0, (SD - 2) / 10));
+		}
+		return FMath::Max(.3, D);
+	}
 
 	double DepthAt(double X, double Z)
 	{
+		if (GReal) return RealDepthAt(X, Z);
 		const double DZ = Z - ChainZ(X);
 		double D;
 		if (DZ < 0) D = 1.4 + FMath::Min(-DZ, 2600.0) / 2600 * 3.4;            // Florida Bay
@@ -594,11 +755,11 @@ namespace KeysGeo
 	template <typename T>
 	static T GridAt(const TArray<T>& G, double X, double Z)
 	{
-		const double FX = Clamp((X - WorldX0) / DG, 0, DGN - 1.001), FZ = Clamp((Z - WorldZ0) / DG, 0, DGN - 1.001);
+		const double FX = Clamp((X - WorldX0) / DG, 0, DGNX - 1.001), FZ = Clamp((Z - WorldZ0) / DG, 0, DGNZ - 1.001);
 		const int32 i = int32(FX), j = int32(FZ);
 		const float U = float(FX - i), V = float(FZ - j);
-		const int32 K = j * DGN + i;
-		return (G[K] * (1 - U) + G[K + 1] * U) * (1 - V) + (G[K + DGN] * (1 - U) + G[K + DGN + 1] * U) * V;
+		const int32 K = j * DGNX + i;
+		return (G[K] * (1 - U) + G[K + 1] * U) * (1 - V) + (G[K + DGNX] * (1 - U) + G[K + DGNX + 1] * U) * V;
 	}
 
 	double DepthFast(double X, double Z) { return GridAt(DepthG, X, Z); }
@@ -620,10 +781,10 @@ namespace KeysGeo
 
 	FString ZoneAt(double X, double Z)
 	{
-		const double D = DepthAt(X, Z), DZ = Z - ChainZ(X);
+		const double D = DepthAt(X, Z), DZ = DZAt(X, Z);
 		if (CreekDist(X, Z) < 0) return TEXT("Creek");
 		if (NearBridge(X, Z) && D >= 2 && ShoreInfo(X, Z).D > 6) return TEXT("Bridge");
-		if (D < 2.6) return TEXT("Flats");
+		if (D < (GReal ? 1.5 : 2.6)) return TEXT("Flats");   // the real bay is 2-3 m all over; its flats are the banks
 		if (DZ < 0) return TEXT("Backcountry");
 		if (D >= 45) return TEXT("Offshore");
 		if (DZ > 1250) return TEXT("Reef");
@@ -639,8 +800,9 @@ namespace KeysGeo
 		return F ? *F : Zone;
 	}
 
-	bool InMiami(double X, double Z) { return X > -500 && X < 4200 && Z < -1450; }
-	bool InCity(double X, double Z) { return X > 250 && X < 3900 && Z < -2560 && Z > -3600; }
+	// Miami is on the original map only for now
+	bool InMiami(double X, double Z) { return !GReal && X > -500 && X < 4200 && Z < -1450; }
+	bool InCity(double X, double Z) { return !GReal && X > 250 && X < 3900 && Z < -2560 && Z > -3600; }
 
 	int32 SurfaceKind(double X, double Z)
 	{
@@ -648,7 +810,7 @@ namespace KeysGeo
 		const FShore S = ShoreInfo(X, Z);
 		double LX, LZ;
 		IslandLocal(*S.Isl, X, Z, LX, LZ);
-		if (S.Isl == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW) return 2;
+		if (!GReal && S.Isl == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW) return 2;
 		return OnCourse(S.Isl, LX, LZ) ? 1 : 0;
 	}
 

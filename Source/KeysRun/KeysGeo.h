@@ -8,8 +8,16 @@
 // Unreal space is centimeters with Z up, so a game point (x, y, z) sits at FVector(x*100, z*100, y*100).
 namespace KeysGeo
 {
-	constexpr double WorldX0 = -4300, WorldZ0 = -3100, WorldSize = 8600;
-	constexpr double WBX0 = -4150, WBX1 = 4150, WBZ0 = -2950, WBZ1 = 5350;
+	// The map rectangle (terrain, depth grids, chart) and the bounds boats are kept inside. Either the original hand-made
+	// 8.6 km square around Marathon, or the real Keys baked from NOAA / USGS / OpenStreetMap data (KeysGeoReal.h) when
+	// that map is switched on with -KRRealMap. Set by Init().
+	extern double WorldX0, WorldZ0, WorldSizeX, WorldSizeZ;
+	extern double WBX0, WBX1, WBZ0, WBZ1;
+	bool RealMap();
+	// the square the chart shows: the whole map, centred (the real map is wider than it is tall)
+	inline double ChartSize() { return FMath::Max(WorldSizeX, WorldSizeZ); }
+	inline double ChartX0() { return WorldX0 + (WorldSizeX - ChartSize()) * .5; }
+	inline double ChartZ0() { return WorldZ0 + (WorldSizeZ - ChartSize()) * .5; }
 
 	struct FIsland
 	{
@@ -51,7 +59,16 @@ namespace KeysGeo
 	// Builds islands, creeks, marinas and the fast depth grids. Safe to call more than once.
 	void Init();
 
-	inline double ChainZ(double X) { return 0.000012 * X * X; }
+	// US-1's line down the island chain: its z at x, and the angle it runs at there
+	double ChainZ(double X);
+	double ChainAngle(double X);
+	// Content laid out on the original map as "DZ metres south of the chain" (reef 1300-1460, wall to 1650, Gulf Stream
+	// beyond): the matching distance on the map in use. The real reef line and drop-off lie about twice as far out.
+	// LegacyZ: where a point "DZ south of the chain at X" on the original map belongs on the map in use (the real reef
+	// is measured against the real drop-off at that X). DZAt is the other way: the original-map DZ a point stands for,
+	// so everything written in those terms (reef zones, relief, spawn bands) reads the real map correctly.
+	double LegacyZ(double X, double DZ);
+	double DZAt(double X, double Z);
 	inline FVector ToUE(double X, double Y, double Z) { return FVector(X * 100.0, Z * 100.0, Y * 100.0); }
 
 	const TArray<FIsland>& Islands();
@@ -152,9 +169,11 @@ namespace KeysGeo
 	struct FPillar { double X, Z, R; bool bOld; };
 	// US-1's bents stand every BridgeBentStep m from WBX0; over the boat channel a concrete arch spans from the pier at
 	// BridgeArchX0 to the one at BridgeArchX1 with nothing in between (KeysBridges.cpp builds it to match)
-	constexpr double BridgeBentStep = 36, BridgeArchX0 = -3178, BridgeArchX1 = -3106;
+	constexpr double BridgeBentStep = 36;
+	extern double BridgeArchX0, BridgeArchX1;
 	// the old bridge: piers every 30 m from OldBridgeX0 to OldBridgeX1, at ChainZ + OldBridgeDZ, with the swing span gone
-	constexpr double OldBridgeX0 = -3820, OldBridgeX1 = -2010, OldBridgeDZ = -58, OldBridgeGap0 = -3200, OldBridgeGap1 = -3080;
+	constexpr double OldBridgeDZ = -58;
+	extern double OldBridgeX0, OldBridgeX1, OldBridgeGap0, OldBridgeGap1;
 	const TArray<FPillar>& Pillars();
 	void PillarsNear(double X, double Z, TArray<const FPillar*>& Out);
 }

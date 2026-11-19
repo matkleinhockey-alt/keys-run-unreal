@@ -94,8 +94,8 @@ void AKeysSeafloor::Scan(double CamX, double CamZ)
 {
 	const TArray<FRing>& R = Rings();
 	const double MaxOuter = R.Last().Outer;
-	const int32 MinCX = FMath::FloorToInt32(WorldX0 / ChunkSize) - WorldChunkMargin, MaxCX = FMath::CeilToInt32((WorldX0 + WorldSize) / ChunkSize) + WorldChunkMargin;
-	const int32 MinCZ = FMath::FloorToInt32(WorldZ0 / ChunkSize) - WorldChunkMargin, MaxCZ = FMath::CeilToInt32((WorldZ0 + WorldSize) / ChunkSize) + WorldChunkMargin;
+	const int32 MinCX = FMath::FloorToInt32(WorldX0 / ChunkSize) - WorldChunkMargin, MaxCX = FMath::CeilToInt32((WorldX0 + WorldSizeX) / ChunkSize) + WorldChunkMargin;
+	const int32 MinCZ = FMath::FloorToInt32(WorldZ0 / ChunkSize) - WorldChunkMargin, MaxCZ = FMath::CeilToInt32((WorldZ0 + WorldSizeZ) / ChunkSize) + WorldChunkMargin;
 	const int32 C0X = FMath::Max(MinCX, FMath::FloorToInt32((CamX - MaxOuter) / ChunkSize)), C1X = FMath::Min(MaxCX, FMath::CeilToInt32((CamX + MaxOuter) / ChunkSize));
 	const int32 C0Z = FMath::Max(MinCZ, FMath::FloorToInt32((CamZ - MaxOuter) / ChunkSize)), C1Z = FMath::Min(MaxCZ, FMath::CeilToInt32((CamZ + MaxOuter) / ChunkSize));
 	const int32 Prof = bProfileSub ? 100 : 0;

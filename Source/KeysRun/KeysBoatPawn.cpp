@@ -232,7 +232,7 @@ void AKeysBoatPawn::PlaceAtSpawn()
 {
 	// the nearest deep blue water to Boot Key (40 m and more, off the reef), pointed back toward the Keys
 	X = -1150;
-	Z = ChainZ(-1150) + 305;
+	Z = LegacyZ(-1150, 305);
 	H = PI / 2;
 	{
 		const double HX = X, HZ = Z;
@@ -1541,7 +1541,7 @@ void AKeysBoatPawn::RunDests(TArray<FRunDest>& Out, bool bOnlyFound) const
 	};
 	for (const KeysWrecks::FWreck& W : KeysWrecks::Wrecks()) Out.Add({FString(W.Name), TEXT("wreck"), W.X + 30, W.Z});
 	for (const FMarina& M : Marinas()) Out.Add({M.Name, TEXT("marina"), M.SX, M.SZ + M.Dir * 48});
-	Out.Add({TEXT("Sombrero Reef"), TEXT("the crest"), 60, 1462});
+	if (RealMap()) Out.Add({TEXT("Sombrero Reef"), TEXT("the crest"), -1800, 2790}); else Out.Add({TEXT("Sombrero Reef"), TEXT("the crest"), 60, 1462});
 	for (const FHump& Hm : Humps()) Out.Add({Hm.Name, Hm.bPatch ? TEXT("patch reef") : TEXT("offshore hump"), Hm.X, ChainZ(Hm.X) + Hm.DZ});
 	if (const AKeysLife* L = AKeysLife::Get(this))
 	{

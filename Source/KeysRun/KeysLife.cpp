@@ -1457,7 +1457,7 @@ void AKeysLife::SpawnHotspot(const FString& Zone)
 		Z = LRand(WBZ0 + 100, WBZ1 - 100);
 		if (!FarFromBoat(X, Z)) continue;
 		// cheap rejections before the full zone test
-		const double DZ = Z - ChainZ(X);
+		const double DZ = DZAt(X, Z);
 		if (Zone == TEXT("Offshore") && DZ < 1500) continue;
 		if (Zone == TEXT("Reef") && (DZ < 1150 || DZ > 1800)) continue;
 		if (Zone == TEXT("Hawk Channel") && (DZ < -10 || DZ > 1350)) continue;
@@ -1576,7 +1576,7 @@ void AKeysLife::BuildWeeds()
 	TArray<FVector2D> Spots;
 	for (int32 k = 0; k < 400 && Spots.Num() < 18; k++)
 	{
-		const double X = LRand(-3800, 3800), Z = ChainZ(X) + LRand(1550, 3700);
+		const double X = LRand(-3800, 3800), Z = LegacyZ(X, LRand(1550, 3700));
 		if (DepthAt(X, Z) > 35) Spots.Add(FVector2D(X, Z));
 	}
 	for (const FHump& H : Humps())
@@ -1702,7 +1702,7 @@ void AKeysLife::BuildRigs()
 		White = C(0xe8eaec), Orange = C(0xe4572e), Concrete = C(0xa9a79f), Heli = C(0x2f6e4a), Blue = C(0x2f5d8a), Green = C(0x3f7a4a), Window = C(0x2a3a48);
 	for (int32 Ri = 0; Ri < 4; Ri++)
 	{
-		const double X = Spots[Ri][0], Z = ChainZ(X) + Spots[Ri][1], Dep = DepthAt(X, Z);
+		const double X = Spots[Ri][0], Z = LegacyZ(X, Spots[Ri][1]), Dep = DepthAt(X, Z);
 		if (Dep < 20) continue;
 		const int32 Kind = Kinds[Ri];
 		const double Rot = Ri * .6, Base = -FMath::Min(40.0, Dep);

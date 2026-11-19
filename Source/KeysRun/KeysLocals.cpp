@@ -161,9 +161,9 @@ void AKeysLocals::BuildFleet()
 	struct FDef { const TCHAR* Name; int32 Kind; FKeysRoute R; double Speed; };
 	const TArray<FDef> Defs = {
 		{TEXT("Hot Tuna"), 0, AKeysTraffic::MakeRoute(1250, 1420), 3.5},
-		{TEXT("Dog Pound"), 1, AKeysTraffic::RouteFrom({FVector2D(-2400, ChainZ(-2400) + 700), FVector2D(-1050, ChainZ(-1050) + 920), FVector2D(200, ChainZ(200) + 880), FVector2D(-1400, ChainZ(-1400) + 1020)}), 2.4},
+		{TEXT("Dog Pound"), 1, AKeysTraffic::RouteFrom({FVector2D(-2400, LegacyZ(-2400, 700)), FVector2D(-1050, LegacyZ(-1050, 920)), FVector2D(200, LegacyZ(200, 880)), FVector2D(-1400, LegacyZ(-1400, 1020))}), 2.4},
 		{TEXT("Pin Wheel"), 2, AKeysTraffic::MakeRoute(2050, 2400), 2.2},
-		{TEXT("No Limits"), 3, AKeysTraffic::RouteFrom({FVector2D(900, ChainZ(900) + 560), FVector2D(2300, ChainZ(2300) + 700), FVector2D(3200, ChainZ(3200) + 520), FVector2D(1700, ChainZ(1700) + 460)}), 2.6},
+		{TEXT("No Limits"), 3, AKeysTraffic::RouteFrom({FVector2D(900, LegacyZ(900, 560)), FVector2D(2300, LegacyZ(2300, 700)), FVector2D(3200, LegacyZ(3200, 520)), FVector2D(1700, LegacyZ(1700, 460))}), 2.6},
 		{TEXT("Fat Tuna"), 4, AKeysTraffic::MakeRoute(2650, 3050), 2.0}};
 	UMaterialInterface* VC = AKeysWorld::VertexColorMaterial();
 	const FLinearColor Steel = Hex(0x8d949b), Rust = Hex(0x7a4a2a), Timber = Hex(0x8a6b45), Net = Hex(0x3d4a3a), Buoy = Hex(0xe4572e);
@@ -333,7 +333,7 @@ void AKeysLocals::FleetDots(TArray<FVector2D>& Out) const
 // ================================================================ Larry's POS (larry.ts)
 void AKeysLocals::BuildLarry()
 {
-	const double Loops[5][3] = {{-2400, ChainZ(-2400) - 700, 520}, {-900, ChainZ(-900) - 820, 460}, {700, ChainZ(700) - 760, 540}, {2300, ChainZ(2300) - 640, 480}, {1500, ChainZ(1500) + 700, 430}};
+	const double Loops[5][3] = {{-2400, LegacyZ(-2400, -700), 520}, {-900, LegacyZ(-900, -820), 460}, {700, LegacyZ(700, -760), 540}, {2300, LegacyZ(2300, -640), 480}, {1500, LegacyZ(1500, 700), 430}};
 	for (const auto& Lp : Loops) LarryLoops.Add(DriftLoop(Lp[0], Lp[1], Lp[2]));
 	Larry = NewMesh(TEXT("LarryRaft"));
 	LarryMan = NewMesh(TEXT("Larry"));
@@ -480,7 +480,7 @@ void AKeysLocals::BuildSandbar()
 	for (double X = -3200; X <= 3200; X += 60)
 		for (double DZ = -1200; DZ <= 800; DZ += 40)
 		{
-			const double Z = ChainZ(X) + DZ, D = DepthAt(X, Z);
+			const double Z = LegacyZ(X, DZ), D = DepthAt(X, Z);
 			if (D < CrestMin || D > CrestMax || LandH(X, Z) > .02 || ShoreInfo(X, Z).D < MinShoreD) continue;
 			double Sum = 0, Lo = 1e9, Hi = -1e9;
 			for (int32 a = 0; a < 8; a++)
@@ -674,7 +674,7 @@ void AKeysLocals::BuildParties()
 	for (const FAnc& A : Ancs)
 	{
 		// findAnchorage: march away from the island to the first floatable spot close to the shore
-		const double Z0 = ChainZ(A.X) + A.StartDz;
+		const double Z0 = LegacyZ(A.X, A.StartDz);
 		double SX = 0, SZ = 0;
 		bool bFound = false;
 		for (int32 k = 0; k < 1400 && !bFound; k++)

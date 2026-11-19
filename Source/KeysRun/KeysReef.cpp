@@ -25,7 +25,10 @@ namespace
 	constexpr double LodNearMax = 14, LodMidMax = 26;
 	constexpr int32 SlotsPerAttr = 4096;
 	enum EAttr { PRESENCE = 0, OFFSET_X, OFFSET_Z, ROT_Y, SCALE, COLOR, TILT_X, TILT_Z, SCALE_X, SCALE_Y, SCALE_Z };
-	constexpr double SombX = 250, SombDZ = 1380, SombR = 380, SombGroove = 34;
+	constexpr double SombR = 380, SombGroove = 34;
+	// the Sombrero dive site: on the real map, the real Sombrero Key reef
+	#define SombX (KeysGeo::RealMap() ? -1800.0 : 250.0)
+	#define SombDZ (KeysGeo::RealMap() ? KeysGeo::DZAt(-1800, 2760) : 1380.0)
 	constexpr double MicroPatchP = .07, PatchFull = 60, PatchFade = 110;
 
 	enum ESp { Elkhorn, Staghorn, Brain, Star, SeaFan, SeaPlume, Barrel, Tube, Encrusting, Seagrass, NumSp };
@@ -133,7 +136,7 @@ namespace
 		const double D = DepthFast(X, Z);
 		const double DepthM = Trapezoid(D, Sp[S].D);
 		if (DepthM <= 0) return 0;
-		const double DZ = Z - ChainZ(X);
+		const double DZ = DZAt(X, Z);
 		const EZ Zone = ReefZone(D, DZ);
 		const double Patch = PatchFactor(X, DZ);
 		if (!Sp[S].bReef) return (Zone == EZ::Reef || Patch > .15) ? 0 : DepthM;
@@ -527,7 +530,7 @@ namespace
 		const double D = DepthFast(X, Z);
 		const double DepthM = Trapezoid(D, S.D);
 		if (DepthM <= 0) return 0;
-		const double DZ = Z - ChainZ(X);
+		const double DZ = DZAt(X, Z);
 		const EZ Zone = ReefZone(D, DZ);
 		const double Patch = PatchFactor(X, DZ);
 		switch (S.Kind)

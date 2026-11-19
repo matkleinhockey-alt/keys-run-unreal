@@ -304,7 +304,7 @@ namespace
 
 	FKeysRoute MakeNamedRoute(const FString& N)
 	{
-		auto C = [](double X, double Dz) { return FVector2D(X, ChainZ(X) + Dz); };
+		auto C = [](double X, double Dz) { return FVector2D(X, LegacyZ(X, Dz)); };
 		if (N == TEXT("hawk1")) return AKeysTraffic::MakeRoute(450, 1000);
 		if (N == TEXT("hawk2")) return AKeysTraffic::MakeRoute(620, 1150);
 		if (N == TEXT("hawk3")) return AKeysTraffic::MakeRoute(800, 950);
@@ -342,8 +342,8 @@ namespace
 FKeysRoute AKeysTraffic::MakeRoute(double DzOut, double DzBack)
 {
 	FKeysRoute R;
-	for (double X = 3900; X >= -3900; X -= 200) { const double Z = ChainZ(X) + DzOut; if (DepthAt(X, Z) > 2.5) R.Pts.Add(FVector2D(X, Z)); }
-	for (double X = -3900; X <= 3900; X += 200) { const double Z = ChainZ(X) + DzBack; if (DepthAt(X, Z) > 2.5) R.Pts.Add(FVector2D(X, Z)); }
+	for (double X = 3900; X >= -3900; X -= 200) { const double Z = LegacyZ(X, DzOut); if (DepthAt(X, Z) > 2.5) R.Pts.Add(FVector2D(X, Z)); }
+	for (double X = -3900; X <= 3900; X += 200) { const double Z = LegacyZ(X, DzBack); if (DepthAt(X, Z) > 2.5) R.Pts.Add(FVector2D(X, Z)); }
 	const int32 N = R.Pts.Num();
 	R.Cum.Add(0);
 	for (int32 i = 1; i <= N; i++) R.Cum.Add(R.Cum[i - 1] + FVector2D::Distance(R.Pts[i - 1], R.Pts[i % N]));

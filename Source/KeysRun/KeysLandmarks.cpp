@@ -191,7 +191,8 @@ void AKeysLandmarks::BuildMarinas(FTownBatch& B)
 // ---------------------------------------------------------------- Sombrero Key Light (world/lighthouse.ts) and Faro Blanco's tower (landmarks.ts)
 void AKeysLandmarks::BuildLighthouse(FTownBatch& B, FTownBatch& G)
 {
-	const double LX = -200, LZ = KeysGeo::ChainZ(-200) + 1455, Focal = 43;
+	// on the real map the light stands on the real Sombrero Key reef
+	const double LX = KeysGeo::RealMap() ? -1831 : -200, LZ = KeysGeo::RealMap() ? 2804 : KeysGeo::ChainZ(-200) + 1455, Focal = 43;
 	LightPos = FVector(LX, Focal - 1.6, LZ);
 	const uint32 Iron = 0x6e4232, White = 0xe8e6df, Dark = 0x22262b;
 	const int32 Sides = 8;
@@ -438,9 +439,9 @@ void AKeysLandmarks::BuildBuoys()
 	};
 	int32 N = 1;
 	const double Cuts[4][5] = {{-1700, -480, 200, 430, 3.8}, {-2000, -1560, 150, 800, 4.2}, {-1750, -1350, -420, -180, 3.4}, {-800, -420, -420, -180, 3.4}};
-	for (const auto& C : Cuts) ForRect(C[0], C[1], KeysGeo::ChainZ(C[0]) + C[2], KeysGeo::ChainZ(C[1]) + C[3], N);
+	if (!KeysGeo::RealMap()) for (const auto& C : Cuts) ForRect(C[0], C[1], KeysGeo::ChainZ(C[0]) + C[2], KeysGeo::ChainZ(C[1]) + C[3], N);
 	const double Deep[4][4] = {{2312, 2380, -2010, -1420}, {2376, 2480, -2640, -1950}, {2140, 2224, -2640, -1960}, {2224, 2380, -2740, -2640}};
-	for (const auto& C : Deep) ForRect(C[0], C[1], C[2], C[3], N);
+	if (!KeysGeo::RealMap()) for (const auto& C : Deep) ForRect(C[0], C[1], C[2], C[3], N);
 	// the marina entrances: a pair at the mouth of each basin
 	for (const KeysGeo::FMarina& M : KeysGeo::Marinas())
 		for (double R : {60.0, 110.0})
@@ -453,7 +454,7 @@ void AKeysLandmarks::BuildBuoys()
 	Marks.RemoveAll([](const FMark& K) { return KeysGeo::DepthAt(K.X, K.Z) < 1 || KeysGeo::LandH(K.X, K.Z) > -.5; });
 	// the reef's mooring-ball line along Hawk Channel
 	int32 Bi = 0;
-	for (double X = -3900; X < 3900; X += 260, Bi++) Balls.Add(FVector2D(X + (Hc(Bi, 1) - .5) * 60, KeysGeo::ChainZ(X) + FMath::Lerp(1360.0, 1440.0, Hc(Bi, 2))));
+	for (double X = -3900; X < 3900; X += 260, Bi++) Balls.Add(FVector2D(X + (Hc(Bi, 1) - .5) * 60, KeysGeo::LegacyZ(X, FMath::Lerp(1360.0, 1440.0, Hc(Bi, 2)))));
 
 	// lobster-trap floats: lines of them on the shallow banks either side of the keys, a float every 25-35 m, each
 	// line a different fisherman's (the Keys is thick with them from August to March)
@@ -464,7 +465,7 @@ void AKeysLandmarks::BuildBuoys()
 			const double X0 = R.FRandRange(-3800, 3800);
 			const double Off = R.FRand() < .6 ? R.FRandRange(320, 1250) : -R.FRandRange(380, 1500);
 			const double Dir = R.FRandRange(0, 2 * PI), Step = R.FRandRange(25, 35);
-			double X = X0, Z = KeysGeo::ChainZ(X0) + Off;
+			double X = X0, Z = KeysGeo::LegacyZ(X0, Off);
 			const double Tilt = R.FRandRange(6, 22);
 			for (int32 k = 0; k < 12; k++, X += FMath::Cos(Dir) * Step, Z += FMath::Sin(Dir) * Step)
 			{

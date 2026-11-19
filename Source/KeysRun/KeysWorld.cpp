@@ -224,13 +224,13 @@ void AKeysWorld::BuildTerrain()
 	using namespace KeysGeo;
 	const double Cell = 8;
 	const int32 CH = 64;
-	const int32 NC = FMath::CeilToInt(WorldSize / Cell / CH);
-	const int32 GN = NC * CH + 1;
+	const int32 NCX = FMath::CeilToInt(WorldSizeX / Cell / CH), NCZ = FMath::CeilToInt(WorldSizeZ / Cell / CH);
+	const int32 GN = NCX * CH + 1, GNZ = NCZ * CH + 1;   // GN across (the row length), GNZ rows
 	TArray<float> HG;
 	TArray<uint8> Kind;
-	HG.SetNumUninitialized(GN * GN);
-	Kind.SetNumZeroed(GN * GN);
-	ParallelFor(GN, [&](int32 j)
+	HG.SetNumUninitialized(GN * GNZ);
+	Kind.SetNumZeroed(GN * GNZ);
+	ParallelFor(GNZ, [&](int32 j)
 	{
 		for (int32 i = 0; i < GN; i++)
 		{
@@ -259,8 +259,8 @@ void AKeysWorld::BuildTerrain()
 	};
 
 	int32 Section = 0;
-	for (int32 CY = 0; CY < NC; CY++)
-		for (int32 CX = 0; CX < NC; CX++)
+	for (int32 CY = 0; CY < NCZ; CY++)
+		for (int32 CX = 0; CX < NCX; CX++)
 		{
 			bool bAny = false;
 			for (int32 j = CY * CH; j <= (CY + 1) * CH && !bAny; j++)
@@ -280,7 +280,7 @@ void AKeysWorld::BuildTerrain()
 				{
 					const int32 i = CX * CH + a, j = CY * CH + b;
 					const double X = WorldX0 + i * Cell, Z = WorldZ0 + j * Cell, H = HG[j * GN + i];
-					const int32 i0 = FMath::Max(i - 1, 0), i1 = FMath::Min(i + 1, GN - 1), j0 = FMath::Max(j - 1, 0), j1 = FMath::Min(j + 1, GN - 1);
+					const int32 i0 = FMath::Max(i - 1, 0), i1 = FMath::Min(i + 1, GN - 1), j0 = FMath::Max(j - 1, 0), j1 = FMath::Min(j + 1, GNZ - 1);
 					const double DX = (HG[j * GN + i1] - HG[j * GN + i0]) / ((i1 - i0) * Cell), DZ = (HG[j1 * GN + i] - HG[j0 * GN + i]) / ((j1 - j0) * Cell);
 					// below the waterline the beach dives steeply, so the sea floor mesh (KeysSeafloor) is what you see through the water
 					V.Add(ToUE(X, H < -.25 ? -.25 + (H + .25) * 3 : H, Z));
@@ -330,8 +330,8 @@ void AKeysWorld::BuildScenery()
 	// palms and mangroves (kept out of creeks, off the beach, and out of downtown)
 	int32 PalmCount = 0, HouseCount = 0;
 	const double PS = 16;
-	for (double Z = WorldZ0; Z < WorldZ0 + WorldSize; Z += PS)
-		for (double X = WorldX0; X < WorldX0 + WorldSize; X += PS)
+	for (double Z = WorldZ0; Z < WorldZ0 + WorldSizeZ; Z += PS)
+		for (double X = WorldX0; X < WorldX0 + WorldSizeX; X += PS)
 		{
 			const double JX = X + (Hash2(X, Z) - .5) * PS, JZ = Z + (Hash2(Z, X) - .5) * PS;
 			const double H = LandH(JX, JZ);
@@ -364,8 +364,8 @@ void AKeysWorld::BuildScenery()
 	static const uint32 Pastel[] = {0xf7c6d0, 0xfde2a7, 0xa8e0d8, 0xb9d4f5, 0xf9f3e3, 0xd8c6f0, 0xffffff, 0xc9e8c2};
 	static const uint32 Shutter[] = {0x2bb3a8, 0x1f4f8c, 0xffffff, 0x3f8a5a, 0xe4572e};
 	const double HS = 34;
-	for (double Z = WorldZ0; Z < WorldZ0 + WorldSize; Z += HS)
-		for (double X = WorldX0; X < WorldX0 + WorldSize; X += HS)
+	for (double Z = WorldZ0; Z < WorldZ0 + WorldSizeZ; Z += HS)
+		for (double X = WorldX0; X < WorldX0 + WorldSizeX; X += HS)
 		{
 			const double JX = X + (Hash2(X * .7, Z) - .5) * 10, JZ = Z + (Hash2(Z, X * .7) - .5) * 10;
 			const double H = LandH(JX, JZ);

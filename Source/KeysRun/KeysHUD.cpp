@@ -1,4 +1,5 @@
 #include "KeysHUD.h"
+#include "KeysGeoReal.h"
 #include "KeysEateries.h"
 #include "CanvasItem.h"
 #include "KeysFeed.h"
@@ -49,7 +50,8 @@ namespace
 	int32 HudBand(double D) { return D <= .36 ? -1 : D < 1.8 ? 0 : D < 3.6 ? 1 : D < 6 ? 2 : D < 20 ? 3 : D < 60 ? 4 : 5; }
 	FString HudLatLon(double GX, double GZ)
 	{
-		const double Lat = 24.7130 - (GZ - 0) / 111320 * 2.5, Lon = 81.0900 - (GX - -120) / 101090 * 2.5;   // Vaca Key center is (-120, 0)
+		double Lat = 24.7130 - (GZ - 0) / 111320 * 2.5, Lon = 81.0900 - (GX - -120) / 101090 * 2.5;   // Vaca Key center is (-120, 0)
+		if (KeysGeo::RealMap()) { KeysGeoReal::ToLonLat(GX, GZ, Lon, Lat); Lon = -Lon; }   // the real position
 		auto F = [](double V, bool bThree)
 		{
 			const int32 A = FMath::FloorToInt(V);
@@ -112,10 +114,12 @@ void AKeysHUD::BuildChart()
 	for (int32 j = 0; j < ChartN; j++)
 		for (int32 i = 0; i < ChartN; i++)
 		{
-			const double X = WorldX0 + (i + .5) / ChartN * WorldSize, Z = WorldZ0 + (j + .5) / ChartN * WorldSize;
+			const double X = ChartX0() + (i + .5) / ChartN * ChartSize(), Z = ChartZ0() + (j + .5) / ChartN * ChartSize();
 			const double H = LandH(X, Z);
 			FLinearColor C;
-			if (H > .1) C = Land;
+			// off the edge of the map (the real one is wider than it is tall): plain chart paper
+			if (X < WorldX0 || X > WorldX0 + WorldSizeX || Z < WorldZ0 || Z > WorldZ0 + WorldSizeZ) C = FLinearColor(.80f, .84f, .86f);
+			else if (H > .1) C = Land;
 			else
 			{
 				// chart blues: pale in the shallows, deeper toward the Gulf Stream (stored as display colors)
@@ -134,7 +138,7 @@ void AKeysHUD::BuildChart()
 
 FVector2D AKeysHUD::ChartXY(double GX, double GZ, float X, float Y, float Size) const
 {
-	return FVector2D(X + (GX - WorldX0) / WorldSize * Size, Y + (GZ - WorldZ0) / WorldSize * Size);
+	return FVector2D(X + (GX - ChartX0()) / ChartSize() * Size, Y + (GZ - ChartZ0()) / ChartSize() * Size);
 }
 
 void AKeysHUD::DrawWxBlobs(TFunctionRef<FVector2D(double, double)> Pt, double PxPerM, float X0, float Y0, float X1, float Y1)
@@ -606,7 +610,7 @@ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
 	const float Y = P->bBigMap ? Canvas->SizeY * .5f - Size * .5f : 24 * U;
 	DrawRect(FLinearColor(0, 0, 0, .5f), X - 4 * U, Y - 4 * U, Size + 8 * U, Size + 8 * U);
 	DrawTexture(Chart, X, Y, Size, Size, 0, 0, 1, 1, FLinearColor::White, BLEND_Opaque);
-	DrawWxBlobs([&](double GX, double GZ) { return ChartXY(GX, GZ, X, Y, Size); }, Size / WorldSize, X, Y, X + Size, Y + Size);
+	DrawWxBlobs([&](double GX, double GZ) { return ChartXY(GX, GZ, X, Y, Size); }, Size / ChartSize(), X, Y, X + Size, Y + Size);
 	// marinas
 	for (const FMarina& M : Marinas())
 	{
@@ -1285,7 +1289,7 @@ void AKeysHUD::DrawGps(AKeysBoatPawn* P, float X, float Y, float W, float H)
 	Text(FString::Printf(TEXT("COG %03d"), Hdg) + FString::Chr(0x00B0), X + W * .375f, Y + 2 * U, .62f);
 	Text(FString::Printf(TEXT("%.1f ft"), Dep), X + W - 76 * U, Y + 2 * U, .62f);
 	Text(HudLatLon(Bx, Bz), X + 6 * U, Y + H - 17 * U, .52f);
-	Text(FString::Printf(TEXT("%.2f nm"), Range * 2 * .00054 * 2.5), X + W - 66 * U, Y + H - 17 * U, .52f);
+	Text(FString::Printf(TEXT("%.2f nm"), Range * 2 * .00054 * (KeysGeo::RealMap() ? KeysGeoReal::Scale() : 2.5)), X + W - 66 * U, Y + H - 17 * U, .52f);
 	Text(TEXT("N"), X + 8 * U, Y + 26 * U, .6f, HudHex(0x1f4f8c));
 }
 

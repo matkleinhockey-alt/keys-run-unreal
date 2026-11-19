@@ -48,7 +48,7 @@ namespace
 		const uint32 Seed = KeysWrecks::WorldSeed;
 		const double X = S.X0 + (S.X1 - S.X0) * KeysSea::HashCell(Seed, i, k, SaltX);
 		const double DZ = S.DZ0 + (S.DZ1 - S.DZ0) * KeysSea::HashCell(Seed, i, k, SaltDZ);
-		const double Z = ChainZ(X) + DZ;
+		const double Z = LegacyZ(X, DZ);
 		if (LandH(X, Z) > -.3) return false;
 		const double D = DepthAt(X, Z);
 		if (D < S.D0 || D > S.D1 || D < S.W.Height + Clearance) return false;

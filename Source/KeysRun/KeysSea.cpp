@@ -158,7 +158,7 @@ namespace
 	{
 		const double Phase = FMath::Sin((T / 960) * PI * 2);
 		if (Phase == 0 || !Cuts().Num()) return FVector2D::ZeroVector;
-		const double DZ = Z - ChainZ(X);
+		const double DZ = KeysGeo::DZAt(X, Z);
 		const FVector2D N = KeysSea::ChainNormal(X);
 		double VX = 0, VZ = 0;
 		for (const FCut& C : Cuts())
@@ -185,7 +185,7 @@ namespace KeysSea
 {
 	double ReliefAt(double X, double Z, double D)
 	{
-		const double DZ = Z - ChainZ(X);
+		const double DZ = KeysGeo::DZAt(X, Z);
 		const double Gate = SSmooth(150, 300, DZ) * SSmooth(2.6, 4.2, D);
 		if (Gate <= 0) return 0;
 		const double R = RawRelief(X, Z, DZ) * Gate;
@@ -213,7 +213,7 @@ namespace KeysSea
 
 	FLinearColor SeafloorColorAt(double X, double Z, double D, double Shade, double Rel)
 	{
-		const double DZ = Z - ChainZ(X);
+		const double DZ = KeysGeo::DZAt(X, Z);
 		const double N = FMath::Sin(X * .05) * FMath::Cos(Z * .043) + FMath::Sin(X * .013 + Z * .021);
 		FLinearColor C = L3(Sand, Grass, SClamp(N * .6 + .4 - (D < 1 ? .6 : 0), 0, 1) * (DZ < 0 ? .9 : .55));
 		if (IsReefy(X, DZ, D))
@@ -241,7 +241,7 @@ namespace KeysSea
 
 	FVector2D ChainTangent(double X)
 	{
-		const double Slope = .000024 * X, Inv = 1 / FMath::Sqrt(1 + Slope * Slope);
+		const double Slope = FMath::Tan(KeysGeo::ChainAngle(X)), Inv = 1 / FMath::Sqrt(1 + Slope * Slope);
 		return FVector2D(Inv, Slope * Inv);
 	}
 
@@ -255,7 +255,7 @@ namespace KeysSea
 	{
 		const FVector2D Tn = ChainTangent(X);
 		const double Gulf = 1.15 * OffshoreF(X, Z);
-		const double U = (Z - ChainZ(X) - 300) / 1100;
+		const double U = (KeysGeo::DZAt(X, Z) - 300) / 1100;
 		const double Exposure = SClamp(FMath::Exp(-(U * U)) * (1 - OffshoreF(X, Z)), 0, 1);
 		const double Tide = .42 * Exposure * FMath::Sin((T / 960) * PI * 2);
 		const double S = Gulf + Tide;

@@ -25,7 +25,8 @@ namespace
 {
 	constexpr double ChunkLen = 240;   // meters of bridge per chunk
 	constexpr double NearDist = 300;   // detailed within this of the camera
-	constexpr double ArchC = (BridgeArchX0 + BridgeArchX1) / 2, RampOut = 330, RampIn = 62, ArchRise = 12;
+	constexpr double RampOut = 330, RampIn = 62, ArchRise = 12;
+	#define ArchC ((BridgeArchX0 + BridgeArchX1) / 2)   // the arch moves with the map in use
 
 	double Hb(double A, double B) { const double H = FMath::Sin(A * 127.1 + B * 311.7) * 43758.5453; return H - FMath::FloorToDouble(H); }
 	double SS(double A, double B, double X) { const double T = FMath::Clamp((X - A) / (B - A), 0.0, 1.0); return T * T * (3 - 2 * T); }
@@ -36,7 +37,7 @@ namespace
 		const double Z = ChainZ(X), SD = ShoreInfo(X, Z).D;
 		return (SD < 0 ? 5.6 : 2.6 + (7.2 - 2.6) * SS(0, 70, SD)) + ArchRise * SS(RampOut, RampIn, FMath::Abs(X - ArchC));
 	}
-	double AngAt(double X) { return FMath::Atan(.000024 * X); }
+	double AngAt(double X) { return KeysGeo::ChainAngle(X); }
 
 	const FLinearColor Rust(.42f, .2f, .08f), Algae(.19f, .26f, .14f), Tide(.15f, .14f, .12f), Asphalt(.2f, .205f, .215f);
 

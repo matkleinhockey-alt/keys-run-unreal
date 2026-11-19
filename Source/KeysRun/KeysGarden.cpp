@@ -61,7 +61,7 @@ double AKeysGarden::Ground(double LX, double LY) const
 // a flat, sandy stretch 11-16 m down, off the reef: a freediver can get there and still have the light
 void AKeysGarden::FindSite()
 {
-	const double X0 = -1150, Z0 = KeysGeo::ChainZ(-1150) + 900;
+	const double X0 = -1150, Z0 = KeysGeo::LegacyZ(-1150, 900);
 	CX = X0; CZ = Z0;
 	for (double R = 0; R < 9000; R += 40)
 	{

@@ -9,13 +9,16 @@ Inputs (public data, fetched by Tools/geo/fetch.sh into the raw dir):
   osm_<phase>_extra.json  OpenStreetMap US-1, bridges, place names, mangroves, marinas, reefs
 
 Output <out dir>/<phase>.kgeo (little endian):
-  char[4] 'KGEO', int32 version (1)
+  char[4] 'KGEO', int32 version (2)
   double X0, Z0, Cell; int32 NX, NZ          the grid, game metres; row-major, z rows outer, [iz * NX + ix]
   double Scale, ThetaRad, Lat0, Lon0, AnchorX, AnchorZ
   int32 NChain; double ChainX0, ChainStep    US-1's line: game z at x = ChainX0 + i * ChainStep
   int16 Height[NZ * NX]                      centimetres, + land, - water depth (never 0: land >= 20, water <= -30)
   int16 Shore[NZ * NX]                       decimetres from the shoreline, + at sea, - on land (clamped +-3276 m)
   float Chain[NChain]
+  uint8 Island[NZ * NX]                      index of the nearest island
+  int32 NIslands, then each: int32 name bytes, utf8 name, double X, Z, Area, MinX, MinZ, MaxX, MaxZ,
+                             int32 N, float ring[N] (x0, z0, x1, z1, ... closed outline, game metres)
 and <out dir>/<phase>_places.json: islands (name, centre, area, outline rings), bridges, mangroves, marinas, reefs.
 """
 import sys, json, struct, math, os
@@ -33,6 +36,15 @@ PHASES = {
     'p1': dict(rect=(-8300, 7500, -4200, 6200), box=(-81.38, 24.46, -80.79, 24.91)),
 }
 CELL = 10.0
+# islands everyone knows by name, with a point that is on them (lon, lat); first match wins
+KNOWN = [
+    ('Marathon (Vaca Key)', -81.0730, 24.7180), ('Boot Key', -81.1010, 24.6980), ('Key Colony Beach', -81.0190, 24.7215),
+    ('Fat Deer Key', -81.0120, 24.7330), ('Grassy Key', -80.9550, 24.7600), ('Crawl Key', -80.9800, 24.7480),
+    ("Knight's Key", -81.1245, 24.7075), ('Pigeon Key', -81.1553, 24.7040), ('Duck Key', -80.9130, 24.7740),
+    ('Bahia Honda Key', -81.2700, 24.6600), ('Little Duck Key', -81.2290, 24.6810), ('Missouri Key', -81.2380, 24.6760),
+    ('Ohio Key', -81.2460, 24.6720), ('No Name Key', -81.3250, 24.6980), ('Conch Key', -80.8880, 24.7900),
+    ('Long Point Key', -80.9870, 24.7480), ('Sombrero Key', -81.1110, 24.6270),
+]
 FINE = 2          # the land mask is rasterised FINE x finer than the grid
 
 
@@ -142,21 +154,38 @@ def main():
                 g = [F.to_game(p['lon'], p['lat']) for p in el['geometry']]
                 names.append((t['name'], (sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g))))
     islands = []
+    id_img = Image.new('L', (fnx, fnz), 0)
+    id_draw = ImageDraw.Draw(id_img)
     for p in sorted(polys, key=lambda q: -q.area):
         c = p.representative_point()
         if not (x0 <= c.x <= x1 and z0 <= c.y <= z1):
             continue
         nm = ''
-        for name, (px, pz) in names:
-            if p.contains(Point(px, pz)) or p.distance(Point(px, pz)) < 25:
+        for name, lon, lat in KNOWN:
+            if p.contains(Point(*F.to_game(lon, lat))):
                 nm = name
                 break
+        if not nm:
+            # otherwise the OSM island name whose label sits nearest this outline's middle
+            best = 1e18
+            for name, (px, pz) in names:
+                if p.contains(Point(px, pz)) or p.distance(Point(px, pz)) < 25:
+                    d = (px - p.centroid.x) ** 2 + (pz - p.centroid.y) ** 2
+                    if d < best:
+                        best, nm = d, name
         sp = p.simplify(1.5)
         if sp.is_empty or sp.geom_type != 'Polygon':
             sp = p
         mnx, mnz, mxx, mxz = p.bounds
+        if len(islands) < 254:
+            id_draw.polygon([((x - x0) / fc, (z - z0) / fc) for x, z in p.exterior.coords], fill=len(islands) + 1)
         islands.append(dict(name=nm, x=round(p.centroid.x, 1), z=round(p.centroid.y, 1), area=round(p.area), bounds=[round(v, 1) for v in (mnx, mnz, mxx, mxz)],
                             ring=[round(v, 1) for xy in sp.exterior.coords for v in xy]))
+
+    islands = islands[:254]
+    ids = np.array(id_img)
+    near = ndimage.distance_transform_edt(ids == 0, return_distances=False, return_indices=True)
+    isl_id = (ids[tuple(near)][::FINE, ::FINE] - 1).astype(np.uint8)   # the nearest island's index, everywhere
 
     def ways(pred):
         outl = []
@@ -184,13 +213,21 @@ def main():
 
     os.makedirs(out, exist_ok=True)
     with open(f'{out}/{phase}.kgeo', 'wb') as f:
-        f.write(b'KGEO' + struct.pack('<i', 1))
+        f.write(b'KGEO' + struct.pack('<i', 2))
         f.write(struct.pack('<dddii', x0, z0, CELL, nx, nz))
         f.write(struct.pack('<dddddd', F.SCALE, F.THETA, F.LAT0, F.LON0, F.ANCHOR_X, F.ANCHOR_Z))
         f.write(struct.pack('<idd', len(cz), float(cx[0]), step))
         f.write(np.clip(np.round(height * 100), -32000, 32000).astype('<i2').tobytes())
         f.write(np.clip(np.round(shore * 10), -32760, 32760).astype('<i2').tobytes())
         f.write(cz.astype('<f4').tobytes())
+        f.write(isl_id.tobytes())
+        f.write(struct.pack('<i', len(islands)))
+        for i in islands:
+            nm = i['name'].encode('utf8')
+            f.write(struct.pack('<i', len(nm)) + nm)
+            f.write(struct.pack('<ddd4d', i['x'], i['z'], float(i['area']), *i['bounds']))
+            f.write(struct.pack('<i', len(i['ring'])))
+            f.write(np.array(i['ring'], '<f4').tobytes())
     json.dump(places, open(f'{out}/{phase}_places.json', 'w'), separators=(',', ':'))
 
     wet = ~landg

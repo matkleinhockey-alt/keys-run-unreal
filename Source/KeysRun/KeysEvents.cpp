@@ -180,9 +180,9 @@ void AKeysEvents::BuildCourse()
 	for (const FCourseBuoy& B : MarathonCourse)
 	{
 		double DZ = B.DZ;
-		for (int32 k = 0; k < 60 && LandH(B.X, ChainZ(B.X) + DZ) > -.5; k++) DZ += 15;
+		for (int32 k = 0; k < 60 && LandH(B.X, LegacyZ(B.X, DZ)) > -.5; k++) DZ += 15;
 		if (DZ != B.DZ) UE_LOG(LogTemp, Warning, TEXT("Keys Run: race mark %s moved %.0f m offshore"), B.Name, DZ - B.DZ);
-		Course.Add({B.Name, B.X, ChainZ(B.X) + DZ});
+		Course.Add({B.Name, B.X, LegacyZ(B.X, DZ)});
 	}
 	// the AI's line: a closed Catmull-Rom through the marks, in 4 m steps
 	PathPts.Reset();
