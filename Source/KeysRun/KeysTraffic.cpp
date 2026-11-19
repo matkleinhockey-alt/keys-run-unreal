@@ -314,6 +314,13 @@ namespace
 		if (N == TEXT("reef")) return AKeysTraffic::MakeRoute(1200, 1320);
 		if (N == TEXT("bay")) return AKeysTraffic::MakeRoute(-700, -1150);
 		if (N == TEXT("harbor")) return AKeysTraffic::RouteFrom({C(-1560, 300), C(-1100, 315), C(-680, 305), C(-1100, 295)});
+		if (RealMap())
+		{
+			// Miami is not on the real chart: its local traffic plays in the bay behind Marathon and off Bahia Honda's beach
+			if (N == TEXT("west")) return AKeysTraffic::RouteFrom({FVector2D(550, -520), FVector2D(1000, -560), FVector2D(1000, -820), FVector2D(600, -760)});
+			if (N == TEXT("bayE")) return AKeysTraffic::RouteFrom({FVector2D(2000, -600), FVector2D(2520, -600), FVector2D(2520, -1100), FVector2D(2000, -1100)});
+			if (N == TEXT("beach")) return AKeysTraffic::RouteFrom({FVector2D(-6700, 60), FVector2D(-6300, 10), FVector2D(-5950, -60), FVector2D(-5950, 20), FVector2D(-6300, 90), FVector2D(-6700, 140)});
+		}
 		if (N == TEXT("west")) return AKeysTraffic::RouteFrom({FVector2D(1800, -2660), FVector2D(2110, -2660), FVector2D(2110, -2200), FVector2D(1880, -2300)});
 		if (N == TEXT("bayE")) return AKeysTraffic::RouteFrom({FVector2D(3080, -2660), FVector2D(3600, -2660), FVector2D(3600, -1960), FVector2D(3080, -1960)});
 		if (N == TEXT("bayN")) return AKeysTraffic::RouteFrom({C(-900, -520), C(200, -560), C(900, -520), C(200, -700), C(-900, -680)});

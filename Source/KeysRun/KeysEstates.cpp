@@ -107,7 +107,8 @@ void AKeysEstates::BeginPlay()
 {
 	Super::BeginPlay();
 	SetActorLocation(FVector::ZeroVector);
-	for (const KeysPlat::FRaw& R : KeysPlat::Parcels)
+	// (the plat was surveyed on the old map's islands; the real islands get their own, so there it is Harbor Row only)
+	if (!KeysGeo::RealMap()) for (const KeysPlat::FRaw& R : KeysPlat::Parcels)
 	{
 		FParcel P;
 		P.Id = R.Id; P.Name = R.Name; P.Island = R.Island; P.Side = R.Side; P.Tier = ETier(R.Tier);
@@ -147,6 +148,7 @@ int32 AKeysEstates::PlatParcelAt(double X, double Z)
 	struct FBox2 { double X0, X1, Z0, Z1; };
 	static TArray<FBox2> Boxes;
 	static TArray<TArray<FVector2D>> Polys;
+	if (KeysGeo::RealMap()) return -1;
 	if (!Boxes.Num())
 		for (const KeysPlat::FRaw& R : KeysPlat::Parcels)
 		{

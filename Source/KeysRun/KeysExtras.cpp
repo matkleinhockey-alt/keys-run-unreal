@@ -176,6 +176,7 @@ bool AKeysExtras::OpenWater(double X, double Z, double Draft, double& OutX, doub
 bool AKeysExtras::MiamiDestination(double BoatX, double BoatZ, double Draft, double& OutX, double& OutZ, double& OutH, FString& OutMsg)
 {
 	using namespace KeysGeo;
+	if (RealMap()) { OutMsg = TEXT("Miami is 100 miles up the coast - off this chart. The real Keys map covers the Middle Keys so far."); return false; }
 	const bool bToMiami = !InMiami(BoatX, BoatZ);
 	const double D = Draft > 0 ? Draft : 1;
 	bool bOk = bToMiami
