@@ -586,3 +586,11 @@ void AKeysExtras::UpdateCaelen(double Dt, double T)
 	}
 	if (CBubble > 0) CBubble -= Dt;
 }
+
+void AKeysExtras::AboardPositions(TArray<FVector, TInlineAllocator<16>>& Out) const
+{
+	if (Captain.bVisible) Out.Add(Captain.Pos);
+	if (Crew.bVisible) Out.Add(Crew.Pos);
+	if (bMateOn && Mate.bVisible) Out.Add(Mate.Pos);
+	for (const FKeysPartyGoer& G : Party) if (G.H.bVisible) Out.Add(G.H.Pos);
+}

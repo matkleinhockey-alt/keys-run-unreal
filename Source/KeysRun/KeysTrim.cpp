@@ -20,11 +20,31 @@ namespace
 	FKeysTrimProfile Make(const TCHAR* Id, std::initializer_list<FVector2D> Curve, double Draft)
 	{
 		FKeysTrimProfile P;
+		P.PointsAlong = {.44f, .15f, -.15f, -.44f};
+		P.PointsAcross = {-.42f, 0.f, .42f};
 		P.BoatId = FName(Id);
 		P.IdealCurve = TArray<FVector2D>(Curve);
 		P.PropDepthM = float(Draft);
 		P.HullDraftM = float(Draft * .58);
 		return P;
+	}
+}
+
+namespace
+{
+	// mass and motion per hull: the cats get two rows of points (one per hull), wide-set and well damped in roll
+	void Motion(FKeysTrimProfile& P, float Kg, bool bCat, float Freeboard)
+	{
+		P.MassKg = Kg;
+		P.FreeboardM = Freeboard;
+		if (bCat)
+		{
+			P.PointsAlong = {.44f, .22f, 0.f, -.22f, -.44f};
+			P.PointsAcross = {-.37f, .37f};
+			P.WaterplaneCoef = .5f;
+			P.RollGyradius = .45f;
+			P.RollDamping = .3f;
+		}
 	}
 }
 
@@ -35,48 +55,48 @@ UKeysTrimTuning::UKeysTrimTuning()
 	// the light single-engine bay boat: lively, gets on plane on its own, porpoises easily if you trim it out too far
 	FKeysTrimProfile Robalo = Make(TEXT("robalo"), {{0, -4}, {.3, -2}, {.5, 2}, {.75, 5}, {1, 8}}, .6);
 	Robalo.HoleShotDownGain = .25f; Robalo.PorpoiseStartDeg = 3.f; Robalo.PorpoiseAmpDeg = 4.f; Robalo.PorpoiseHz = 1.6f;
-	Robalo.TabAuthorityDeg = 6.f; Robalo.CrewLeanDeg = 2.4f; Robalo.WindLeanDegPerMs = .3f; Robalo.PropStrikeCost = 450;
-	Boats.Add(Robalo);
+	Robalo.TabAuthorityDeg = 6.f; Robalo.WindLeanDegPerMs = .3f; Robalo.PropStrikeCost = 450;
+	Motion(Robalo, 2300, false, .45f); Robalo.HeaveDamping = .26f; Robalo.PitchDamping = .4f; Robalo.RollDamping = .26f; Boats.Add(Robalo);
 
 	FKeysTrimProfile Grady = Make(TEXT("grady"), {{0, -4}, {.3, -3}, {.5, 1.5}, {.75, 4.5}, {1, 6.5}}, .72);
 	Grady.RoughTrimDownDeg = 6.f;   // a deep-V that wants to be driven in into a head sea
-	Boats.Add(Grady);
+	Motion(Grady, 5400, false, .6f); Boats.Add(Grady);
 
 	// catamarans: two hulls ride level on their own; tabs do less, porpoising is milder, but they blow out when trimmed high
 	FKeysTrimProfile Freeman = Make(TEXT("freeman"), {{0, -3}, {.3, -1}, {.5, 2}, {.75, 4}, {1, 6}}, .82);
 	Freeman.SweetBandDeg = 3.f; Freeman.PorpoiseAmpDeg = 2.f; Freeman.VentStartDeg = 6.f; Freeman.TabAuthorityDeg = 2.5f;
-	Freeman.CrewLeanDeg = .8f; Freeman.WindLeanDegPerMs = .12f; Freeman.HoleShotUpLoss = .35f; Freeman.PropStrikeCost = 1600;
-	Boats.Add(Freeman);
+	Freeman.WindLeanDegPerMs = .12f; Freeman.HoleShotUpLoss = .35f; Freeman.PropStrikeCost = 1600;
+	Motion(Freeman, 9500, true, .75f); Boats.Add(Freeman);
 
 	FKeysTrimProfile Midnight = Make(TEXT("midnight"), {{0, -5}, {.3, -3}, {.5, 1}, {.75, 4}, {1, 6}}, .9);
 	Midnight.HoleShotDownGain = .4f; Midnight.BowRiseDeg = 11.f; Midnight.RoughTrimDownDeg = 6.f; Midnight.PropStrikeCost = 2400;
-	Boats.Add(Midnight);
+	Motion(Midnight, 11000, false, .75f); Midnight.HeaveDamping = .38f; Midnight.PitchDamping = .55f; Boats.Add(Midnight);
 
 	// the go-fast cat: tiny sweet spot high up the range, very loose at the top end
 	FKeysTrimProfile Mti = Make(TEXT("mti"), {{0, -3}, {.3, -1}, {.5, 3}, {.75, 6.5}, {1, 9}}, 1.15);
 	Mti.SweetBandDeg = 1.8f; Mti.PorpoiseStartDeg = 2.5f; Mti.PorpoiseAmpDeg = 2.5f; Mti.PorpoiseHz = 1.8f; Mti.VentStartDeg = 5.5f;
-	Mti.TabAuthorityDeg = 2.5f; Mti.CrewLeanDeg = .7f; Mti.WindLeanDegPerMs = .1f; Mti.SlamPerDegUp = .09f; Mti.PropStrikeCost = 3200;
-	Boats.Add(Mti);
+	Mti.TabAuthorityDeg = 2.5f; Mti.WindLeanDegPerMs = .1f; Mti.SlamPerDegUp = .09f; Mti.PropStrikeCost = 3200;
+	Motion(Mti, 7500, true, .6f); Mti.PlaneLift = .7f; Boats.Add(Mti);
 
 	FKeysTrimProfile Yellowfin = Make(TEXT("yellowfin"), {{0, -4}, {.3, -3}, {.5, 1.5}, {.75, 4.5}, {1, 7}}, .76);
 	Yellowfin.PropStrikeCost = 1200;
-	Boats.Add(Yellowfin);
+	Motion(Yellowfin, 6800, false, .65f); Boats.Add(Yellowfin);
 
 	FKeysTrimProfile Contender = Make(TEXT("contender"), {{0, -4}, {.3, -3}, {.5, 2}, {.75, 5}, {1, 7}}, .68);
 	Contender.RoughTrimDownDeg = 6.f;
-	Boats.Add(Contender);
+	Motion(Contender, 4600, false, .55f); Boats.Add(Contender);
 
 	// the stepped go-fast monohull: wants a lot of trim at the top, punishes you hard for too much
 	FKeysTrimProfile Nortech = Make(TEXT("nortech"), {{0, -4}, {.3, -2}, {.5, 3}, {.75, 7}, {1, 10}}, 1.05);
 	Nortech.SweetBandDeg = 1.8f; Nortech.PorpoiseStartDeg = 2.5f; Nortech.PorpoiseAmpDeg = 4.5f; Nortech.PorpoiseHz = 1.7f;
 	Nortech.VentStartDeg = 5.f; Nortech.BowSteerGain = 1.3f; Nortech.SlamPerDegUp = .09f; Nortech.PropStrikeCost = 2800;
-	Boats.Add(Nortech);
+	Motion(Nortech, 7200, false, .6f); Nortech.PlaneLift = .7f; Boats.Add(Nortech);
 
 	// inboard diesels on shafts: nothing to trim or tilt, the props sit under the hull; tabs only
 	FKeysTrimProfile Viking = Make(TEXT("viking"), {{0, 0}, {1, 0}}, 1.45);
 	Viking.bOutboards = false; Viking.TopSpeedBonus = 0; Viking.FuelBurnSaving = 0; Viking.HullDraftM = 1.2f;
-	Viking.TabAuthorityDeg = 3.f; Viking.WindLeanDegPerMs = .18f; Viking.CrewLeanDeg = .5f; Viking.PropStrikeCost = 6500;
-	Boats.Add(Viking);
+	Viking.TabAuthorityDeg = 3.f; Viking.WindLeanDegPerMs = .18f; Viking.PropStrikeCost = 6500;
+	Motion(Viking, 34000, false, 1.1f); Viking.HeaveDamping = .42f; Viking.PitchDamping = .6f; Viking.RollDamping = .16f; Viking.PlaneLift = .25f; Viking.HumpSink = .15f; Viking.HumpBowDeg = 3.f; Viking.FishBoxAlong = -.3f; Boats.Add(Viking);
 }
 
 const UKeysTrimTuning* UKeysTrimTuning::Get()

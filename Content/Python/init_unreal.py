@@ -1956,12 +1956,122 @@ def _sky(mat):
     mel.connect_material_property(add, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
 
+# ---- the bridges' concrete (KeysLandmarks BuildBridges): real tiling textures, projected from world position on all
+# three axes so a 300 m span never stretches them, a fine detail normal on top, and the mesh's vertex colours for paint
+# and weathering (rust streaks, the tide line, growth). UV1.x 6 (steel rail) shades as metal. Textures come from
+# Tools/tex (Tools/concrete_tex.py): 2K, mipmapped, in the World / WorldNormalMap texture groups.
+TEX_DIR = ROOT + "/Textures"
+CONCRETE_TEX = (("T_KR_Concrete_D", False), ("T_KR_Concrete_N", True), ("T_KR_ConcreteDet_N", True))
+
+
+def _import_concrete_textures():
+    import os
+    proj = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
+    tasks = []
+    for name, _nrm in CONCRETE_TEX:
+        if eal.does_asset_exist(TEX_DIR + "/" + name):
+            continue
+        t = unreal.AssetImportTask()
+        t.set_editor_property("filename", os.path.join(proj, "Tools", "tex", name + ".png"))
+        t.set_editor_property("destination_path", TEX_DIR)
+        t.set_editor_property("destination_name", name)
+        t.set_editor_property("automated", True)
+        t.set_editor_property("replace_existing", True)
+        t.set_editor_property("save", False)
+        tasks.append(t)
+    if tasks:
+        unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)
+    out = {}
+    for name, nrm in CONCRETE_TEX:
+        tex = eal.load_asset(TEX_DIR + "/" + name)
+        tex.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_FROM_TEXTURE_GROUP)
+        tex.set_editor_property("never_stream", False)
+        if nrm:
+            tex.set_editor_property("srgb", False)
+            tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+            tex.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_WORLD_NORMAL_MAP)
+        else:
+            tex.set_editor_property("srgb", True)
+            tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_DEFAULT)
+            tex.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_WORLD)
+        eal.save_loaded_asset(tex)
+        out[name] = tex
+    return out
+
+
+CONCRETE_FN = """
+float3 N = normalize(VN);
+float3 w = pow(abs(N), 4.0); w /= (w.x + w.y + w.z);
+float3 p = WP / 400.0;          // a 4 m tile
+float3 q = WP / 45.0;           // the detail grit, 45 cm
+float kind = floor(K.x + 0.5);
+float3 a = Texture2DSample(TD, TDSampler, p.yz).rgb * w.x + Texture2DSample(TD, TDSampler, p.xz).rgb * w.y + Texture2DSample(TD, TDSampler, p.xy).rgb * w.z;
+float2 tx = Texture2DSample(TN, TNSampler, p.yz).xy * 2.0 - 1.0;
+float2 ty = Texture2DSample(TN, TNSampler, p.xz).xy * 2.0 - 1.0;
+float2 tz = Texture2DSample(TN, TNSampler, p.xy).xy * 2.0 - 1.0;
+float dk = 1.0 - saturate((D / 100.0 - 8.0) / 40.0);   // the grit only up close
+float2 dx = (Texture2DSample(TDet, TDetSampler, q.yz).xy * 2.0 - 1.0) * 0.6 * dk;
+float2 dy = (Texture2DSample(TDet, TDetSampler, q.xz).xy * 2.0 - 1.0) * 0.6 * dk;
+float2 dz = (Texture2DSample(TDet, TDetSampler, q.xy).xy * 2.0 - 1.0) * 0.6 * dk;
+tx += dx; ty += dy; tz += dz;
+float3 nX = float3(N.x, tx.x + N.y, tx.y + N.z);
+float3 nY = float3(ty.x + N.x, N.y, ty.y + N.z);
+float3 nZ = float3(tz.x + N.x, tz.y + N.y, N.z);
+float3 nrm = normalize(nX * w.x + nY * w.y + nZ * w.z);
+float3 col = VC.rgb * (a / 0.36);   // the texture averages 0.62 in sRGB, 0.36 once it is sampled linear
+float rough = 0.86; float metal = 0.0; float spec = 0.4;
+if (kind > 5.5 && kind < 6.5) { col = VC.rgb; metal = 0.75; rough = 0.45; nrm = N; }   // the steel rails (rusting paint is in the colour)
+// the splash zone: everything within a metre of the sea is dark and wet
+float wz = saturate((70.0 - WP.z) / 90.0);
+col *= lerp(1.0, 0.7, wz);
+rough = lerp(rough, 0.32, wz);
+Rough = rough; Metal = metal; Spec = spec; Nrm = nrm;
+return col;
+"""
+
+
+def _concrete(mat):
+    tex = _import_concrete_textures()
+    mat.set_editor_property("tangent_space_normal", False)
+    mat.set_editor_property("two_sided", False)
+    F1 = unreal.CustomMaterialOutputType.CMOT_FLOAT1
+    F3 = unreal.CustomMaterialOutputType.CMOT_FLOAT3
+    vc = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -1400, 0)
+    uv1 = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1400, 120)
+    uv1.set_editor_property("coordinate_index", 1)
+    wp = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1400, 240)
+    vn = mel.create_material_expression(mat, unreal.MaterialExpressionVertexNormalWS, -1400, 360)
+    dp = mel.create_material_expression(mat, unreal.MaterialExpressionPixelDepth, -1400, 480)
+    objs = []
+    for i, (name, _n) in enumerate(CONCRETE_TEX):
+        o = mel.create_material_expression(mat, unreal.MaterialExpressionTextureObject, -1400, 600 + i * 140)
+        o.set_editor_property("texture", tex[name])
+        if _n:
+            o.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL)
+        objs.append(o)
+    s = _custom(mat, -700, 0, CONCRETE_FN, F3, ["VC", "K", "WP", "VN", "D", "TD", "TN", "TDet"], "Concrete")
+    outs = []
+    for name, ty in (("Rough", F1), ("Metal", F1), ("Spec", F1), ("Nrm", F3)):
+        o = unreal.CustomOutput()
+        o.set_editor_property("output_name", name)
+        o.set_editor_property("output_type", ty)
+        outs.append(o)
+    s.set_editor_property("additional_outputs", outs)
+    for src, pin in ((vc, "VC"), (uv1, "K"), (wp, "WP"), (vn, "VN"), (dp, "D"), (objs[0], "TD"), (objs[1], "TN"), (objs[2], "TDet")):
+        _link(src, "", s, pin)
+    mel.connect_material_property(s, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(s, "Rough", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(s, "Metal", unreal.MaterialProperty.MP_METALLIC)
+    mel.connect_material_property(s, "Spec", unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(s, "Nrm", unreal.MaterialProperty.MP_NORMAL)
+
+
 BUILDERS = {
     "M_KR_Sky": _sky, "M_KR_VertexColor": _vertex_color, "M_KR_Water": _water, "M_KR_Ocean": _ocean, "M_KR_Solid": _solid,
     "M_KR_Boid": _boid, "M_KR_Seafloor": _seafloor, "M_KR_Reef": _reef, "M_KR_ReefCard": _reef_card, "M_KR_Underwater": _underwater,
     "M_KR_WaterUnder": _water_under, "M_KR_Bubble": _bubble, "M_KR_Dash": _dash, "M_KR_Glass": _glass,
     "M_KR_GirlSkin": _girl(0), "M_KR_GirlHair": _girl(1), "M_KR_GirlSuit": _girl(2),
-    "M_KR_Cloud": _cloud, "M_KR_Rain": _rain, "M_KR_Fish": _fish,
+    "M_KR_Cloud": _cloud, "M_KR_Rain": _rain, "M_KR_Fish": _fish, "M_KR_Concrete": _concrete,
 }
 
 

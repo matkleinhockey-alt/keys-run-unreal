@@ -455,6 +455,8 @@ private:
 	double PinX = 0, PinZ = 0, PinH = 0;            // where the boat is tied up while you are ashore
 	bool bAir = false;
 	void UpdateTrim(double Dt, double T, double TopMs);
+	void UpdateHullMotion(double Dt, double T, double F, double HullDraft);   // KeysHullMotion.cpp
+	double LoadListDeg = 0, LoadTrimDeg = 0, StuffT = -99, StuffMsgT = -99, HullLogT = 0;   // what the weight aboard does to her; the last stuffed bow
 	// what UpdateTrim worked out this frame, for UpdateBoat / UpdateFuel / Slam
 	double TrimSpeedK = 1, TrimFuelK = 1, TrimHoleK = 1, TrimSteerK = 1, TrimYaw = 0, TrimPitch = 0, TrimRoll = 0, TrimSlamK = 1;
 	double TrimSprayK = 1, TrimSpraySide = 0, TrimCapMs = 1e9, TrimPorpPose = 0, TrimPorpLift = 0;

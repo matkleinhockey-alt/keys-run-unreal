@@ -1100,6 +1100,22 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd.StartsWith(TEXT("reel="))) { bScriptReelAuto = Cmd.Mid(5) == TEXT("auto"); bScriptReel = !bScriptReelAuto && FCString::Atoi(*Cmd.Mid(5)) != 0; }   // reel=1 holds S; reel=auto reels like a player watching the bar
 		else if (Cmd == TEXT("engines")) { if (AKeysAudio* Au = AKeysAudio::Get(this)) Au->ToggleEngines(); }   // the I key
+		else if (Cmd == TEXT("hulllog")) bScriptLog = true;   // KRHull lines ten times a second
+		else if (Cmd == TEXT("wakepass"))
+		{
+			// a 30 ft boat's wake laid 30 m off the starboard beam, as if one had just run past at 24 kn
+			const double Fwx = -FMath::Sin(H), Fwz = -FMath::Cos(H), Rwx = FMath::Cos(H), Rwz = -FMath::Sin(H);
+			for (int32 i = -20; i <= 20; i++) KeysGeo::EmitWake(X + Rwx * 30 + Fwx * i * 2.5, Z + Rwz * 30 + Fwz * i * 2.5, 12, 9, GetWorld()->GetTimeSeconds(), .2);
+		}
+		else if (Cmd.StartsWith(TEXT("heading=")))
+		{
+			// heading=head|follow|beam: point the bow into, with or across the sea (it runs with the wind)
+			const FString W = Cmd.Mid(8);
+			const double Wd = WindDir();
+			const double Dx = W == TEXT("follow") ? FMath::Cos(Wd) : W == TEXT("beam") ? -FMath::Sin(Wd) : -FMath::Cos(Wd);
+			const double Dz = W == TEXT("follow") ? FMath::Sin(Wd) : W == TEXT("beam") ? FMath::Cos(Wd) : -FMath::Sin(Wd);
+			H = FMath::Atan2(-Dx, -Dz);   // forward is (-sin H, -cos H)
+		}
 		else if (Cmd.StartsWith(TEXT("trim="))) { TrimDeg = FCString::Atod(*Cmd.Mid(5)); bScriptLog = true; }   // trim=<degrees>, logs KRTrim twice a second
 		else if (Cmd.StartsWith(TEXT("tabs=")))
 		{
@@ -2248,14 +2264,12 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 
 	// ride on the waves
 	const double Amp = AmpAt(X, Z), Rx = FMath::Cos(H), Rz = -FMath::Sin(H);
-	// the planing hump (bow up as she climbs onto plane), the running attitude, and everything trim adds (UpdateTrim)
-	const double Plane = .085 * FMath::Sin(FMath::Min(F * 2.6, 1.0) * PI) + .035 * F + TrimPitch + TrimVent * .03 * FMath::Sin(T * 9);
 	// rollers push the hull: running down the back of a swell speeds you up, climbing a face slows you, and a stopped boat surges with the swell
 	const FVector2D Sl = WaveSlope(X, Z, T, Amp);
 	const double Along = Sl.X * Fx + Sl.Y * Fz, BeamSl = Sl.X * Rx + Sl.Y * Rz;
 	if (!bAir)
 	{
-		Speed -= Along * 9.8 * .5 * Dt;
+		Speed -= Along * 9.8 * TrimProfile().SurfPush * Dt;   // surfing down the back of a swell, slowed climbing its face
 		DVX -= Sl.X * 9.8 * .22 * Dt;
 		DVZ -= Sl.Y * 9.8 * .22 * Dt;
 		if (F < .25) H += BeamSl * .35 * Dt * (1 - F * 4);   // a slow boat gets nudged beam-to by the swell
@@ -2265,73 +2279,8 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	X += DVX * Dt;
 	Z += DVZ * Dt;
 
-	// buoyancy: points under the hull (bow to stern, along the keel and both chines - or down each of a catamaran's two
-	// hulls) each push up by how deep they sit in the water, sampling the same WaveH the water mesh is drawn from.
-	// Their sum lifts the boat (heave), their front/back imbalance pitches it, and their side-to-side imbalance rolls it.
-	const double Dk = (.45 + S.Len * .035) * (S.bCat ? .85 : 1);
-	const double Ride = Dk * (1 - .55 * FMath::Min(1.0, F * 1.6) * (.8 + .4 * TrimV));
-	static const double NXMono[3] = {-.42, 0, .42}, NXCat[2] = {-.37, .37};
-	const TArrayView<const double> NXs = S.bCat ? TArrayView<const double>(NXCat, 2) : TArrayView<const double>(NXMono, 3);
-	static const double NZs[5] = {-.46, -.22, .02, .26, .46};
-	const double NPts = NXs.Num() * 5;
-	const double K = 9.8 / (NPts * Dk), Ip = S.Len * S.Len / 12 * 1.15, Ir = S.Beam * S.Beam / 12 * (S.bCat ? 2.4 : 1.7);
-	double Sz2 = 0, Sx2 = 0;
-	for (double A : NZs) Sz2 += NXs.Num() * FMath::Square(A * S.Len);
-	for (double A : NXs) Sx2 += 5 * FMath::Square(A * S.Beam);
-	// a catamaran's two wide-set hulls damp roll harder: she rides chop flatter than a monohull
-	const double WH = FMath::Sqrt(9.8 / Dk), WP = FMath::Sqrt(K * Sz2 / Ip), WR = FMath::Sqrt(K * Sx2 / Ir), Zeta = .3, ZetaR = S.bCat ? .5 : .3;
-	int32 Wet = 0;
-	double BowSub = 0, BowRise = 0;
-	const int32 Sub = 3;
-	const double HDt = Dt / Sub;
-	for (int32 It = 0; It < Sub; It++)
-	{
-		double Fy = 0, Tp = 0, Tr = 0;
-		Wet = 0;
-		const double Spn = FMath::Sin(Pitch), Srn = FMath::Sin(Roll), Tt = T - Dt + HDt * (It + 1);
-		for (double Ax : NXs)
-			for (double Az : NZs)
-			{
-				const double Px = Ax * S.Beam, Pz = Az * S.Len;
-				const double Wx = X + Fx * (-Pz) + Rx * Px, Wz = Z + Fz * (-Pz) + Rz * Px;
-				const double Yb = Y + (-Pz) * Spn + Px * Srn - Ride;
-				const double Sea = WaveH(Wx, Wz, Tt, Amp);
-				const double Sbm = Clamp(Sea - Yb, 0, Dk * 2.4);
-				if (Sbm > 0) Wet++;
-				if (Az < -.4 && It == Sub - 1)
-				{
-					// the bow points: how hard the next wave face is coming up at them (for slamming in a head sea)
-					BowSub = FMath::Max(BowSub, Sbm);
-					const double Rise = (Sea - WaveH(Wx, Wz, Tt - .05, Amp)) / .05 - (VY + VP * (-Pz) * FMath::Cos(Pitch));
-					BowRise = FMath::Max(BowRise, Rise);
-				}
-				const double Fi = K * Sbm;
-				Fy += Fi;
-				Tp += Fi * (-Pz);
-				Tr += Fi * Px;
-			}
-		const double InW = Wet > 0 ? 1 : .15;
-		VY += (Fy - 9.8 - 2 * Zeta * WH * VY * InW) * HDt;
-		Y += VY * HDt;
-		VP += (Tp / Ip + Plane * WP * WP * (Wet ? 1 : 0) - (Wet ? 0 : .5) - 2 * Zeta * WP * VP * InW) * HDt;
-		Pitch += VP * HDt;
-		VR += (Tr / Ir + (Steer * F * (S.bCat ? .05 : .16) + TrimRoll) * WR * WR * (Wet ? 1 : 0) - 2 * ZetaR * WR * VR * InW) * HDt;
-		Roll += VR * HDt;
-	}
-	Pitch = Clamp(Pitch, -.6, .75);
-	Roll = Clamp(Roll, -.7, .7);
-	const bool bWasAir = bAir;
-	bAir = Wet == 0;
-	if (bWasAir && !bAir && VY < -2.2) Slam(VY);
-	// running fast into a steep face: the bow buries and slams without ever leaving the water (stuffing it into chop)
-	else if (!bAir && F > .35 && BowSub > Dk * .9 && BowRise > 2.0 / FMath::Sqrt(TrimSlamK) && T - BowSlamT > .45)
-	{
-		BowSlamT = T;
-		Slam(-(BowRise - 1.2) * (.8 + .6 * F) * (S.bCat ? .75 : 1));
-	}
-	if (D < HullDraft && Y < -.15) { Y = -.15; VY = FMath::Max(0.0, VY); }
-	RideNow = Ride;
-	DkNow = Dk;
+	// heave, pitch and roll on the waves, the planing hump and lift, slams, stuffing, wakes and the weight aboard
+	UpdateHullMotion(Dt, T, F, HullDraft);
 
 	WakeT += Dt;
 	// rings every 0.08 s instead of 0.35 s: the same wake height, but a smooth V instead of scalloped rings
@@ -2374,7 +2323,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	const FVector Fp = Fw * FMath::Cos(PosePitch) + Up * FMath::Sin(PosePitch);
 	const FVector Rr = Rt * FMath::Cos(Roll) + Up * FMath::Sin(Roll);
 	const FRotator Rot = FRotationMatrix::MakeFromXY(Fp, Rr).Rotator();
-	SetActorLocationAndRotation(ToUE(X, Y + (Dk - Ride) * 1.6 + TrimPorpLift, Z), Rot);
+	SetActorLocationAndRotation(ToUE(X, Y + (DkNow - RideNow) * 1.6 + TrimPorpLift, Z), Rot);
 }
 
 // ================================================================ camera

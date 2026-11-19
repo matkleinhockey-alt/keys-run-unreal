@@ -36,7 +36,12 @@ private:
 	void BuildPiers(struct FTownBatch& B);
 	void BuildEstates(struct FTownBatch& B);
 	void BuildBuoys();
-	void BuildBridges(struct FTownBatch& B);
+	void BuildBridges(struct FTownBatch& Road);   // KeysBridges.cpp
+	// the bridges in chunks, each a detailed and a plain version, swapped by distance (UpdateBridgeLod)
+	struct FBridgeChunk { double X0 = 0, X1 = 0, ZOff = 0; UProceduralMeshComponent* Near = nullptr; UProceduralMeshComponent* Far = nullptr; bool bNear = false; };
+	TArray<FBridgeChunk> BridgeChunks;
+	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> BridgeComps;
+	void UpdateBridgeLod();
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Static;

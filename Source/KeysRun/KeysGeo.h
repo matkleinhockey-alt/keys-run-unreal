@@ -150,6 +150,11 @@ namespace KeysGeo
 
 	// bridge pilings, for boat collisions
 	struct FPillar { double X, Z, R; bool bOld; };
+	// US-1's bents stand every BridgeBentStep m from WBX0; over the boat channel a concrete arch spans from the pier at
+	// BridgeArchX0 to the one at BridgeArchX1 with nothing in between (KeysBridges.cpp builds it to match)
+	constexpr double BridgeBentStep = 36, BridgeArchX0 = -3178, BridgeArchX1 = -3106;
+	// the old bridge: piers every 30 m from OldBridgeX0 to OldBridgeX1, at ChainZ + OldBridgeDZ, with the swing span gone
+	constexpr double OldBridgeX0 = -3820, OldBridgeX1 = -2010, OldBridgeDZ = -58, OldBridgeGap0 = -3200, OldBridgeGap1 = -3080;
 	const TArray<FPillar>& Pillars();
 	void PillarsNear(double X, double Z, TArray<const FPillar*>& Out);
 }

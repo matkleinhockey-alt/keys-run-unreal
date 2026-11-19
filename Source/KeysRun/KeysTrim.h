@@ -70,7 +70,38 @@ struct FKeysTrimProfile
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tabs") float TabAuthorityDeg = 5.f;     // roll one tab fully down gives at speed
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tabs") float TabRatePerSec = .5f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tabs") float WindLeanDegPerMs = .22f;   // heel from a beam wind
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tabs") float CrewLeanDeg = 1.6f;        // the angler at the starboard rail
+
+	// ---- how the hull moves on the water (KeysHullMotion.cpp). The draft comes from the mass over the waterplane, so a
+	// light skiff floats high and bounces quickly while a heavy sportfisher sits deep and moves slowly and smoothly.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float MassKg = 5000.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float WaterplaneCoef = .72f;     // waterplane area / (length x beam)
+	// the buoyancy points: stations along the hull (fraction of length, + = bow) times positions across it (fraction of
+	// beam); 4 x 3 = 12 for a monohull, 5 x 2 = 10 for a catamaran's two hulls
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") TArray<float> PointsAlong;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") TArray<float> PointsAcross;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float PitchGyradius = .31f;      // x length
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float RollGyradius = .38f;       // x beam
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float HeaveDamping = .32f;       // fraction of critical
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float PitchDamping = .5f;        // heavier than roll
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float RollDamping = .22f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float FreeboardM = .5f;          // how far above the waterline a point can be pushed under
+	// planing: before it, a hump (the stern squats, the bow climbs); on plane the hull lifts out by this much of its draft
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float PlaneLift = .55f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float HumpSpeedFrac = .28f;      // the hump's peak, fraction of top speed
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float HumpSink = .3f;            // extra draft at the hump
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float HumpBowDeg = 5.f;
+	// seas
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float SlamRiseMs = 2.f;          // a wave face coming up at the bow this fast slams it
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float SurfPush = .5f;            // following seas: how hard the back of a wave pushes you
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float StuffDepth = 1.6f;         // x draft: the bow buried this deep in the wave ahead is stuffed
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float StuffDrag = 1.2f;          // speed lost per second while stuffed
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float BroachYaw = .35f;          // following seas slewing the stern round
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float WakeResponse = 1.f;        // other boats' wakes
+	// weight aboard: people where they stand, the catch in the fish box
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float PersonKg = 80.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float LoadEffect = 2.5f;           // how strongly weight off-centre lists and trims her (1 = the bare point model, which is stiff)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float FishBoxAlong = .12f;       // fraction of length from midships, + = forward
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion") float FishBoxAcross = 0.f;       // m, + = starboard
 
 	double IdealAt(double Fr) const;
 };

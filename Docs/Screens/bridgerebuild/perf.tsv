@@ -1,0 +1,14 @@
+marina	Medium	1920x1080	14.0 fps	frame 71.36 ms	game 27.30	draw 10.60	gpu 69.09	worst 175.9 ms	71 frames
+marina	High	1920x1080	7.8 fps	frame 127.95 ms	game 32.22	draw 13.57	gpu 123.89	worst 243.1 ms	40 frames
+reef_underwater	Medium	1920x1080	17.0 fps	frame 58.76 ms	game 27.19	draw 13.48	gpu 56.95	worst 191.3 ms	88 frames
+reef_underwater	High	1920x1080	10.2 fps	frame 98.42 ms	game 33.26	draw 20.72	gpu 96.68	worst 194.7 ms	52 frames
+bait_ball	Medium	1920x1080	19.4 fps	frame 51.60 ms	game 27.80	draw 14.09	gpu 49.05	worst 145.1 ms	100 frames
+bait_ball	High	1920x1080	11.5 fps	frame 87.14 ms	game 31.90	draw 15.91	gpu 85.88	worst 210.7 ms	59 frames
+offshore_trolling	Medium	1920x1080	15.7 fps	frame 63.71 ms	game 12.83	draw 9.85	gpu 61.98	worst 162.9 ms	80 frames
+offshore_trolling	High	1920x1080	9.0 fps	frame 111.40 ms	game 20.79	draw 13.81	gpu 109.19	worst 248.4 ms	46 frames
+oil_rig	Medium	1920x1080	21.2 fps	frame 47.26 ms	game 14.11	draw 13.37	gpu 45.58	worst 53.2 ms	107 frames
+oil_rig	High	1920x1080	11.0 fps	frame 91.32 ms	game 16.89	draw 15.96	gpu 89.83	worst 100.5 ms	55 frames
+rain_at_sea	Medium	1920x1080	15.8 fps	frame 63.19 ms	game 13.76	draw 11.73	gpu 61.67	worst 166.6 ms	80 frames
+rain_at_sea	High	1920x1080	8.8 fps	frame 113.47 ms	game 18.52	draw 16.90	gpu 109.31	worst 279.9 ms	45 frames
+bridge	Medium	1920x1080	16.3 fps	frame 61.35 ms	game 16.24	draw 10.37	gpu 1151.66	worst 167.9 ms	82 frames
+bridge	High	1920x1080	8.9 fps	frame 112.68 ms	game 21.29	draw 12.93	gpu 111.57	worst 241.9 ms	45 frames

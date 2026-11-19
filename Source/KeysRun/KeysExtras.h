@@ -84,6 +84,8 @@ public:
 	// ---- for the HUD
 	void GetTags(TArray<FKeysExtrasTag>& Out) const;
 	bool IsBuddyOn() const { return bBuddyOn; }
+	// where the people aboard your boat are standing (boat-local metres: X bow, Y starboard), for the weight they put on her
+	void AboardPositions(TArray<FVector, TInlineAllocator<16>>& Out) const;
 	// Caelen as a pistol target (entities/life/caelen.ts): his capsule while he is here, and what a shot did
 	bool CaelenHitbox(FVector& OutA, FVector& OutB, double& OutR) const;
 	void CaelenShot(bool bHit);

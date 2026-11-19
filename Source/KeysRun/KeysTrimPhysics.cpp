@@ -135,11 +135,12 @@ void AKeysBoatPawn::UpdateTrim(double Dt, double T, double TopMs)
 	// ---- trim tabs against the lean from a beam wind and the crew on one side
 	const double Ws = WindSpeed();
 	const double WindBeam = (FMath::Cos(Wd) * Rx + FMath::Sin(Wd) * Rz) * Ws;   // + blows toward starboard
-	const double CrewSide = IsLineOut() || FState == EKeysFish::Caught ? 1 : .25;    // the angler at the starboard rail
-	const double LeanDeg = -WindBeam * P.WindLeanDegPerMs - P.CrewLeanDeg * CrewSide;    // + = starboard side up
+	const double WindDeg = -WindBeam * P.WindLeanDegPerMs;   // + = starboard side up
 	const double TabDeg = -(TabL - TabR) * P.TabAuthorityDeg * FMath::SmoothStep(.15, .5, Fr);   // the port tab lifts the port side
-	TrimLean = LeanDeg + TabDeg;
-	TrimRoll = FMath::DegreesToRadians(TrimLean) * (.4 + .6 * FMath::Min(1.0, Fr * 2));
+	// the wind and the tabs drive the roll here; the weight aboard (crew, the fish box) lists her in UpdateHullMotion,
+	// and LoadListDeg is how far that is, so the lean you see and correct is all three
+	TrimRoll = FMath::DegreesToRadians(WindDeg + TabDeg) * (.4 + .6 * FMath::Min(1.0, Fr * 2));
+	TrimLean = WindDeg + TabDeg + LoadListDeg;
 	PitchT -= FMath::DegreesToRadians(.6) * (TabL + TabR) * PlaneK;   // tabs down push the bow down a touch
 	TrimSpeedK -= .015 * (TabL + TabR) * PlaneK;
 	TrimSpraySide = FMath::Clamp(-TrimLean / 4, -1.0, 1.0) * FMath::SmoothStep(.3, .6, Fr);   // the low side's chine throws the spray

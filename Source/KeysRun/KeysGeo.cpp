@@ -408,11 +408,18 @@ namespace KeysGeo
 		// bridge pilings: US-1 over open water, and the old Seven Mile Bridge with its swing-span gap
 		GPillars.Reset();
 		GPGrid.Reset();
-		for (double X = WBX0; X <= WBX1; X += 36)
+		for (double X = WBX0; X <= WBX1; X += BridgeBentStep)
 		{
 			const double Z = ChainZ(X);
 			if (LandH(X, Z) > -.5) continue;
+			if (X > BridgeArchX0 + 1 && X < BridgeArchX1 - 1) continue;   // the arch's clear span over the channel
 			const double Th = FMath::Atan2(0.000024 * X, 1.0), NX = -FMath::Sin(Th), NZ = FMath::Cos(Th);
+			if (FMath::Abs(X - BridgeArchX0) < 1 || FMath::Abs(X - BridgeArchX1) < 1)
+			{
+				// the arch piers: one massive block across the whole deck
+				for (const double Off : {-4.4, 0.0, 4.4}) AddPillar(X + NX * Off, Z + NZ * Off, 2.6, false);
+				continue;
+			}
 			AddPillar(X + NX * 4.5, Z + NZ * 4.5, .8, false);
 			AddPillar(X - NX * 4.5, Z - NZ * 4.5, .8, false);
 		}
