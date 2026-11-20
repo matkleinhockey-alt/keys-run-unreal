@@ -350,6 +350,7 @@ void AKeysBoatPawn::GetMenuItems(TArray<FMenuItem>& Out) const
 		Add(TEXT("diveview"), TEXT("Dive view"), bDiveChase ? TEXT("Chase") : TEXT("Dive mask"), true);
 		Add(TEXT("haze"), TEXT("Underwater haze"), UnderwaterHaze < .8 ? TEXT("Clear") : UnderwaterHaze > 1.2 ? TEXT("Murky") : TEXT("Normal"), true);
 		Add(TEXT("gfx"), TEXT("Graphics quality"), KeysGfx::QualityLabel(), true);
+		Add(TEXT("map"), TEXT("Map"), FString(RealMapWanted() ? TEXT("Real Florida Keys - Middle Keys") : TEXT("Classic")) + (RealMapWanted() != RealMap() ? TEXT("  (quit and reopen to switch)") : TEXT("")), true);
 		Add(TEXT("res"), TEXT("Resolution scale"), KeysGfx::ResScaleLabel(), true);
 		Add(TEXT("display"), TEXT("Display"), KeysGfx::IsFullscreen() ? TEXT("Full screen") : TEXT("Window"), true);
 		Add(TEXT("back"), TEXT("Back"));
@@ -389,6 +390,11 @@ void AKeysBoatPawn::MenuActivate(FName Id, int32 Dir)
 		SaveEconomy();
 	}
 	else if (Id == TEXT("fuel")) { bUnlimitedFuel = !bUnlimitedFuel; bFuelOutMsg = false; SaveEconomy(); }
+	else if (Id == TEXT("map"))
+	{
+		SetRealMapWanted(!RealMapWanted());
+		ShowToast(RealMapWanted() != RealMap() ? TEXT("Map changed - quit and reopen Keys Run to load it.") : TEXT("Staying on this map."), 5);
+	}
 	else if (Id == TEXT("runto"))
 	{
 		TArray<FRunDest> Ds;

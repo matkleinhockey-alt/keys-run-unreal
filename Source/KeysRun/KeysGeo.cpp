@@ -1,4 +1,6 @@
 #include "KeysGeo.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Misc/CommandLine.h"
 #include "KeysOcean.h"
 #include "Async/ParallelFor.h"
 #include "KeysCoastData.h"
@@ -28,6 +30,18 @@ namespace KeysGeo
 	static void BuildNavSegs();
 	static FLinearColor DepthRGBSrgb(double D);
 	bool RealMap() { return GReal; }
+	bool RealMapWanted()
+	{
+		bool b = true;
+		if (GConfig) GConfig->GetBool(TEXT("KeysRun"), TEXT("RealMap"), b, GGameUserSettingsIni);
+		return b;
+	}
+	void SetRealMapWanted(bool b)
+	{
+		if (!GConfig) return;
+		GConfig->SetBool(TEXT("KeysRun"), TEXT("RealMap"), b, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
 	double ChainZ(double X) { return GReal ? KeysGeoReal::ChainZ(X) : 0.000012 * X * X; }
 	double ChainAngle(double X) { return FMath::Atan(GReal ? KeysGeoReal::ChainSlope(X) : 0.000024 * X); }
 
@@ -340,7 +354,10 @@ namespace KeysGeo
 		auto SRand = [&Seed]() { Seed = (Seed * 16807) % 2147483647; return double(Seed) / 2147483647.0; };
 
 		// the real Keys (NOAA / USGS / OpenStreetMap, baked by Tools/geo/bake.py) when asked for; else the original map
-		GReal = FParse::Param(FCommandLine::Get(), TEXT("KRRealMap")) && KeysGeoReal::Load(TEXT("p1"));
+		// which map: the Settings menu's choice (kept in the user's settings file; the real Keys unless they pick the classic
+		// map), or forced from the command line with -KRRealMap / -KRClassicMap
+		const bool bWantReal = FParse::Param(FCommandLine::Get(), TEXT("KRRealMap")) || (!FParse::Param(FCommandLine::Get(), TEXT("KRClassicMap")) && RealMapWanted());
+		GReal = bWantReal && KeysGeoReal::Load(TEXT("p1"));
 		if (GReal)
 		{
 			WorldX0 = KeysGeoReal::X0(); WorldZ0 = KeysGeoReal::Z0(); WorldSizeX = KeysGeoReal::SizeX(); WorldSizeZ = KeysGeoReal::SizeZ();

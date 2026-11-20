@@ -93,6 +93,8 @@ namespace KeysGeo
 	bool OnMangrove(double X, double Z);
 	double MangroveNear(double X, double Z);
 	bool InMarkedChannel(double X, double Z);      // real map: in (or on the edge of) a channel marked by daybeacons
+	bool RealMapWanted();                          // the map picked in Settings (takes effect at the next launch)
+	void SetRealMapWanted(bool b);
 	bool InTownPad(double X, double Z);            // on the town's raised pad (its top is 2.35 m)
 	constexpr double TownUS1V = 132;               // real map: how far in from the town marina US-1 crosses the pad
 	// how far inside the dredged cut of a marina basin (web depth.ts marinaCutDepth): > 0 inside
