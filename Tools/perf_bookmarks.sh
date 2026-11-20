@@ -27,7 +27,8 @@ BOOKMARKS=(
   "offshore_trolling|5:goto=offshore;6:throttle=0.3"
   "oil_rig|5:rig=0,140;6:cam=0,.1,1.2"
   "rain_at_sea|5:goto=offshore;6:weather=storm;7:storm=spawn:0"
-  "bridge|5:tp=-3060,200,0.4"
+  "bridge|5:tp=-2700,-560,2.6"
+  "mangroves|5:tp=-1150,452,4.71"
 )
 
 for B in "${BOOKMARKS[@]}"; do

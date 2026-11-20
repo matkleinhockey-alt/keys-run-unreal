@@ -99,3 +99,10 @@ the town now looks at a dense real Vaca Key (1219 houses, 5744 palms on 98 islan
 Mangroves v1 on the real map (2026-11-20, same editor-build method): marina 14.5 fps (was 14.6), alongside the Boot Key
 mangroves 14.9, bridge 18.2 (was 17.8). 16.5k rooted trees and 10.6k crowns in 62 tiles; roots and trunks are drawn
 within 700 m only, canopy to 4.5 km.
+
+### v1.43 bookmarks (2026-11-20) - NOT VALID, re-run on a quiet machine
+
+Run from the packaged v1.43 app while a copy of v1.42 was open and being played: marina 13.0 fps and offshore 12.4 fps
+on Medium (the baseline is 30), and six of the eight bookmarks ran out of their 90 s before measuring. The only usable
+comparison for the real map is the editor-build table above. `Tools/perf_bookmarks.sh` now has the bridge bookmark on
+the real map and a `mangroves` bookmark; old-map runs need `-KRClassicMap`.
