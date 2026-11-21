@@ -87,6 +87,7 @@ public:
 	bool ApplyFishCam(double Dt, double T, FVector& Pos, FVector& Look);
 	struct FLandStage { bool bOn = false, bDoor = false; double Age = 0, Lv = 1, Side = 1, Pull = 0, Done = 2.3, DoorX = 0; FVector Fish = FVector::ZeroVector, Grip = FVector::ZeroVector, Final = FVector::ZeroVector; };
 	FLandStage Stage;
+	double CloseUpK = 0;   // 0..1: the landing close-up's exposure and bloom trim
 	double CardDelay() const { return Stage.bOn ? Stage.Done : 1.3; }
 	double CaughtAge() const { return GetWorld() ? GetWorld()->GetTimeSeconds() - CaughtT : 0; }   // seconds since the landing
 	FString CardName, CardZone, CardFact, CardBonus, CardNote, CardSex;

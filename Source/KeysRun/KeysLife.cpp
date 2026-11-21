@@ -1581,7 +1581,12 @@ void AKeysLife::BuildWeeds()
 	}
 	for (const FHump& H : Humps())
 		if (!H.bPatch)
-			for (int32 k = 0; k < 2; k++) Spots.Add(FVector2D(H.X + LRand(-300, 300), ChainZ(H.X) + H.DZ + LRand(-300, 300)));
+			for (int32 k = 0; k < 2; k++)
+			{
+				// (blue water only: on the real map a hump's old offset can land on a flat)
+				const FVector2D S(H.X + LRand(-300, 300), ChainZ(H.X) + H.DZ + LRand(-300, 300));
+				if (DepthAt(S.X, S.Y) > 30) Spots.Add(S);
+			}
 	for (const FVector2D& S : Spots)
 	{
 		FKeysWeedline W;

@@ -2724,6 +2724,11 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	if (Shake > 0) P += FVector(FMath::FRand() - .5, FMath::FRand() - .5, FMath::FRand() - .5) * Shake * 60;
 	const FVector L = ToUE(ShotLook.X, ShotLook.Y, ShotLook.Z);
 	Camera->SetWorldLocationAndRotation(P, (L - P).Rotation());
+	// the landing close-up fills the frame with white deck in full sun: stop the lens down for it, and ease the bloom
+	CloseUpK = FMath::FInterpTo(CloseUpK, FState == EKeysFish::Caught || Stage.bOn ? 1.0 : 0.0, Dt, 3.0);
+	Camera->PostProcessSettings.bOverride_AutoExposureBias = Camera->PostProcessSettings.bOverride_BloomIntensity = CloseUpK > .01;
+	Camera->PostProcessSettings.AutoExposureBias = float(-.6 * CloseUpK);
+	Camera->PostProcessSettings.BloomIntensity = float(.55 - .3 * CloseUpK);
 }
 
 // ================================================================ the fish cam
