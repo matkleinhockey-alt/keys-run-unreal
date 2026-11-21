@@ -9,7 +9,8 @@ The project rule: graphics changes must not take Medium below 60 fps. A lane can
 (that is the marshal's job at integration), so a lane measures before and after in the editor build.
 
 1. Pick the spot your change affects and one spot it should not affect.
-2. Run the same script on your branch's base (stash or use the numbers in `PERF.md`) and on your change:
+2. Run the same script before your change and after it. Take the "before" run first, on the clean branch, before you
+   start editing. Never use `git stash`: the stash is shared with the other worktrees.
 
 ```bash
 "/Users/mat/Documents/Unreal Projects/KeysRun-devkit/shoot.sh" perf_after "3:play;4:gfx=1;6:tp=<x>,<z>,<heading>;16:perf=after;24:quit"
