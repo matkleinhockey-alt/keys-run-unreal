@@ -1,6 +1,7 @@
 #include "KeysSchools.h"
 #include "KeysGeo.h"
 #include "KeysSea.h"
+#include "KeysOcean.h"
 #include "KeysMesh.h"
 #include "KeysLife.h"
 #include "KeysReef.h"
@@ -28,6 +29,12 @@ namespace
 	constexpr double CellSize = 26;
 	constexpr double SpawnR = 140, KeepR = 190;
 	constexpr int32 MaxSchools = 72, MaxFish = 5200;
+	// Bait may take this much of the fish budget and no more. A bait ball is 150 to 500 fish, so without a share of its
+	// own twenty of them used the whole budget and nothing else - no snapper, no grunts, no jacks - got a fish.
+	constexpr int32 MaxBaitFish = 3200;
+	// The bubble (Populate) only brings back a school that swam out of it by itself: with the camera moving faster than
+	// this (m/s) the school has simply been left behind, and is let go.
+	constexpr double WrapMaxCamSpeed = 5;
 	constexpr double BoundsExt = 40;     // mesh units: the tail beat and body bend reach a little outside the rest pose
 
 	using ERole = AKeysSchools::ERole;
@@ -536,8 +543,16 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 			if (FarCell) Cells.Add(FarCell, -1);
 		}
 	}
+	const int32 Want = N;
+	if (Sc.Role == ERole::Bait)
+	{
+		int32 NBait = 0;
+		for (const FSchool& O : Schools) if (Specs[O.Sp].Role == ERole::Bait) NBait += O.Fish.Num();
+		N = FMath::Min(N, MaxBaitFish - NBait);
+	}
 	if (NFishAll + N > MaxFish) N = MaxFish - NFishAll;
-	if (N < 1) return nullptr;
+	// no room for a proper school: none, rather than a stray fish or two calling itself one
+	if (N < 1 || (Cell && N < (Want + 1) / 2)) return nullptr;
 	const double Space = Sc.Spacing * S.Len;
 	S.Radius = FMath::Max(Space, Space * FMath::Pow(double(N), 1.0 / 3.0) * .62);
 	const bool bBall = Sc.Role == ERole::Bait;
@@ -602,6 +617,10 @@ AKeysSchools::FSchool* AKeysSchools::NearestOfRole(const FVector& P, bool bBaitO
 
 void AKeysSchools::Populate()
 {
+	// how fast the camera is travelling (Populate runs every half second)
+	const double CamMoved = Hyp(Cam.X - PopCam.X, Cam.Z - PopCam.Z);
+	PopCam = Cam;
+	const bool bCamStill = CamMoved < WrapMaxCamSpeed * .5;
 	// let go of schools far from the camera
 	for (int32 i = Schools.Num() - 1; i >= 0; i--)
 	{
@@ -612,14 +631,17 @@ void AKeysSchools::Populate()
 		// the bubble: an open-water school that swims out of it comes back in on the far side, just out of sight,
 		// still on its way (reef fish, grouper, barracuda and flats fish belong where they live, and are let go)
 		const ERole Role = Specs[S.Sp].Role;
-		if (Role == ERole::Bait || Role == ERole::Hunter || Role == ERole::Patrol)
+		// Only one that left by its own swimming, and only into the kind of water it came from: a boat running off (or a
+		// teleport) used to drag the first bait balls it met along for good, from the marina to the reef to blue water,
+		// where they kept the fish budget full and the local schools never appeared.
+		if (bCamStill && D < KeepR + 40 && (Role == ERole::Bait || Role == ERole::Hunter || Role == ERole::Patrol))
 		{
 			const double NX = Cam.X - DX / D * KeepR * .9, NZ = Cam.Z - DZ / D * KeepR * .9;
-			if (ValidWater(S.Sp, NX, NZ))
+			if (ValidWater(S.Sp, NX, NZ) && ZoneAt(NX, NZ) == ZoneAt(S.Home.X, S.Home.Z))
 			{
 				const FVector Dl(NX - S.Center.X, 0, NZ - S.Center.Z);
 				const double Floor = TopAt(NX, NZ) + 1.0;
-				for (FFish& F : S.Fish) { F.P += Dl; F.P.Y = FMath::Clamp(F.P.Y, FMath::Min(Floor, -.8), -.8); }
+				for (FFish& F : S.Fish) { F.P += Dl; F.P.Y = FMath::Clamp(F.P.Y, FMath::Min(Floor, SurfY - .8), SurfY - .8); }
 				S.Center += Dl; S.Home += Dl; S.Goal += Dl;
 				if (S.Cell) { Cells.Remove(S.Cell); S.Cell = 0; }   // the water it left can fill again
 				UE_LOG(LogTemp, Verbose, TEXT("KRSchools wrap %s to %.0f %.0f"), Specs[S.Sp].Key, NX, NZ);
@@ -681,8 +703,9 @@ void AKeysSchools::Populate()
 				const FSpec& Sc = Specs[Sp];
 				const double Water = -Top;
 				double Y;
-				if (Role == ERole::Bait) Y = FMath::Lerp(Top + Sc.AltMin, -1.0, .45);
-				if (Role == ERole::Bait && Water > 30) Y = -5 - 9 * KeysSea::HashCell(0x5c4f, CX, CZ, 13);   // off soundings the bait is up top, where the birds can see it
+				// (bait hangs in mid-water; this line used to be overwritten by the else below, which left every ball on the bottom)
+				if (Role == ERole::Bait && Water <= 30) Y = FMath::Lerp(Top + Sc.AltMin, -1.0, .45);
+				else if (Role == ERole::Bait && Water > 30) Y = -5 - 9 * KeysSea::HashCell(0x5c4f, CX, CZ, 13);   // off soundings the bait is up top, where the birds can see it
 				else if (Role != ERole::Bait && Water > 45) Y = -6 - 10 * KeysSea::HashCell(0x5c4f, CX, CZ, 14);     // and so is what hunts it
 				else Y = Top + FMath::Lerp(Sc.AltMin, Sc.AltMax, .5);
 				Y = FMath::Min(Y, -.35 - .2 * FMath::Min(1.0, Water));
@@ -721,7 +744,11 @@ FVector AKeysSchools::PickGoal(FSchool& S)
 		if (!ValidWater(S.Sp, X, Z)) continue;
 		const double Top = TopAt(X, Z);
 		double Y;
-		if (Sc.Role == ERole::Bait || Sc.Role == ERole::Hunter || Sc.Role == ERole::Hanger) Y = FMath::Lerp(Top + Sc.AltMin + S.Radius * .5, -.8 - S.Radius * .5, S.Rng.FRandRange(.25, .7));
+		// off soundings the bait and what hunts it stay in the top of the water column (5 to 14 m, 6 to 16 m), as they
+		// are put there; their goals used to be picked between the surface and the bottom, 100 m down, and they sank away
+		if (Sc.Role == ERole::Bait && -Top > 30) Y = -S.Rng.FRandRange(5.0, 14.0);
+		else if (Sc.Role == ERole::Hunter && -Top > 45) Y = -S.Rng.FRandRange(6.0, 16.0);
+		else if (Sc.Role == ERole::Bait || Sc.Role == ERole::Hunter || Sc.Role == ERole::Hanger) Y = FMath::Lerp(Top + Sc.AltMin + S.Radius * .5, -.8 - S.Radius * .5, S.Rng.FRandRange(.25, .7));
 		else Y = Top + S.Rng.FRandRange(Sc.AltMin, Sc.AltMax);
 		return FVector(X, FMath::Min(Y, -.3), Z);
 	}
@@ -994,7 +1021,7 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 	if (Lives(Sc.Role)) WantY = TopHere + F.BandY;
 	else
 	{
-		const double Lo = TopHere + Sc.AltMin + F.Len, Hi = -.35 - F.Len * .5;
+		const double Lo = TopHere + Sc.AltMin + F.Len, Hi = SurfY - .35 - F.Len * .5;
 		WantY = FMath::Clamp(S.Goal.Y + F.BandY * (1 - .5 * S.Mill), FMath::Min(Lo, Hi), Hi);
 	}
 	Acc.Y += (WantY - F.P.Y) * .9 - F.V.Y * .6;
@@ -1032,7 +1059,7 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 	F.P += F.V * Dt;
 	const double TopNow = FMath::Max(TopHere, TopAt(F.P.X, F.P.Z));
 	if (F.P.Y < TopNow + .08 + F.Len * .2) { F.P.Y = TopNow + .08 + F.Len * .2; F.V.Y = FMath::Max(0.0, F.V.Y); }
-	if (F.P.Y > -.2 - F.Len * .2) { F.P.Y = -.2 - F.Len * .2; F.V.Y = FMath::Min(0.0, F.V.Y); }
+	if (F.P.Y > SurfY - .2 - F.Len * .2) { F.P.Y = SurfY - .2 - F.Len * .2; F.V.Y = FMath::Min(0.0, F.V.Y); }
 
 	// ---- the body: face the way it swims, bank into turns, roll flat on its side in a flash; the tail beat
 	const FVector OldF = F.Fwd;
@@ -1058,6 +1085,7 @@ void AKeysSchools::Tick(float DeltaSeconds)
 	const double T0 = FPlatformTime::Seconds();
 	const double Dt = FMath::Clamp(double(DeltaSeconds), 0.0, .1);
 	NowT = GetWorld()->GetTimeSeconds();
+	SurfY = KeysOcean::SeaLevel();   // the surface the fish keep under goes up and down with the tide, when it is drawn so
 	TilesThisFrame = 0;
 	if (bOff) { FrameAcc += DeltaSeconds; CpuN++; StatT += Dt; if (bScriptLog && StatT > 5) { StatT = 0; DebugCmd(TEXT("stats")); } return; }
 	ReadWorld(Dt);
@@ -1255,6 +1283,38 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 			const KeysDive::FState& St = Dv->State();
 			const FVector Dir = (Mid - FVector(St.X, St.Y + .15, St.Z)).GetSafeNormal();
 			Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%f,%f"), FMath::Atan2(-Dir.X, -Dir.Z), FMath::Asin(FMath::Clamp(Dir.Y, -1.0, 1.0))));
+		}
+	}
+	else if (C == TEXT("tobait"))
+	{
+		// tobait[=m]: take the diver to the nearest bait ball the game itself put there, m metres (7: outside the range it shies from a diver) off its edge at its
+		// own depth, looking at it (a ball is a few metres across in 140 m of water: this is how a test finds one)
+		FSchool* S = nullptr;
+		double BD = 400;
+		for (FSchool& O : Schools)
+			if (Specs[O.Sp].Role == ERole::Bait && !O.bPinned && O.Fish.Num() >= 60 && (O.Center - Eye).Size() < BD) { BD = (O.Center - Eye).Size(); S = &O; }
+		if (!S) { UE_LOG(LogTemp, Log, TEXT("KRSchools tobait: no bait school within reach")); return; }
+		LastPut = S->Id;
+		FVector Dir = Flat(S->Center - Eye).GetSafeNormal();
+		if (Dir.IsNearlyZero()) Dir = FVector(1, 0, 0);
+		// from the side it is nearest on, unless coral stands in the line of sight: then the first clear side round from it
+		const double Off = S->Radius + (A.IsNumeric() ? FCString::Atod(*A) : 7.0);
+		for (int32 q = 0; q < 12; q++)
+		{
+			const FVector Dq = Dir.RotateAngleAxis((q % 2 ? -1 : 1) * ((q + 1) / 2) * 30.0, FVector(0, 1, 0));
+			bool bClear = true;
+			for (double R = 0; R <= Off + 1 && bClear; R += .75)
+				bClear = TopAt(S->Center.X - Dq.X * R, S->Center.Z - Dq.Z * R) < S->Center.Y - .8;
+			if (bClear) { Dir = Dq; break; }
+		}
+		const FVector P = S->Center - Dir * Off;
+		UE_LOG(LogTemp, Log, TEXT("KRSchools tobait %s #%d: %d fish, centre %.0f %.1f %.0f, radius %.1f m, %.0f m away, %.1f m of water there"),
+			Specs[S->Sp].Key, S->Id, S->Fish.Num(), S->Center.X, S->Center.Y, S->Center.Z, S->Radius, (S->Center - Eye).Size(), DepthFast(S->Center.X, S->Center.Z));
+		if (AKeysDiver* Dv = AKeysDiver::Get(this); Dv && Dv->IsDiving())
+		{
+			Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%f,%f"), P.X, P.Z));
+			Dv->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%f"), -S->Center.Y));
+			DebugCmd(TEXT("look"));
 		}
 	}
 	else if (C == TEXT("off") || C == TEXT("on"))
