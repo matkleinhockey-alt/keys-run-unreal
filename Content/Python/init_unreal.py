@@ -61,7 +61,7 @@ float cover = saturate(A);
 // whitecaps from the simulated sea, sharp to the pixel (the mesh carries them too, but only at its vertices)
 if (On > 0.5) {
   float sf = max(Sim0.SampleLevel(Sim0Sampler, p / L0 + 0.5 / 64.0, 0).b, 0.55 * Sim1.SampleLevel(Sim1Sampler, p / L1 + 0.5 / 64.0, 0).b);
-  cover = max(cover, sf * (0.3 + 0.7 * saturate(Caps)) * saturate(1.0 - D / 300000.0));
+  cover = max(cover, sf * (0.3 + 0.7 * saturate(Caps)) * saturate(1.0 - D / 300000.0) * (1.0 - saturate(Calm)));   // (none in a sheltered creek)
 }
 // in the prop wash the foam is dragged out into streaks along the boat's track (TD, radians in the sea's own x/y)
 float2 td = float2(cos(TD), sin(TD));
@@ -173,8 +173,9 @@ for (int i = 0; i < nTrains; i++) {
   g += dir * (steep * cos(ph)) * aa;
 }
 float s = Strength * (1.0 - 0.75 * saturate(F)) * (1.0 - 0.5 * saturate(Aer));
-g *= s;
-g += gs * (1.0 - 0.75 * saturate(F)) * (1.0 - 0.5 * saturate(Aer));   // (true slopes: not scaled by the ripple strength)
+// a creek under the mangroves is out of the wind: a faint cat's-paw, nothing more
+g *= s * (1.0 - 0.82 * saturate(Calm));
+g += gs * (1.0 - 0.75 * saturate(F)) * (1.0 - 0.5 * saturate(Aer)) * (1.0 - 0.94 * saturate(Calm));   // (true slopes: not scaled by the ripple strength)
 // rain: every drop leaves a little ring spreading out and fading; two staggered layers of drop cells
 float rain = saturate(Rain);
 if (rain > 0.01 && foot < 0.04) {
@@ -214,7 +215,7 @@ float h = frac(sin(dot(ci, float2(127.1, 311.7))) * 43758.5453);
 float tw = smoothstep(0.35, 1.0, 0.5 + 0.5 * sin(T * (2.0 + 3.0 * h) + h * 40.0));
 float spark = lerp(0.25 + 2.2 * tw, 1.0, far);
 float day = saturate(L.z * 5.0);
-return float3(1.0, 0.94, 0.82) * (spec * spark * lerp(1.6, 0.7, far) * day * (1.0 - saturate(F * 1.5)) * Glint);
+return float3(1.0, 0.94, 0.82) * (spec * spark * lerp(1.6, 0.7, far) * day * (1.0 - saturate(F * 1.5)) * Glint * (1.0 - 0.8 * saturate(Calm)));
 """
 
 OCEAN_ROUGH = """
@@ -925,12 +926,15 @@ for (int bi = 0; bi < 3; bi++) {
 }
 boil = saturate(boil / 1.05);
 float wash = saturate(UV.y) * smoothstep(0.38, 0.85, boil * 0.85 + saturate(UV.y) * 0.3);
+// mangrove creek water is stained like tea by the leaf litter: dark olive-brown, not turquoise
+sc = lerp(sc, float3(0.030, 0.026, 0.007), saturate(Calm));
 sc = lerp(sc, float3(0.13, 0.16, 0.15) * (0.5 + 0.9 * boil), wash * 0.38);
 return sc / 100.0;
 """
 
 OCEAN_ABSORB = """
-return Absorb / 100.0;
+// (tannin takes the blue out first, then everything: the bottom is gone within a metre or two)
+return lerp(Absorb, float3(0.75, 0.62, 1.7), saturate(Calm)) / 100.0;
 """
 
 
@@ -974,6 +978,10 @@ def _ocean(mat):
     deep = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1150, 1520)
     deep.set_editor_property("r", True); deep.set_editor_property("g", False)
     _link(uv2, "", deep, "")
+    # UV2.y: 1 inside a sheltered mangrove creek (calm, tea-stained water), 0 in open water
+    calm = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1150, 1560)
+    calm.set_editor_property("r", False); calm.set_editor_property("g", True)
+    _link(uv2, "", calm, "")
 
     trackdir = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, 1600)
     trackdir.set_editor_property("parameter_name", "TrackDir")
@@ -993,10 +1001,11 @@ def _ocean(mat):
         e.set_editor_property("default_value", dv)
         return e
     sim_l0 = _sp("SimL0", 133.0, 2100); sim_l1 = _sp("SimL1", 31.0, 2160); sim_on = _sp("SimOn", 0.0, 2220)
-    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D", "WD", "Caps", "Rain", "Aer", "TD", "Sim0", "Sim1", "L0", "L1", "On"], "Foam")
+    foam = _custom(mat, -900, 0, OCEAN_FOAM, F1, ["WP", "T", "A", "D", "WD", "Caps", "Rain", "Aer", "TD", "Sim0", "Sim1", "L0", "L1", "On", "Calm"], "Foam")
     for src, pin in ((sims[0], "Sim0"), (sims[1], "Sim1"), (sim_l0, "L0"), (sim_l1, "L1"), (sim_on, "On")):
         _link(src, "", foam, pin)
     _link(aer, "", foam, "Aer")
+    _link(calm, "", foam, "Calm")
     _link(trackdir, "", foam, "TD")
     _link(wp, "", foam, "WP")
     _link(tm, "", foam, "T")
@@ -1006,9 +1015,9 @@ def _ocean(mat):
     _link(caps, "", foam, "Caps")
     _link(rain, "", foam, "Rain")
 
-    nrm = _custom(mat, -500, 300, OCEAN_NORMAL, F3, ["WP", "T", "VN", "D", "F", "Aer", "Strength", "WD", "Rain", "Sim0", "Sim1", "L0", "L1", "On", "Deep"], "Ripples")
+    nrm = _custom(mat, -500, 300, OCEAN_NORMAL, F3, ["WP", "T", "VN", "D", "F", "Aer", "Strength", "WD", "Rain", "Sim0", "Sim1", "L0", "L1", "On", "Deep", "Calm"], "Ripples")
     for src, pin in ((wp, "WP"), (tm, "T"), (vn, "VN"), (dp, "D"), (foam, "F"), (aer, "Aer"), (strength, "Strength"), (wdir, "WD"), (rain, "Rain"),
-                     (sims[0], "Sim0"), (sims[1], "Sim1"), (sim_l0, "L0"), (sim_l1, "L1"), (sim_on, "On"), (deep, "Deep")):
+                     (sims[0], "Sim0"), (sims[1], "Sim1"), (sim_l0, "L0"), (sim_l1, "L1"), (sim_on, "On"), (deep, "Deep"), (calm, "Calm")):
         _link(src, "", nrm, pin)
 
     rough = _custom(mat, -500, 150, OCEAN_ROUGH, F1, ["F", "D", "Rain", "Caps"], "Roughness")
@@ -1026,15 +1035,17 @@ def _ocean(mat):
     absorb = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, 1050)
     absorb.set_editor_property("parameter_name", "Absorption")
     absorb.set_editor_property("default_value", unreal.LinearColor(0.45, 0.085, 0.04, 1.0))
-    sc = _custom(mat, -500, 900, OCEAN_SCATTER, F3, ["Scat", "UV", "F", "Deep", "WP", "T"], "Scattering")
+    sc = _custom(mat, -500, 900, OCEAN_SCATTER, F3, ["Scat", "UV", "F", "Deep", "WP", "T", "Calm"], "Scattering")
+    _link(calm, "", sc, "Calm")
     _link(wp, "", sc, "WP")
     _link(tm, "", sc, "T")
     _link(deep, "", sc, "Deep")
     _link(scat, "", sc, "Scat")
     _link(uv, "", sc, "UV")
     _link(foam, "", sc, "F")
-    ab = _custom(mat, -500, 1050, OCEAN_ABSORB, F3, ["Absorb"], "Absorption")
+    ab = _custom(mat, -500, 1050, OCEAN_ABSORB, F3, ["Absorb", "Calm"], "Absorption")
     _link(absorb, "", ab, "Absorb")
+    _link(calm, "", ab, "Calm")
     phase = _const(mat, 0.2, -500, 1200)
     out = mel.create_material_expression(mat, unreal.MaterialExpressionSingleLayerWaterMaterialOutput, -150, 1000)
     _link(sc, "", out, "ScatteringCoefficients")
@@ -1054,8 +1065,8 @@ def _ocean(mat):
     glintk.set_editor_property("parameter_name", "Glint")
     glintk.set_editor_property("default_value", 1.0)
     camv = mel.create_material_expression(mat, unreal.MaterialExpressionCameraVectorWS, -900, 2150)
-    gl = _custom(mat, -500, 1900, OCEAN_GLINT, F3, ["SunDir", "CamV", "N", "WP", "D", "T", "F", "Glint"], "Glitter")
-    for src, pin in ((sundir, "SunDir"), (camv, "CamV"), (nrm, "N"), (wp, "WP"), (dp, "D"), (tm, "T"), (foam, "F"), (glintk, "Glint")):
+    gl = _custom(mat, -500, 1900, OCEAN_GLINT, F3, ["SunDir", "CamV", "N", "WP", "D", "T", "F", "Glint", "Calm"], "Glitter")
+    for src, pin in ((sundir, "SunDir"), (camv, "CamV"), (nrm, "N"), (wp, "WP"), (dp, "D"), (tm, "T"), (foam, "F"), (glintk, "Glint"), (calm, "Calm")):
         _link(src, "", gl, pin)
     mel.connect_material_property(gl, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 

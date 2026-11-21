@@ -765,7 +765,7 @@ void AKeysWorld::UpdateWater()
 			WUV[K] = FVector2D(FMath::Clamp(Crest * .8 + Wk * .8, 0.0, 1.0), FMath::Clamp(Tr.Y, 0.0, 1.0));
 			// UV1: x = rain on the water here, y = whitecap cover (wind-streaked foam); UV2: x = how deep (0 flats .. 1 blue water)
 			WUV1[K] = FVector2D(KeysWx::RainAt(X, Z), Caps * Lee);
-			WUV2[K] = FVector2D(SStep(4, 60, D), 0);
+			WUV2[K] = FVector2D(SStep(4, 60, D), 1 - Lee);   // y: a sheltered, tea-stained mangrove creek
 			FLinearColor C = DepthColorFast(X, Z);
 			C.A = float(FMath::Clamp(F, 0.0, 1.0));
 			WC[K] = C;
