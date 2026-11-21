@@ -2359,6 +2359,10 @@ void AKeysLife::ManagePopulation(double RMin)
 
 void AKeysLife::UpdateCreatures(double Dt, double T)
 {
+	// what brings fish to the top more often: tarpon roll at first and last light, tails come up on the flood
+	const double ActHour = KeysFeed::HourNow(this);
+	const double Twilight = FMath::Max(FMath::Exp(-FMath::Square((ActHour - 6.6) / 1.3)), FMath::Exp(-FMath::Square((ActHour - 18.6) / 1.4)));
+	const double RollRate = .6 + 2.6 * Twilight, TailRate = FMath::Clamp(1 + .9 * KeysGeo::TideLevel(), .35, 2.0);
 	PopT -= Dt;
 	if (PopT <= 0) { PopT = .4; ManagePopulation(70); }
 	NearT -= Dt;
@@ -2501,7 +2505,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			double Pitch = 0, Roll = 0;
 			if (V->Act != EKeysAct::None && V->Act != EKeysAct::Glide)
 			{
-				M.ActT -= Dt;
+				M.ActT -= Dt * (V->Act == EKeysAct::Roll ? RollRate : V->Act == EKeysAct::Tail ? TailRate : 1.0);
 				if (!M.Act && M.ActT <= 0 && G.Flee <= 0 && (V->Act != EKeysAct::Tail || D < 2.6)) { M.Act = uint8(V->Act); M.AP = 0; M.bSpl = false; }
 				if (M.Act)
 				{

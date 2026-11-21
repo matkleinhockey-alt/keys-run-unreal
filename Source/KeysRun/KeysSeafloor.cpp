@@ -55,10 +55,13 @@ AKeysSeafloor::AKeysSeafloor()
 	Chunks->SetupAttachment(Root);
 	Chunks->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Chunks->bUseAsyncCooking = true;
+	Chunks->SetCastShadow(false);   // (see Tick: back on for a diver)
+	Chunks->bAffectDynamicIndirectLighting = false;
 	Skirt = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Skirt"));
 	Skirt->SetupAttachment(Root);
 	Skirt->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Skirt->SetCastShadow(false);
+	Skirt->bAffectDynamicIndirectLighting = false;
 }
 
 void AKeysSeafloor::BeginPlay()
@@ -257,13 +260,16 @@ void AKeysSeafloor::BuildSkirt(double CamX, double CamZ)
 		for (int32 i = 0; i < Rows; i++)
 		{
 			const double X = CamX + F(-1 + 2.0 * i / Nn), Z = CamZ + F(-1 + 2.0 * j / Nn);
-			double Y = KeysSea::SeafloorHeightAt(X, Z) - FarSkirtYBias;
+			// (sunk under the chunks so the two never fight; only a hand's breadth on the flats, where half a meter
+			// more water would show as a darker square round the chunks)
+			const double Y0 = KeysSea::SeafloorHeightAt(X, Z), Bias = FMath::Lerp(.1, FarSkirtYBias, FMath::SmoothStep(1.5, 5.0, -Y0));
+			double Y = Y0 - Bias;
 			const double Lh = LandH(X, Z);
 			if (Lh > -.3 && Lh - .3 < Y) Y = Lh - .3;
 			Hg[j * Rows + i] = Y;
 			V[j * Rows + i] = ToUE(X, Y, Z);
 			UV[j * Rows + i] = FVector2D(X, Z);
-			Col[j * Rows + i] = DebugColors() ? FLinearColor::Green : KeysSea::SeafloorColorAt(X, Z, -Y);
+			Col[j * Rows + i] = DebugColors() ? FLinearColor::Green : KeysSea::SeafloorColorAt(X, Z, -(Y + Bias));
 		}
 	});
 	for (int32 j = 0; j < Rows; j++)
@@ -297,6 +303,11 @@ void AKeysSeafloor::Tick(float DeltaSeconds)
 	if (bSubmerged != bProfileSub)
 	{
 		bProfileSub = bSubmerged;
+		// from the boat the near chunks must light exactly like the far skirt (no shadows, no bounce of their own), or
+		// they show as a brighter square on the flats; a diver gets the reef's own shadows back
+		Chunks->SetCastShadow(bSubmerged);
+		Chunks->bAffectDynamicIndirectLighting = bSubmerged;
+		Chunks->MarkRenderStateDirty();
 		Queue.Reset(); Queued.Reset();
 		LastScanX = 1e9;
 	}
