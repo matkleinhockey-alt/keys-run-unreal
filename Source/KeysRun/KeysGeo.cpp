@@ -1203,10 +1203,15 @@ namespace KeysGeo
 
 	// small inshore, big rollers in deep blue water
 	double AmpFor(double D) { return .1 + .9 * Clamp((D - 1) / 40, 0, 1) + 1 * Clamp((D - 45) / 250, 0, 1); }
-	double AmpAt(double X, double Z) { return AmpFor(DepthFast(X, Z)) * (1 + .9 * GridAt(InletG, X, Z)); }
+	// (a creek through the mangroves is out of the wind and the swell: all but glassy between its banks)
+	double AmpAt(double X, double Z)
+	{
+		const double A = AmpFor(DepthFast(X, Z)) * (1 + .9 * GridAt(InletG, X, Z));
+		return GReal && GCreeks.Num() ? A * Lerp(.1, 1.0, SS(0, 14, CreekDist(X, Z))) : A;
+	}
 
 	// The swell scales with Amp (depth and inlets); the wind sea much less, so a blow still chops up the flats.
-	static FORCEINLINE double ChopAmp(double Amp) { return FMath::Min(1.3, .3 + .7 * Amp); }
+	static FORCEINLINE double ChopAmp(double Amp) { return FMath::Min(1.3, .3 + .7 * Amp) * FMath::Min(1.0, Amp * 10); }   // (open water never has Amp under .1: only shelter takes the chop off)
 
 	double ChopScale(double Amp) { return ChopAmp(Amp); }
 
@@ -1216,7 +1221,8 @@ namespace KeysGeo
 		const double GX = (DepthFast(X + 1.5, Z) - DepthFast(X - 1.5, Z)) / 3, GZ = (DepthFast(X, Z + 1.5) - DepthFast(X, Z - 1.5)) / 3;
 		const double Slope = FMath::Sqrt(GX * GX + GZ * GZ);
 		// a beach face or a reef edge, not the endless flat flats (and nothing out past 5 m)
-		const double Gate = SS(.006, .03, Slope) * (1 - SS(3.5, 5.0, D));
+		// (and no surf on the banks of a mangrove creek: nothing breaks in there)
+		const double Gate = SS(.006, .03, Slope) * (1 - SS(3.5, 5.0, D)) * (GReal && GCreeks.Num() ? SS(0, 14, CreekDist(X, Z)) : 1.0);
 		if (Gate <= 0) return FVector2D::ZeroVector;
 		// the swell that reaches the shore (the reef and the keys take most of it), shoaling up (Green's law) until it breaks
 		const double H0 = .14 + .22 * SW;

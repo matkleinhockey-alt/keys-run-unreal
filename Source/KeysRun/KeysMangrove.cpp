@@ -43,7 +43,7 @@ namespace
 			for (int32 i = 0; i < NU; i++)
 			{
 				const double Lon = 2 * PI * i / NU + Seed;
-				const double Lump = 1 + .13 * FMath::Sin(Lon * 3 + Seed * 6.1) * FMath::Cos(Lat * 2.3 + Seed * 3.7) + .12 * (MHash(Seed + i * 1.37, j * 2.11 + Seed * .31) - .5);
+				const double Lump = 1 + .07 * FMath::Sin(Lon * 3 + Seed * 6.1) * FMath::Cos(Lat * 2.3 + Seed * 3.7) + .04 * (MHash(Seed + i * 1.37, j * 2.11 + Seed * .31) - .5);
 				const FVector Dir(CL * FMath::Sin(Lon), SL, CL * FMath::Cos(Lon));
 				FLinearColor Col = FMath::Lerp(Bc * Shade, Bc, float(FMath::Min(1.0, Tt * 2.4)));
 				Col = FMath::Lerp(Col, Tc, float(FMath::Clamp((Tt - .45) * 2.2, 0.0, 1.0)) * .9f);
@@ -126,40 +126,72 @@ void AKeysWorld::BuildMangroves()
 		return false;
 	};
 
-	// a red mangrove standing at (X, Z) on its prop roots; Lean carries its head that way (metres), Tall lifts the fork;
-	// bClose: one you idle right past, so its crown is cut finer. Returns the top of its crown.
-	auto Tree = [&](FTile& T, double X, double Z, double Ground, const FVector2D& Lean, double Tall, bool bClose = false) -> FVector
+	// A red mangrove standing at (X, Z), shaped on a photograph of a mangrove creek: a cage of thin prop roots that
+	// spring from the trunk, bow out and over and plunge into the mud; a slender crooked trunk standing on top of it;
+	// boughs spreading to several clumps of leaves at different heights, so the outline is ragged and you see trunks
+	// and roots in the shade under it. Lean carries its head that way (metres), Tall lifts it. Detail 0: a tree on the
+	// landward edge, 1: one with its feet in the water, 2: one you idle right past. Returns the top of its crown.
+	auto Tree = [&](FTile& T, double X, double Z, double Ground, const FVector2D& Lean, double Tall, int32 Detail = 1) -> FVector
 	{
 		const double Base = FMath::Max(Ground, -.05), Foot = FMath::Min(Ground, -.35) - .25;   // the roots go on down into the mud
-		const double Hh = 1.5 + 1.1 * MHash(X, Z) + Tall, Sz = .8 + .5 * MHash(Z, X);            // where the roots leave the trunk
-		const FVector Top(X + (MHash(X, 3.0) - .5) * .8 + Lean.X, Base + Hh + 1.6 * Sz, Z + (MHash(Z, 5.0) - .5) * .8 + Lean.Y);
+		const double Sz = .8 + .5 * MHash(Z, X);
+		const double Hh = (1.3 + .9 * MHash(X, Z)) * Sz + Tall * .5;                              // the top of the root cage
+		const double TrunkH = (2.3 + 1.5 * MHash(X + 4.0, Z)) * Sz + Tall * .5;
 		const FVector Fork(X, Base + Hh, Z);
-		Limb(T.Roots, Fork, Top, .11 * Sz, Trunk);
-		// the prop roots: out, over, and down, each with a knee; a few drop straight from the branches
-		const int32 NR = 5 + int32(MHash(X + 1.0, Z) * 3);
+		const FVector Mid(X + (MHash(X, 3.0) - .5) * 1.0 + Lean.X * .45, Fork.Y + TrunkH * .55, Z + (MHash(Z, 5.0) - .5) * 1.0 + Lean.Y * .45);
+		Limb(T.Roots, Fork, Mid, .12 * Sz, Trunk);
+		// the prop roots, each an arc of a few straight pieces
+		const int32 NR = (Detail == 2 ? 11 : Detail == 1 ? 8 : 5) + int32(MHash(X + 1.0, Z) * 2.5), Seg = Detail == 2 ? 4 : Detail == 1 ? 3 : 2;
+		auto Arc = [&](const FVector& From, const FVector& End, double Bow, double R0, const FLinearColor& C)
+		{
+			const FVector Ctrl(From.X + (End.X - From.X) * .78, From.Y + Bow, From.Z + (End.Z - From.Z) * .78);
+			FVector P = From;
+			for (int32 k = 1; k <= Seg; k++)
+			{
+				const double U = double(k) / Seg;
+				const FVector Q = From * ((1 - U) * (1 - U)) + Ctrl * (2 * U * (1 - U)) + End * (U * U);
+				Limb(T.Roots, P, Q, R0 * (1 - .3 * U), C * float(1 - .15 * U));
+				P = Q;
+			}
+		};
 		for (int32 r = 0; r < NR; r++)
 		{
-			const double A = 2 * PI * (r + MHash(X + r, Z)) / NR, Reach = (1.6 + 1.7 * MHash(X, Z + r)) * Sz;
+			const double A = 2 * PI * (r + MHash(X + r, Z)) / NR, Reach = (1.3 + 2.1 * MHash(X, Z + r)) * Sz;
 			const FVector Dir(FMath::Cos(A), 0, FMath::Sin(A));
-			const FVector From = Fork + FVector(0, -Hh * .35 * MHash(r, X), 0);
-			const FVector Knee = FVector(X, 0, Z) + Dir * Reach * .62 + FVector(0, Base + Hh * (.5 + .25 * MHash(Z, r)), 0);
-			const FVector End = FVector(X, 0, Z) + Dir * Reach + FVector(0, Foot, 0);
+			// most leave the foot of the trunk at different heights; every third one comes off the trunk higher up
+			const FVector From = r % 3 == 2 ? FMath::Lerp(Fork, Mid, .25 + .5 * MHash(r, Z)) : Fork + FVector(0, -Hh * .55 * MHash(r, X), 0);
+			const FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
 			const FLinearColor C = FMath::Lerp(RootC, RootDark, float(MHash(r * 3.0, X + Z)) * .7f);
-			Limb(T.Roots, From, Knee, .06 * Sz, C);
-			Limb(T.Roots, Knee, End, .05 * Sz, C * .85f);
+			Arc(From, End, (.1 + .4 * MHash(Z, r)) * Sz, .052 * Sz, C);
+			// and near the water many of them divide
+			if (Detail == 2 && MHash(X + r * 1.7, Z - r) < .55)
+			{
+				const double A2 = A + (MHash(r, X + Z) < .5 ? -.5 : .5);
+				const FVector Split = FMath::Lerp(From, End, .45) + FVector(0, (From.Y - Foot) * .22, 0);
+				Arc(Split, FVector(X + FMath::Cos(A2) * Reach * .9, Foot, Z + FMath::Sin(A2) * Reach * .9), .1 * Sz, .036 * Sz, C * .9f);
+			}
 		}
-		for (int32 r = 0; r < 2; r++)
+		// the boughs and the leaves on them: one clump over the trunk, the others shouldering out round it
+		const int32 NB = Detail == 2 ? 4 : 3;
+		const double R = (2.5 + 1.0 * MHash(X * 1.3, Z)) * Sz, A0 = 2 * PI * MHash(X * 2.1, Z * 1.7);
+		const float Shade = Detail == 2 ? .4f : .55f;
+		FVector Apex = Mid;
+		for (int32 b = 0; b < NB; b++)
 		{
-			const double A = 2 * PI * MHash(X + r * 9.0, Z + 1.0), Rr = (1.2 + 1.4 * MHash(Z + r, X)) * Sz;
-			const FVector Hang = FVector(Top.X + FMath::Cos(A) * Rr, Top.Y + .3, Top.Z + FMath::Sin(A) * Rr);
-			Limb(T.Roots, Hang, FVector(Hang.X, Foot, Hang.Z), .03, RootDark);
+			const double H1 = MHash(X + b * 2.0, Z + 3.0), H2 = MHash(Z + b * 5.0, X + 1.0);
+			const double A = A0 + 2 * PI * (b + .6 * H1) / FMath::Max(1, NB - 1), Out = b == 0 ? .25 * R : (.8 + .35 * H2) * R;
+			const FVector End(Mid.X + FMath::Cos(A) * Out + Lean.X * .55, Mid.Y + TrunkH * .45 + (b == 0 ? .75 : .1 + .55 * H1) * R, Mid.Z + FMath::Sin(A) * Out + Lean.Y * .55);
+			Limb(T.Roots, Mid, End, .07 * Sz, Trunk);
+			const double Rc = R * (b == 0 ? 1.0 : .68 + .26 * H2), SY = .6 + .16 * H1;
+			Crown(T.Canopy, End + FVector(0, Rc * .12, 0), Rc, SY, Leaf[int32(MHash(X + b, Z * 1.9) * 5) % 5], LeafTop[int32(MHash(Z, X * 1.1 + b) * 3) % 3], 6.28 * MHash(X + b * 3.0, Z * 1.9), Detail == 2 ? 12 : b == 0 && Detail == 1 ? 10 : 8, Detail == 2 ? 5 : b == 0 && Detail == 1 ? 4 : 3, true, Shade);
+			if (End.Y + Rc * (.12 + SY * .93) > Apex.Y) Apex = FVector(End.X, End.Y + Rc * (.12 + SY * .93), End.Z);
+			// a thin aerial root let down from the bough to the water
+			if (b > 0 && Detail > 0 && H2 < .7)
+			{
+				const FVector Hang = FMath::Lerp(Mid, End, .6 + .3 * H1);
+				Limb(T.Roots, Hang, FVector(Hang.X + (H1 - .5) * .3, Foot, Hang.Z + (H2 - .5) * .3), .028, RootDark);
+			}
 		}
-		// the canopy: low, wide and dense - one broad dome and a second, lighter one shouldering out of it
-		const double R = (3.0 + 1.3 * MHash(X * 1.3, Z)) * Sz;
-		const FVector Apex(Top.X, Top.Y + R * .2 + R * .56 * .93, Top.Z);
-		Crown(T.Canopy, FVector(Top.X, Top.Y + R * .2, Top.Z), R, .56, Leaf[int32(MHash(X, Z * 1.9) * 5) % 5], LeafTop[int32(MHash(Z, X * 1.1) * 3) % 3], 6.28 * MHash(X, Z * 1.9), bClose ? 12 : 9, bClose ? 5 : 4, true, bClose ? .4f : .55f);
-		Crown(T.Canopy, FVector(Top.X + (MHash(X, 7.0) - .5) * R, Top.Y + R * .42, Top.Z + (MHash(Z, 9.0) - .5) * R), R * .66, .6,
-			Leaf[int32(MHash(Z, X * 2.3) * 5) % 5], LeafTop[int32(MHash(X, Z * 1.7) * 3) % 3], 6.28 * MHash(Z, X * 1.3), bClose ? 10 : 7, bClose ? 4 : 3, true, bClose ? .4f : .55f);
 		Rooted++;
 		// fiddler and mangrove tree crabs on the roots: specks of red-orange and dark shell, a few to a tree
 		for (int32 c = 0; c < 3 && MHash(X + 2.0, Z + c) < .6; c++)
@@ -189,7 +221,7 @@ void AKeysWorld::BuildMangroves()
 				for (int32 k = 0; k < 2; k++)
 				{
 					const double X = CX + (MHash(I + k * 7.3, J) - .5) * Cell, Z = CZ + (MHash(J, I + k * 3.1) - .5) * Cell;
-					const double R = 5.2 + 2.2 * MHash(I * 1.7, J + k), Y = FMath::Max(.3, LandH(X, Z)) + 3.2 + 1.6 * MHash(I + k, J * 2.3);
+					const double R = 5.2 + 2.2 * MHash(I * 1.7, J + k), Y = FMath::Max(.3, LandH(X, Z)) + 3.8 + 3.0 * MHash(I + k, J * 2.3);   // (a ragged skyline, level with the trees along the water)
 					Crown(T.Canopy, FVector(X, Y - R * .12, Z), R, .56, Leaf[int32(MHash(I, J + k * 5.0) * 5) % 5], LeafTop[int32(MHash(J, I + k * 3.0) * 3) % 3], 6.28 * MHash(I + k, J), 8, 3, false);
 					Crowns++;
 				}
@@ -203,7 +235,7 @@ void AKeysWorld::BuildMangroves()
 				if (CreekD(X, Z) < 4.6) continue;                         // the channel and its banks are planted below
 				const double Ground = LandH(X, Z);
 				if (!bFringe && Ground < -.6) continue;
-				const FVector Apex = Tree(T, X, Z, Ground, FVector2D::ZeroVector, 0);
+				const FVector Apex = Tree(T, X, Z, Ground, FVector2D::ZeroVector, 0, bFringe ? 1 : 0);
 				// a heron or an egret now and then, stalking the shallows just off the roots
 				if (bFringe && k == 0 && MHash(I * 3.7, J * 1.9) < .07)
 				{
@@ -260,7 +292,7 @@ void AKeysWorld::BuildMangroves()
 					const bool bFront = N.D < 4.4;
 					FVector2D In = N.C - FVector2D(PX, PZ);
 					In = In.GetSafeNormal() * (!bFront ? 0 : N.bRoof ? 1.8 : 1.1);
-					const FVector Apex = Tree(TileAt(PX, PZ), PX, PZ, LandH(PX, PZ), In, !bFront ? .2 : N.bRoof ? 1.4 : .3, bFront);
+					const FVector Apex = Tree(TileAt(PX, PZ), PX, PZ, LandH(PX, PZ), In, !bFront ? .2 : N.bRoof ? 1.4 : .3, bFront ? 2 : 0);
 					BankTrees++;
 					// the trees by a roost carry a bird or two as well
 					if (!N.bRoof && MHash(PX * 1.9, PZ * 2.3) < .5)

@@ -750,18 +750,21 @@ void AKeysWorld::UpdateWater()
 			double F = KeysOcean::Enabled()
 				? FMath::Max(KeysOcean::Foam(X, Z) * (.3 + .7 * Caps) * (1 - SStep(8, 40, MinLen)), SStep(.75, 1.3, Crest) * .12 * Caps)
 				: SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
+			// (a creek through the mangroves is in the lee of everything: no whitecaps, no wash on its banks)
+			const double Lee = RealMap() ? SStep(0, 14, CreekDist(X, Z)) : 1.0;
+			F *= Lee;
 			// white lines along the arms of a fresh wake, where the crests are tallest
 			F = FMath::Max(F, SStep(.025, .16, Wk) * .92);
 			F = FMath::Max(F, Tr.X);
 			// the wash in the shallows along a beach. On the real map the flats are shallow a long way from any shore, so
 			// there it is kept to the water's edge - and there is none under the mangroves, where no surf gets in
-			const double Wash = !RealMap() ? 1.0 : SStep(16, 4, KeysGeoReal::Shore(X, Z)) * (1 - MangroveNear(X, Z));
+			const double Wash = !RealMap() ? 1.0 : SStep(16, 4, KeysGeoReal::Shore(X, Z)) * (1 - MangroveNear(X, Z)) * Lee;
 			F = FMath::Max(F, SStep(.9, .25, D) * (.3 + .3 * FMath::Clamp(Crest + .5, 0.0, 1.0)) * Wash);
 			F = FMath::Max(F, Surf.Y);
 			// UV0: x = how high on a crest (light glows through thin crests), y = aerated wash under the foam
 			WUV[K] = FVector2D(FMath::Clamp(Crest * .8 + Wk * .8, 0.0, 1.0), FMath::Clamp(Tr.Y, 0.0, 1.0));
 			// UV1: x = rain on the water here, y = whitecap cover (wind-streaked foam); UV2: x = how deep (0 flats .. 1 blue water)
-			WUV1[K] = FVector2D(KeysWx::RainAt(X, Z), Caps);
+			WUV1[K] = FVector2D(KeysWx::RainAt(X, Z), Caps * Lee);
 			WUV2[K] = FVector2D(SStep(4, 60, D), 0);
 			FLinearColor C = DepthColorFast(X, Z);
 			C.A = float(FMath::Clamp(F, 0.0, 1.0));
