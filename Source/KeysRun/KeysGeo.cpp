@@ -28,6 +28,7 @@ namespace KeysGeo
 	double OldBridgeX0 = -3820, OldBridgeX1 = -2010, OldBridgeGap0 = -3200, OldBridgeGap1 = -3080;
 
 	static void BuildNavSegs();
+	static void BuildMangNear();
 	static FLinearColor DepthRGBSrgb(double D);
 	bool RealMap() { return GReal; }
 	bool RealMapWanted()
@@ -538,6 +539,7 @@ namespace KeysGeo
 
 		if (GReal) GCreeks.Reset();   // the real creeks are in the coastline itself
 		if (GReal) BuildNavSegs();
+		if (GReal) BuildMangNear();
 
 		GSea = {{TEXT("Calm"), .8, .5, TEXT("glassy, a long, lazy ground swell."), 1.5},
 				{TEXT("Choppy"), 1.3, 1.2, TEXT("a steady trade wind, swells with afternoon chop on top."), 7},
@@ -578,7 +580,7 @@ namespace KeysGeo
 					}
 					// tannin: the water round the mangroves is stained the colour of tea
 					const double Tan = MangroveNear(X, Z) * SS(5, 1.5, D);
-					if (Tan > 0) ColorG[K] = FMath::Lerp(ColorG[K], FLinearColor(.105f, .075f, .022f), float(Tan * .72));
+					if (Tan > 0) ColorG[K] = FMath::Lerp(ColorG[K], FLinearColor(.105f, .075f, .022f), float(Tan * .85));
 				}
 			}
 		});
@@ -809,18 +811,35 @@ namespace KeysGeo
 	}
 
 	bool OnMangrove(double X, double Z) { return GReal && KeysGeoReal::MangroveAt(X, Z) >= 200; }
+	// how close to mangrove, per cell of the real map's grid: 255 on it, falling to 0 some 75 m off (built once)
+	static TArray<uint8> GMangNear;
+	static void BuildMangNear()
+	{
+		const int32 NX = KeysGeoReal::NX(), NZ = KeysGeoReal::NZ();
+		GMangNear.SetNumZeroed(NX * NZ);
+		for (int32 J = 0; J < NZ; J++) for (int32 I = 0; I < NX; I++) if (KeysGeoReal::MangroveCell(I, J)) GMangNear[J * NX + I] = 255;
+		TArray<uint8> Tmp;
+		for (int32 Pass = 0; Pass < 7; Pass++)
+		{
+			Tmp = GMangNear;
+			for (int32 J = 1; J < NZ - 1; J++)
+				for (int32 I = 1; I < NX - 1; I++)
+				{
+					int32 M = 0;
+					for (int32 b = -1; b <= 1; b++) for (int32 a = -1; a <= 1; a++) M = FMath::Max(M, int32(Tmp[(J + b) * NX + I + a]) - (a && b ? 48 : 34));
+					if (M > Tmp[J * NX + I]) GMangNear[J * NX + I] = uint8(M);
+				}
+		}
+	}
 	double MangroveNear(double X, double Z)
 	{
-		if (!GReal) return 0;
-		double Best = 0;
-		for (int32 r = 0; r < 4 && Best < 1; r++)
-		{
-			const double R = r * 12.0, K = 1 - r * .28;
-			if (K <= Best) break;
-			for (int32 a = 0; a < (r ? 8 : 1); a++)
-				if (KeysGeoReal::MangroveAt(X + R * FMath::Cos(a * PI / 4), Z + R * FMath::Sin(a * PI / 4)) > 0) { Best = K; break; }
-		}
-		return Best;
+		if (!GReal || !GMangNear.Num()) return 0;
+		const int32 NX = KeysGeoReal::NX(), NZ = KeysGeoReal::NZ();
+		const double FX = Clamp((X - KeysGeoReal::X0()) / KeysGeoReal::Cell(), 0, NX - 1.001), FZ = Clamp((Z - KeysGeoReal::Z0()) / KeysGeoReal::Cell(), 0, NZ - 1.001);
+		const int32 I = int32(FX), J = int32(FZ);
+		const double U = FX - I, V = FZ - J;
+		const uint8* P = GMangNear.GetData() + J * NX + I;
+		return ((P[0] * (1 - U) + P[1] * U) * (1 - V) + (P[NX] * (1 - U) + P[NX + 1] * U) * V) / 255.0;
 	}
 	bool InMarkedChannel(double X, double Z) { return GReal && GNavSegs.Num() && NavChannelK(X, Z) > .3; }
 
@@ -925,7 +944,7 @@ namespace KeysGeo
 	{
 		const double D = DepthAt(X, Z), DZ = DZAt(X, Z);
 		if (CreekDist(X, Z) < 0) return TEXT("Creek");
-		if (GReal && D < 3.2 && MangroveNear(X, Z) > .4) return TEXT("Creek");   // under and along the mangroves
+		if (GReal && D < 3.2 && MangroveNear(X, Z) > .6) return TEXT("Creek");   // under and along the mangroves
 		if (NearBridge(X, Z) && D >= 2 && ShoreInfo(X, Z).D > 6) return TEXT("Bridge");
 		if (D < (GReal ? 1.5 : 2.6)) return TEXT("Flats");   // the real bay is 2-3 m all over; its flats are the banks
 		if (DZ < 0) return TEXT("Backcountry");

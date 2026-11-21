@@ -3,6 +3,7 @@
 #include "Engine/Texture2D.h"
 #include "KeysEstates.h"
 #include "KeysGeo.h"
+#include "KeysGeoReal.h"
 #include "KeysTownData.h"
 #include "KeysTown.h"
 #include "KeysTownKit.h"
@@ -255,7 +256,13 @@ void AKeysWorld::BuildTerrain()
 			case 4: return FMath::Lerp(Srgb(.25, .21, .15), Mangrove, float(SStep(.2, .9, H)));   // mud and leaf litter under the mangroves
 			default: break;
 		}
-		if (H < .35) return FMath::Lerp(WetSand, Sand, float(SStep(-1.2, .35, H)));
+		if (H < .35)
+		{
+			// a beach - unless the mangroves stand along it: then it is dark peat, not sand
+			const FLinearColor Beach = FMath::Lerp(WetSand, Sand, float(SStep(-1.2, .35, H)));
+			const double Tan = MangroveNear(X, Z);
+			return Tan > 0 ? FMath::Lerp(Beach, Srgb(.2, .15, .09), float(Tan * .9)) : Beach;
+		}
 		const double N = .5 + .3 * FMath::Sin(X * .013) * FMath::Cos(Z * .011) + .2 * FMath::Sin((X + Z) * .031);
 		const FLinearColor Veg = N > .62 ? Mangrove : N > .42 ? Scrub : Grass;
 		return FMath::Lerp(Sand, Veg, float(SStep(.35, .95, H)));
@@ -743,7 +750,10 @@ void AKeysWorld::UpdateWater()
 			// white lines along the arms of a fresh wake, where the crests are tallest
 			F = FMath::Max(F, SStep(.025, .16, Wk) * .92);
 			F = FMath::Max(F, Tr.X);
-			F = FMath::Max(F, SStep(.9, .25, D) * (.3 + .3 * FMath::Clamp(Crest + .5, 0.0, 1.0)));
+			// the wash in the shallows along a beach. On the real map the flats are shallow a long way from any shore, so
+			// there it is kept to the water's edge - and there is none under the mangroves, where no surf gets in
+			const double Wash = !RealMap() ? 1.0 : SStep(16, 4, KeysGeoReal::Shore(X, Z)) * (1 - MangroveNear(X, Z));
+			F = FMath::Max(F, SStep(.9, .25, D) * (.3 + .3 * FMath::Clamp(Crest + .5, 0.0, 1.0)) * Wash);
 			F = FMath::Max(F, Surf.Y);
 			// UV0: x = how high on a crest (light glows through thin crests), y = aerated wash under the foam
 			WUV[K] = FVector2D(FMath::Clamp(Crest * .8 + Wk * .8, 0.0, 1.0), FMath::Clamp(Tr.Y, 0.0, 1.0));

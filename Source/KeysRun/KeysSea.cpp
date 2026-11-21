@@ -234,6 +234,8 @@ namespace KeysSea
 			C = L3(C, L3(Base, Live, SSmooth(.9, 2.2, Rel) * .55), RockT * .85);
 		}
 		else if (Rel < -.25) C = L3(C, Sand, SSmooth(.25, .9, -Rel) * .6);
+		// under and beside the mangroves the bottom is dark peat and leaf litter, and the water over it is stained like tea
+		if (const double Tan = KeysGeo::MangroveNear(X, Z); Tan > 0) C = L3(C, FLinearColor(.15f, .10f, .045f), Tan * .85 * SClamp((6 - D) / 4, 0, 1));
 		C = L3(C, Deep, SClamp((D - 13) / 22, 0, 1));
 		const double J = (.94 + Hash2(X * .7, Z * .3) * .12) * Shade;
 		return FLinearColor(float(C.R * J), float(C.G * J), float(C.B * J), 1.f);
