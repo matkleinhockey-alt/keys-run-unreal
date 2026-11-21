@@ -11,7 +11,7 @@ once).
 | Lane | Goal | Branch | Worktree | State |
 |---|---|---|---|---|
 | `water` | Sea and seafloor polish | `lane/water` | `../KeysRun-water` | merged 2026-11-21 |
-| `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | running |
+| `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | merged 2026-11-21 |
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | running |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | waiting for a free slot |
 
@@ -78,3 +78,11 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   Follow-ups it left: reef chunk block from high above, diver depth readout ignores the tide, one unexplained 712 ms
   frame at the reef, seagrass tufts read bright green from above.
 - 2026-11-21: `lane/yards` created from `main` after the `water` merge; the `water` worktree removed (branch kept).
+- 2026-11-21: `mangroves` merged (lane at 9426997). Requests applied: R1 creek ground, R2 `creek=` and numeric
+  `heading=` test commands, R3 creatures allowed in creeks, R4 four Free Fish spots and three charter rows (added in
+  `KeysCharter::LoadTable` because the table asset cannot be re-imported without the editor), R5 mangrove snapper
+  weight 4 in the Creek table. Marshal additions: teleport and `tpcheck` accept creek spots; exposure held down in the
+  roofed tunnel. Editor build and smoke runs on both maps green. Follow-ups: an estate dock with a boat lift now
+  stands in the Whiskey Creek pond; the chase camera clips bank trees on bends; `SpawnHotspot("Creek")` uses the old
+  map's creeks; manatees come through a debug spawn hook; real boat and engine brand names in the `KeysData` boat
+  table. Packaged-build perf bookmarks still owed.

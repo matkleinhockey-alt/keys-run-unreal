@@ -88,7 +88,7 @@ namespace KeysData
 		if (!T.Num())
 		{
 			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(Name, FRow(Rows)); };
-			Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.5}, {TEXT("snook"), 5}, {TEXT("redfish"), 3}, {TEXT("tarpon"), 2}, {TEXT("mangrove"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}});
+			Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.5}, {TEXT("snook"), 5}, {TEXT("redfish"), 3}, {TEXT("tarpon"), 2}, {TEXT("mangrove"), 4}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}});
 			Z(TEXT("Flats"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.2}, {TEXT("bonefish"), 11}, {TEXT("permit"), 2}, {TEXT("barracuda"), 3}, {TEXT("tarpon"), 1}, {TEXT("ladyfish"), 2}, {TEXT("lemonshark"), 0.8}, {TEXT("blacktip"), 1}, {TEXT("palometa"), 1.5}});
 			// the real map's bay-side flats: the grass banks behind the keys fish like the backcountry, not like the ocean flats
 			Z(TEXT("Bay Flats"), {{TEXT("flounder"), 2}, {TEXT("redfish"), 8}, {TEXT("trout"), 6}, {TEXT("snook"), 3}, {TEXT("bonefish"), 2.5}, {TEXT("tarpon"), 1.5}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("lemonshark"), 0.8}, {TEXT("blacktip"), 1}, {TEXT("barracuda"), 1.2}});

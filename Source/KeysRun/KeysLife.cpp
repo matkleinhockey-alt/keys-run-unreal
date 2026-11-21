@@ -2226,7 +2226,7 @@ FKeysSchool* AKeysLife::SpawnGroupAt(const FString& Type, double X, double Z, do
 	const FKeysVis* V = LifeVis(Type);
 	if (!V) return nullptr;
 	const double D = DepthAt(X, Z);
-	if (D < V->DMin || D > V->DMax || ShoreInfo(X, Z).D < 4) return nullptr;
+	if (D < V->DMin || D > V->DMax || (ShoreInfo(X, Z).D < 4 && CreekDist(X, Z) > -3)) return nullptr;   // (a creek cut through the mangroves is water too)
 	const int32 N = V->SMin + FMath::RandRange(0, V->SMax - V->SMin);
 	if (!bIgnoreCap && FreeSlots(V) < N) return nullptr;
 	FKeysSchool& G = Schools.AddDefaulted_GetRef();
@@ -2470,7 +2470,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 		}
 		double Fx = -FMath::Sin(G.H), Fz = -FMath::Cos(G.H);
 		const double La = 5 + Sp * 2, Lx = G.CX + Fx * La, Lz = G.CZ + Fz * La, Ld = DepthFast(Lx, Lz);
-		if (Ld < V->DMin || Ld > V->DMax * 1.5 || ShoreInfo(Lx, Lz).D < 4)
+		if (Ld < V->DMin || Ld > V->DMax * 1.5 || (ShoreInfo(Lx, Lz).D < 4 && CreekDist(Lx, Lz) > -3))
 		{
 			if (!G.Turn) G.Turn = FMath::FRand() < .5 ? -1 : 1;
 			G.H += G.Turn * 1.8 * Dt;

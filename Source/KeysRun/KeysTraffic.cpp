@@ -403,7 +403,8 @@ double AKeysTraffic::ClosestS(const FKeysRoute& R, double X, double Z)
 bool AKeysTraffic::SpotClear(double X, double Z, const KeysData::FBoatSpec& S)
 {
 	const double R = S.Len * .5 + 6;
-	if (DepthAt(X, Z) < S.Draft + .6 || ShoreInfo(X, Z).D < R + 6) return false;
+	// (a creek cut through the real map's mangroves is water, though the baked shore distance calls it land)
+	if (DepthAt(X, Z) < S.Draft + .6 || (ShoreInfo(X, Z).D < R + 6 && !(RealMap() && CreekDist(X, Z) < -3))) return false;
 	// the marina piers and T-heads as KeysWorld::BuildMarinas lays them out
 	for (const FMarina& M : Marinas())
 	{

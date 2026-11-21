@@ -1,4 +1,5 @@
 #include "KeysBoatPawn.h"
+#include "KeysMangroveLife.h"
 #include "Components/TextRenderComponent.h"
 #include "KeysGarden.h"
 #include "KeysCharter.h"
@@ -582,6 +583,8 @@ void AKeysBoatPawn::StartRun(bool bDemo)
 	ShowToast(FString::Printf(TEXT("Welcome to Marathon. The %s %s is fueled up and out in the Gulf Stream off Marathon. Esc for the menu."), *Spec().Brand, *Spec().Name), 5);
 }
 
+static int32 GScriptCreek = -1;   // creek=N: the mangrove creek the script is idling her along
+
 // -KRScript="8:shot;9:settings;11:shot;14:quit" runs menu actions and screenshots on a timer (seconds of game time),
 // so menus and models can be checked in an offscreen run without a keyboard. Words are menu ids (play, settings, back,
 // board, esc, ...), "shot" saves a screenshot, "sel=N" selects row N, "quit" exits.
@@ -821,7 +824,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 				double RigD = 1e9;
 				for (const FVector2D& R : Rigs) RigD = FMath::Min(RigD, FVector2D::Distance(R, FVector2D(TX, TZ)));
 				const double Dep = DepthAt(TX, TZ), Sh = ShoreInfo(TX, TZ).D;
-				const bool bGood = bOk && Dep >= Spec().Draft + .6 && Sh > 6 && RigD > 100;
+				const bool bGood = bOk && Dep >= Spec().Draft + .6 && (Sh > 6 || (RealMap() && CreekDist(TX, TZ) < -3)) && RigD > 100;   // (in a mangrove creek the banks are close by design)
 				Bad += bGood ? 0 : 1;
 				UE_LOG(LogTemp, Log, TEXT("KRTp %s %-32s (%s) -> %.0f,%.0f depth %.1f m shore %.0f m rig %.0f m moved %.0f m"), bGood ? TEXT("OK ") : TEXT("BAD"), *D.Name, *D.Note, TX, TZ, Dep, Sh, RigD, FMath::Sqrt(FMath::Square(TX - D.X) + FMath::Square(TZ - D.Z)));
 			}
@@ -1130,12 +1133,13 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd.StartsWith(TEXT("heading=")))
 		{
-			// heading=head|follow|beam: point the bow into, with or across the sea (it runs with the wind)
+			// heading=head|follow|beam: point the bow into, with or across the sea (it runs with the wind); heading=<radians>
 			const FString W = Cmd.Mid(8);
 			const double Wd = WindDir();
 			const double Dx = W == TEXT("follow") ? FMath::Cos(Wd) : W == TEXT("beam") ? -FMath::Sin(Wd) : -FMath::Cos(Wd);
 			const double Dz = W == TEXT("follow") ? FMath::Sin(Wd) : W == TEXT("beam") ? FMath::Cos(Wd) : -FMath::Sin(Wd);
 			H = FMath::Atan2(-Dx, -Dz);   // forward is (-sin H, -cos H)
+			if (W.IsNumeric()) H = FCString::Atod(*W);   // heading=4.71: that heading, in radians as tp= takes it
 		}
 		else if (Cmd.StartsWith(TEXT("trim="))) { TrimDeg = FCString::Atod(*Cmd.Mid(5)); bScriptLog = true; }   // trim=<degrees>, logs KRTrim twice a second
 		else if (Cmd.StartsWith(TEXT("tabs=")))
@@ -1145,6 +1149,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (Cmd.Mid(5).Split(TEXT(","), &A, &B)) { TabL = FMath::Clamp(FCString::Atod(*A), 0.0, 1.0); TabR = FMath::Clamp(FCString::Atod(*B), 0.0, 1.0); }
 		}
 		else if (Cmd.StartsWith(TEXT("steer="))) ScriptSteer = FCString::Atod(*Cmd.Mid(6));   // steer=0.3 (left positive)
+		else if (Cmd.StartsWith(TEXT("creek="))) GScriptCreek = FCString::Atoi(*Cmd.Mid(6));   // creek=1: hold her on that mangrove creek's line to its head, then stop (KeysMangroveLife::Creeks(); -1 lets go)
 		else if (Cmd.StartsWith(TEXT("catch=")))
 		{
 			// land a fish of that species (a fifth of the way up its size range) and show the catch card; catch=tourney: the tournament's first
@@ -1563,6 +1568,14 @@ void AKeysBoatPawn::RunDests(TArray<FRunDest>& Out, bool bOnlyFound) const
 	for (const KeysWrecks::FWreck& W : KeysWrecks::Wrecks()) Out.Add({FString(W.Name), TEXT("wreck"), W.X + 30, W.Z});
 	for (const FMarina& M : Marinas()) Out.Add({M.Name, TEXT("marina"), M.SX, M.SZ + M.Dir * 48});
 	if (RealMap()) Out.Add({TEXT("Sombrero Reef"), TEXT("the crest"), -1800, 2790}); else Out.Add({TEXT("Sombrero Reef"), TEXT("the crest"), 60, 1462});
+	if (RealMap())
+	{
+		// the mangrove country round Boot Key (creek lines: KeysMangroveLife.cpp)
+		Out.Add({TEXT("Sister Creek"), TEXT("mangrove creek"), -272, 426});
+		Out.Add({TEXT("Whiskey Creek"), TEXT("mangrove tunnel"), -292, 462});
+		Out.Add({TEXT("Sister Creek mouth"), TEXT("tarpon at first and last light"), -342, 792});
+		Out.Add({TEXT("Boot Key flat"), TEXT("mangrove flat"), -1150, 452});
+	}
 	for (const FHump& Hm : Humps()) Out.Add({Hm.Name, Hm.bPatch ? TEXT("patch reef") : TEXT("offshore hump"), Hm.X, ChainZ(Hm.X) + Hm.DZ});
 	if (const AKeysLife* L = AKeysLife::Get(this))
 	{
@@ -2265,6 +2278,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	}
 	else if (D > HullDraft + .08) bAgroundPrev = false;
 	const double St = bAc ? AcSteer : bCanDrive ? (bLeft ? 1 : bRight ? -1 : ScriptSteer) : 0;
+	if (GScriptCreek >= 0 && !KeysMangroveLife::Pilot(GScriptCreek, X, Z, H)) { GScriptCreek = -1; ScriptThr = 0; }   // test harness: creek=N
 	Steer += (St - Steer) * FMath::Min(1.0, Dt * 4);
 	const double F = FMath::Abs(Speed) / TopMs;
 	H += S.Turn * Steer * (.3 + FMath::Min(1.0, FMath::Abs(Speed) / 8) * .9) * (1 - .35 * F) * (1.05 - .2 * TrimV) * TrimSteerK * (Speed < -.2 ? -1 : 1) * Dt + TrimYaw * Dt;
@@ -2726,8 +2740,12 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	Camera->SetWorldLocationAndRotation(P, (L - P).Rotation());
 	// the landing close-up fills the frame with white deck in full sun: stop the lens down for it, and ease the bloom
 	CloseUpK = FMath::FInterpTo(CloseUpK, FState == EKeysFish::Caught || Stage.bOn ? 1.0 : 0.0, Dt, 3.0);
-	Camera->PostProcessSettings.bOverride_AutoExposureBias = Camera->PostProcessSettings.bOverride_BloomIntensity = CloseUpK > .01;
-	Camera->PostProcessSettings.AutoExposureBias = float(-.6 * CloseUpK);
+	// under a mangrove tunnel's roof the eye adaptation opens right up, and the water, still mirroring open sky, burns
+	// out to white: hold the exposure down while she is in the roofed stretch
+	static double TunnelK = 0;
+	TunnelK = FMath::FInterpTo(TunnelK, RealMap() && KeysMangroveLife::Near(X, Z).bRoof ? 1.0 : 0.0, Dt, 1.2);
+	Camera->PostProcessSettings.bOverride_AutoExposureBias = Camera->PostProcessSettings.bOverride_BloomIntensity = CloseUpK > .01 || TunnelK > .01;
+	Camera->PostProcessSettings.AutoExposureBias = float(-.6 * CloseUpK - 1.5 * TunnelK);
 	Camera->PostProcessSettings.BloomIntensity = float(.55 - .3 * CloseUpK);
 }
 

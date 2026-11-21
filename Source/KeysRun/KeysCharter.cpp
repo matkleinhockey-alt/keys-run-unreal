@@ -51,6 +51,18 @@ void AKeysCharter::LoadTable()
 		const FString File = FPaths::ProjectContentDir() / TEXT("KeysRun/Data/CharterRequests.json");
 		if (FFileHelper::LoadFileToString(Json, *File)) Table->CreateTableFromJSONString(Json);
 	}
+	// requests added in code since the table asset was last saved (it cannot be re-imported without the editor)
+	auto Add = [this](const TCHAR* Name, const TCHAR* Client, const TCHAR* Text, const TCHAR* Species, float MinLb, int32 N, bool bRelease, float Minutes, int32 Pay)
+	{
+		if (Table->FindRowUnchecked(Name)) return;
+		FCharterRequest R;
+		R.ClientName = Client; R.RequestText = Text; R.TargetSpecies = {FName(Species)};
+		R.MinWeight = MinLb; R.RequiredCount = N; R.CatchAndRelease = bRelease; R.TimeLimitMinutes = Minutes; R.BasePay = Pay;
+		Table->AddRow(Name, R);
+	};
+	Add(TEXT("CreekSnook"), TEXT("Captain Odalys Ferrer"), TEXT("My nephew wants his first snook. Work the roots in Sister Creek on the moving tide - two slot fish, and they go back."), TEXT("snook"), 4, 2, true, 120, 550);
+	Add(TEXT("DuskTarpon"), TEXT("The Halvorsen brothers"), TEXT("One silver king, jumped and let go. They roll at the creek mouth and under the bridges at first and last light."), TEXT("tarpon"), 40, 1, true, 150, 900);
+	Add(TEXT("MangroveSupper"), TEXT("Tide Table Supper Club"), TEXT("Four mangrove snapper for the pan. Go light on the leader and fish the shade under the roots."), TEXT("mangrove"), 1, 4, false, 120, 450);
 	UE_LOG(LogTemp, Log, TEXT("KRCharter table %s: %d requests"), *Table->GetName(), Table->GetRowMap().Num());
 }
 
