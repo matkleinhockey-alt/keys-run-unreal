@@ -1,0 +1,40 @@
+--- a/Source/KeysRun/KeysGeo.cpp
++++ b/Source/KeysRun/KeysGeo.cpp
+@@ -5,6 +5,7 @@
+ #include "Async/ParallelFor.h"
+ #include "KeysCoastData.h"
+ #include "KeysGeoReal.h"
++#include "KeysMangroveLife.h"
+ #include "Misc/CommandLine.h"
+ #include "Misc/Parse.h"
+ 
+@@ -558,7 +559,19 @@
+ 			Snake(TEXT("Mangrove river"), -2400, -2620, -2950, -4100, 150, 3, 32),
+ 			Snake(TEXT("Little River"), 3650, -2640, 3950, -3700, 70, 2, 26)};
+ 
+-		if (GReal) GCreeks.Reset();   // the real creeks are in the coastline itself
++		if (GReal)
++		{
++			// the real creeks are in the coastline itself - too fine for the 10 m grid to keep open, so the mangrove
++			// creeks a skiff can idle through are cut along their own lines (KeysMangroveLife.cpp)
++			GCreeks.Reset();
++			for (const KeysMangroveLife::FCreek& M : KeysMangroveLife::Creeks())
++			{
++				FCreek C;
++				C.Name = M.Name; C.Pts = M.Pts; C.W = M.W;
++				C.BX0 = M.X0; C.BX1 = M.X1; C.BZ0 = M.Z0; C.BZ1 = M.Z1;
++				GCreeks.Add(C);
++			}
++		}
+ 		if (GReal) BuildNavSegs();
+ 		if (GReal) BuildMangNear();
+ 
+@@ -880,6 +893,8 @@
+ 			if (K > 0) D = Lerp(D, NavDepth, K * K * (3 - 2 * K));
+ 		}
+ 		if (SD < 25) { const double T = FMath::Max(0.0, SD) / 25; D = FMath::Min(D, .35 + T * (2 - T) * (D - .35)); }
++		// the mangrove creeks are kept open from bank to bank: seven feet of dark water, shoaling under the roots
++		if (GCreeks.Num()) { const double CD = CreekDist(X, Z); if (CD < 8) D = FMath::Max(D, Lerp(.35, 2.3, SS(8, 1, CD))); }
+ 		const double DZ = Z - ChainZ(X);
+ 		for (const FHump& H : GHumps)
+ 			if (!H.bPatch) D = FMath::Min(D, 40 + FMath::Sqrt(FMath::Square(X - H.X) + FMath::Square(DZ - H.DZ)) * .32);

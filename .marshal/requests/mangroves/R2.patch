@@ -1,0 +1,48 @@
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -1,4 +1,5 @@
+ #include "KeysBoatPawn.h"
++#include "KeysMangroveLife.h"
+ #include "Components/TextRenderComponent.h"
+ #include "KeysGarden.h"
+ #include "KeysCharter.h"
+@@ -581,6 +582,8 @@
+ 	Menu = EMenu::None;
+ 	ShowToast(FString::Printf(TEXT("Welcome to Marathon. The %s %s is fueled up and out in the Gulf Stream off Marathon. Esc for the menu."), *Spec().Brand, *Spec().Name), 5);
+ }
++
++static int32 GScriptCreek = -1;   // creek=N: the mangrove creek the script is idling her along
+ 
+ // -KRScript="8:shot;9:settings;11:shot;14:quit" runs menu actions and screenshots on a timer (seconds of game time),
+ // so menus and models can be checked in an offscreen run without a keyboard. Words are menu ids (play, settings, back,
+@@ -1130,12 +1133,13 @@
+ 		}
+ 		else if (Cmd.StartsWith(TEXT("heading=")))
+ 		{
+-			// heading=head|follow|beam: point the bow into, with or across the sea (it runs with the wind)
++			// heading=head|follow|beam: point the bow into, with or across the sea (it runs with the wind); heading=<radians>
+ 			const FString W = Cmd.Mid(8);
+ 			const double Wd = WindDir();
+ 			const double Dx = W == TEXT("follow") ? FMath::Cos(Wd) : W == TEXT("beam") ? -FMath::Sin(Wd) : -FMath::Cos(Wd);
+ 			const double Dz = W == TEXT("follow") ? FMath::Sin(Wd) : W == TEXT("beam") ? FMath::Cos(Wd) : -FMath::Sin(Wd);
+ 			H = FMath::Atan2(-Dx, -Dz);   // forward is (-sin H, -cos H)
++			if (W.IsNumeric()) H = FCString::Atod(*W);   // heading=4.71: that heading, in radians as tp= takes it
+ 		}
+ 		else if (Cmd.StartsWith(TEXT("trim="))) { TrimDeg = FCString::Atod(*Cmd.Mid(5)); bScriptLog = true; }   // trim=<degrees>, logs KRTrim twice a second
+ 		else if (Cmd.StartsWith(TEXT("tabs=")))
+@@ -1145,6 +1149,7 @@
+ 			if (Cmd.Mid(5).Split(TEXT(","), &A, &B)) { TabL = FMath::Clamp(FCString::Atod(*A), 0.0, 1.0); TabR = FMath::Clamp(FCString::Atod(*B), 0.0, 1.0); }
+ 		}
+ 		else if (Cmd.StartsWith(TEXT("steer="))) ScriptSteer = FCString::Atod(*Cmd.Mid(6));   // steer=0.3 (left positive)
++		else if (Cmd.StartsWith(TEXT("creek="))) GScriptCreek = FCString::Atoi(*Cmd.Mid(6));   // creek=1: hold her on that mangrove creek's line to its head, then stop (KeysMangroveLife::Creeks(); -1 lets go)
+ 		else if (Cmd.StartsWith(TEXT("catch=")))
+ 		{
+ 			// land a fish of that species (a fifth of the way up its size range) and show the catch card; catch=tourney: the tournament's first
+@@ -2265,6 +2270,7 @@
+ 	}
+ 	else if (D > HullDraft + .08) bAgroundPrev = false;
+ 	const double St = bAc ? AcSteer : bCanDrive ? (bLeft ? 1 : bRight ? -1 : ScriptSteer) : 0;
++	if (GScriptCreek >= 0 && !KeysMangroveLife::Pilot(GScriptCreek, X, Z, H)) { GScriptCreek = -1; ScriptThr = 0; }   // test harness: creek=N
+ 	Steer += (St - Steer) * FMath::Min(1.0, Dt * 4);
+ 	const double F = FMath::Abs(Speed) / TopMs;
+ 	H += S.Turn * Steer * (.3 + FMath::Min(1.0, FMath::Abs(Speed) / 8) * .9) * (1 - .35 * F) * (1.05 - .2 * TrimV) * TrimSteerK * (Speed < -.2 ? -1 : 1) * Dt + TrimYaw * Dt;
