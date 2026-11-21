@@ -29,17 +29,7 @@
  		if (GReal) BuildNavSegs();
  		if (GReal) BuildMangNear();
  
-@@ -662,7 +675,8 @@
- 		if (GReal)
- 		{
- 			// the baked distance-to-shore grid and its nearest island
--			const double D = KeysGeoReal::Shore(X, Z);
-+			double D = KeysGeoReal::Shore(X, Z);
-+			if (D < 10 && GCreeks.Num()) { const double CD = CreekDist(X, Z); if (CD < 0) D = FMath::Max(D, -CD); }   // a creek's water is water: its banks are the shore
- 			const FIsland& I = GIslands[FMath::Min(KeysGeoReal::IslandAt(X, Z), GIslands.Num() - 1)];
- 			return {D, &I, 1 + D / FMath::Min((I.A + I.B) * .5, ShoreScale)};
- 		}
-@@ -880,6 +894,8 @@
+@@ -880,6 +893,8 @@
  			if (K > 0) D = Lerp(D, NavDepth, K * K * (3 - 2 * K));
  		}
  		if (SD < 25) { const double T = FMath::Max(0.0, SD) / 25; D = FMath::Min(D, .35 + T * (2 - T) * (D - .35)); }

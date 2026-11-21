@@ -33,6 +33,10 @@ namespace KeysMangroveLife
 	};
 	FNear Near(double X, double Z);
 
+	// The test harness's helmsman (the creek=N script command, request R2): the heading (as the boat's H) that keeps a
+	// boat at (X, Z) on creek N's line, bound from its mouth to its head. False once she is at the head, or N is no creek.
+	bool Pilot(int32 Creek, double X, double Z, double& InOutH);
+
 	// where a manatee or two lie up: calm, deep bends and the pond at the head of Whiskey Creek
 	const TArray<FVector2D>& Haunts();
 	// dead snags at the creek mouths where the pelicans roost (x, z)
@@ -41,7 +45,7 @@ namespace KeysMangroveLife
 	// a three-sided limb from P0 to P1 (game metres, y up), R thick, tapering a little
 	void Limb(FTownBatch& B, const FVector& P0, const FVector& P1, double R, const FLinearColor& C);
 	// a brown pelican perched with its feet at Feet, facing Yaw: bill tucked down on the breast (Pose 0), or head up
-	// and looking about (Pose 1)
+	// and looking about (Pose 1). Sz 1 is life size; like the waders they are drawn large (1.7 and up) to read from a boat
 	void Pelican(FTownBatch& B, const FVector& Feet, double Yaw, double Sz, int32 Pose);
 	// a dead, bare mangrove standing at (X, Z) with its foot at Y0, and N pelicans along its limbs; returns how many
 	int32 Snag(FTownBatch& B, double X, double Y0, double Z, double Seed, int32 N);

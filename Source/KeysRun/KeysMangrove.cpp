@@ -29,8 +29,8 @@ namespace
 
 	// A crown of leaves: a lumpy dome round C, R across and SY as tall, its vertices shared so it shades round. Dark
 	// in the shade underneath, Base round the sides, Top where the sun gets at it. NU round, NR rings up to the top;
-	// bUnder closes the underside (wanted wherever you can get beneath it).
-	void Crown(FTownBatch& B, const FVector& C, double R, double SY, uint32 Base, uint32 Top, double Seed, int32 NU, int32 NR, bool bUnder)
+	// bUnder closes the underside (wanted wherever you can get beneath it); Shade is how dark the leaves are down there.
+	void Crown(FTownBatch& B, const FVector& C, double R, double SY, uint32 Base, uint32 Top, double Seed, int32 NU, int32 NR, bool bUnder, float Shade = .55f)
 	{
 		FKeysMesh& M = B.M;
 		const FLinearColor Bc = KeysTownPaint::Hex(Base), Tc = KeysTownPaint::Hex(Top);
@@ -45,7 +45,7 @@ namespace
 				const double Lon = 2 * PI * i / NU + Seed;
 				const double Lump = 1 + .13 * FMath::Sin(Lon * 3 + Seed * 6.1) * FMath::Cos(Lat * 2.3 + Seed * 3.7) + .12 * (MHash(Seed + i * 1.37, j * 2.11 + Seed * .31) - .5);
 				const FVector Dir(CL * FMath::Sin(Lon), SL, CL * FMath::Cos(Lon));
-				FLinearColor Col = FMath::Lerp(Bc * .55f, Bc, float(FMath::Min(1.0, Tt * 2.4)));
+				FLinearColor Col = FMath::Lerp(Bc * Shade, Bc, float(FMath::Min(1.0, Tt * 2.4)));
 				Col = FMath::Lerp(Col, Tc, float(FMath::Clamp((Tt - .45) * 2.2, 0.0, 1.0)) * .9f);
 				Put(C + FVector(Dir.X * R * Lump, Dir.Y * R * SY * Lump, Dir.Z * R * Lump), FVector(Dir.X, Dir.Y / SY * .8 + .12, Dir.Z), Col * float(.9 + .2 * MHash(Seed * 2.3 + i, j + Seed)));
 			}
@@ -53,7 +53,7 @@ namespace
 		const int32 TopI = M.V.Num();
 		Put(C + FVector(0, R * SY * (.97 + .08 * MHash(Seed, 3.3)), 0), FVector(0, 1, 0), Tc);
 		const int32 BotI = M.V.Num();
-		if (bUnder) Put(C + FVector(0, S0 * R * SY * .7, 0), FVector(0, -1, 0), Bc * .4f);
+		if (bUnder) Put(C + FVector(0, S0 * R * SY * .7, 0), FVector(0, -1, 0), Bc * (Shade * .7f));
 		auto Tri = [&M](int32 I0, int32 I1, int32 I2)
 		{
 			// wound as FTownBatch::TriN winds its own
@@ -126,8 +126,9 @@ void AKeysWorld::BuildMangroves()
 		return false;
 	};
 
-	// a red mangrove standing at (X, Z) on its prop roots; Lean carries its head that way (metres), Tall lifts the fork
-	auto Tree = [&](FTile& T, double X, double Z, double Ground, const FVector2D& Lean, double Tall) -> FVector
+	// a red mangrove standing at (X, Z) on its prop roots; Lean carries its head that way (metres), Tall lifts the fork;
+	// bClose: one you idle right past, so its crown is cut finer. Returns the top of its crown.
+	auto Tree = [&](FTile& T, double X, double Z, double Ground, const FVector2D& Lean, double Tall, bool bClose = false) -> FVector
 	{
 		const double Base = FMath::Max(Ground, -.05), Foot = FMath::Min(Ground, -.35) - .25;   // the roots go on down into the mud
 		const double Hh = 1.5 + 1.1 * MHash(X, Z) + Tall, Sz = .8 + .5 * MHash(Z, X);            // where the roots leave the trunk
@@ -155,9 +156,10 @@ void AKeysWorld::BuildMangroves()
 		}
 		// the canopy: low, wide and dense - one broad dome and a second, lighter one shouldering out of it
 		const double R = (3.0 + 1.3 * MHash(X * 1.3, Z)) * Sz;
-		Crown(T.Canopy, FVector(Top.X, Top.Y + R * .2, Top.Z), R, .56, Leaf[int32(MHash(X, Z * 1.9) * 5) % 5], LeafTop[int32(MHash(Z, X * 1.1) * 3) % 3], 6.28 * MHash(X, Z * 1.9), 9, 4, true);
+		const FVector Apex(Top.X, Top.Y + R * .2 + R * .56 * .93, Top.Z);
+		Crown(T.Canopy, FVector(Top.X, Top.Y + R * .2, Top.Z), R, .56, Leaf[int32(MHash(X, Z * 1.9) * 5) % 5], LeafTop[int32(MHash(Z, X * 1.1) * 3) % 3], 6.28 * MHash(X, Z * 1.9), bClose ? 12 : 9, bClose ? 5 : 4, true, bClose ? .4f : .55f);
 		Crown(T.Canopy, FVector(Top.X + (MHash(X, 7.0) - .5) * R, Top.Y + R * .42, Top.Z + (MHash(Z, 9.0) - .5) * R), R * .66, .6,
-			Leaf[int32(MHash(Z, X * 2.3) * 5) % 5], LeafTop[int32(MHash(X, Z * 1.7) * 3) % 3], 6.28 * MHash(Z, X * 1.3), 7, 3, true);
+			Leaf[int32(MHash(Z, X * 2.3) * 5) % 5], LeafTop[int32(MHash(X, Z * 1.7) * 3) % 3], 6.28 * MHash(Z, X * 1.3), bClose ? 10 : 7, bClose ? 4 : 3, true, bClose ? .4f : .55f);
 		Rooted++;
 		// fiddler and mangrove tree crabs on the roots: specks of red-orange and dark shell, a few to a tree
 		for (int32 c = 0; c < 3 && MHash(X + 2.0, Z + c) < .6; c++)
@@ -165,7 +167,7 @@ void AKeysWorld::BuildMangroves()
 			const double A = 2 * PI * MHash(X + c * 4.0, Z - 1.0), Rr = (.5 + 1.2 * MHash(Z + c, X + 6.0)) * Sz;
 			T.Roots.Ball(X + FMath::Cos(A) * Rr, Base + .25 + .9 * MHash(X - c, Z + 8.0), Z + FMath::Sin(A) * Rr, .045, c == 0 ? 0xc8482a : 0x4a2c22, .6, 4);
 		}
-		return Top;
+		return Apex;
 	};
 
 	for (int32 J = 0; J < KeysGeoReal::NZ(); J++)
@@ -201,7 +203,7 @@ void AKeysWorld::BuildMangroves()
 				if (CreekD(X, Z) < 4.6) continue;                         // the channel and its banks are planted below
 				const double Ground = LandH(X, Z);
 				if (!bFringe && Ground < -.6) continue;
-				const FVector Top = Tree(T, X, Z, Ground, FVector2D::ZeroVector, 0);
+				const FVector Apex = Tree(T, X, Z, Ground, FVector2D::ZeroVector, 0);
 				// a heron or an egret now and then, stalking the shallows just off the roots
 				if (bFringe && k == 0 && MHash(I * 3.7, J * 1.9) < .07)
 				{
@@ -221,7 +223,12 @@ void AKeysWorld::BuildMangroves()
 					if (LandH(SX, SZ) < .3 && CreekD(SX, SZ) > 6)
 						Pelicans += KeysMangroveLife::Snag(T.Roots, SX, FMath::Min(LandH(SX, SZ), -.3), SZ, MHash(I, J) * 50, 1 + int32(MHash(J * 1.3, I + 2.0) * 3));
 				}
-				(void)Top;
+				// or one sits on top of a living tree, on the seaward edge where it can see the water
+				if (bFringe && MHash(I * 5.3 + 2.0, J * 1.1 + k) < .022)
+				{
+					KeysMangroveLife::Pelican(T.Roots, Apex, 2 * PI * MHash(J * 3.1, I + k), 1.7 + .3 * MHash(I, J * 7.7), MHash(I + 1.0, J) < .35 ? 1 : 0);
+					Pelicans++;
+				}
 			}
 		}
 
@@ -248,11 +255,22 @@ void AKeysWorld::BuildMangroves()
 				{
 					const double PX = X + (MHash(X, Z + 1.7) - .5) * Step * .8, PZ = Z + (MHash(Z, X + 2.9) - .5) * Step * .8;
 					const KeysMangroveLife::FNear N = KeysMangroveLife::Near(PX, PZ);
-					if (N.D < .5 || N.D > 4.4 || &Creeks[N.Creek] != &C || Blocked(PX, PZ) || OnLot(PX, PZ)) continue;
+					// (a tunnel's banks are planted three deep, so no daylight comes in under the roof from the sides)
+					if (N.D < .5 || N.D > (N.bRoof ? 10.5 : 4.4) || &Creeks[N.Creek] != &C || Blocked(PX, PZ) || OnLot(PX, PZ)) continue;
+					const bool bFront = N.D < 4.4;
 					FVector2D In = N.C - FVector2D(PX, PZ);
-					In = In.GetSafeNormal() * (N.bRoof ? 2.2 : 1.1);
-					Tree(TileAt(PX, PZ), PX, PZ, LandH(PX, PZ), In, N.bRoof ? 1.4 : .3);
+					In = In.GetSafeNormal() * (!bFront ? 0 : N.bRoof ? 1.8 : 1.1);
+					const FVector Apex = Tree(TileAt(PX, PZ), PX, PZ, LandH(PX, PZ), In, !bFront ? .2 : N.bRoof ? 1.4 : .3, bFront);
 					BankTrees++;
+					// the trees by a roost carry a bird or two as well
+					if (!N.bRoof && MHash(PX * 1.9, PZ * 2.3) < .5)
+						for (const FVector2D& R : KeysMangroveLife::Roosts())
+							if (FMath::Square(R.X - PX) + FMath::Square(R.Y - PZ) < 16.0 * 16.0)
+							{
+								KeysMangroveLife::Pelican(TileAt(PX, PZ).Roots, Apex, 2 * PI * MHash(PZ, PX), 1.7 + .3 * MHash(PX, PZ * 3.3), MHash(PX + 1.0, PZ) < .35 ? 1 : 0);
+								Pelicans++;
+								break;
+							}
 				}
 		// the tunnels: every few metres a pair of limbs springs from the banks and meets over the middle, and the
 		// canopy lies along them - low at the sides, some 7 m clear over the middle of the channel
@@ -287,10 +305,12 @@ void AKeysWorld::BuildMangroves()
 							Limb(T.Roots, Hang, FVector(Hang.X, -.5, Hang.Z), .03, RootDark);
 						}
 						const uint32 Lf = Leaf[int32(MHash(Seed, Sd + 7.0) * 5) % 5], Lt = LeafTop[int32(MHash(Seed + 2.0, Sd) * 3) % 3];
-						Crown(T.Canopy, At(Sd * (HalfW + 3.5), 6.6, J1), 5.4, .62, Lf, Lt, Seed + Sd, 9, 3, true);              // over the bank
-						Crown(T.Canopy, At(Sd * (HalfW - 2.2), 9.3, J2), 4.9, .5, Lf, Lt, Seed * 1.3 + Sd, 9, 3, true);        // over the shoulder
+						const double R1 = 4.6 + 1.8 * MHash(Seed + 4.0, Sd), R2 = 4.2 + 1.6 * MHash(Seed, Sd + 6.0);
+						Crown(T.Canopy, At(Sd * (HalfW + 2.6 + 1.8 * MHash(Seed, Sd + 8.0)), 6.2 + MHash(Sd, Seed + 1.0), J1), R1, .64, Lf, Lt, Seed + Sd, 10, 4, true, .36f);                    // over the bank
+						Crown(T.Canopy, At(Sd * (HalfW - 3.0 + 1.6 * MHash(Seed + 9.0, Sd)), 8.9 + .8 * MHash(Sd, Seed + 2.0), J2 + J1 * .4), R2, .5, Lf, Lt, Seed * 1.3 + Sd, 10, 4, true, .36f);   // over the shoulder
 					}
-					if (Station % 5 != 3) Crown(T.Canopy, At((MHash(Seed, 9.0) - .5) * 2.0, 10.4, 0), 5.0, .46, Leaf[Station % 5], LeafTop[Station % 3], Seed * 2.1, 9, 3, true);   // the ridge (a gap now and then lets the light in)
+					// the ridge (a gap now and then lets the light in)
+					if (Station % 3 != 1) Crown(T.Canopy, At((MHash(Seed, 9.0) - .5) * 3.4, 10.0 + .9 * MHash(Seed, 10.0), (MHash(Seed, 11.0) - .5) * 2.5), 4.4 + 1.6 * MHash(Seed, 12.0), .46, Leaf[Station % 5], LeafTop[Station % 3], Seed * 2.1, 10, 4, true, .36f);
 					RoofSpans++;
 				}
 				S += L;
