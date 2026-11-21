@@ -1,0 +1,40 @@
+diff --git a/Source/KeysRun/KeysBoatPawn.cpp b/Source/KeysRun/KeysBoatPawn.cpp
+index 287947b..d6d00c1 100644
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -21,6 +21,7 @@
+ #include "KeysWalker.h"
+ #include "KeysVisitors.h"
+ #include "KeysLocals.h"
++#include "KeysYards.h"
+ #include "KeysHandgun.h"
+ #include "KeysTreasure.h"
+ #include "KeysEstates.h"
+@@ -1019,6 +1020,7 @@ void AKeysBoatPawn::RunTestScript(double T)
+ 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
+ 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
+ 		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) { const FString R = Lc->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *R); } }
++		else if (Cmd.StartsWith(TEXT("yd:"))) { if (AKeysYards* Yd = AKeysYards::Get(this)) { const FString R = Yd->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript yd %s"), *R); } }   // the yards' test hooks (KeysYards.h)
+ 		else if (Cmd.StartsWith(TEXT("give=")))
+ 		{
+ 			// give=safety.flare,3: consumables as if bought; give=handgun.dot: gear
+diff --git a/Source/KeysRun/KeysGameMode.cpp b/Source/KeysRun/KeysGameMode.cpp
+index 9d31767..86538ec 100644
+--- a/Source/KeysRun/KeysGameMode.cpp
++++ b/Source/KeysRun/KeysGameMode.cpp
+@@ -28,6 +28,7 @@
+ #include "KeysLandmarks.h"
+ #include "KeysEvents.h"
+ #include "KeysWeather.h"
++#include "KeysYards.h"
+ #include "EngineUtils.h"
+ #include "GameFramework/Controller.h"
+ 
+@@ -82,6 +83,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
+ 	SpawnOnce<AKeysSlots>(W);
+ 	SpawnOnce<AKeysFinal>(W);
+ 	SpawnOnce<AKeysWeather>(W);
++	SpawnOnce<AKeysYards>(W);   // the dry stack and the boatyard (KeysYards.cpp)
+ 	AKeysExtras* Ex = SpawnOnce<AKeysExtras>(W);
+ 	AKeysAudio* Au = SpawnOnce<AKeysAudio>(W);
+ 	if (Ex && Au)
