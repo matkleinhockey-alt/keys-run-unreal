@@ -1,0 +1,25 @@
+diff --git a/Source/KeysRun/KeysMangrove.cpp b/Source/KeysRun/KeysMangrove.cpp
+index 63adb83..db31faa 100644
+--- a/Source/KeysRun/KeysMangrove.cpp
++++ b/Source/KeysRun/KeysMangrove.cpp
+@@ -170,12 +170,16 @@ void AKeysWorld::BuildMangroves()
+ 		return Apex;
+ 	};
+ 
+-	for (int32 J = 0; J < KeysGeoReal::NZ(); J++)
+-		for (int32 I = 0; I < KeysGeoReal::NX(); I++)
++	// every tree is seeded by its cell's number on the first phase's own grid (I, J), not by where the cell sits in the
++	// whole map (GI, GJ): the map can grow north or west and the trees already standing stay as they are
++	const int32 SeedI0 = KeysGeoReal::CellI0(), SeedJ0 = KeysGeoReal::CellJ0();
++	for (int32 GJ = 0; GJ < KeysGeoReal::NZ(); GJ++)
++		for (int32 GI = 0; GI < KeysGeoReal::NX(); GI++)
+ 		{
+-			const uint8 Mv = KeysGeoReal::MangroveCell(I, J);
++			const uint8 Mv = KeysGeoReal::MangroveCell(GI, GJ);
+ 			if (!Mv) continue;
+-			const double CX = KeysGeoReal::X0() + I * Cell, CZ = KeysGeoReal::Z0() + J * Cell;
++			const int32 I = GI + SeedI0, J = GJ + SeedJ0;
++			const double CX = KeysGeoReal::X0() + GI * Cell, CZ = KeysGeoReal::Z0() + GJ * Cell;
+ 			if (Blocked(CX, CZ)) continue;
+ 			const double CellCD = CreekD(CX, CZ);
+ 			if (CellCD < -2) continue;                                   // open water now

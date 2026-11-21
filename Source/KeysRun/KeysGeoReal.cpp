@@ -241,6 +241,8 @@ namespace KeysGeoReal
 	int32 NX() { return GNX; }
 	int32 NZ() { return GNZ; }
 	double Cell() { return GCell; }
+	int32 CellI0() { return GGrids.Num() ? FMath::RoundToInt32((GX0 - GGrids[0].X0) / GCell) : 0; }
+	int32 CellJ0() { return GGrids.Num() ? FMath::RoundToInt32((GZ0 - GGrids[0].Z0) / GCell) : 0; }
 	uint8 MangroveCell(int32 I, int32 J)
 	{
 		for (const FGrid& G : GGrids)

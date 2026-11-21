@@ -4,7 +4,7 @@
 
 // The real Florida Keys, baked into the game frame by Tools/geo/bake.py from public data: NOAA NCEI / USGS elevation
 // and bathymetry, and OpenStreetMap coastlines (c) OpenStreetMap contributors, ODbL 1.0. One file per phase in
-// Content/KeysRun/Geo. Real positions are compressed Scale : 1 and turned Theta so the island chain runs along +x;
+// Content/KeysRun/Geo, loaded side by side as one map. Real positions are compressed Scale : 1 and turned Theta so the island chain runs along +x;
 // depths and heights are real.
 namespace KeysGeoReal
 {
@@ -42,6 +42,10 @@ namespace KeysGeoReal
 	int32 NX();
 	int32 NZ();
 	double Cell();
+	// cell (0, 0) of the whole map, counted on the first phase's own grid: (0, 0) with p1 alone, negative once a later
+	// phase reaches further north or west. Anything seeded by cell number adds these, so it does not change as the map grows.
+	int32 CellI0();
+	int32 CellJ0();
 
 	// The map is baked in phases, one .kgeo each, that tile it: p1 (the Middle Keys), p2 (the Upper Keys) and p2_bay (the
 	// strip of Florida Bay north of p1). Everything below answers for the whole map, whichever files a point falls in.
