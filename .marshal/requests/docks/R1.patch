@@ -1,0 +1,40 @@
+diff --git a/Source/KeysRun/KeysBoatPawn.cpp b/Source/KeysRun/KeysBoatPawn.cpp
+index f822a20..4cfe83c 100644
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -23,6 +23,7 @@
+ #include "KeysVisitors.h"
+ #include "KeysLocals.h"
+ #include "KeysYards.h"
++#include "KeysDocks.h"
+ #include "KeysHandgun.h"
+ #include "KeysTreasure.h"
+ #include "KeysEstates.h"
+@@ -1023,6 +1024,7 @@ void AKeysBoatPawn::RunTestScript(double T)
+ 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
+ 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
+ 		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) { const FString R = Lc->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *R); } }
++		else if (Cmd.StartsWith(TEXT("dk:"))) { if (AKeysDocks* Dk = AKeysDocks::Get(this)) { const FString R = Dk->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript dk %s"), *R); } }   // the docks' test hooks (KeysDocks.h)
+ 		else if (Cmd.StartsWith(TEXT("yd:"))) { if (AKeysYards* Yd = AKeysYards::Get(this)) { const FString R = Yd->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript yd %s"), *R); } }   // the yards' test hooks (KeysYards.h)
+ 		else if (Cmd.StartsWith(TEXT("give=")))
+ 		{
+diff --git a/Source/KeysRun/KeysGameMode.cpp b/Source/KeysRun/KeysGameMode.cpp
+index 86538ec..6ec2732 100644
+--- a/Source/KeysRun/KeysGameMode.cpp
++++ b/Source/KeysRun/KeysGameMode.cpp
+@@ -29,6 +29,7 @@
+ #include "KeysEvents.h"
+ #include "KeysWeather.h"
+ #include "KeysYards.h"
++#include "KeysDocks.h"
+ #include "EngineUtils.h"
+ #include "GameFramework/Controller.h"
+ 
+@@ -84,6 +85,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
+ 	SpawnOnce<AKeysFinal>(W);
+ 	SpawnOnce<AKeysWeather>(W);
+ 	SpawnOnce<AKeysYards>(W);   // the dry stack and the boatyard (KeysYards.cpp)
++	SpawnOnce<AKeysDocks>(W);   // the private docks and boat lifts (KeysDocks.cpp)
+ 	AKeysExtras* Ex = SpawnOnce<AKeysExtras>(W);
+ 	AKeysAudio* Au = SpawnOnce<AKeysAudio>(W);
+ 	if (Ex && Au)
