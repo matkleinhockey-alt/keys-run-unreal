@@ -16,6 +16,9 @@ namespace
 {
 	double MHash(double A, double B) { const double H = FMath::Sin(A * 127.1 + B * 311.7) * 43758.5453; return H - FMath::FloorToDouble(H); }
 
+	// a wading bird standing in the shallows: great egret (white), great blue heron (slate) or little blue (dark), facing Yaw
+	void Wader(FTownBatch& B, double X, double Y, double Z, double Yaw, int32 Kind, double Sz);
+
 	// a three-sided limb from A to B (game metres, y up), R thick
 	void Limb(FTownBatch& B, const FVector& P0, const FVector& P1, double R, const FLinearColor& C)
 	{
@@ -30,6 +33,29 @@ namespace
 			const FVector& Rb = Rim[(k + 1) % 3];
 			B.Quad3(P0 + Ra, P0 + Rb, P1 + Rb * .8, P1 + Ra * .8, (Ra + Rb).GetSafeNormal(), C);
 		}
+	}
+}
+
+namespace
+{
+	void Limb(FTownBatch& B, const FVector& P0, const FVector& P1, double R, const FLinearColor& C);
+	void Wader(FTownBatch& B, double X, double Y, double Z, double Yaw, int32 Kind, double Sz)
+	{
+		static const uint32 Body[] = {0xf4f4ee, 0x6f7f92, 0x3c4a66}, Bill[] = {0xe8b030, 0xd8a838, 0x4a5a70}, Leg[] = {0x1c1c1c, 0x5a5648, 0x4a5240};
+		const FVector F(FMath::Cos(Yaw), 0, FMath::Sin(Yaw)), Up(0, 1, 0), O(X, Y, Z);
+		const FLinearColor Lc = KeysTownPaint::Hex(Leg[Kind]), Bc = KeysTownPaint::Hex(Body[Kind]);
+		const double H = .62 * Sz;                                   // how high the body stands
+		for (const double Sd : {-1.0, 1.0})
+		{
+			const FVector Hip = O + Up * H + FVector(-F.Z, 0, F.X) * .05 * Sd * Sz + F * (.04 * Sd) * Sz;
+			Limb(B, Hip, FVector(Hip.X, Y - .35, Hip.Z) + F * (.05 * Sd), .012 * Sz, Lc);
+		}
+		B.Ball(O.X - F.X * .05 * Sz, O.Y + H + .1 * Sz, O.Z - F.Z * .05 * Sz, .2 * Sz, Body[Kind], .62, 6);          // body
+		const FVector Sh = O + Up * (H + .2 * Sz) + F * .14 * Sz, Bend = Sh + Up * .26 * Sz - F * .05 * Sz, Head = Bend + Up * .22 * Sz + F * .1 * Sz;
+		Limb(B, Sh, Bend, .035 * Sz, Bc);                                                                                // the S of the neck
+		Limb(B, Bend, Head, .028 * Sz, Bc);
+		B.Ball(Head.X, Head.Y, Head.Z, .055 * Sz, Body[Kind], .9, 5);
+		Limb(B, Head + F * .03 * Sz, Head + F * .24 * Sz - Up * .03 * Sz, .014 * Sz, KeysTownPaint::Hex(Bill[Kind]));
 	}
 }
 
@@ -49,7 +75,7 @@ void AKeysWorld::BuildMangroves()
 	static const uint32 LeafTop[] = {0x4a8a3c, 0x55933f, 0x448238};
 	const FLinearColor RootC = KeysTownPaint::Hex(0x6e4a30), RootDark = KeysTownPaint::Hex(0x4a3524), Trunk = KeysTownPaint::Hex(0x5c4836);
 	const double Cell = KeysGeoReal::Cell();
-	int32 Rooted = 0, Crowns = 0;
+	int32 Rooted = 0, Crowns = 0, Birds = 0;
 	for (int32 J = 0; J < KeysGeoReal::NZ(); J++)
 		for (int32 I = 0; I < KeysGeoReal::NX(); I++)
 		{
@@ -112,6 +138,24 @@ void AKeysWorld::BuildMangroves()
 				T.Canopy.Ball(Top.X, Top.Y + R * .22, Top.Z, R, Leaf[int32(MHash(X, Z * 1.9) * 5) % 5], .5, 7);
 				T.Canopy.Ball(Top.X + (MHash(X, 7.0) - .5) * R, Top.Y + R * .5, Top.Z + (MHash(Z, 9.0) - .5) * R, R * .62, LeafTop[int32(MHash(Z, X * 1.1) * 3) % 3], .5, 6);
 				Rooted++;
+				// fiddler and mangrove tree crabs on the roots: specks of red-orange and dark shell, a few to a tree
+				for (int32 c = 0; c < 3 && MHash(X + 2.0, Z + c) < .6; c++)
+				{
+					const double A = 2 * PI * MHash(X + c * 4.0, Z - 1.0), Rr = (.5 + 1.2 * MHash(Z + c, X + 6.0)) * Sz;
+					T.Roots.Ball(X + FMath::Cos(A) * Rr, Base + .25 + .9 * MHash(X - c, Z + 8.0), Z + FMath::Sin(A) * Rr, .045, c == 0 ? 0xc8482a : 0x4a2c22, .6, 4);
+				}
+				// a heron or an egret now and then, stalking the shallows just off the roots
+				if (bFringe && k == 0 && MHash(I * 3.7, J * 1.9) < .07)
+				{
+					const double A = 2 * PI * MHash(I, J + 11.0), WX = X + FMath::Cos(A) * 4.5, WZ = Z + FMath::Sin(A) * 4.5;
+					const double Wd = DepthAt(WX, WZ);
+					if (LandH(WX, WZ) < -.05 && Wd < .7)
+					{
+						const double Pk = MHash(J * 2.3, I);
+						Wader(T.Roots, WX, .05, WZ, 2 * PI * MHash(I + 5.0, J), Pk < .55 ? 0 : Pk < .85 ? 1 : 2, Pk < .55 ? 1.0 : Pk < .85 ? 1.25 : .7);
+						Birds++;
+					}
+				}
 			}
 		}
 	int32 RootTris = 0, CanopyTris = 0;
@@ -131,5 +175,5 @@ void AKeysWorld::BuildMangroves()
 		}
 		delete T.Value;
 	}
-	UE_LOG(LogTemp, Log, TEXT("Keys Run: mangroves - %d trees on prop roots, %d inland crowns, %d tiles, %d root tris, %d canopy tris"), Rooted, Crowns, Tiles.Num(), RootTris, CanopyTris);
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: mangroves - %d trees on prop roots, %d inland crowns, %d wading birds, %d tiles, %d root tris, %d canopy tris"), Rooted, Crowns, Birds, Tiles.Num(), RootTris, CanopyTris);
 }

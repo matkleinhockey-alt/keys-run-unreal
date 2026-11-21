@@ -501,6 +501,24 @@ void AKeysLandmarks::BuildDaymarks(FTownBatch&, FTownBatch& G)
 				if (Bits & 64) Stroke(0, 0, Dw, St);
 			}
 		}
+		if (!K.bLit && Hc(int32(K.X) + 3, int32(K.Z)) < .16)
+		{
+			// ospreys build on the channel markers: a great untidy pile of sticks on the pile head, and a bird at home
+			B.Ball(K.X, Top + .22, K.Z, .75, 0x5c4a34, .38, 7);
+			B.Ball(K.X + .1, Top + .34, K.Z - .05, .55, 0x74603f, .3, 6);
+			for (int32 s = 0; s < 7; s++)
+			{
+				const double A = s * .9 + Yaw;
+				B.Box(K.X + FMath::Cos(A) * .55, Top + .3 + .04 * s, K.Z + FMath::Sin(A) * .55, 1.0, .04, .04, 0x4a3a28, 0, A + .6, (s % 3 - 1) * .2);
+			}
+			if (Hc(int32(K.Z), int32(K.X) + 9) < .7)
+			{
+				B.Ball(K.X, Top + .72, K.Z, .17, 0x3a3026, 1.5, 6);                          // dark back, standing
+				B.Ball(K.X + FMath::Cos(Yaw) * .07, Top + .68, K.Z + FMath::Sin(Yaw) * .07, .13, 0xf0ece0, 1.4, 5);   // white breast
+				B.Ball(K.X + FMath::Cos(Yaw) * .06, Top + 1.02, K.Z + FMath::Sin(Yaw) * .06, .085, 0xf0ece0, 1, 5);  // white head
+				B.Box(K.X + FMath::Cos(Yaw) * .14, Top + 1.03, K.Z + FMath::Sin(Yaw) * .14, .1, .03, .035, 0x2a2420, 0, -Yaw);   // the eye-stripe and bill
+			}
+		}
 		if (K.bLit)
 		{
 			// the lantern: a little solar panel and the lens, red or green
