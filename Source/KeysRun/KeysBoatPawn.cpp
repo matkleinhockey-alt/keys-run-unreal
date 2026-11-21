@@ -23,6 +23,7 @@
 #include "KeysVisitors.h"
 #include "KeysLocals.h"
 #include "KeysYards.h"
+#include "KeysDocks.h"
 #include "KeysHandgun.h"
 #include "KeysTreasure.h"
 #include "KeysEstates.h"
@@ -1023,6 +1024,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
 		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) { const FString R = Lc->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *R); } }
+		else if (Cmd.StartsWith(TEXT("dk:"))) { if (AKeysDocks* Dk = AKeysDocks::Get(this)) { const FString R = Dk->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript dk %s"), *R); } }   // the docks' test hooks (KeysDocks.h)
 		else if (Cmd.StartsWith(TEXT("yd:"))) { if (AKeysYards* Yd = AKeysYards::Get(this)) { const FString R = Yd->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript yd %s"), *R); } }   // the yards' test hooks (KeysYards.h)
 		else if (Cmd.StartsWith(TEXT("give=")))
 		{

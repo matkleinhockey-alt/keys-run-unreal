@@ -14,7 +14,7 @@ once).
 | `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | merged 2026-11-21 |
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | merged 2026-11-21 |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | running |
-| `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | running (as a background agent of the marshal session) |
+| `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | merged 2026-11-21 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -101,3 +101,9 @@ Lanes never edit these. They ask with the `marshal-request` skill.
 - 2026-11-21: `lane/docks` created from `main` after the `yards` merge. The user asked the marshal to take care of the
   missing lifts and docks brief, so the marshal wrote it (`.marshal/prompts/docks.md`) and runs the lane as a
   background agent; the `yards` worktree removed (branch kept).
+- 2026-11-21: `docks` merged (lane at 2152ed5) on the user's "merge docks", as it stands: 26 private docks with lifts
+  (Marathon 10, Grassy Key 15, Duck Key 1). Requests applied: R1 spawn and `dk:` commands, R2 palms and bushes kept
+  off. Editor build and smoke runs on both maps green. Open: only 77 of 503 shore houses have 1 m of water within
+  reach, so the shores are not filled; the marshal proposed dredging a pocket under each dock (user chose the plain
+  merge, pockets not done). No collision on docks; not tested on Phase 2 islands; house positions are a copy of
+  `BuildScenery`'s dice. Packaged-build perf bookmarks still owed.

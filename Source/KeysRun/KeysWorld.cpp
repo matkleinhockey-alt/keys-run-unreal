@@ -1,6 +1,7 @@
 #include "KeysWorld.h"
 #include "KeysOcean.h"
 #include "Engine/Texture2D.h"
+#include "KeysDocks.h"
 #include "KeysYards.h"
 #include "KeysEstates.h"
 #include "KeysGeo.h"
@@ -359,7 +360,7 @@ void AKeysWorld::BuildScenery()
 			const double R = Hash2(JX * 1.3, JZ * .7);
 			const FShore S = ShoreInfo(JX, JZ);
 			const double Density = S.Isl->bMainland ? .05 : S.Isl->bMiami ? .2 : .4;
-			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6) || KeysYards::InFootprint(JX, JZ, 5) || FMath::Abs(JZ - ChainZ(JX)) < 9) continue;
+			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6) || KeysYards::InFootprint(JX, JZ, 5) || KeysDocks::InFootprint(JX, JZ, 4) || FMath::Abs(JZ - ChainZ(JX)) < 9) continue;
 			if (H < .9 && S.E > .93 && !S.Isl->bMiami)
 			{
 				// mangrove fringe at the water's edge

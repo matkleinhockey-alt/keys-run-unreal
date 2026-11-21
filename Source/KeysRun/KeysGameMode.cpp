@@ -29,6 +29,7 @@
 #include "KeysEvents.h"
 #include "KeysWeather.h"
 #include "KeysYards.h"
+#include "KeysDocks.h"
 #include "EngineUtils.h"
 #include "GameFramework/Controller.h"
 
@@ -84,6 +85,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	SpawnOnce<AKeysFinal>(W);
 	SpawnOnce<AKeysWeather>(W);
 	SpawnOnce<AKeysYards>(W);   // the dry stack and the boatyard (KeysYards.cpp)
+	SpawnOnce<AKeysDocks>(W);   // the private docks and boat lifts (KeysDocks.cpp)
 	AKeysExtras* Ex = SpawnOnce<AKeysExtras>(W);
 	AKeysAudio* Au = SpawnOnce<AKeysAudio>(W);
 	if (Ex && Au)
