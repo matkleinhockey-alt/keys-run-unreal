@@ -44,7 +44,9 @@ namespace
 	// the yard's origin (game metres): the middle of the quay at the head of the cove, placed off Keys Fisheries
 	bool Origin(double& OutX, double& OutZ)
 	{
-		if (!KeysGeo::RealMap()) return false;
+		// -KRNoYards leaves them out altogether (for before-and-after frame times)
+		static const bool bOff = FParse::Param(FCommandLine::Get(), TEXT("KRNoYards"));
+		if (bOff || !KeysGeo::RealMap()) return false;
 		const TArray<KeysGeo::FMarina>& Ms = KeysGeo::Marinas();
 		if (Ms.Num() < 4) return false;
 		OutX = Ms[3].SX + 54;
@@ -86,7 +88,7 @@ namespace KeysYards
 		if (!Origin(X0, Z0)) { S.Reset(); return S; }
 		if (!S.Num())
 		{
-			S.Add({TEXT("Cowfish Cove Dry Stack"), X0 - 39, Z0 - 4, X0 - 3, Z0 - 13, PI / 2});
+			S.Add({TEXT("Cowfish Cove Dry Stack"), X0 - 39, Z0 - 4, X0 + 3, Z0 - 30, PI / 2});
 			S.Add({TEXT("Cowfish Cove Boatyard"), X0 + 39, Z0 - 4, X0 + 3, Z0 - 22, -PI / 2});
 		}
 		return S;
@@ -592,6 +594,9 @@ void AKeysYards::BuildBoatyard(FKeysMesh& S, FKeysMesh& Bt, FKeysMesh& D, FKeysM
 		const FVector SaleN = FQuat(FVector::ZAxisVector, Hard[7].Yaw + PI / 2 + PI).RotateVector(FVector(1, 0, 0));
 		NewText(Site, TEXT("FOR SALE"), Fs + SaleN * .05 + FVector(0, 0, .7 + .85), SaleYaw, .34, FColor(0xc8, 0x10, 0x2e));
 		NewText(Site, FString::Printf(TEXT("17' %s SKIFF\n$9,500 OBO\nASK THE DOCKMASTER"), *Hard[7].B.Brand.ToUpper()), Fs + SaleN * .05 + FVector(0, 0, .7 + .4), SaleYaw, .15, FColor(0x15, 0x17, 0x1a));
+		// and the same on the back, for whoever comes the other way
+		NewText(Site, TEXT("FOR SALE"), Fs - SaleN * .05 + FVector(0, 0, .7 + .85), SaleYaw + 180, .34, FColor(0xc8, 0x10, 0x2e));
+		NewText(Site, FString::Printf(TEXT("17' %s SKIFF\n$9,500 OBO\nASK THE DOCKMASTER"), *Hard[7].B.Brand.ToUpper()), Fs - SaleN * .05 + FVector(0, 0, .7 + .4), SaleYaw + 180, .15, FColor(0x15, 0x17, 0x1a));
 	}
 
 	// ---- the clutter: stacked jack stands and spare blocks, old outboards, a trailer, drums, the dumpster, pallets
@@ -858,9 +863,9 @@ void AKeysYards::BeginPlay()
 		Lt->RegisterComponent();
 		Lt->SetRelativeLocation(LampAt[i] * 100.0);
 		Lt->SetIntensityUnits(ELightUnits::Lumens);
-		Lt->SetIntensity(26000.f);
+		Lt->SetIntensity(1800.f);
 		Lt->SetLightColor(FLinearColor(1.f, .88f, .66f));
-		Lt->SetAttenuationRadius(3200.f);
+		Lt->SetAttenuationRadius(2600.f);
 		Lt->SetCastShadows(false);
 		Lt->SetVisibility(false);
 		Lamps.Add(Lt);
