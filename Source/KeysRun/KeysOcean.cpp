@@ -1,4 +1,5 @@
 #include "KeysOcean.h"
+#include "KeysGeo.h"
 #include "Math/RandomStream.h"
 
 namespace
@@ -122,6 +123,10 @@ namespace
 namespace KeysOcean
 {
 	bool Enabled() { return GOn; }
+
+	static bool GDrawTide = false;
+	void DrawTide(bool bOn) { GDrawTide = bOn; }
+	double SeaLevel() { return GDrawTide ? KeysGeo::TideRise() : 0.0; }
 	void SetEnabled(bool bOn) { GOn = bOn; }
 
 	void Update(double T, double Rms, double PeakLen, double SeaDir, double Confusion, double Steep)

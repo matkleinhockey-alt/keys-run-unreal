@@ -128,6 +128,8 @@ private:
 	int32 NextId = 1, LastPut = -1;
 	double PopT = 0, PredT = 0, StatT = 0, NowT = 0;
 	FVector Cam = FVector::ZeroVector;   // game meters
+	FVector PopCam = FVector::ZeroVector;   // where the camera was at the last Populate
+	double SurfY = 0;                    // the water level now (KeysOcean::SeaLevel)
 	FVector BoatP = FVector::ZeroVector, BoatV = FVector::ZeroVector;
 	bool bHaveBoat = false, bDiving = false, bScriptLog = false, bOff = false;
 	TArray<FVector4> LifePreds;

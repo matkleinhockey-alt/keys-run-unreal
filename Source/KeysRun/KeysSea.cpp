@@ -211,7 +211,7 @@ namespace KeysSea
 		OutH = -(D - OutRel);
 	}
 
-	FLinearColor SeafloorColorAt(double X, double Z, double D, double Shade, double Rel)
+	FLinearColor SeafloorColorAt(double X, double Z, double D, double Shade, double Rel, bool bGrain)
 	{
 		const double DZ = KeysGeo::DZAt(X, Z);
 		const double N = FMath::Sin(X * .05) * FMath::Cos(Z * .043) + FMath::Sin(X * .013 + Z * .021);
@@ -237,7 +237,7 @@ namespace KeysSea
 		// under and beside the mangroves the bottom is dark peat and leaf litter, and the water over it is stained like tea
 		if (const double Tan = KeysGeo::MangroveNear(X, Z); Tan > 0) C = L3(C, FLinearColor(.15f, .10f, .045f), Tan * .85 * SClamp((6 - D) / 4, 0, 1));
 		C = L3(C, Deep, SClamp((D - 13) / 22, 0, 1));
-		const double J = (.94 + Hash2(X * .7, Z * .3) * .12) * Shade;
+		const double J = (bGrain ? .94 + Hash2(X * .7, Z * .3) * .12 : 1.0) * Shade;
 		return FLinearColor(float(C.R * J), float(C.G * J), float(C.B * J), 1.f);
 	}
 

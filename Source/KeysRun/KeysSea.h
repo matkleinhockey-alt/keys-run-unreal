@@ -19,8 +19,9 @@ namespace KeysSea
 	double SeafloorHeightAt(double X, double Z);
 	// height and relief in one pass
 	void SeafloorSample(double X, double Z, double& OutH, double& OutRel);
-	// biome color (linear) at a point with base depth D; Shade darkens steep faces, Rel is the relief there
-	FLinearColor SeafloorColorAt(double X, double Z, double D, double Shade = 1, double Rel = 0);
+	// biome color (linear) at a point with base depth D; Shade darkens steep faces, Rel is the relief there; bGrain
+	// adds the per-vertex speckle (averages to 1; off for meshes too coarse to carry it)
+	FLinearColor SeafloorColorAt(double X, double Z, double D, double Shade = 1, double Rel = 0, bool bGrain = true);
 
 	// ---- water movement (m/s, horizontal, game x/z)
 	FVector2D ChainTangent(double X);
