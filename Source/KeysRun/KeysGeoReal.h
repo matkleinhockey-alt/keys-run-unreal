@@ -43,8 +43,14 @@ namespace KeysGeoReal
 	int32 NZ();
 	double Cell();
 
-	bool Load(const TCHAR* Phase);
+	// The map is baked in phases, one .kgeo each, that tile it: p1 (the Middle Keys), p2 (the Upper Keys) and p2_bay (the
+	// strip of Florida Bay north of p1). Everything below answers for the whole map, whichever files a point falls in.
+	bool Load(const TCHAR* Phase);    // the first phase alone
+	bool Add(const TCHAR* Phase);     // another phase beside what is loaded (false, and no change, if its file is missing)
+	bool LoadAll();                   // p1 and every later phase that is there: the real map
 	bool Loaded();
+	int32 Phases();                   // how many files are loaded
+	int32 PhaseAt(double X, double Z);   // which of them a point is in (0 = p1)
 	double X0();
 	double Z0();
 	double SizeX();

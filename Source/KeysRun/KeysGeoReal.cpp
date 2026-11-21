@@ -4,16 +4,31 @@
 
 namespace KeysGeoReal
 {
+	// One grid per baked file. The files tile the map: p1 (the Middle Keys), p2 (the Upper Keys, east of p1) and p2_bay
+	// (the strip of Florida Bay north of p1 that squares the map off). Where two meet they hold the same values along
+	// the shared edge (bake.py joins them), so a lookup simply uses the grid the point is in.
+	struct FGrid
+	{
+		FString Phase;
+		double X0 = 0, Z0 = 0, X1 = 0, Z1 = 0;
+		int32 NX = 0, NZ = 0;
+		int32 IOff = 0, JOff = 0;      // this grid's first cell on the whole map's cell grid
+		int32 IslBase = 0, NIsl = 0;   // its islands in GIslands
+		TArray<int16> Height, Shore;
+		TArray<uint8> Island, Mangrove;
+		TArray<float> Chain;
+		double ChainX0 = 0, ChainStep = 50;
+	};
 	static bool GLoaded = false;
+	static TArray<FGrid> GGrids;
+	// the whole map: the box round every grid loaded
 	static double GX0 = 0, GZ0 = 0, GCell = 10, GScale = 3, GTheta = 0, GLat0 = 0, GLon0 = 0, GAncX = 0, GAncZ = 0, GChainX0 = 0, GChainStep = 50;
 	static int32 GNX = 0, GNZ = 0;
-	static TArray<int16> GHeight, GShore;
-	static TArray<uint8> GIsland;
 	static TArray<float> GChain;
 	static TArray<FIsl> GIslands;
 	static TArray<FNavMark> GMarks;
 	static TArray<FPlatLot> GPlat;
-	static TArray<uint8> GMangrove;
+	static int64 GBytes = 0;
 
 	namespace
 	{
@@ -40,10 +55,45 @@ namespace KeysGeoReal
 		};
 	}
 
-	bool Load(const TCHAR* Phase)
+	// the map's box, cell offsets and US-1's line, again from every grid loaded
+	static void Rebuild()
 	{
-		if (GLoaded) return true;
-		const FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Geo") / (FString(Phase) + TEXT(".kgeo"));
+		double MinX = 1e18, MinZ = 1e18, MaxX = -1e18, MaxZ = -1e18;
+		for (const FGrid& G : GGrids)
+		{
+			MinX = FMath::Min(MinX, G.X0); MinZ = FMath::Min(MinZ, G.Z0);
+			MaxX = FMath::Max(MaxX, G.X1); MaxZ = FMath::Max(MaxZ, G.Z1);
+		}
+		GX0 = MinX; GZ0 = MinZ;
+		GNX = FMath::RoundToInt32((MaxX - MinX) / GCell) + 1;
+		GNZ = FMath::RoundToInt32((MaxZ - MinZ) / GCell) + 1;
+		for (FGrid& G : GGrids)
+		{
+			G.IOff = FMath::RoundToInt32((G.X0 - GX0) / GCell);
+			G.JOff = FMath::RoundToInt32((G.Z0 - GZ0) / GCell);
+		}
+		// US-1's line runs the length of the map: each stretch of x from the first grid loaded that covers it
+		GChainStep = GGrids[0].ChainStep;
+		GChainX0 = GX0;
+		const int32 NC = FMath::CeilToInt32((MaxX - MinX) / GChainStep) + 1;
+		GChain.SetNumUninitialized(NC);
+		for (int32 i = 0; i < NC; i++)
+		{
+			const double X = GChainX0 + i * GChainStep;
+			const FGrid* Src = nullptr;
+			for (const FGrid& G : GGrids) if (X >= G.X0 - 1 && X <= G.X1 + 1) { Src = &G; break; }
+			if (!Src) Src = &GGrids[0];
+			const double F = FMath::Clamp((X - Src->ChainX0) / Src->ChainStep, 0.0, Src->Chain.Num() - 1.001);
+			const int32 K = int32(F);
+			GChain[i] = float(Src->Chain[K] + (Src->Chain[K + 1] - Src->Chain[K]) * (F - K));
+		}
+	}
+
+	// one baked phase: <Phase>.kgeo and, beside it, its marks, estate lots and mangrove cover
+	static bool LoadPhase(const TCHAR* Phase)
+	{
+		const FString Dir = FPaths::ProjectContentDir() / TEXT("KeysRun/Geo");
+		const FString Path = Dir / (FString(Phase) + TEXT(".kgeo"));
 		TArray<uint8> Bytes;
 		if (!FFileHelper::LoadFileToArray(Bytes, *Path))
 		{
@@ -58,19 +108,28 @@ namespace KeysGeoReal
 			UE_LOG(LogTemp, Warning, TEXT("KeysGeoReal: %s is not a version 2 KGEO file"), *Path);
 			return false;
 		}
-		GX0 = R.Get<double>(); GZ0 = R.Get<double>(); GCell = R.Get<double>();
-		GNX = R.Get<int32>(); GNZ = R.Get<int32>();
-		GScale = R.Get<double>(); GTheta = R.Get<double>(); GLat0 = R.Get<double>(); GLon0 = R.Get<double>(); GAncX = R.Get<double>(); GAncZ = R.Get<double>();
+		FGrid G;
+		G.Phase = Phase;
+		G.X0 = R.Get<double>(); G.Z0 = R.Get<double>();
+		const double CellM = R.Get<double>();
+		G.NX = R.Get<int32>(); G.NZ = R.Get<int32>();
+		const double FScale = R.Get<double>(), FTheta = R.Get<double>(), FLat0 = R.Get<double>(), FLon0 = R.Get<double>(), FAncX = R.Get<double>(), FAncZ = R.Get<double>();
 		const int32 NChain = R.Get<int32>();
-		GChainX0 = R.Get<double>(); GChainStep = R.Get<double>();
-		if (!R.bOk || GNX < 2 || GNZ < 2 || GNX > 20000 || GNZ > 20000 || NChain < 2) return false;
-		const int64 N = int64(GNX) * GNZ;
-		R.GetArray(GHeight, N);
-		R.GetArray(GShore, N);
-		R.GetArray(GChain, NChain);
-		R.GetArray(GIsland, N);
+		G.ChainX0 = R.Get<double>(); G.ChainStep = R.Get<double>();
+		if (!R.bOk || G.NX < 2 || G.NZ < 2 || G.NX > 20000 || G.NZ > 20000 || NChain < 2) return false;
+		if (GGrids.Num() && (CellM != GCell || FScale != GScale || FTheta != GTheta || FLat0 != GLat0 || FLon0 != GLon0 || FAncX != GAncX || FAncZ != GAncZ))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("KeysGeoReal: %s is baked on another frame than %s"), *Path, *GGrids[0].Phase);
+			return false;
+		}
+		G.X1 = G.X0 + (G.NX - 1) * CellM; G.Z1 = G.Z0 + (G.NZ - 1) * CellM;
+		const int64 N = int64(G.NX) * G.NZ;
+		R.GetArray(G.Height, N);
+		R.GetArray(G.Shore, N);
+		R.GetArray(G.Chain, NChain);
+		R.GetArray(G.Island, N);
 		const int32 NIsl = R.Get<int32>();
-		GIslands.Reset();
+		TArray<FIsl> Isl;
 		for (int32 i = 0; i < NIsl && R.bOk; i++)
 		{
 			FIsl I;
@@ -90,17 +149,20 @@ namespace KeysGeoReal
 			if (M > 1 && Ring[0] == Ring[M * 2 - 2] && Ring[1] == Ring[M * 2 - 1]) M--;   // the outline comes closed
 			I.Ring.Reserve(M * 2);
 			for (int32 k = 0; k < M * 2; k++) I.Ring.Add(Ring[k]);
-			GIslands.Add(MoveTemp(I));
+			Isl.Add(MoveTemp(I));
 		}
-		if (!R.bOk || GIslands.Num() == 0)
+		if (!R.bOk || Isl.Num() == 0)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("KeysGeoReal: %s is cut short"), *Path);
 			return false;
 		}
+		if (!GGrids.Num()) { GCell = CellM; GScale = FScale; GTheta = FTheta; GLat0 = FLat0; GLon0 = FLon0; GAncX = FAncX; GAncZ = FAncZ; }
+		G.IslBase = GIslands.Num(); G.NIsl = Isl.Num();
+		GIslands.Append(MoveTemp(Isl));
 		// the marks: "x z kind number lit name" a line (Tools/geo/bake_marks.py)
-		GMarks.Reset();
+		const int32 Marks0 = GMarks.Num();
 		TArray<FString> Lines;
-		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectContentDir() / TEXT("KeysRun/Geo") / (FString(Phase) + TEXT("_marks.txt"))));
+		FFileHelper::LoadFileToStringArray(Lines, *(Dir / (FString(Phase) + TEXT("_marks.txt"))));
 		for (const FString& L : Lines)
 		{
 			if (L.StartsWith(TEXT("#"))) continue;
@@ -114,9 +176,8 @@ namespace KeysGeoReal
 			GMarks.Add(MoveTemp(M));
 		}
 		// the estates plat: "id|name|island|tier|side|cx|cz|area|frontage|x0 z0 x1 z1 ..." a line
-		GPlat.Reset();
 		Lines.Reset();
-		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectContentDir() / TEXT("KeysRun/Geo") / (FString(Phase) + TEXT("_plat.txt"))));
+		FFileHelper::LoadFileToStringArray(Lines, *(Dir / (FString(Phase) + TEXT("_plat.txt"))));
 		for (const FString& L : Lines)
 		{
 			if (L.StartsWith(TEXT("#"))) continue;
@@ -132,22 +193,63 @@ namespace KeysGeoReal
 			if (Lot.Poly.Num() >= 3) GPlat.Add(MoveTemp(Lot));
 		}
 		// mangrove cover: 'KMGV', nx, nz, bytes
-		GMangrove.Reset();
 		TArray<uint8> MB;
-		if (FFileHelper::LoadFileToArray(MB, *(FPaths::ProjectContentDir() / TEXT("KeysRun/Geo") / (FString(Phase) + TEXT("_mangrove.bin"))), FILEREAD_Silent) && MB.Num() == 12 + GNX * GNZ)
-			GMangrove.Append(MB.GetData() + 12, GNX * GNZ);
-		GLoaded = true;
-		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: %s, %d x %d cells of %.0f m from (%.0f, %.0f), %d islands, %d marks, 1:%.1f"), Phase, GNX, GNZ, GCell, GX0, GZ0, GIslands.Num(), GMarks.Num(), GScale);
+		if (FFileHelper::LoadFileToArray(MB, *(Dir / (FString(Phase) + TEXT("_mangrove.bin"))), FILEREAD_Silent) && MB.Num() == 12 + N)
+			G.Mangrove.Append(MB.GetData() + 12, N);
+		const int64 Held = G.Height.GetAllocatedSize() + G.Shore.GetAllocatedSize() + G.Island.GetAllocatedSize() + G.Mangrove.GetAllocatedSize() + G.Chain.GetAllocatedSize();
+		GBytes += Held;
+		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: %s, %d x %d cells of %.0f m from (%.0f, %.0f), %d islands, %d marks, 1:%.1f, %.1f MB"), Phase, G.NX, G.NZ, CellM, G.X0, G.Z0, G.NIsl, GMarks.Num() - Marks0, FScale, Held / 1048576.0);
+		GGrids.Add(MoveTemp(G));
+		Rebuild();
+		return true;
+	}
+
+	bool Load(const TCHAR* Phase)
+	{
+		if (GLoaded) return true;
+		GLoaded = LoadPhase(Phase);
+		return GLoaded;
+	}
+
+	bool Add(const TCHAR* Phase)
+	{
+		if (!GLoaded) return false;
+		for (const FGrid& G : GGrids) if (G.Phase == Phase) return true;
+		return LoadPhase(Phase);
+	}
+
+	bool LoadAll()
+	{
+		// every phase of the real map, the first one first. A later phase that is missing is left out: the map is then
+		// the phases that did load.
+		if (GLoaded) return true;
+		const double T0 = FPlatformTime::Seconds();
+		if (!Load(TEXT("p1"))) return false;
+		const double T1 = FPlatformTime::Seconds();
+		const int64 B1 = GBytes;
+		for (const TCHAR* Phase : {TEXT("p2"), TEXT("p2_bay")}) Add(Phase);
+		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: the map is %d grids, %d x %d cells from (%.0f, %.0f) to (%.0f, %.0f), %d islands, %d marks; p1 %.1f MB in %.0f ms, the rest %.1f MB in %.0f ms"),
+			GGrids.Num(), GNX, GNZ, GX0, GZ0, GX0 + (GNX - 1) * GCell, GZ0 + (GNZ - 1) * GCell, GIslands.Num(), GMarks.Num(),
+			B1 / 1048576.0, (T1 - T0) * 1000, (GBytes - B1) / 1048576.0, (FPlatformTime::Seconds() - T1) * 1000);
 		return true;
 	}
 
 	bool Loaded() { return GLoaded; }
+	int32 Phases() { return GGrids.Num(); }
 	const TArray<FNavMark>& Marks() { return GMarks; }
 	const TArray<FPlatLot>& Plat() { return GPlat; }
 	int32 NX() { return GNX; }
 	int32 NZ() { return GNZ; }
 	double Cell() { return GCell; }
-	uint8 MangroveCell(int32 I, int32 J) { return GMangrove.Num() && I >= 0 && J >= 0 && I < GNX && J < GNZ ? GMangrove[int64(J) * GNX + I] : 0; }
+	uint8 MangroveCell(int32 I, int32 J)
+	{
+		for (const FGrid& G : GGrids)
+		{
+			const int32 A = I - G.IOff, B = J - G.JOff;
+			if (A >= 0 && B >= 0 && A < G.NX && B < G.NZ) return G.Mangrove.Num() ? G.Mangrove[int64(B) * G.NX + A] : 0;
+		}
+		return 0;
+	}
 	uint8 MangroveAt(double X, double Z) { return MangroveCell(FMath::RoundToInt32((X - GX0) / GCell), FMath::RoundToInt32((Z - GZ0) / GCell)); }
 	double X0() { return GX0; }
 	double Z0() { return GZ0; }
@@ -157,30 +259,51 @@ namespace KeysGeoReal
 	double Scale() { return GScale; }
 	double Theta() { return GTheta; }
 
-	static FORCEINLINE void Cell(double X, double Z, int32& I, int32& J, double& U, double& V)
+	// the grid a point is in; off the map (or in a corner no file covers), the nearest one, read at its edge
+	static FORCEINLINE const FGrid& GridAt(double X, double Z)
 	{
-		const double FX = FMath::Clamp((X - GX0) / GCell, 0.0, GNX - 1.001), FZ = FMath::Clamp((Z - GZ0) / GCell, 0.0, GNZ - 1.001);
+		const FGrid* Best = GGrids.GetData();
+		const int32 N = GGrids.Num();
+		if (N == 1) return *Best;
+		double BestD = 1e30;
+		for (int32 i = 0; i < N; i++)
+		{
+			const FGrid& G = GGrids[i];
+			const double DX = X < G.X0 ? G.X0 - X : X > G.X1 ? X - G.X1 : 0, DZ = Z < G.Z0 ? G.Z0 - Z : Z > G.Z1 ? Z - G.Z1 : 0;
+			if (DX == 0 && DZ == 0) return G;
+			const double D = DX * DX + DZ * DZ;
+			if (D < BestD) { BestD = D; Best = &G; }
+		}
+		return *Best;
+	}
+
+	static FORCEINLINE void CellIn(const FGrid& G, double X, double Z, int32& I, int32& J, double& U, double& V)
+	{
+		const double FX = FMath::Clamp((X - G.X0) / GCell, 0.0, G.NX - 1.001), FZ = FMath::Clamp((Z - G.Z0) / GCell, 0.0, G.NZ - 1.001);
 		I = int32(FX); J = int32(FZ);
 		U = FX - I; V = FZ - J;
 	}
 
-	static FORCEINLINE double Bilinear(const TArray<int16>& G, double X, double Z)
+	static FORCEINLINE double Bilinear(const FGrid& G, const TArray<int16>& A, double X, double Z)
 	{
 		int32 I, J;
 		double U, V;
-		Cell(X, Z, I, J, U, V);
-		const int16* P = G.GetData() + int64(J) * GNX + I;
-		return (P[0] * (1 - U) + P[1] * U) * (1 - V) + (P[GNX] * (1 - U) + P[GNX + 1] * U) * V;
+		CellIn(G, X, Z, I, J, U, V);
+		const int16* P = A.GetData() + int64(J) * G.NX + I;
+		return (P[0] * (1 - U) + P[1] * U) * (1 - V) + (P[G.NX] * (1 - U) + P[G.NX + 1] * U) * V;
 	}
 
-	double Height(double X, double Z) { return Bilinear(GHeight, X, Z) * .01; }
-	double Shore(double X, double Z) { return Bilinear(GShore, X, Z) * .1; }
+	double Height(double X, double Z) { const FGrid& G = GridAt(X, Z); return Bilinear(G, G.Height, X, Z) * .01; }
+	double Shore(double X, double Z) { const FGrid& G = GridAt(X, Z); return Bilinear(G, G.Shore, X, Z) * .1; }
 
 	int32 IslandAt(double X, double Z)
 	{
-		const int32 I = FMath::Clamp(FMath::RoundToInt32((X - GX0) / GCell), 0, GNX - 1), J = FMath::Clamp(FMath::RoundToInt32((Z - GZ0) / GCell), 0, GNZ - 1);
-		return FMath::Min<int32>(GIsland[int64(J) * GNX + I], GIslands.Num() - 1);
+		const FGrid& G = GridAt(X, Z);
+		const int32 I = FMath::Clamp(FMath::RoundToInt32((X - G.X0) / GCell), 0, G.NX - 1), J = FMath::Clamp(FMath::RoundToInt32((Z - G.Z0) / GCell), 0, G.NZ - 1);
+		return G.IslBase + FMath::Min<int32>(G.Island[int64(J) * G.NX + I], G.NIsl - 1);
 	}
+
+	int32 PhaseAt(double X, double Z) { return int32(&GridAt(X, Z) - GGrids.GetData()); }
 
 	double ChainZ(double X)
 	{
