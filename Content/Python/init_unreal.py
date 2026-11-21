@@ -519,6 +519,19 @@ if (kind < 0.5) {
   df = lerp(lerp(0.9, 1.06, gr.x), lerp(0.75, 0.12, acl), caulk * midF);
   g = float3(0, sign(pl - 0.5) * caulk * 0.4, 0) * acl + gr.yzw * 0.02 * F.aa(40.0, fw);
   rough = 0.8; spec = 0.3;
+} else if (kind > 27.5 && kind < 28.5) {   // a mangrove's crown from a boat: clumps of leaves, dark gaps between, sunlit tips
+  float a1 = F.aa(1.6, fw), a2 = F.aa(4.3, fw), a3 = F.aa(13.0, fw);
+  float4 c1 = F.nd(p * 1.6);
+  float4 c2 = F.nd(p * 4.3 + 3.1);
+  float4 c3 = F.nd(p * 13.0 + 7.7);
+  float clump = lerp(0.5, c1.x, a1) * 0.4 + lerp(0.5, c2.x, a2) * 0.42 + lerp(0.5, c3.x, a3) * 0.18;
+  float gap = smoothstep(0.46, 0.3, clump);        // between the clumps you look into the shade inside the tree
+  float tip = smoothstep(0.54, 0.72, clump);       // the outermost leaves catch the sun
+  df = lerp(1.0, 0.42, gap) * lerp(0.92, 1.16, tip);
+  col = lerp(col, col * float3(1.22, 1.16, 0.72), tip * 0.55);
+  g = c1.yzw * 0.26 * a1 + c2.yzw * 0.24 * a2 + c3.yzw * 0.09 * a3;
+  rough = 0.55; spec = 0.3;
+  col = lerp(col, col * float3(1.1, 1.1, 0.82), fres * 0.5);
 } else {                           // grass, ground cover
   float4 n = F.fbm(p * 22.0, 2);
   float4 lo = F.nd(p * 0.45);

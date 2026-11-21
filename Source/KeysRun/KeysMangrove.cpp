@@ -107,7 +107,7 @@ void AKeysWorld::BuildMangroves()
 	auto TileAt = [&](double X, double Z) -> FTile&
 	{
 		FTile*& T = Tiles.FindOrAdd((int64(FMath::FloorToInt(X / 600)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 600))));
-		if (!T) T = new FTile();
+		if (!T) { T = new FTile(); T->Canopy.M.Surf = SurfCanopy; }
 		return *T;
 	};
 	static const uint32 Leaf[] = {0x2f6b2f, 0x3a7a34, 0x285a2a, 0x376f2c, 0x2a6238};
