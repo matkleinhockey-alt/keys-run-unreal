@@ -95,7 +95,8 @@ namespace
 		static const TArray<FZoneMix> M = {
 			{TEXT("Flats"), .4, {{Bonefish, 4}, {Permit, 2}, {Silverside, 2}, {Barracuda, 1.5}, {Blacktip, .6}, {Jack, .8}}},
 			{TEXT("Backcountry"), .3, {{Silverside, 3}, {Barracuda, 1}, {Jack, 1}, {Grunt, 1}, {Bonefish, 1}}},
-			{TEXT("Creek"), .3, {{Silverside, 3}, {Barracuda, 1}, {Jack, 1}, {Grunt, 1}}},
+			// under and along the mangroves: clouds of juveniles in the roots, snapper holding in the shade, and what hunts them
+			{TEXT("Creek"), .8, {{Silverside, 5}, {Schoolmaster, 2.5}, {Lane, 1.5}, {Grunt, 2}, {Barracuda, 1.3}, {Jack, 1}, {Blacktip, .7}, {Bonefish, .6}}},
 			{TEXT("Bridge"), .5, {{Herring, 3}, {Grunt, 2}, {Schoolmaster, 2}, {Barracuda, 1}, {Jack, 1}}},
 			{TEXT("Hawk Channel"), .45, {{Herring, 2}, {Silverside, 2}, {Grunt, 2}, {Schoolmaster, 1}, {Lane, 1.5}, {RedGrouper, .8}, {Barracuda, 1}, {Bluerunner, 1.2}, {Bullshark, .2}}},
 			{TEXT("Reef"), .7, {{Silverside, 3}, {Herring, 2}, {Schoolmaster, 3}, {Grunt, 3}, {Lane, 2}, {Yellowtail, 2}, {Grouper, 1.2}, {RedGrouper, .8}, {Barracuda, 1.5}, {Bluerunner, 1.5}, {Jack, .8}, {Blacktip, .3}, {Bullshark, .25}}},
@@ -254,6 +255,8 @@ double AKeysSchools::TopAt(double X, double Z, double* OutFloor)
 bool AKeysSchools::ValidWater(int32 Sp, double X, double Z) const
 {
 	const double D = DepthFast(X, Z);
+	// in among the mangrove roots the small fish and the snapper live in a couple of feet of water
+	if (D >= .5 && D < Specs[Sp].DMin && Specs[Sp].LenMax < .5 && MangroveNear(X, Z) > .55) return LandH(X, Z) < 0;
 	return D >= Specs[Sp].DMin && D <= Specs[Sp].DMax && LandH(X, Z) < 0;
 }
 
@@ -649,7 +652,9 @@ void AKeysSchools::Populate()
 				Cells.Add(K, -1);
 				const FString Zone = ZoneAt(X0, Z0);
 				const FZoneMix* Mix = ZoneMixes().FindByPredicate([&](const FZoneMix& Z) { return Zone == Z.Zone; });
-				if (!Mix || KeysSea::HashCell(0x5c4f, CX, CZ, 11) >= Mix->Density) continue;
+				// the tide moves them: up onto the flats and in among the roots at high water, back to the channels at low
+				const double TideK = (Zone == TEXT("Flats") || Zone == TEXT("Creek")) ? 1 + .5 * TideLevel() : (Zone == TEXT("Bridge") || Zone == TEXT("Hawk Channel") || Zone == TEXT("Backcountry")) ? 1 - .3 * TideLevel() : 1;
+				if (!Mix || KeysSea::HashCell(0x5c4f, CX, CZ, 11) >= Mix->Density * TideK) continue;
 				double Tot = 0;
 				for (const TPair<int32, double>& Rw : Mix->Rows) Tot += Rw.Value;
 				double Pick = KeysSea::HashCell(0x5c4f, CX, CZ, 12) * Tot;
