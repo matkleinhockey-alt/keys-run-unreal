@@ -102,23 +102,42 @@ def main():
             v = ln.split(None, 5)
             marks.append((float(v[0]), float(v[1]), v[2], int(v[3]), v[5].strip() if len(v) > 5 else ''))
         md = np.array([-float(at(H, m[0], m[1])) for m in marks])
+        # the game opens a channel along the line through its marks in number order (KeysGeo BuildNavSegs: marks named
+        # alike, legs up to 420 m, dredged to 2.7 m wherever the line is more than 1 m off the shore). So a leg is open
+        # unless the grid has land on the line; this is the same rule, on the baked grid.
         chans = {}
         for m in marks:
-            nm = re.sub(r'\s*(Daybeacon|Light|Buoy|Lighted Buoy|Junction.*)?\s*\d*[A-Z]?\s*$', '', m[4]).strip()
-            if nm: chans.setdefault(nm, []).append(m)
-        shut = []
-        nseg = 0
+            if m[2] not in 'RG': continue      # the game reads the daybeacons, not the buoys
+            nm = m[4]
+            for cut in (' Daybeacon', ' Light', ' Buoy'):
+                k = nm.rfind(cut)
+                if k > 0: nm = nm[:k]
+            chans.setdefault(nm, []).append(m)
+        shut, clipped, nseg, natural = [], [], 0, 0
         for nm, ms in sorted(chans.items()):
             ms.sort(key=lambda m: m[3])
             for a, b in zip(ms[:-1], ms[1:]):
                 L = float(np.hypot(b[0] - a[0], b[1] - a[1]))
-                if L > 700 or L < 1: continue
-                t = np.linspace(0, 1, max(2, int(L / 5)))
-                d = -at(H, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+                if L > 420 or L < 1: continue
+                t = np.linspace(0, 1, max(2, int(L / 2)))
+                lx, lz = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+                sh = at(S, lx, lz)
                 nseg += 1
-                if d.min() < .6: shut.append(f'{nm} {a[3]}-{b[3]} ({d.min():.1f} m)')
-        print(f'p2 marks: {len(marks)} in {len(chans)} named channels; water at the marks {md.min():.1f}..{md.max():.1f} m (median {np.median(md):.1f}); '
-              f'{nseg} legs between consecutive marks, {len(shut)} with under 0.6 m on the straight line' + (': ' + '; '.join(shut[:12]) if shut else ''))
+                if (-at(H, lx, lz)).min() >= 2.7: natural += 1
+                dry = float((sh <= 1).sum() * L / len(t))
+                if dry > 0:
+                    # the straight line clips land (a bridge abutment, a point): is there water round it? Flood the water
+                    # (2 m and more off the shore) within 150 m of the leg from one mark and see if it reaches the other
+                    i0, i1 = int((min(a[0], b[0]) - 150 - x0) / cell), int((max(a[0], b[0]) + 150 - x0) / cell) + 1
+                    j0, j1 = int((min(a[1], b[1]) - 150 - z0) / cell), int((max(a[1], b[1]) + 150 - z0) / cell) + 1
+                    lab, _ = ndimage.label(S[j0:j1, i0:i1] >= 2)
+                    cellof = lambda m: lab[int(round((m[1] - z0) / cell)) - j0, int(round((m[0] - x0) / cell)) - i0]
+                    way_round = cellof(a) != 0 and cellof(a) == cellof(b)
+                    clipped.append(f'{nm} {a[3]}-{b[3]} ({dry:.0f} m of {L:.0f} m)')
+                    if not way_round: shut.append(f'{nm} {a[3]}-{b[3]}')
+        print(f'p2 marks: {len(marks)} ({sum(1 for m in marks if m[2] in "RG")} daybeacons) in {len(chans)} named channels; water at the marks {md.min():.1f}..{md.max():.1f} m (median {np.median(md):.1f}); '
+              f'{nseg} channel legs: {natural} already 2.7 m deep, {nseg - natural - len(clipped)} the game dredges clear, {len(clipped)} where the straight line clips land'
+              + (' (' + '; '.join(clipped) + ')' if clipped else '') + f'; legs with no water way round: {len(shut)}' + (' (' + '; '.join(shut) + ')' if shut else ''))
 
     # ---- the picture
     import matplotlib

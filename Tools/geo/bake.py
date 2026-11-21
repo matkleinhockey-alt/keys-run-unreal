@@ -13,6 +13,9 @@ Phases after the first share an edge with one already baked (PHASES 'join'). Alo
 old one's heights and shore distances exactly, and the difference is faded out over JOIN_FADE cells, so the two
 files meet with no step. Bake order: p1, p2, p2_bay.
 
+p2 is baked twice: once, then bake_marks.py, then again - the second time it reads p2_marks.txt and cuts the marked
+channel legs the 10 m grid has pinched shut (PHASES 'cut_marks'). Then bake_marks.py and bake_mangrove.py once more.
+
 Output <out dir>/<phase>.kgeo (little endian):
   char[4] 'KGEO', int32 version (2)
   double X0, Z0, Cell; int32 NX, NZ          the grid, game metres; row-major, z rows outer, [iz * NX + ix]
@@ -46,12 +49,13 @@ PHASES = {
     # north edge -6920 (the chain climbs to z = -5300 by the east edge, and 1360 m steps keep Phase 1's scenery on
     # the same spots: see the status file); south edge 6200, the same as Phase 1.
     'p2': dict(rect=(7500, 23500, -6920, 6200), box=(-81.41, 24.60, -80.35, 25.12), src='p2', pad=60, clip=True,
-               join=[('p1', 'west')]),
+               join=[('p1', 'west')], cut_marks=True),
     # the strip of Florida Bay north of Phase 1 that squares the map off
     'p2_bay': dict(rect=(-8300, 7500, -6920, -4200), box=(-81.41, 24.60, -80.35, 25.12), src='p2', pad=60, clip=True,
                    join=[('p1', 'south'), ('p2', 'east')], chain_from='p1'),
 }
 JOIN_FADE = 30    # cells over which a joined edge's correction fades out
+CUT_MAX, CUT_HALF_W = 20.0, 8.0   # marked channel legs: how much land a leg may clip and still be cut, and how wide
 CELL = 10.0
 # islands everyone knows by name, with a point that is on them (lon, lat); first match wins
 KNOWN = [
@@ -195,6 +199,48 @@ def main():
         dem_land = keep[lab]
     land = osm_land | dem_land
     land = ndimage.binary_opening(land, iterations=1) | osm_land
+
+    # ---- marked channels the grid has pinched shut: where the line between two consecutive daybeacons of a channel
+    # (the legs the game dredges, KeysGeo BuildNavSegs) only just clips land - under CUT_MAX metres of it - the land is
+    # cut CUT_HALF_W either side of the line. Needs <phase>_marks.txt from an earlier bake of this phase; longer
+    # crossings (a causeway, an island) are left alone.
+    cut_note = ''
+    marks_path = f'{out}/{phase}_marks.txt'
+    if P.get('cut_marks') and os.path.exists(marks_path):
+        chans = {}
+        for ln in open(marks_path):
+            v = ln.split(None, 5)
+            if ln.startswith('#') or len(v) < 6 or v[2] not in 'RG':
+                continue
+            nm = v[5].strip()
+            for word in (' Daybeacon', ' Light', ' Buoy'):
+                k = nm.rfind(word)
+                if k > 0:
+                    nm = nm[:k]
+            chans.setdefault(nm, []).append((int(v[3]), float(v[0]), float(v[1])))
+        # 'clips land' counts the water within a fine cell of the shore too: a channel that narrow closes on the 10 m grid
+        tight = ndimage.binary_dilation(land, iterations=1)
+        cuts = []
+        for nm, ms in sorted(chans.items()):
+            ms.sort()
+            for (na, ax, az), (nb, bx, bz) in zip(ms[:-1], ms[1:]):
+                L = math.hypot(bx - ax, bz - az)
+                if L > 420 or L < 1:
+                    continue
+                t = np.linspace(0, 1, max(2, int(L / (fc / 2))))
+                li = np.clip(np.round((ax + (bx - ax) * t - x0) / fc).astype(int), 0, fnx - 1)
+                lj = np.clip(np.round((az + (bz - az) * t - z0) / fc).astype(int), 0, fnz - 1)
+                dry = float(tight[lj, li].sum() * L / len(t))
+                if 0 < dry < CUT_MAX:
+                    i0, i1 = max(0, li.min() - 4), min(fnx, li.max() + 5)
+                    j0, j1 = max(0, lj.min() - 4), min(fnz, lj.max() + 5)
+                    QX, QZ = np.meshgrid(x0 + np.arange(i0, i1) * fc, z0 + np.arange(j0, j1) * fc)
+                    tt = np.clip(((QX - ax) * (bx - ax) + (QZ - az) * (bz - az)) / (L * L), 0, 1)
+                    near_line = np.hypot(QX - ax - (bx - ax) * tt, QZ - az - (bz - az) * tt) <= CUT_HALF_W
+                    land[j0:j1, i0:i1] &= ~near_line
+                    fine[j0:j1, i0:i1] = np.where(near_line, np.minimum(fine[j0:j1, i0:i1], -1.5), fine[j0:j1, i0:i1])
+                    cuts.append(f'{nm} {na}-{nb} ({dry:.0f} m)')
+        cut_note = f'{len(cuts)} channel legs cut through' + (': ' + '; '.join(cuts) if cuts else '')
 
     # ---- signed distance from the shoreline (game metres)
     d_out = ndimage.distance_transform_edt(~land) * fc
@@ -470,6 +516,8 @@ def main():
         print('  biggest islands: ' + '; '.join(f'{i["name"] or "?"} {i["area"] / 1e4:.0f} ha' for i in islands[:14]))
     if P.get('clip'):
         print('  islands cut by the phase edge: ' + ('; '.join(f'{i["name"] or "?"} at {i["x"]:.0f}, {i["z"]:.0f}' for i in islands if i['bounds'][0] < x0 or i['bounds'][2] > x1 or i['bounds'][1] < z0 or i['bounds'][3] > z1) or 'none'))
+    if cut_note:
+        print('  ' + cut_note)
     for note in join_notes:
         print('  join: ' + note)
 
