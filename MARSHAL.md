@@ -14,9 +14,10 @@ once).
 | `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | merged 2026-11-21 |
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | merged 2026-11-21 |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | running |
+| `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | running (as a background agent of the marshal session) |
 
-Not a lane yet: lifts and docks (P4), whose brief has not been given. Map Phase 3 becomes a lane after `upperkeys`
-merges.
+Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
+first merges first.
 
 ## Ownership
 
@@ -27,6 +28,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `water` | `Source/KeysRun/KeysSeafloor.*`, `KeysSea.*`, `KeysOcean.*`, `KeysSchools.*` |
 | `mangroves` | `Source/KeysRun/KeysMangrove.cpp`, new `Source/KeysRun/KeysMangroveLife.*`, `Tools/geo/bake_mangrove.py`, `Content/KeysRun/Geo/p1_mangrove.bin` |
 | `yards` | new `Source/KeysRun/KeysYards.*`, `KeysForklift.*`, `KeysYardProps.*` |
+| `docks` | new `Source/KeysRun/KeysDocks.*`, `KeysLifts.*` |
 | `upperkeys` | `Source/KeysRun/KeysGeoReal.*`, `Tools/geo/bake.py`, new `Tools/geo/*p2*`, `Content/KeysRun/Geo/p2_*` and `p2.kgeo` |
 
 ## Marshal-only files
@@ -96,3 +98,6 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   smoke runs on both maps green. Follow-ups: the player can drive through the floats, fuel dock and a launched boat;
   no going ashore there; the old box racks at the town marina and Faro Blanco still stand; the reverse (fetch)
   forklift cycle was not shot. Packaged-build perf bookmarks still owed.
+- 2026-11-21: `lane/docks` created from `main` after the `yards` merge. The user asked the marshal to take care of the
+  missing lifts and docks brief, so the marshal wrote it (`.marshal/prompts/docks.md`) and runs the lane as a
+  background agent; the `yards` worktree removed (branch kept).
