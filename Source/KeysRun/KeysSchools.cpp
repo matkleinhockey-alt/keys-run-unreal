@@ -27,7 +27,7 @@ namespace
 	// ---- where schools live
 	constexpr double CellSize = 26;
 	constexpr double SpawnR = 140, KeepR = 190;
-	constexpr int32 MaxSchools = 56, MaxFish = 3200;
+	constexpr int32 MaxSchools = 72, MaxFish = 5200;
 	constexpr double BoundsExt = 40;     // mesh units: the tail beat and body bend reach a little outside the rest pose
 
 	using ERole = AKeysSchools::ERole;
@@ -44,8 +44,8 @@ namespace
 	enum ESp { Silverside, Herring, Schoolmaster, Grunt, Lane, Yellowtail, Grouper, RedGrouper, Barracuda, Bonefish, Permit, Bluerunner, Jack, Blacktip, Bullshark, NumSpec };
 	const FSpec Specs[NumSpec] = {
 		// key              role           len         n          subs    cruise burst accel spacing diverR  dmin dmax  alt          roam  pred
-		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 45, 1.2, 3.5,  22, false},
-		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   45, 1.5, 4,    28, false},
+		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
+		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
 		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  14, 30,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
 		{TEXT("grunt"),      ERole::Reef,   .22, .3,   16, 36,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
 		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  10, 24,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
@@ -55,8 +55,8 @@ namespace
 		{TEXT("barracuda"),  ERole::Hanger, .9, 1.3,   1, 2,      0, 0,  .05, 5.5, 4.0, 2.5, 2.5,  .9,  40, .8, 3.5,  12, true},
 		{TEXT("bonefish"),   ERole::Flats,  .45, .62,  4, 9,      0, 1,  .75, 5.0, 3.0, 2.2, 7,    .4,  2.8, .12, .3,  70, false},
 		{TEXT("permit"),     ERole::Flats,  .6, .8,    2, 5,      0, 1,  .55, 4.2, 2.5, 2.4, 6,    .5,  3.5, .15, .4,  70, false},
-		{TEXT("bluerunner"), ERole::Hunter, .4, .5,    5, 9,      0, 1,  1.15, 4.6, 3.0, 2.0, 3,    2,   45, 1.0, 4.5,  60, true},
-		{TEXT("jackcrevalle"), ERole::Hunter, .6, .85, 4, 7,      0, 1,  .95, 5.0, 3.0, 2.0, 3,    1,   45, .8, 4.0,   60, true},
+		{TEXT("bluerunner"), ERole::Hunter, .4, .5,    5, 9,      0, 1,  1.15, 4.6, 3.0, 2.0, 3,    2,   3000, 1.0, 4.5,  60, true},
+		{TEXT("jackcrevalle"), ERole::Hunter, .6, .85, 4, 7,      0, 1,  .95, 5.0, 3.0, 2.0, 3,    1,   3000, .8, 4.0,   60, true},
 		{TEXT("blacktip"),   ERole::Patrol, 1.5, 1.9,  1, 1,      0, 0,  .9,  3.2, 1.4, 1,   1.5,  .8,  30, .4, 2.5,   90, true},
 		{TEXT("bullshark"),  ERole::Patrol, 2.0, 2.4,  1, 1,      0, 0,  .8,  3.0, 1.2, 1,   1.5,  4,   45, .6, 4,     90, true},
 	};
@@ -93,13 +93,15 @@ namespace
 	const TArray<FZoneMix>& ZoneMixes()
 	{
 		static const TArray<FZoneMix> M = {
-			{TEXT("Flats"), .4, {{Bonefish, 4}, {Permit, 2}, {Silverside, 2}, {Barracuda, 1.5}, {Blacktip, .6}, {Jack, .8}}},
-			{TEXT("Backcountry"), .3, {{Silverside, 3}, {Barracuda, 1}, {Jack, 1}, {Grunt, 1}, {Bonefish, 1}}},
+			{TEXT("Flats"), .45, {{Bonefish, 4}, {Permit, 2}, {Silverside, 3.5}, {Barracuda, 1.5}, {Blacktip, .6}, {Jack, .8}}},
+			{TEXT("Backcountry"), .42, {{Silverside, 6}, {Barracuda, 1}, {Jack, 1}, {Grunt, 1}, {Bonefish, 1}}},
 			// under and along the mangroves: clouds of juveniles in the roots, snapper holding in the shade, and what hunts them
 			{TEXT("Creek"), .8, {{Silverside, 5}, {Schoolmaster, 2.5}, {Lane, 1.5}, {Grunt, 2}, {Barracuda, 1.3}, {Jack, 1}, {Blacktip, .7}, {Bonefish, .6}}},
-			{TEXT("Bridge"), .5, {{Herring, 3}, {Grunt, 2}, {Schoolmaster, 2}, {Barracuda, 1}, {Jack, 1}}},
-			{TEXT("Hawk Channel"), .45, {{Herring, 2}, {Silverside, 2}, {Grunt, 2}, {Schoolmaster, 1}, {Lane, 1.5}, {RedGrouper, .8}, {Barracuda, 1}, {Bluerunner, 1.2}, {Bullshark, .2}}},
-			{TEXT("Reef"), .7, {{Silverside, 3}, {Herring, 2}, {Schoolmaster, 3}, {Grunt, 3}, {Lane, 2}, {Yellowtail, 2}, {Grouper, 1.2}, {RedGrouper, .8}, {Barracuda, 1.5}, {Bluerunner, 1.5}, {Jack, .8}, {Blacktip, .3}, {Bullshark, .25}}},
+			{TEXT("Bridge"), .62, {{Herring, 6}, {Grunt, 2}, {Schoolmaster, 2}, {Barracuda, 1}, {Jack, 1}}},
+			{TEXT("Hawk Channel"), .58, {{Herring, 5}, {Silverside, 4.5}, {Grunt, 2}, {Schoolmaster, 1}, {Lane, 1.5}, {RedGrouper, .8}, {Barracuda, 1}, {Bluerunner, 1.2}, {Bullshark, .2}}},
+			{TEXT("Reef"), .78, {{Silverside, 6}, {Herring, 4.5}, {Schoolmaster, 3}, {Grunt, 3}, {Lane, 2}, {Yellowtail, 2}, {Grouper, 1.2}, {RedGrouper, .8}, {Barracuda, 1.5}, {Bluerunner, 1.5}, {Jack, .8}, {Blacktip, .3}, {Bullshark, .25}}},
+			// blue water: bait balls up in the top of the water column, with the runners and jacks that work them
+			{TEXT("Offshore"), .3, {{Herring, 6}, {Silverside, 4}, {Bluerunner, 1.6}, {Jack, .8}}},
 		};
 		return M;
 	}
@@ -680,6 +682,8 @@ void AKeysSchools::Populate()
 				const double Water = -Top;
 				double Y;
 				if (Role == ERole::Bait) Y = FMath::Lerp(Top + Sc.AltMin, -1.0, .45);
+				if (Role == ERole::Bait && Water > 30) Y = -5 - 9 * KeysSea::HashCell(0x5c4f, CX, CZ, 13);   // off soundings the bait is up top, where the birds can see it
+				else if (Role != ERole::Bait && Water > 45) Y = -6 - 10 * KeysSea::HashCell(0x5c4f, CX, CZ, 14);     // and so is what hunts it
 				else Y = Top + FMath::Lerp(Sc.AltMin, Sc.AltMax, .5);
 				Y = FMath::Min(Y, -.35 - .2 * FMath::Min(1.0, Water));
 				// a flats bait school is a small one
