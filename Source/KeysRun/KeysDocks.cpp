@@ -109,7 +109,7 @@ namespace
 		if (X < WBX0 + 30 || X > WBX1 - 30 || Z < WBZ0 + 30 || Z > WBZ1 - 30) return WhyEdge;
 		if (InMarkedChannel(X, Z)) return WhyChannel;
 		if (CreekDist(X, Z) < 6) return WhyCreek;
-		if (OnMangrove(X, Z) || MangroveNear(X, Z) > .85) return WhyMangrove;
+		if (OnMangrove(X, Z) || MangroveNear(X, Z) > .7) return WhyMangrove;
 		if (KeysYards::InFootprint(X, Z, 18)) return WhyCove;
 		if (KeysTown::InFootprint(X, Z, 25) || InFill(X, Z)) return WhyTown;
 		if (NearBridge(X, Z) || FMath::Abs(Z - ChainZ(X)) < 26) return WhyBridge;
@@ -338,7 +338,13 @@ namespace
 			for (double A = 3; A <= D.Len && Why == WhyOk; A += 1) { const FVector2D Q = D.At(A, 0); if (LandH(Q.X, Q.Y) > .1) Why = WhyLand; }
 			// (and never more than five eighths of the way across a basin or a cut)
 			for (double G = 2; G <= FMath::Max(16.0, D.Box.A1 * .6) && Why == WhyOk; G += 2)
-				for (int32 k = -1; k <= 1 && Why == WhyOk; k++) { const FVector2D Q = D.At(D.Box.A1 + G, (D.Box.C0 + D.Box.C1) / 2 + k * 4.0); if (LandH(Q.X, Q.Y) > -.3) Why = WhyNarrow; }
+				for (int32 k = -1; k <= 1 && Why == WhyOk; k++)
+				{
+					// (mangroves wading out in front of the head shut it in as surely as a bank does)
+					const FVector2D Q = D.At(D.Box.A1 + G, (D.Box.C0 + D.Box.C1) / 2 + k * 4.0);
+					if (LandH(Q.X, Q.Y) > -.3) Why = WhyNarrow;
+					else if (OnMangrove(Q.X, Q.Y) || MangroveNear(Q.X, Q.Y) > .6) Why = WhyMangrove;
+				}
 			// clear of everything else that stands on this shore
 			for (int32 i = 0; i < D.Parts.Num() && Why == WhyOk; i++)
 			{
