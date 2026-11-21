@@ -35,4 +35,11 @@ namespace KeysOcean
 	int32 GridN();
 	bool Enabled();
 	void SetEnabled(bool bOn);   // off: KeysGeo falls back to its classic wave trains
+
+	// The level the sea is drawn at, m above the datum depths are measured from: the tide's rise (KeysGeo::TideRise,
+	// +-0.32 m) once the world draws its water there, else 0. AKeysWorld turns it on with DrawTide(true) when its water
+	// mesh and KeysGeo::WaveH add SeaLevel(); the seafloor and the schools follow whatever this returns, so they agree
+	// with the surface either way.
+	void DrawTide(bool bOn);
+	double SeaLevel();
 }
