@@ -13,7 +13,7 @@ once).
 | `water` | Sea and seafloor polish | `lane/water` | `../KeysRun-water` | merged 2026-11-21 |
 | `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | merged 2026-11-21 |
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | running |
-| `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | waiting for a free slot |
+| `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | running |
 
 Not a lane yet: lifts and docks (P4), whose brief has not been given. Map Phase 3 becomes a lane after `upperkeys`
 merges.
@@ -27,7 +27,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `water` | `Source/KeysRun/KeysSeafloor.*`, `KeysSea.*`, `KeysOcean.*`, `KeysSchools.*` |
 | `mangroves` | `Source/KeysRun/KeysMangrove.cpp`, new `Source/KeysRun/KeysMangroveLife.*`, `Tools/geo/bake_mangrove.py`, `Content/KeysRun/Geo/p1_mangrove.bin` |
 | `yards` | new `Source/KeysRun/KeysYards.*`, `KeysForklift.*`, `KeysYardProps.*` |
-| `upperkeys` | `Source/KeysRun/KeysGeoReal.*`, new `Tools/geo/*p2*`, `Content/KeysRun/Geo/p2_*` |
+| `upperkeys` | `Source/KeysRun/KeysGeoReal.*`, `Tools/geo/bake.py`, new `Tools/geo/*p2*`, `Content/KeysRun/Geo/p2_*` and `p2.kgeo` |
 
 ## Marshal-only files
 
@@ -86,3 +86,5 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   stands in the Whiskey Creek pond; the chase camera clips bank trees on bends; `SpawnHotspot("Creek")` uses the old
   map's creeks; manatees come through a debug spawn hook; real boat and engine brand names in the `KeysData` boat
   table. Packaged-build perf bookmarks still owed.
+- 2026-11-21: `lane/upperkeys` created from `main` after the `mangroves` merge (it also owns `Tools/geo/bake.py`); the
+  `mangroves` worktree removed (branch kept).
