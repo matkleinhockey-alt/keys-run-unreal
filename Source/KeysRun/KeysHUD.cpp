@@ -647,7 +647,7 @@ void AKeysHUD::DrawGauges(AKeysBoatPawn* P)
 	if (!P->bUnlimitedFuel) Text(FString::Printf(TEXT("Fuel %d%%"), FMath::RoundToInt(P->Fuel * 100)), X + 250 * U, GY + 104 * U, .8f, P->Fuel < .15 ? Red : Dim);
 	Bar(X + 100 * U, GY + 130 * U, 220 * U, 10 * U, float(FMath::Max(0.0, P->Throttle())), Teal);
 	Text(P->ZoneName() + TEXT("  -  ") + P->NearName(), X + 18 * U, GY + 150 * U, .8f, FLinearColor::White);
-	Text(TEXT("Sea: ") + SeaStates()[SeaIndex()].Name + TEXT("  -  ") + KeysWx::HudLine(P->BoatX(), P->BoatZ()), X + 18 * U, GY - 26 * U, .85f, Dim);
+	Text(TEXT("Sea: ") + SeaStates()[SeaIndex()].Name + TEXT("  -  ") + KeysWx::HudLine(P->BoatX(), P->BoatZ()) + TEXT("  -  ") + TideName(), X + 18 * U, GY - 26 * U, .85f, Dim);
 
 	const FString Warn = P->Warning();
 	if (!Warn.IsEmpty()) Text(Warn, X, GY - 56 * U, 1.0f, Red);

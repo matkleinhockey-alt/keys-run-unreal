@@ -206,6 +206,7 @@ public:
 	bool IsAshore() const;
 	int64 Cash = 0;            // dollars: fillets sold at weigh-in, spent in the shops
 	TSet<FString> Owned;       // shop items you own (gear, cosmetics)
+	double TideBiteK = 1;           // the tide's hand in the bite where you are fishing
 	bool bAgroundPrev = false;      // sitting on the bottom last frame
 	double AgroundMsgT = -100;
 	TArray<FString> Estates;   // parcels you own (Harbor Row and the Keys Run Estates plat)

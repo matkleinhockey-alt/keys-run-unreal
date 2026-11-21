@@ -31,6 +31,27 @@ namespace KeysGeo
 	static void BuildMangNear();
 	static FLinearColor DepthRGBSrgb(double D);
 	bool RealMap() { return GReal; }
+	static double GTideForce = 9;
+	static constexpr double TidePeriodS = 1440, TideRangeM = .32;
+	static double TidePhase() { return FMath::Fmod(double(FDateTime::UtcNow().ToUnixTimestamp()) + FDateTime::UtcNow().GetMillisecond() * .001, TidePeriodS) / TidePeriodS; }
+	void ForceTide(double Level) { GTideForce = Level; }
+	double TideLevel() { return FMath::Abs(GTideForce) <= 1 ? GTideForce : FMath::Cos(2 * PI * TidePhase()); }
+	double TideRise() { return TideLevel() * TideRangeM; }
+	FString TideName()
+	{
+		const double L = TideLevel();
+		if (L > .8) return TEXT("High tide");
+		if (L < -.8) return TEXT("Low tide");
+		const bool bFalling = FMath::Abs(GTideForce) <= 1 ? L < 0 : TidePhase() < .5;
+		return bFalling ? TEXT("Tide falling") : TEXT("Tide rising");
+	}
+	double TideBite(const FString& Zone)
+	{
+		const double L = TideLevel();
+		if (Zone == TEXT("Flats") || Zone == TEXT("Creek")) return 1 + .55 * L;                                         // up on the flats and in the roots with the water
+		if (Zone == TEXT("Bridge") || Zone == TEXT("Hawk Channel") || Zone == TEXT("Backcountry")) return 1 - .3 * L;   // back in the channels at low water
+		return 1;
+	}
 	bool RealMapWanted()
 	{
 		bool b = true;

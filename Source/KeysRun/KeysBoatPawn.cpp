@@ -265,7 +265,7 @@ void AKeysBoatPawn::ShowToast(const FString& Msg, double Secs)
 }
 
 double AKeysBoatPawn::KnotsNow() const { return FMath::Abs(Speed) / SpeedScale / .5144; }
-double AKeysBoatPawn::DepthHere() const { return DepthAt(X, Z); }
+double AKeysBoatPawn::DepthHere() const { return FMath::Max(0.0, DepthAt(X, Z) + TideRise()); }   // what the sounder reads: the bottom, at this state of the tide
 FString AKeysBoatPawn::NearName() const { return NearestName(X, Z); }
 double AKeysBoatPawn::CoolerLb() const { double S = 0; for (const FKeysCooler& C : Cooler) S += C.Weight; return S; }
 
@@ -784,6 +784,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			if (Save) for (const TPair<FString, double>& B : Save->SpeciesBest) UE_LOG(LogTemp, Log, TEXT("KRFree best %s %.1f lb"), *B.Key, B.Value);
 			(void)Best;
 		}
+		else if (Cmd.StartsWith(TEXT("tide="))) { ForceTide(FCString::Atod(*Cmd.Mid(5))); UE_LOG(LogTemp, Log, TEXT("KRTide %s level %.2f rise %.2f m, bite flats x%.2f channel x%.2f"), *TideName(), TideLevel(), TideRise(), TideBite(TEXT("Flats")), TideBite(TEXT("Bridge"))); }
 		else if (Cmd == TEXT("picks"))
 		{
 			// what bites here: 400 draws from the table for the water under the boat
@@ -2236,7 +2237,7 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 	const double Target = Clamp(Thr * TopMs * TrimSpeedK, -TrimCapMs, TrimCapMs);
 	Speed += (Target - Speed) * Dt * (FMath::Abs(Thr) < 1e-3 ? S.Accel * .5 : S.Accel * TrimHoleK);
 
-	const double D = DepthFast(X, Z), HullDraft = TrimProfile().HullDraftM;
+	const double D = DepthFast(X, Z) + TideRise(), HullDraft = TrimProfile().HullDraftM;   // the tide floats her off, or sets her down
 	if (D < HullDraft)
 	{
 		// run aground: she fetches up hard, mud boils up, and from there she only creeps (back off the way you came)
@@ -3276,6 +3277,7 @@ void AKeysBoatPawn::UpdateFeeding(double Dt)
 	const TArray<FZoneRow>& Tbl = ZoneTable(Zn);
 	const double Hr = KeysFeed::HourNow(this);
 	FeedArea = KeysFeed::AreaMul(Tbl, Hr);
+	TideBiteK = TideBite(Zn);
 	BiteLineText = KeysFeed::BiteLine(Tbl, Hr);
 	const int32 Now = FeedArea >= 1.2 ? 1 : 0;
 	if (FeedState == 0 && Now == 1 && bRunning && !IsDiving() && !IsAshore() && Menu == EMenu::None)
@@ -3355,7 +3357,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
 		double Dip = FMath::Sin(T * 2) * .05;
 		if (FState == EKeysFish::Waiting)
 		{
-			BiteT -= Dt * (bReel ? .6 : 1) * FeedArea;   // a feeding window shortens the wait (never lengthens it)
+			BiteT -= Dt * (bReel ? .6 : 1) * FeedArea * TideBiteK;   // a feeding window shortens the wait (never lengthens it)
 			DbgWait += Dt;
 			if (!Sp && BiteT < 3.2) ChooseFish();
 			if (BiteT <= 0)
@@ -4070,7 +4072,7 @@ FString AKeysBoatPawn::Hint() const
 
 FString AKeysBoatPawn::Warning() const
 {
-	const double D = DepthAt(X, Z);
+	const double D = DepthAt(X, Z) + TideRise();
 	const double Hull = TrimProfile().HullDraftM;
 	if (D < Hull) return TEXT("Aground - back off to deeper water");
 	if (D < PropDepthNow + .1 && PropDepthNow > .05) return TEXT("Props in the bottom - trim up / tilt (trim mode, Up)");

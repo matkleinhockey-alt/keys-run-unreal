@@ -93,6 +93,14 @@ namespace KeysGeo
 	bool OnMangrove(double X, double Z);
 	double MangroveNear(double X, double Z);
 	bool InMarkedChannel(double X, double Z);      // real map: in (or on the edge of) a channel marked by daybeacons
+	// the tide: a full cycle every 24 minutes of real time (high water twice in 48), the same for everyone playing.
+	// Level runs -1 (dead low) to +1 (high); Rise is that in metres on the depth; Name is how a skipper would say it.
+	// On the flats and under the mangroves the fish come up with the water; at low water they drop back to the channels.
+	double TideLevel();
+	double TideRise();
+	FString TideName();
+	double TideBite(const FString& Zone);          // how the tide helps or hurts the bite in a zone (about .45 to 1.55)
+	void ForceTide(double Level);                   // tests: hold the tide at a level (-1..1); anything beyond 1 lets it run
 	bool RealMapWanted();                          // the map picked in Settings (takes effect at the next launch)
 	void SetRealMapWanted(bool b);
 	bool InTownPad(double X, double Z);            // on the town's raised pad (its top is 2.35 m)
