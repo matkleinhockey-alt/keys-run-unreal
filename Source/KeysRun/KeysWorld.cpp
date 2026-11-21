@@ -156,6 +156,7 @@ void AKeysWorld::BeginPlay()
 {
 	Super::BeginPlay();
 	KeysGeo::Init();
+	KeysOcean::DrawTide(true);   // the water mesh (UpdateWater) and KeysGeo::WaveH sit at KeysOcean::SeaLevel()
 
 	Sun->SetAtmosphereSunLight(true);
 	Sun->SetIntensity(9.f);
@@ -609,14 +610,16 @@ void AKeysWorld::UpdateWater()
 	const double FX = FocusX, FZ = FocusZ;
 	// crest foam is measured against the sea's own rms height; whitecaps come with the wind
 	const double Rms = FMath::Max(.01, WaveRms()), Caps = Whitecaps(), Wind = WindSpeed();
+	// the tide: the whole surface rides up and down on it, and the water is that much deeper or shallower everywhere
+	const double Tide = KeysOcean::SeaLevel();
 	{
 		// the ring past the fine grid follows it, overlapping its outer few percent
 		const double Far = 80000, In = WR * .96;
 		const double OX[4] = {-1, 1, 1, -1}, OZ[4] = {-1, -1, 1, 1};
 		for (int32 k = 0; k < 4; k++)
 		{
-			FarV[k] = ToUE(CX + OX[k] * Far, -.6, CZ + OZ[k] * Far);
-			FarV[k + 4] = ToUE(CX + OX[k] * In, -.6, CZ + OZ[k] * In);
+			FarV[k] = ToUE(CX + OX[k] * Far, Tide - .6, CZ + OZ[k] * Far);
+			FarV[k + 4] = ToUE(CX + OX[k] * In, Tide - .6, CZ + OZ[k] * In);
 		}
 		Water->UpdateMeshSection_LinearColor(1, FarV, TArray<FVector>(), TArray<FVector2D>(), TArray<FLinearColor>(), TArray<FProcMeshTangent>());
 	}
@@ -720,7 +723,7 @@ void AKeysWorld::UpdateWater()
 			const FVector2D Tr = bNear ? TrailFrom(LiveTrails, TrailCells[Ck], X, Z) : FVector2D::ZeroVector;
 			// wave trains shorter than ~3 grid cells here would only alias on the coarse outer grid
 			const double MinLen = 2.6 * FMath::Max(WSp[i], WSp[j]);
-			const double D = DepthFast(X, Z);
+			const double D = DepthFast(X, Z) + Tide;   // (the surf line and the beach wash move up and down the shore with it)
 			// surf on the beaches and reef edges (near the camera, where the mesh can draw it)
 			const FVector2D Surf = bNear ? SurfAt(X, Z, T, D) : FVector2D::ZeroVector;
 			const double Sea = WaveHLod(X, Z, T, Amp, MinLen) + Surf.X;
@@ -733,7 +736,7 @@ void AKeysWorld::UpdateWater()
 				const double Lump = FMath::Sin(X * 1.9 + T * 3.1) * FMath::Sin(Z * 1.6 - T * 2.4) + .6 * FMath::Sin(X * 3.7 - Z * 2.9 + T * 4.3);
 				Boil += (Tr.X - .25) * .16 * Lump;
 			}
-			const double H = KeepOut(X, Z, Sea * (1 - .25 * Tr.Y) + Wk + Boil);
+			const double H = KeepOut(X, Z, Tide + Sea * (1 - .25 * Tr.Y) + Wk + Boil);
 			WH[K] = H;
 			// the simulated sea pulls each point sideways toward the crests: sharp crests, broad troughs
 			FVector2D Side = FVector2D::ZeroVector;

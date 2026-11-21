@@ -1241,7 +1241,8 @@ namespace KeysGeo
 
 	double WaveH(double X, double Z, double T, double Amp, bool bWithWake)
 	{
-		return WaveHLod(X, Z, T, Amp, 0) + (bWithWake ? WakeH(X, Z, T) : 0);
+		// on top of the tide: every hull, bird, buoy and weed line that floats on WaveH rises and falls with it
+		return KeysOcean::SeaLevel() + WaveHLod(X, Z, T, Amp, 0) + (bWithWake ? WakeH(X, Z, T) : 0);
 	}
 
 	FVector2D WaveSlope(double X, double Z, double T, double Amp)

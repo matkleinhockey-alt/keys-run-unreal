@@ -10,7 +10,7 @@ once).
 
 | Lane | Goal | Branch | Worktree | State |
 |---|---|---|---|---|
-| `water` | Sea and seafloor polish | `lane/water` | `../KeysRun-water` | running |
+| `water` | Sea and seafloor polish | `lane/water` | `../KeysRun-water` | merged 2026-11-21 |
 | `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | running |
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | waiting for a free slot |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | waiting for a free slot |
@@ -73,3 +73,7 @@ Lanes never edit these. They ask with the `marshal-request` skill.
 ## Log
 
 - 2026-11-21: set up. `main` at the commit that adds this file; `lane/water` and `lane/mangroves` created from it.
+- 2026-11-21: `water` merged (lane code at bfc7079, request R1 applied: the water is drawn at the tide). Editor build and
+  smoke runs on the real and classic maps green. Packaged-build perf bookmarks still owed before any release.
+  Follow-ups it left: reef chunk block from high above, diver depth readout ignores the tide, one unexplained 712 ms
+  frame at the reef, seagrass tufts read bright green from above.
