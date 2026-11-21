@@ -1,0 +1,17 @@
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -1130,12 +1130,13 @@
+ 		}
+ 		else if (Cmd.StartsWith(TEXT("heading=")))
+ 		{
+-			// heading=head|follow|beam: point the bow into, with or across the sea (it runs with the wind)
++			// heading=head|follow|beam: point the bow into, with or across the sea (it runs with the wind); heading=<radians>
+ 			const FString W = Cmd.Mid(8);
+ 			const double Wd = WindDir();
+ 			const double Dx = W == TEXT("follow") ? FMath::Cos(Wd) : W == TEXT("beam") ? -FMath::Sin(Wd) : -FMath::Cos(Wd);
+ 			const double Dz = W == TEXT("follow") ? FMath::Sin(Wd) : W == TEXT("beam") ? FMath::Cos(Wd) : -FMath::Sin(Wd);
+ 			H = FMath::Atan2(-Dx, -Dz);   // forward is (-sin H, -cos H)
++			if (W.IsNumeric()) H = FCString::Atod(*W);   // heading=4.71: that heading, in radians as tp= takes it
+ 		}
+ 		else if (Cmd.StartsWith(TEXT("trim="))) { TrimDeg = FCString::Atod(*Cmd.Mid(5)); bScriptLog = true; }   // trim=<degrees>, logs KRTrim twice a second
+ 		else if (Cmd.StartsWith(TEXT("tabs=")))
