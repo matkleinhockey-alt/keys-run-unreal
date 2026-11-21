@@ -4,6 +4,7 @@
 #include "KeysOcean.h"
 #include "Async/ParallelFor.h"
 #include "KeysCoastData.h"
+#include "KeysYards.h"
 #include "KeysGeoReal.h"
 #include "KeysMangroveLife.h"
 #include "Misc/CommandLine.h"
@@ -794,6 +795,8 @@ namespace KeysGeo
 			const double U = M.Dir * (X - M.SX), V = M.Dir * (M.SZ - Z);
 			if (U >= -112 && U <= 112 && V >= 14 && V <= 180) H = FMath::Min(H, 2.2);
 		}
+		// the dry stack and the boatyard (KeysYards.cpp): made ground under their pads, their basin and slip dredged
+		{ double YH; if (GReal && KeysYards::Ground(X, Z, YH)) H = YH; }
 		return H;
 	}
 
@@ -908,6 +911,8 @@ namespace KeysGeo
 			const double MC = MarinaCutDepth(X, Z);
 			if (MC > 0) D = FMath::Max(D, .35 + (CutD - .35) * FMath::Min(1.0, MC / CutFeather) * FMath::Min(1.0, (SD - 2) / 10));
 		}
+		// the yards' basin and slip are dredged; their pads are dry land (KeysYards.cpp)
+		{ double YH; if (KeysYards::Ground(X, Z, YH)) D = YH < 0 ? FMath::Max(D, -YH) : .3; }
 		return FMath::Max(.3, D);
 	}
 

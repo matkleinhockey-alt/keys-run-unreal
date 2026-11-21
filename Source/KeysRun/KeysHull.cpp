@@ -24,7 +24,7 @@ namespace
 		for (int32 k = 0; k < 5; k++)
 		{
 			const double F = Fs[k];
-			Pts.Add(FVector2D(FMath::Lerp(X0, S.Bs, F) + FMath::Sin(F * PI) * B * .012 * S.BF + Tb * B * .5 * FMath::Pow(FMath::Sin(F * PI), .6), FMath::Lerp(Y0, S.YS, F)));
+			Pts.Add(FVector2D(FMath::Lerp(X0, S.Bs, F) + FMath::Sin(F * PI) * B * .012 * S.BF + Tb * B * .5 * FMath::Pow(FMath::Max(0.0, FMath::Sin(F * PI)), .6), FMath::Lerp(Y0, S.YS, F)));
 			Cols.Add(Cs[k]);
 		}
 	}

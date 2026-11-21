@@ -1,6 +1,7 @@
 #include "KeysWorld.h"
 #include "KeysOcean.h"
 #include "Engine/Texture2D.h"
+#include "KeysYards.h"
 #include "KeysEstates.h"
 #include "KeysGeo.h"
 #include "KeysGeoReal.h"
@@ -358,7 +359,7 @@ void AKeysWorld::BuildScenery()
 			const double R = Hash2(JX * 1.3, JZ * .7);
 			const FShore S = ShoreInfo(JX, JZ);
 			const double Density = S.Isl->bMainland ? .05 : S.Isl->bMiami ? .2 : .4;
-			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6) || FMath::Abs(JZ - ChainZ(JX)) < 9) continue;
+			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6) || KeysYards::InFootprint(JX, JZ, 5) || FMath::Abs(JZ - ChainZ(JX)) < 9) continue;
 			if (H < .9 && S.E > .93 && !S.Isl->bMiami)
 			{
 				// mangrove fringe at the water's edge
@@ -393,7 +394,7 @@ void AKeysWorld::BuildScenery()
 			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || KeysTown::InFootprint(JX, JZ, 14) || FMath::Abs(JZ - ChainZ(JX)) < 16) continue;
 			bool bNearMarina = false;
 			for (const FMarina& Mr : Marinas()) bNearMarina |= FMath::Abs(JX - Mr.SX) < 30 && FMath::Abs(JZ - Mr.SZ) < 30;
-			if (bNearMarina || KeysTown::NearEstate(JX, JZ, 54)) continue;   // web waterfront.ts sites clear the conch houses
+			if (bNearMarina || KeysTown::NearEstate(JX, JZ, 54) || KeysYards::InFootprint(JX, JZ, 12)) continue;   // web waterfront.ts sites clear the conch houses
 			const double R = Hash2(JX * 2.1, JZ * 1.7);
 			if (R > (S.Isl->bMainland ? .12 : .5)) continue;
 			// the house's own dice

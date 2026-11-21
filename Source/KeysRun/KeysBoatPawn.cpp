@@ -22,6 +22,7 @@
 #include "KeysWalker.h"
 #include "KeysVisitors.h"
 #include "KeysLocals.h"
+#include "KeysYards.h"
 #include "KeysHandgun.h"
 #include "KeysTreasure.h"
 #include "KeysEstates.h"
@@ -1022,6 +1023,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 		else if (Cmd == TEXT("bigmap")) bBigMap = !bBigMap;
 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
 		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) { const FString R = Lc->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *R); } }
+		else if (Cmd.StartsWith(TEXT("yd:"))) { if (AKeysYards* Yd = AKeysYards::Get(this)) { const FString R = Yd->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript yd %s"), *R); } }   // the yards' test hooks (KeysYards.h)
 		else if (Cmd.StartsWith(TEXT("give=")))
 		{
 			// give=safety.flare,3: consumables as if bought; give=handgun.dot: gear

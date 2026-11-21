@@ -16,6 +16,7 @@
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysMangroveLife.h"
+#include "KeysYards.h"
 #include "ProceduralMeshComponent.h"
 
 namespace
@@ -121,6 +122,7 @@ void AKeysWorld::BuildMangroves()
 	auto CreekD = [&](double X, double Z) { return bCreeks ? KeysMangroveLife::Near(X, Z).D : 1e9; };
 	auto Blocked = [&](double X, double Z)
 	{
+		if (KeysYards::InFootprint(X, Z, 6)) return true;   // the dry stack and the boatyard
 		if (InFill(X, Z) || InTownPad(X, Z) || KeysTown::InFootprint(X, Z, 20) || SurfaceKind(X, Z) == 2 || InMarkedChannel(X, Z)) return true;
 		for (const FMarina& M : Marinas()) if (FMath::Square(X - M.SX) + FMath::Square(Z - M.SZ) < 70.0 * 70.0) return true;
 		return false;

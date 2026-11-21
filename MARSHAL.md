@@ -12,7 +12,7 @@ once).
 |---|---|---|---|---|
 | `water` | Sea and seafloor polish | `lane/water` | `../KeysRun-water` | merged 2026-11-21 |
 | `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | merged 2026-11-21 |
-| `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | running |
+| `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | merged 2026-11-21 |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | running |
 
 Not a lane yet: lifts and docks (P4), whose brief has not been given. Map Phase 3 becomes a lane after `upperkeys`
@@ -88,3 +88,11 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   table. Packaged-build perf bookmarks still owed.
 - 2026-11-21: `lane/upperkeys` created from `main` after the `mangroves` merge (it also owns `Tools/geo/bake.py`); the
   `mangroves` worktree removed (branch kept).
+- 2026-11-21: on `main` after the `mangroves` merge (marshal): mangroves reshaped on the user's reference photo
+  (root cages, trunks, clumped crowns, `SurfCanopy` leaf shading), creek water calm and tea-stained (`M_KR_Ocean`).
+- 2026-11-21: `yards` merged (lane at 9cc66fc): Cowfish Cove dry stack and boatyard east of Keys Fisheries. Requests
+  applied: R1 spawn and `yd:` commands, R2 made ground and dredged cove, R3 palms and houses kept off, R4 mangroves
+  kept off. Marshal addition: the hull loft no longer writes NaN into the sheer (`KeysHull.cpp`). Editor build and
+  smoke runs on both maps green. Follow-ups: the player can drive through the floats, fuel dock and a launched boat;
+  no going ashore there; the old box racks at the town marina and Faro Blanco still stand; the reverse (fetch)
+  forklift cycle was not shot. Packaged-build perf bookmarks still owed.
