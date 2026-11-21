@@ -272,7 +272,11 @@ namespace
 		D.DeckZ = 1.3 + .22 * Rnd(3);
 		KeysLifts::FLift& L = D.Lift;
 		L.Kind = LiftDeal[Nth % 16];
-		L.State = L.Kind == KeysLifts::LiftDavits ? ((Nth / 16) % 3 == 1 ? KeysLifts::StateAfloat : KeysLifts::StateHung) : StateDeal[Nth % 9];
+		L.State = StateDeal[Nth % 9];
+		// (the two rarer lifts take their turns from their own short hands, so the first of each has a boat in it)
+		static const uint8 ElevDeal[4] = {0, 1, 0, 2}, DavitDeal[4] = {0, 1, 0, 0};
+		if (L.Kind == KeysLifts::LiftElevator) L.State = ElevDeal[((Nth / 16) * 2 + (Nth % 16 == 13 ? 1 : 0)) % 4];
+		if (L.Kind == KeysLifts::LiftDavits) L.State = DavitDeal[((Nth / 16) * 2 + (Nth % 16 == 9 ? 1 : 0)) % 4];
 		D.Shape = ShapeDeal[Nth % 7];
 		if (L.Kind == KeysLifts::LiftDavits && D.Shape == KeysDocks::ShapeFinger) D.Shape = KeysDocks::ShapeT;   // davits want a head to stand on
 		D.bUnder = Nth % 6 == 3;
@@ -332,7 +336,8 @@ namespace
 			Why = WhyOk;
 			// nothing dry under the walkway once it has left the shore, and room to get past beyond the head
 			for (double A = 3; A <= D.Len && Why == WhyOk; A += 1) { const FVector2D Q = D.At(A, 0); if (LandH(Q.X, Q.Y) > .1) Why = WhyLand; }
-			for (double G = 2; G <= 16 && Why == WhyOk; G += 2)
+			// (and never more than five eighths of the way across a basin or a cut)
+			for (double G = 2; G <= FMath::Max(16.0, D.Box.A1 * .6) && Why == WhyOk; G += 2)
 				for (int32 k = -1; k <= 1 && Why == WhyOk; k++) { const FVector2D Q = D.At(D.Box.A1 + G, (D.Box.C0 + D.Box.C1) / 2 + k * 4.0); if (LandH(Q.X, Q.Y) > -.3) Why = WhyNarrow; }
 			// clear of everything else that stands on this shore
 			for (int32 i = 0; i < D.Parts.Num() && Why == WhyOk; i++)
@@ -697,12 +702,14 @@ namespace
 		{
 			// a green lamp on the bottom off the head (a real light at night: AKeysDocks moves a few of them about),
 			// and its cable down the nearest pile
-			const FVector At = P3(Hd.A1 + 1.4, HeadC, -.75);
+			// (off the far side of the head, clear of a boat lying across its face; off the end of a finger)
+			const FVector At = bRoomy ? P3(Hd.A1 - .6, Far - Sg * 1.6, -.85) : P3(Hd.A1 + 1.5, 0, -.85);
+			const FVector Down = bRoomy ? P3(Hd.A1 - .6, Far - Sg * .15, 0) : P3(Hd.A1 + .15, 0, 0);
 			O.Unders.Add(At);
 			D.Surf = SurfRubber;
-			D.AddTube(P3(Hd.A1 + .13, HeadC, Dz - .2), P3(Hd.A1 + .2, HeadC, -1.2), .012, .012, 4, Hex(0x1c1c1e));
+			D.AddTube(Down + FVector(0, 0, Dz - .2), Down + FVector(0, 0, -1.2), .012, .012, 4, Hex(0x1c1c1e));
 			D.Surf = SurfDefault;
-			O.Lamp.AddGlowBlob(At + FVector(0, 0, .5), .35, FLinearColor(.3f, 1.f, .6f, .5f));
+			O.Lamp.AddGlowBlob(At + FVector(0, 0, .55), .3, FLinearColor(.3f, 1.f, .6f, .45f));
 		}
 
 		// ---- the lift, and a boat lying alongside on her lines
@@ -733,10 +740,13 @@ namespace
 
 	// a test script's way of naming a dock: its number, or words joined with + that must all fit it (cradle, elevator,
 	// davits, nolift, hung, afloat, emptyup, emptydown, along, fish, hose, under, T, L, finger, platform, pine,
-	// weathered, stained, composite), with #n for the n-th such dock
+	// weathered, stained, composite), with #n for the n-th such dock; or shore0, shore1 .. for the dock in the middle
+	// of the busiest stretches
+	int32 ShoreDock(int32 K, int32* OutCount, FVector2D* OutMid);
 	int32 FindDock(const FString& Sel)
 	{
 		const TArray<FDock>& Docks = KeysDocks::Sites();
+		if (Sel.StartsWith(TEXT("shore"))) return ShoreDock(FCString::Atoi(*Sel.Mid(5)), nullptr, nullptr);
 		if (Sel.IsNumeric()) return Docks.IsValidIndex(FCString::Atoi(*Sel)) ? FCString::Atoi(*Sel) : -1;
 		FString Words = Sel, Nth;
 		int32 Skip = 0;
@@ -755,6 +765,69 @@ namespace
 			if (bFits && Skip-- <= 0) return i;
 		}
 		return -1;
+	}
+
+	// Follows the middle of a cut from P (Ang: radians, 0 east, PI/2 south) and logs its width, its water at low tide
+	// and the heading a boat needs, every 5 m - for writing the canal run's script
+	FString TraceCut(FVector2D P, double Ang, double Run)
+	{
+		auto Bank = [](const FVector2D& From, const FVector2D& Dir) { for (double R = .5; R <= 40; R += .5) if (KeysGeo::LandH(From.X + Dir.X * R, From.Y + Dir.Y * R) > 0) return R; return 40.0; };
+		double WMin = 1e9, DMin = 1e9, Done = 0;
+		const FVector2D Start = P;
+		for (; Done <= Run; Done += 5)
+		{
+			// the heading that keeps the most room ahead
+			double Best = -1, BestA = Ang;
+			for (int32 k = -4; k <= 4; k++)
+			{
+				const double A = Ang + k * .13;
+				const FVector2D Dr(FMath::Cos(A), FMath::Sin(A)), Ahead = P + Dr * 12, Ac(-Dr.Y, Dr.X);
+				if (KeysGeo::LandH(Ahead.X, Ahead.Y) > -.2 || KeysGeo::LandH(P.X + Dr.X * 6, P.Y + Dr.Y * 6) > -.2) continue;
+				const double Room = FMath::Min(Bank(Ahead, Ac), Bank(Ahead, -Ac)) - FMath::Abs(k) * .3;
+				if (Room > Best) { Best = Room; BestA = A; }
+			}
+			if (Best < 0) break;
+			Ang = BestA;
+			const FVector2D Dr(FMath::Cos(Ang), FMath::Sin(Ang)), Ac(-Dr.Y, Dr.X);
+			const double L = Bank(P, Ac), R = Bank(P, -Ac);
+			P += Ac * ((L - R) / 2);
+			const double Wt = KeysGeo::DepthAt(P.X, P.Y) - LowTide;
+			UE_LOG(LogTemp, Log, TEXT("KRDocks trace %3.0f m: %.1f, %.1f width %.1f m water %.2f m at low tide heading=%.3f in a dock %d"), Done, P.X, P.Y, L + R, Wt, FMath::Atan2(-Dr.X, -Dr.Y), KeysDocks::InFootprint(P.X, P.Y, 2) ? 1 : 0);
+			if (L + R >= 79) break;   // out in open water
+			WMin = FMath::Min(WMin, L + R); DMin = FMath::Min(DMin, Wt);
+			P += Dr * 5;
+		}
+		const FString Sum = FString::Printf(TEXT("from %.0f, %.0f: %.0f m, narrowest %.1f m, least water %.2f m at low tide, ends %.0f, %.0f"), Start.X, Start.Y, Done, WMin > 1e8 ? 0 : WMin, DMin > 1e8 ? 0 : DMin, P.X, P.Y);
+		UE_LOG(LogTemp, Log, TEXT("KRDocks traced %s"), *Sum);
+		return Sum;
+	}
+
+	// the K-th busiest 600 m square of shore: the dock nearest the middle of its docks (-1 if there is none)
+	int32 ShoreDock(int32 K, int32* OutCount, FVector2D* OutMid)
+	{
+		const TArray<FDock>& Docks = KeysDocks::Sites();
+		struct FSq { int64 Key; int32 N; double X, Z; };
+		TArray<FSq> Sq;
+		for (const FDock& D : Docks)
+		{
+			const int64 Key = (int64(FMath::FloorToInt32(D.X0 / TileM)) << 32) ^ int64(uint32(FMath::FloorToInt32(D.Z0 / TileM)));
+			FSq* F = Sq.FindByPredicate([Key](const FSq& S) { return S.Key == Key; });
+			if (!F) F = &Sq.Add_GetRef({Key, 0, 0, 0});
+			F->N++; F->X += D.X0; F->Z += D.Z0;
+		}
+		Sq.StableSort([](const FSq& A, const FSq& B) { return A.N > B.N; });
+		if (!Sq.IsValidIndex(K)) return -1;
+		const FVector2D Mid(Sq[K].X / Sq[K].N, Sq[K].Z / Sq[K].N);
+		int32 Best = -1;
+		double BestD = 1e18;
+		for (int32 i = 0; i < Docks.Num(); i++)
+		{
+			const double Dd = FMath::Square(Docks[i].X0 - Mid.X) + FMath::Square(Docks[i].Z0 - Mid.Y);
+			if (Dd < BestD) { BestD = Dd; Best = i; }
+		}
+		if (OutCount) *OutCount = Sq[K].N;
+		if (OutMid) *OutMid = Mid;
+		return Best;
 	}
 
 	FString TpOf(const FDock& D, double Off)
@@ -903,7 +976,7 @@ void AKeysDocks::BeginPlay()
 		Lt->SetupAttachment(Root);
 		Lt->RegisterComponent();
 		Lt->SetIntensityUnits(ELightUnits::Lumens);
-		Lt->SetIntensity(i < 6 ? 1300.f : 5200.f);
+		Lt->SetIntensity(i < 6 ? 750.f : 2200.f);
 		Lt->SetLightColor(i < 6 ? FLinearColor(1.f, .86f, .62f) : FLinearColor(.2f, 1.f, .5f));
 		Lt->SetAttenuationRadius(i < 6 ? 1500.f : 1100.f);
 		Lt->SetCastShadows(false);
@@ -972,21 +1045,13 @@ void AKeysDocks::LogSites() const
 			LiftName[D.Lift.Kind], D.Lift.Kind ? StateName[D.Lift.State] : TEXT(""), D.bAlong ? TEXT(" + alongside") : TEXT(""), D.Person == 1 ? TEXT(" + fishing") : D.Person == 2 ? TEXT(" + hosing") : D.bUnder ? TEXT(" + underwater lights") : TEXT(""),
 			Bt ? *Bt->Name : TEXT("-"), Bt ? *Bt->Brand : TEXT("-"), !Bt ? TEXT("-") : Bt->Kind == BoatSkiff ? TEXT("skiff") : Bt->Kind == BoatBay ? TEXT("bay boat") : TEXT("centre console"), D.HeadDepth, *TpOf(D, 22));
 	}
-	// the three busiest stretches of shore, and where to lie off them
-	TArray<int32> Order;
-	for (int32 i = 0; i < Tiles.Num(); i++) Order.Add(i);
-	Order.Sort([this](int32 A, int32 B) { return Tiles[A].Docks != Tiles[B].Docks ? Tiles[A].Docks > Tiles[B].Docks : A < B; });
-	for (int32 k = 0; k < Order.Num() && k < 5; k++)
+	// the busiest stretches of shore, and where to lie off them
+	for (int32 k = 0; k < 5; k++)
 	{
-		const FTile& Tl = Tiles[Order[k]];
-		int32 Best = -1;
-		double BestD = 1e18;
-		for (int32 i = 0; i < Docks.Num(); i++)
-		{
-			const double Dd = FMath::Square(Docks[i].X0 - Tl.CX) + FMath::Square(Docks[i].Z0 - Tl.CZ);
-			if (Dd < BestD) { BestD = Dd; Best = i; }
-		}
-		if (Best >= 0) UE_LOG(LogTemp, Log, TEXT("KRDocks shore %d: %d docks round %.0f, %.0f (%s) - dock %d, %s"), k, Tl.Docks, Tl.CX, Tl.CZ, *Docks[Best].Island, Best, *TpOf(Docks[Best], 30));
+		int32 Cnt = 0;
+		FVector2D Mid;
+		const int32 Best = ShoreDock(k, &Cnt, &Mid);
+		if (Best >= 0) UE_LOG(LogTemp, Log, TEXT("KRDocks shore %d: %d docks round %.0f, %.0f (%s) - dock %d, %s"), k, Cnt, Mid.X, Mid.Y, *Docks[Best].Island, Best, *TpOf(Docks[Best], 14));
 	}
 }
 
@@ -1254,40 +1319,56 @@ FString AKeysDocks::DebugCmd(const FString& Cmd)
 		for (int32 i = 0; i < Runs.Num() && i < 8; i++) UE_LOG(LogTemp, Log, TEXT("KRDocks track %s"), *Runs[i].Value);
 		return FString::Printf(TEXT("%d tracks"), Runs.Num());
 	}
+	if (Cmd.StartsWith(TEXT("trace=")))
+	{
+		// trace=x,z,deg[,metres]: follow the middle of a cut from there (deg: 0 east, 90 south)
+		TArray<FString> Pp;
+		Cmd.Mid(6).ParseIntoArray(Pp, TEXT(","));
+		if (Pp.Num() < 3) return TEXT("trace=x,z,deg[,metres]");
+		return TraceCut(FVector2D(FCString::Atod(*Pp[0]), FCString::Atod(*Pp[1])), FMath::DegreesToRadians(FCString::Atod(*Pp[2])), Pp.Num() >= 4 ? FCString::Atod(*Pp[3]) : 300);
+	}
 	if (Cmd == TEXT("canals"))
 	{
-		// water a boat could idle down with a bank close on both hands: 0.6 m at low tide, the banks 14 to 45 m apart
+		// water a boat could idle down with a bank close on both hands (not the mangrove creeks, which have their own
+		// pilot): 0.6 m at low tide, the banks 14 to 45 m apart. The three biggest stretches are traced both ways.
 		const double St = 8;
-		TMap<int64, int32> Bins;
+		struct FCell { double X, Z, Across; };
+		TMap<int64, TArray<FCell>> Bins;
 		int32 Cells = 0;
 		for (double Z = KeysGeo::WBZ0; Z < KeysGeo::WBZ1; Z += St)
 			for (double X = KeysGeo::WBX0; X < KeysGeo::WBX1; X += St)
 			{
 				const double Sd = KeysGeo::ShoreInfo(X, Z).D;
-				if (Sd < 5 || Sd > 24 || KeysGeo::LandH(X, Z) > -.3 || KeysGeo::DepthAt(X, Z) - LowTide < .6) continue;
-				bool bCanal = false;
-				for (int32 a = 0; a < 4 && !bCanal; a++)
+				if (Sd < 5 || Sd > 24 || KeysGeo::LandH(X, Z) > -.3 || KeysGeo::DepthAt(X, Z) - LowTide < .6 || KeysGeo::CreekDist(X, Z) < 20) continue;
+				double Across = -1;
+				for (int32 a = 0; a < 4 && Across < 0; a++)
 				{
 					const double Cs = FMath::Cos(a * PI / 4), Sn = FMath::Sin(a * PI / 4);
 					double D0 = -1, D1 = -1;
 					for (double R = 2; R <= 32 && D0 < 0; R += 2) if (KeysGeo::LandH(X + Cs * R, Z + Sn * R) > .2) D0 = R;
 					for (double R = 2; R <= 32 && D1 < 0; R += 2) if (KeysGeo::LandH(X - Cs * R, Z - Sn * R) > .2) D1 = R;
-					bCanal = D0 > 0 && D1 > 0 && D0 + D1 >= 14 && D0 + D1 <= 45;
+					if (D0 > 0 && D1 > 0 && D0 + D1 >= 14 && D0 + D1 <= 45) Across = a * PI / 4;
 				}
-				if (!bCanal) continue;
+				if (Across < 0) continue;
 				Cells++;
-				Bins.FindOrAdd((int64(FMath::FloorToInt32(X / 160)) << 32) ^ int64(uint32(FMath::FloorToInt32(Z / 160))))++;
+				Bins.FindOrAdd((int64(FMath::FloorToInt32(X / 160)) << 32) ^ int64(uint32(FMath::FloorToInt32(Z / 160)))).Add({X, Z, Across});
 			}
+		Bins.ValueSort([](const TArray<FCell>& A, const TArray<FCell>& B) { return A.Num() > B.Num(); });
 		int32 Shown = 0;
-		Bins.ValueSort([](int32 A, int32 B) { return A > B; });
-		for (const TPair<int64, int32>& Pr : Bins)
+		for (const TPair<int64, TArray<FCell>>& Pr : Bins)
 		{
-			if (Shown++ >= 8) break;
-			UE_LOG(LogTemp, Log, TEXT("KRDocks canal water: %d cells (%.0f m2) round %.0f, %.0f"), Pr.Value, Pr.Value * St * St, (int32(Pr.Key >> 32) + .5) * 160, (int32(uint32(Pr.Key)) + .5) * 160);
+			if (Shown++ >= 3) break;
+			FVector2D Mid(0, 0);
+			for (const FCell& Cl : Pr.Value) Mid += FVector2D(Cl.X, Cl.Z);
+			Mid /= Pr.Value.Num();
+			const FCell* Near = &Pr.Value[0];
+			for (const FCell& Cl : Pr.Value) if (FVector2D::DistSquared(FVector2D(Cl.X, Cl.Z), Mid) < FVector2D::DistSquared(FVector2D(Near->X, Near->Z), Mid)) Near = &Cl;
+			UE_LOG(LogTemp, Log, TEXT("KRDocks canal water: %d cells (%.0f m2) round %.0f, %.0f"), Pr.Value.Num(), Pr.Value.Num() * St * St, Mid.X, Mid.Y);
+			TraceCut(FVector2D(Near->X, Near->Z), Near->Across + PI / 2, 400);
+			TraceCut(FVector2D(Near->X, Near->Z), Near->Across - PI / 2, 400);
 		}
 		return FString::Printf(TEXT("%d cells of canal-like water (%.0f m2 each) in %d places"), Cells, St * St, Bins.Num());
 	}
-	if (Cmd == TEXT("where")) { LogSites(); return TEXT("logged"); }
 	if (Cmd.StartsWith(TEXT("go=")) || Cmd.StartsWith(TEXT("look=")))
 	{
 		// go=<dock>[,off[,across]]: lie the boat that far off the dock's head, bow to it
@@ -1305,7 +1386,7 @@ FString AKeysDocks::DebugCmd(const FString& Cmd)
 		{
 			AKeysBoatPawn* Boat = Cast<AKeysBoatPawn>(PC->GetPawn());
 			if (!Boat) return TEXT("no boat");
-			const FVector2D Q = Dk.At(Dk.Box.A1 + (Pp.Num() >= 2 ? FCString::Atod(*Pp[1]) : 22), (Dk.Box.C0 + Dk.Box.C1) / 2 + (Pp.Num() >= 3 ? FCString::Atod(*Pp[2]) : 0));
+			const FVector2D Q = Dk.At(Dk.Box.A1 + (Pp.Num() >= 2 ? FCString::Atod(*Pp[1]) : 14), (Dk.Box.C0 + Dk.Box.C1) / 2 + (Pp.Num() >= 3 ? FCString::Atod(*Pp[2]) : 0));
 			Boat->DebugPlace(Q.X, Q.Y, FMath::Atan2(Dk.NX, Dk.NZ));
 			return FString::Printf(TEXT("boat off dock %d at %.0f, %.0f"), K, Q.X, Q.Y);
 		}
