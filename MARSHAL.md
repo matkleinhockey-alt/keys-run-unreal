@@ -12,7 +12,7 @@ once).
 |---|---|---|---|---|
 | `water` | Sea and seafloor polish | `lane/water` | `../KeysRun-water` | merged 2026-11-21 |
 | `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | running |
-| `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | waiting for a free slot |
+| `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | running |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | waiting for a free slot |
 
 Not a lane yet: lifts and docks (P4), whose brief has not been given. Map Phase 3 becomes a lane after `upperkeys`
@@ -77,3 +77,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   smoke runs on the real and classic maps green. Packaged-build perf bookmarks still owed before any release.
   Follow-ups it left: reef chunk block from high above, diver depth readout ignores the tide, one unexplained 712 ms
   frame at the reef, seagrass tufts read bright green from above.
+- 2026-11-21: `lane/yards` created from `main` after the `water` merge; the `water` worktree removed (branch kept).
