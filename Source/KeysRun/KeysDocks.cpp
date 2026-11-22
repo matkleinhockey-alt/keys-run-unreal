@@ -1027,72 +1027,35 @@ void AKeysDocks::BeginPlay()
 		return;
 	}
 	const double T0 = FPlatformTime::Seconds();
-	struct FTileMesh { FKeysMesh S, Bt, D, F, Lamp; int32 Tile = 0; };
-	TMap<int64, FTileMesh*> Build;
+	// the tiles and which docks stand in each. Their meshes are made when a tile comes within sight of the camera
+	// (StreamTiles): the whole map's docks at once are far too much to hold (14 million triangles with the Lower Keys).
+	TMap<int64, int32> TileOf;
 	for (int32 i = 0; i < Docks.Num(); i++)
 	{
 		const FDock& Dk = Docks[i];
 		const int32 TX = FMath::FloorToInt32(Dk.X0 / TileM), TZ = FMath::FloorToInt32(Dk.Z0 / TileM);
-		FTileMesh*& Tm = Build.FindOrAdd((int64(TX) << 32) ^ int64(uint32(TZ)));
-		if (!Tm)
+		int32& K = TileOf.FindOrAdd((int64(TX) << 32) ^ int64(uint32(TZ)), -1);
+		if (K < 0)
 		{
-			Tm = new FTileMesh();
-			Tm->Tile = Tiles.AddDefaulted();
-			Tiles[Tm->Tile].X = TX * TileM;
-			Tiles[Tm->Tile].Z = TZ * TileM;
+			K = Tiles.AddDefaulted();
+			Tiles[K].X = TX * TileM;
+			Tiles[K].Z = TZ * TileM;
 		}
-		FTile& Tl = Tiles[Tm->Tile];
-		FDockMesh Dm;
-		BuildDock(Dk, Dm);
-		const FTransform Tf(FQuat(FVector::ZAxisVector, FMath::Atan2(Dk.NZ, Dk.NX)), FVector(Dk.X0 - Tl.X, Dk.Z0 - Tl.Z, 0));
-		Append(Tm->S, Dm.S, Tf);
-		Append(Tm->Bt, Dm.Bt, Tf);
-		Append(Tm->D, Dm.D, Tf);
-		Append(Tm->F, Dm.F, Tf);
-		Append(Tm->Lamp, Dm.Lamp, Tf);
-		for (const FVector& Lp : Dm.Lamps) { const FVector2D Q = Dk.At(Lp.X, Lp.Y); Tl.LampAt.Add(FVector(Q.X, Q.Y, Lp.Z)); }
-		for (const FVector& Lp : Dm.Unders) { const FVector2D Q = Dk.At(Lp.X, Lp.Y); Tl.UnderAt.Add(FVector(Q.X, Q.Y, Lp.Z)); }
+		FTile& Tl = Tiles[K];
+		Tl.DockIdx.Add(i);
 		Tl.CX += Dk.X0; Tl.CZ += Dk.Z0; Tl.Docks++;
 		if (Dk.Person) { FPerson& Pn = People.AddDefaulted_GetRef(); Pn.Dock = i; Pn.Ph = i * 1.7; }
 	}
 	for (FTile& Tl : Tiles) { Tl.CX /= Tl.Docks; Tl.CZ /= Tl.Docks; }
-	for (const FDock& Dk : Docks)
-	{
-		const int32 TX = FMath::FloorToInt32(Dk.X0 / TileM), TZ = FMath::FloorToInt32(Dk.Z0 / TileM);
-		FTile& Tl = Tiles[Build[(int64(TX) << 32) ^ int64(uint32(TZ))]->Tile];
-		Tl.R = FMath::Max(Tl.R, FMath::Sqrt(FMath::Square(Dk.X0 - Tl.CX) + FMath::Square(Dk.Z0 - Tl.CZ)) + Dk.Box.A1 + 10);
-	}
-	UMaterialInterface* Mat = AKeysWorld::VertexColorMaterial();
+	for (FTile& Tl : Tiles)
+		for (int32 i : Tl.DockIdx)
+			Tl.R = FMath::Max(Tl.R, FMath::Sqrt(FMath::Square(Docks[i].X0 - Tl.CX) + FMath::Square(Docks[i].Z0 - Tl.CZ)) + Docks[i].Box.A1 + 10);
 	if (UMaterialInterface* GM = AKeysWorld::GlowMaterial())
 	{
 		GlowMID = UMaterialInstanceDynamic::Create(GM, this);
 		GlowMID->SetScalarParameterValue(TEXT("Bright"), 3.f);
 		SprayMID = UMaterialInstanceDynamic::Create(GM, this);
 		SprayMID->SetScalarParameterValue(TEXT("Bright"), 1.1f);
-	}
-	const double Sea = KeysOcean::SeaLevel();
-	int32 BadVerts = 0;
-	for (TPair<int64, FTileMesh*>& Pr : Build)
-	{
-		FTileMesh& Tm = *Pr.Value;
-		FTile& Tl = Tiles[Tm.Tile];
-		const FVector At = KeysGeo::ToUE(Tl.X, 0, Tl.Z);
-		// the docks themselves from across the harbour, the boats from a kilometre, the fittings only close to
-		if (Tm.S.T.Num()) Tm.S.Commit(NewMesh(At, Root, 2600, true), 0, Mat);
-		if (Tm.Bt.T.Num()) Tm.Bt.Commit(NewMesh(At, Root, 1100, true), 0, Mat);
-		if (Tm.D.T.Num()) Tm.D.Commit(NewMesh(At, Root, 380, false), 0, Mat);
-		Tl.Float = NewMesh(At + FVector(0, 0, Sea * 100), Root, 1100, true);
-		Tl.FloatZ = Sea;
-		if (Tm.F.T.Num()) Tm.F.Commit(Tl.Float, 0, Mat);
-		if (GlowMID && Tm.Lamp.T.Num())
-		{
-			Tl.Lamps = NewMesh(At, Root, 2600, false);
-			Tm.Lamp.Commit(Tl.Lamps, 0, GlowMID);
-			Tl.Lamps->SetVisibility(false);
-		}
-		Tris[0] += Tm.S.T.Num() / 3; Tris[1] += Tm.Bt.T.Num() / 3; Tris[2] += Tm.D.T.Num() / 3; Tris[3] += Tm.F.T.Num() / 3; Tris[4] += Tm.Lamp.T.Num() / 3;
-		for (const FKeysMesh* Mh : {&Tm.S, &Tm.Bt, &Tm.D, &Tm.F}) for (const FVector& Vv : Mh->V) BadVerts += Vv.ContainsNaN();
-		delete Pr.Value;
 	}
 	// a few lamps that really light the deck, moved to whichever docks are nearest at night
 	// (the first six are the dock lamps; the last three the green lamps under the water)
@@ -1129,11 +1092,90 @@ void AKeysDocks::BeginPlay()
 		People[i].Hm.bHoldHead = true;
 	}
 	bBuilt = true;
-	if (BadVerts) UE_LOG(LogTemp, Warning, TEXT("KRDocks: %d broken vertices"), BadVerts);
-	UE_LOG(LogTemp, Log, TEXT("KRDocks built: %d docks in %d tiles, %d meshes, %d tris (structure %d, hung boats %d, fittings %d, afloat %d, lights %d), %d people, %.2f s"),
-		Docks.Num(), Tiles.Num(), Meshes.Num(), Tris[0] + Tris[1] + Tris[2] + Tris[3] + Tris[4], Tris[0], Tris[1], Tris[2], Tris[3], Tris[4], People.Num(), FPlatformTime::Seconds() - T0);
+	// the tiles round the start stand before the first frame
+	FVector2D Start(0, 0);
+	if (APawn* P0 = UGameplayStatics::GetPlayerPawn(this, 0)) Start = FVector2D(P0->GetActorLocation().X / 100, P0->GetActorLocation().Y / 100);
+	else if (KeysGeo::Marinas().Num()) Start = FVector2D(KeysGeo::Marinas()[0].SX, KeysGeo::Marinas()[0].SZ);
+	StreamTiles(Start, 1000);
+	UE_LOG(LogTemp, Log, TEXT("KRDocks built: %d docks in %d tiles, made within 3 km of the camera; %d tiles round the start now, %d meshes, %d tris (structure %d, hung boats %d, fittings %d, afloat %d, lights %d), %d people, %.2f s"),
+		Docks.Num(), Tiles.Num(), MadeTiles, Meshes.Num(), Tris[0] + Tris[1] + Tris[2] + Tris[3] + Tris[4], Tris[0], Tris[1], Tris[2], Tris[3], Tris[4], People.Num(), FPlatformTime::Seconds() - T0);
 	LogSites();
 	Audit();
+}
+
+// one tile's meshes: the docks themselves from across the harbour, the boats from a kilometre, the fittings only close to
+void AKeysDocks::MakeTile(FTile& Tl)
+{
+	const TArray<FDock>& Docks = KeysDocks::Sites();
+	FKeysMesh MS, MBt, MD, MF, MLamp;
+	Tl.LampAt.Reset(); Tl.UnderAt.Reset();
+	for (int32 i : Tl.DockIdx)
+	{
+		const FDock& Dk = Docks[i];
+		FDockMesh Dm;
+		BuildDock(Dk, Dm);
+		const FTransform Tf(FQuat(FVector::ZAxisVector, FMath::Atan2(Dk.NZ, Dk.NX)), FVector(Dk.X0 - Tl.X, Dk.Z0 - Tl.Z, 0));
+		Append(MS, Dm.S, Tf);
+		Append(MBt, Dm.Bt, Tf);
+		Append(MD, Dm.D, Tf);
+		Append(MF, Dm.F, Tf);
+		Append(MLamp, Dm.Lamp, Tf);
+		for (const FVector& Lp : Dm.Lamps) { const FVector2D Q = Dk.At(Lp.X, Lp.Y); Tl.LampAt.Add(FVector(Q.X, Q.Y, Lp.Z)); }
+		for (const FVector& Lp : Dm.Unders) { const FVector2D Q = Dk.At(Lp.X, Lp.Y); Tl.UnderAt.Add(FVector(Q.X, Q.Y, Lp.Z)); }
+	}
+	UMaterialInterface* Mat = AKeysWorld::VertexColorMaterial();
+	const double Sea = KeysOcean::SeaLevel();
+	const FVector At = KeysGeo::ToUE(Tl.X, 0, Tl.Z);
+	const int32 M0 = Meshes.Num();
+	if (MS.T.Num()) MS.Commit(NewMesh(At, Root, 2600, true), 0, Mat);
+	if (MBt.T.Num()) MBt.Commit(NewMesh(At, Root, 1100, true), 0, Mat);
+	if (MD.T.Num()) MD.Commit(NewMesh(At, Root, 380, false), 0, Mat);
+	Tl.Float = NewMesh(At + FVector(0, 0, Sea * 100), Root, 1100, true);
+	Tl.FloatZ = Sea;
+	if (MF.T.Num()) MF.Commit(Tl.Float, 0, Mat);
+	if (GlowMID && MLamp.T.Num())
+	{
+		Tl.Lamps = NewMesh(At, Root, 2600, false);
+		MLamp.Commit(Tl.Lamps, 0, GlowMID);
+		Tl.Lamps->SetVisibility(bNight);
+	}
+	for (int32 k = M0; k < Meshes.Num(); k++) Tl.Parts.Add(Meshes[k]);
+	Tl.TriN[0] = MS.T.Num() / 3; Tl.TriN[1] = MBt.T.Num() / 3; Tl.TriN[2] = MD.T.Num() / 3; Tl.TriN[3] = MF.T.Num() / 3; Tl.TriN[4] = MLamp.T.Num() / 3;
+	for (int32 k = 0; k < 5; k++) Tris[k] += Tl.TriN[k];
+	int32 BadVerts = 0;
+	for (const FKeysMesh* Mh : {&MS, &MBt, &MD, &MF}) for (const FVector& Vv : Mh->V) BadVerts += Vv.ContainsNaN();
+	if (BadVerts) UE_LOG(LogTemp, Warning, TEXT("KRDocks: %d broken vertices"), BadVerts);
+	Tl.bMade = true;
+	MadeTiles++;
+}
+
+void AKeysDocks::DropTile(FTile& Tl)
+{
+	for (UProceduralMeshComponent* C : Tl.Parts) if (C) { Meshes.Remove(C); C->DestroyComponent(); }
+	Tl.Parts.Reset();
+	Tl.Float = Tl.Lamps = nullptr;
+	Tl.LampAt.Reset(); Tl.UnderAt.Reset();
+	for (int32 k = 0; k < 5; k++) { Tris[k] -= Tl.TriN[k]; Tl.TriN[k] = 0; }
+	Tl.bMade = false;
+	MadeTiles--;
+}
+
+// makes the tiles within sight (the docks are drawn to 2.6 km), nearest first, and takes down the ones left behind.
+// SyncWithin: every tile that near is made now (the start, and a teleport's first look); otherwise one a call.
+void AKeysDocks::StreamTiles(const FVector2D& Eye, double SyncWithin)
+{
+	constexpr double In = 3000, Out = 3800;
+	int32 Best = -1;
+	double BestD = 1e18;
+	for (int32 k = 0; k < Tiles.Num(); k++)
+	{
+		FTile& Tl = Tiles[k];
+		const double D = FMath::Sqrt(FMath::Square(Tl.CX - Eye.X) + FMath::Square(Tl.CZ - Eye.Y)) - Tl.R;
+		if (Tl.bMade) { if (D > Out) DropTile(Tl); continue; }
+		if (D < SyncWithin) MakeTile(Tl);
+		else if (D < In && D < BestD) { BestD = D; Best = k; }
+	}
+	if (Best >= 0 && SyncWithin <= 0) MakeTile(Tiles[Best]);
 }
 
 void AKeysDocks::LogSites() const
@@ -1354,6 +1396,7 @@ void AKeysDocks::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	if (!bBuilt) return;
 	const double Dt = FMath::Min(double(DeltaSeconds), .1);
+	if (APlayerCameraManager* CM0 = UGameplayStatics::GetPlayerCameraManager(this, 0)) StreamTiles(FVector2D(CM0->GetCameraLocation().X / 100, CM0->GetCameraLocation().Y / 100), 0);
 	SlowT -= Dt;
 	if (SlowT <= 0)
 	{

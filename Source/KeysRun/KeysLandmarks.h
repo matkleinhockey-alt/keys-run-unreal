@@ -40,6 +40,7 @@ private:
 	void BuildBuoys();
 	void BuildDaymarks(FTownBatch& B, FTownBatch& G);   // the real map's red and green daybeacons
 	void BuildBridges(struct FTownBatch& Road);   // KeysBridges.cpp
+	void BuildSideBridges();                      // the road bridges off US-1's line (Jewfish Creek, Card Sound)
 	// the bridges in chunks, each a detailed and a plain version, swapped by distance (UpdateBridgeLod)
 	struct FBridgeChunk { double X0 = 0, X1 = 0, ZOff = 0; UProceduralMeshComponent* Near = nullptr; UProceduralMeshComponent* Far = nullptr; bool bNear = false; };
 	TArray<FBridgeChunk> BridgeChunks;

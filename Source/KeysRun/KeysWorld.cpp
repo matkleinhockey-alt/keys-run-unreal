@@ -29,6 +29,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "Async/ParallelFor.h"
+#include "Async/Async.h"
 #include "EngineUtils.h"
 #include "Components/StaticMeshComponent.h"
 #include "Misc/CommandLine.h"
@@ -201,6 +202,9 @@ void AKeysWorld::BeginPlay()
 		Clouds->SetMaterial(CloudMat);
 	ApplySun(0);
 
+	// (where the boat will start, so the ground round it is there for the first frame)
+	if (APawn* P0 = UGameplayStatics::GetPlayerPawn(this, 0)) { FocusX = P0->GetActorLocation().X / 100; FocusZ = P0->GetActorLocation().Y / 100; }
+	else if (KeysGeo::Marinas().Num()) { FocusX = KeysGeo::Marinas()[0].SX; FocusZ = KeysGeo::Marinas()[0].SZ; }
 	BuildTerrain();
 	BuildScenery();
 	BuildMangroves();
@@ -225,284 +229,498 @@ UInstancedStaticMeshComponent* AKeysWorld::MakeISM(const TCHAR* Name, UStaticMes
 }
 
 // ---------------------------------------------------------------- terrain
+// The land is a mesh per 512 m tile. The real map is far too long to stand all at once (65 km of keys): only the tiles
+// within sight of the boat are made, off the game thread, and those left behind are taken down (StreamTerrain). Each
+// tile is made from the ground's own functions alone, so a tile is the same whenever and in whatever order it is made.
+namespace
+{
+	constexpr double TerrCell = 8;
+	constexpr int32 TerrCH = 64;
+	constexpr float TerrainDrawDist = 900000.f;   // 9 km: an island is a line on the horizon well before that
+	struct FTerrTile { TArray<FVector> V, N; TArray<FVector2D> UV, K; TArray<FLinearColor> C; TArray<int32> T; };
+	struct FTerrJob { int64 Key = 0; TFuture<FTerrTile*> Job; };
+	TMap<int64, FVector2D> GTerrHave;                               // every tile that may have land in it -> its centre
+	TMap<int64, TWeakObjectPtr<UProceduralMeshComponent>> GTerrLive;   // the tiles made (null: made, and found to be all water)
+	TArray<FTerrJob> GTerrJobs;
+	int32 GTerrGN = 0, GTerrGNZ = 0, GTerrMade = 0;
+	double GTerrScanT = 0;
+	int64 TerrKey(int32 CX, int32 CY) { return (int64(CX) << 32) ^ int64(uint32(CY)); }
+
+	// one tile's mesh, or null if none of it stands clear of the water
+	FTerrTile* GenTerrainTile(int64 Key)
+	{
+		using namespace KeysGeo;
+		const int32 CX = int32(Key >> 32), CY = int32(uint32(Key & 0xffffffff));
+		const double Cell = TerrCell;
+		const int32 CH = TerrCH, S = CH + 1, W = CH + 3, GN = GTerrGN, GNZ = GTerrGNZ;
+		// the heights, one cell past the tile each way for the slopes (held at the map's own edge, as the whole-map grid was)
+		TArray<float> HG;
+		HG.SetNumUninitialized(W * W);
+		auto GI = [&](int32 a) { return FMath::Clamp(CX * CH + a, 0, GN - 1); };
+		auto GJ = [&](int32 b) { return FMath::Clamp(CY * CH + b, 0, GNZ - 1); };
+		auto HAt = [&](int32 a, int32 b) -> float& { return HG[(b + 1) * W + a + 1]; };
+		bool bAny = false;
+		for (int32 b = -1; b <= CH + 1; b++)
+			for (int32 a = -1; a <= CH + 1; a++)
+			{
+				const float H = float(LandH(WorldX0 + GI(a) * Cell, WorldZ0 + GJ(b) * Cell));
+				HAt(a, b) = H;
+				if (H > -1.0f && a >= 0 && b >= 0 && a <= CH && b <= CH) bAny = true;
+			}
+		if (!bAny) return nullptr;
+		TArray<uint8> Kind, Canal;
+		Kind.SetNumZeroed(S * S);
+		Canal.SetNumZeroed(S * S);   // in a canal or on its wall: KeysCanals draws the wall and the lawn there, the sea floor the bottom
+		for (int32 b = 0; b <= CH; b++)
+			for (int32 a = 0; a <= CH; a++)
+			{
+				const double X = WorldX0 + GI(a) * Cell, Z = WorldZ0 + GJ(b) * Cell;
+				if (HAt(a, b) > -1) Kind[b * S + a] = uint8(SurfaceKind(X, Z));
+				if (RealMap()) { double CN; if (KeysGeoReal::CanalBank(X, Z, CN) && CN < 3) Canal[b * S + a] = 1; }
+			}
+
+		const FLinearColor WetSand = Srgb(.74, .69, .53), Sand = Srgb(.91, .86, .71), Grass = Srgb(.43, .56, .28), Scrub = Srgb(.29, .44, .21),
+			Mangrove = Srgb(.16, .31, .15), Golf = Srgb(.42, .67, .3), Runway = Srgb(.33, .33, .34), City = Srgb(.55, .54, .52);
+		auto ColorAt = [&](int32 a, int32 b)
+		{
+			const double X = WorldX0 + GI(a) * Cell, Z = WorldZ0 + GJ(b) * Cell, H = HAt(a, b);
+			switch (Kind[b * S + a])
+			{
+				case 1: return H > .9 ? Golf : Sand;
+				case 2: return H > .9 ? Runway : Sand;
+				case 3: return H > .9 ? City : Sand;
+				case 4: return FMath::Lerp(Srgb(.25, .21, .15), Mangrove, float(SStep(.2, .9, H)));   // mud and leaf litter under the mangroves
+				default: break;
+			}
+			if (H < .35)
+			{
+				// a beach - unless the mangroves stand along it: then it is dark peat, not sand
+				const FLinearColor Beach = FMath::Lerp(WetSand, Sand, float(SStep(-1.2, .35, H)));
+				const double Tan = MangroveNear(X, Z);
+				return Tan > 0 ? FMath::Lerp(Beach, Srgb(.2, .15, .09), float(Tan * .9)) : Beach;
+			}
+			const double N = .5 + .3 * FMath::Sin(X * .013) * FMath::Cos(Z * .011) + .2 * FMath::Sin((X + Z) * .031);
+			const FLinearColor Veg = N > .62 ? Mangrove : N > .42 ? Scrub : Grass;
+			return FMath::Lerp(Sand, Veg, float(SStep(.35, .95, H)));
+		};
+
+		FTerrTile* Out = new FTerrTile();
+		for (int32 b = 0; b < CH; b++)
+			for (int32 a = 0; a < CH; a++)
+			{
+				const int32 K = b * S + a;
+				// under the water the sea floor (KeysSeafloor) takes over, so only the beach is drawn here
+				if (FMath::Max(FMath::Max(HAt(a, b), HAt(a + 1, b)), FMath::Max(HAt(a, b + 1), HAt(a + 1, b + 1))) < -.3f) continue;
+				{ const uint8* Cn = Canal.GetData() + K; if (Cn[0] | Cn[1] | Cn[S] | Cn[S + 1]) continue; }
+				Out->T.Append({K, K + S, K + 1, K + 1, K + S, K + S + 1});
+			}
+		if (!Out->T.Num()) { delete Out; return nullptr; }
+		Out->V.Reserve(S * S); Out->N.Reserve(S * S); Out->UV.Reserve(S * S); Out->C.Reserve(S * S);
+		for (int32 b = 0; b <= CH; b++)
+			for (int32 a = 0; a <= CH; a++)
+			{
+				const int32 i = GI(a), j = GJ(b);
+				const double X = WorldX0 + i * Cell, Z = WorldZ0 + j * Cell, H = HAt(a, b);
+				const int32 i0 = GI(a - 1), i1 = GI(a + 1), j0 = GJ(b - 1), j1 = GJ(b + 1);
+				const double DX = (HAt(a + 1, b) - HAt(a - 1, b)) / (FMath::Max(1, i1 - i0) * Cell), DZ = (HAt(a, b + 1) - HAt(a, b - 1)) / (FMath::Max(1, j1 - j0) * Cell);
+				// below the waterline the beach dives steeply, so the sea floor mesh (KeysSeafloor) is what you see through the water
+				Out->V.Add(ToUE(X, H < -.25 ? -.25 + (H + .25) * 3 : H, Z));
+				Out->N.Add(FVector(-DX, -DZ, 1).GetSafeNormal());
+				Out->UV.Add(FVector2D(X / 20, Z / 20));
+				Out->C.Add(ColorAt(a, b));
+			}
+		// the ground shader (sand ripples and grain; grass where it's green)
+		Out->K.Init(FVector2D(SurfSand, 0), Out->V.Num());
+		return Out;
+	}
+}
+
+void AKeysWorld::CommitTerrainTile(int64 Key, void* TilePtr)
+{
+	FTerrTile* T = static_cast<FTerrTile*>(TilePtr);
+	TWeakObjectPtr<UProceduralMeshComponent>& Live = GTerrLive.FindOrAdd(Key);
+	if (!T) return;
+	// each 512 m tile of land is its own mesh, so the tiles behind you and the ones over the horizon are not drawn
+	UProceduralMeshComponent* Tile = NewObject<UProceduralMeshComponent>(this);
+	Tile->SetupAttachment(Root);
+	Tile->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Tile->RegisterComponent();
+	Tile->CreateMeshSection_LinearColor(0, T->V, T->T, T->N, T->UV, T->K, TArray<FVector2D>(), TArray<FVector2D>(), T->C, TArray<FProcMeshTangent>(), false);
+	Tile->SetMaterial(0, VertexColorMaterial());
+	Tile->SetCachedMaxDrawDistance(TerrainDrawDist);
+	Live = Tile;
+	GTerrMade++;
+	delete T;
+}
+
 void AKeysWorld::BuildTerrain()
 {
 	using namespace KeysGeo;
-	const double Cell = 8;
-	const int32 CH = 64;
-	const float TerrainDrawDist = 900000.f;   // 9 km: an island is a line on the horizon well before that
-	const int32 NCX = FMath::CeilToInt(WorldSizeX / Cell / CH), NCZ = FMath::CeilToInt(WorldSizeZ / Cell / CH);
-	const int32 GN = NCX * CH + 1, GNZ = NCZ * CH + 1;   // GN across (the row length), GNZ rows
-	TArray<float> HG;
-	TArray<uint8> Kind, Canal;
-	HG.SetNumUninitialized(GN * GNZ);
-	Kind.SetNumZeroed(GN * GNZ);
-	Canal.SetNumZeroed(GN * GNZ);   // in a canal or on its wall: KeysCanals draws the wall and the lawn there, the sea floor the bottom
-	ParallelFor(GNZ, [&](int32 j)
-	{
-		for (int32 i = 0; i < GN; i++)
-		{
-			const double X = WorldX0 + i * Cell, Z = WorldZ0 + j * Cell, H = LandH(X, Z);
-			HG[j * GN + i] = float(H);
-			if (H > -1) Kind[j * GN + i] = uint8(SurfaceKind(X, Z));
-			if (RealMap()) { double CN; if (KeysGeoReal::CanalBank(X, Z, CN) && CN < 3) Canal[j * GN + i] = 1; }
-		}
-	});
-
-	const FLinearColor WetSand = Srgb(.74, .69, .53), Sand = Srgb(.91, .86, .71), Grass = Srgb(.43, .56, .28), Scrub = Srgb(.29, .44, .21),
-		Mangrove = Srgb(.16, .31, .15), Golf = Srgb(.42, .67, .3), Runway = Srgb(.33, .33, .34), City = Srgb(.55, .54, .52);
-	auto ColorAt = [&](int32 i, int32 j)
-	{
-		const double X = WorldX0 + i * Cell, Z = WorldZ0 + j * Cell, H = HG[j * GN + i];
-		switch (Kind[j * GN + i])
-		{
-			case 1: return H > .9 ? Golf : Sand;
-			case 2: return H > .9 ? Runway : Sand;
-			case 3: return H > .9 ? City : Sand;
-			case 4: return FMath::Lerp(Srgb(.25, .21, .15), Mangrove, float(SStep(.2, .9, H)));   // mud and leaf litter under the mangroves
-			default: break;
-		}
-		if (H < .35)
-		{
-			// a beach - unless the mangroves stand along it: then it is dark peat, not sand
-			const FLinearColor Beach = FMath::Lerp(WetSand, Sand, float(SStep(-1.2, .35, H)));
-			const double Tan = MangroveNear(X, Z);
-			return Tan > 0 ? FMath::Lerp(Beach, Srgb(.2, .15, .09), float(Tan * .9)) : Beach;
-		}
-		const double N = .5 + .3 * FMath::Sin(X * .013) * FMath::Cos(Z * .011) + .2 * FMath::Sin((X + Z) * .031);
-		const FLinearColor Veg = N > .62 ? Mangrove : N > .42 ? Scrub : Grass;
-		return FMath::Lerp(Sand, Veg, float(SStep(.35, .95, H)));
-	};
-
-	int32 Section = 0;
+	for (FTerrJob& J : GTerrJobs) delete J.Job.Get();
+	GTerrJobs.Reset();
+	GTerrLive.Reset();
+	GTerrHave.Reset();
+	GTerrMade = 0;
+	GTerrScanT = 0;
+	const double Tile = TerrCell * TerrCH;
+	const int32 NCX = FMath::CeilToInt(WorldSizeX / Tile), NCZ = FMath::CeilToInt(WorldSizeZ / Tile);
+	GTerrGN = NCX * TerrCH + 1; GTerrGNZ = NCZ * TerrCH + 1;
+	// which tiles can have land: on the real map, those within a few metres of the baked shoreline (the ground is never
+	// above the water further out than that); on the classic map, all of them
 	for (int32 CY = 0; CY < NCZ; CY++)
 		for (int32 CX = 0; CX < NCX; CX++)
 		{
-			bool bAny = false;
-			for (int32 j = CY * CH; j <= (CY + 1) * CH && !bAny; j++)
-				for (int32 i = CX * CH; i <= (CX + 1) * CH; i++)
-					if (HG[j * GN + i] > -1.0f) { bAny = true; break; }
-			if (!bAny) continue;
-
-			TArray<FVector> V;
-			TArray<FVector> N;
-			TArray<FVector2D> UV;
-			TArray<FLinearColor> C;
-			TArray<int32> T;
-			const int32 S = CH + 1;
-			V.Reserve(S * S); N.Reserve(S * S); UV.Reserve(S * S); C.Reserve(S * S);
-			for (int32 b = 0; b <= CH; b++)
-				for (int32 a = 0; a <= CH; a++)
-				{
-					const int32 i = CX * CH + a, j = CY * CH + b;
-					const double X = WorldX0 + i * Cell, Z = WorldZ0 + j * Cell, H = HG[j * GN + i];
-					const int32 i0 = FMath::Max(i - 1, 0), i1 = FMath::Min(i + 1, GN - 1), j0 = FMath::Max(j - 1, 0), j1 = FMath::Min(j + 1, GNZ - 1);
-					const double DX = (HG[j * GN + i1] - HG[j * GN + i0]) / ((i1 - i0) * Cell), DZ = (HG[j1 * GN + i] - HG[j0 * GN + i]) / ((j1 - j0) * Cell);
-					// below the waterline the beach dives steeply, so the sea floor mesh (KeysSeafloor) is what you see through the water
-					V.Add(ToUE(X, H < -.25 ? -.25 + (H + .25) * 3 : H, Z));
-					N.Add(FVector(-DX, -DZ, 1).GetSafeNormal());
-					UV.Add(FVector2D(X / 20, Z / 20));
-					C.Add(ColorAt(i, j));
-				}
-			for (int32 b = 0; b < CH; b++)
-				for (int32 a = 0; a < CH; a++)
-				{
-					const int32 K = b * S + a;
-					const float H0 = HG[(CY * CH + b) * GN + CX * CH + a], H1 = HG[(CY * CH + b) * GN + CX * CH + a + 1];
-					const float H2 = HG[(CY * CH + b + 1) * GN + CX * CH + a], H3 = HG[(CY * CH + b + 1) * GN + CX * CH + a + 1];
-					// under the water the sea floor (KeysSeafloor) takes over, so only the beach is drawn here
-					if (FMath::Max(FMath::Max(H0, H1), FMath::Max(H2, H3)) < -.3f) continue;
-					{ const uint8* Cn = Canal.GetData() + (CY * CH + b) * GN + CX * CH + a; if (Cn[0] | Cn[1] | Cn[GN] | Cn[GN + 1]) continue; }
-					T.Append({K, K + S, K + 1, K + 1, K + S, K + S + 1});
-				}
-			// the ground shader (sand ripples and grain; grass where it's green)
-			TArray<FVector2D> K;
-			K.Init(FVector2D(SurfSand, 0), V.Num());
-			// each 512 m tile of land is its own mesh, so the tiles behind you and the ones over the horizon are not drawn
-			// (one mesh for the whole map was drawn whole whenever any of it was in view)
-			UProceduralMeshComponent* Tile = NewObject<UProceduralMeshComponent>(this);
-			Tile->SetupAttachment(Root);
-			Tile->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			Tile->RegisterComponent();
-			Tile->CreateMeshSection_LinearColor(0, V, T, N, UV, K, TArray<FVector2D>(), TArray<FVector2D>(), C, TArray<FProcMeshTangent>(), false);
-			Tile->SetMaterial(0, VertexColorMaterial());
-			Tile->SetCachedMaxDrawDistance(TerrainDrawDist);
-			TerrainTiles.Add(Tile);
-			Section++;
+			const double X0 = WorldX0 + CX * Tile, Z0 = WorldZ0 + CY * Tile;
+			if (RealMap() && !KeysGeoReal::ShoreUnder(X0 - 24, Z0 - 24, X0 + Tile + 24, Z0 + Tile + 24, 14)) continue;
+			GTerrHave.Add(TerrKey(CX, CY), FVector2D(X0 + Tile / 2, Z0 + Tile / 2));
 		}
-	UE_LOG(LogTemp, Log, TEXT("Keys Run: terrain built with %d chunks"), Section);
+	// what is round the boat stands before the first frame; the rest comes in over the next seconds
+	TArray<int64> First;
+	const double R0 = RealMap() ? 3000 : 1e9;
+	for (const TPair<int64, FVector2D>& H : GTerrHave) if (FVector2D::DistSquared(H.Value, FVector2D(FocusX, FocusZ)) < R0 * R0) First.Add(H.Key);
+	TArray<FTerrTile*> Made;
+	Made.SetNumZeroed(First.Num());
+	ParallelFor(First.Num(), [&](int32 k) { Made[k] = GenTerrainTile(First[k]); });
+	for (int32 k = 0; k < First.Num(); k++) CommitTerrainTile(First[k], Made[k]);
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: terrain - %d of %d tiles may have land; %d made round the boat, the rest as they come within 9.4 km"), GTerrHave.Num(), NCX * NCZ, GTerrMade);
+}
+
+void AKeysWorld::StreamTerrain()
+{
+	if (!GTerrHave.Num()) return;
+	constexpr double In = 9400, Out = 10600;
+	constexpr int32 MaxJobs = 3, MaxCommits = 2;
+	const FVector2D Focus(FocusX, FocusZ);
+	int32 Commits = 0;
+	for (int32 k = 0; k < GTerrJobs.Num() && Commits < MaxCommits; k++)
+		if (GTerrJobs[k].Job.IsReady())
+		{
+			CommitTerrainTile(GTerrJobs[k].Key, GTerrJobs[k].Job.Get());
+			GTerrJobs.RemoveAtSwap(k--);
+			Commits++;
+		}
+	while (GTerrJobs.Num() < MaxJobs)
+	{
+		// the nearest tile within sight that has not been made
+		int64 Best = 0;
+		double BestD = In * In;
+		bool bAny = false;
+		for (const TPair<int64, FVector2D>& H : GTerrHave)
+		{
+			const double D = FVector2D::DistSquared(H.Value, Focus);
+			if (D >= BestD || GTerrLive.Contains(H.Key)) continue;
+			bool bBusy = false;
+			for (const FTerrJob& J : GTerrJobs) bBusy |= J.Key == H.Key;
+			if (bBusy) continue;
+			BestD = D; Best = H.Key; bAny = true;
+		}
+		if (!bAny) break;
+		FTerrJob& J = GTerrJobs.AddDefaulted_GetRef();
+		J.Key = Best;
+		J.Job = Async(EAsyncExecution::ThreadPool, [Best] { return GenTerrainTile(Best); });
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - GTerrScanT > 1 || Now < GTerrScanT)
+	{
+		GTerrScanT = Now;
+		for (auto It = GTerrLive.CreateIterator(); It; ++It)
+		{
+			const FVector2D* C = GTerrHave.Find(It.Key());
+			if (C && FVector2D::DistSquared(*C, Focus) < Out * Out) continue;
+			if (It.Value().IsValid()) It.Value()->DestroyComponent();
+			It.RemoveCurrent();
+		}
+	}
 }
 
 // ---------------------------------------------------------------- palms, houses, Miami
+// Palms, shore bushes and conch houses are dealt out by dice on fixed grids over the whole map (16 m and 34 m), so
+// what stands on a spot depends on the spot alone. They are built a 1200 m square at a time, within sight of the boat
+// (StreamScenery), instead of all 65 km at launch. What stands on a Keys Run Estates lot is built at launch as before,
+// lot by lot, so building on the lot can clear it.
+namespace
+{
+	constexpr double ScnChunk = 1200;
+	struct FScnObs { double X, Z, AX, AZ, HA, HB; bool bRound; int32 Group; };
+	struct FScnOut
+	{
+		FTownBatch Main;
+		TMap<int32, FTownBatch> Lots;
+		TArray<FTransform> Bushes;
+		TArray<FScnObs> Obs;
+		int32 Palms = 0, Houses = 0;
+	};
+	struct FScnLive { TWeakObjectPtr<UProceduralMeshComponent> PM; TWeakObjectPtr<UInstancedStaticMeshComponent> Bushes; };
+	struct FScnJob { int64 Key = 0; TFuture<FScnOut*> Job; };
+	TSet<int64> GScnHave;                 // every square with land in it
+	TMap<int64, FScnLive> GScnLive;
+	TSet<int64> GScnObsDone;              // squares whose houses and palms are already in the walker's obstacle list
+	TArray<FScnJob> GScnJobs;
+	double GScnScanT = 0;
+	int32 GScnPalms = 0, GScnHouses = 0, GScnMade = 0;
+	int64 ScnKey(int32 KX, int32 KZ) { return (int64(KX) << 32) ^ int64(uint32(KZ)); }
+	FVector2D ScnCentre(int64 Key) { return FVector2D((int32(Key >> 32) + .5) * ScnChunk, (int32(uint32(Key & 0xffffffff)) + .5) * ScnChunk); }
+
+	// everything whose own (jittered) spot is in [X0, X1) x [Z0, Z1): what is not on an estates lot (bLots false), or
+	// only what is (bLots true)
+	void GenScenery(double RX0, double RZ0, double RX1, double RZ1, bool bLots, FScnOut& Out)
+	{
+		using namespace KeysGeo;
+		auto In = [&](double X, double Z) { return X >= RX0 && X < RX1 && Z >= RZ0 && Z < RZ1; };
+		// palms and mangroves (kept out of creeks, off the beach, and out of downtown)
+		const double PS = 16;
+		{
+			const int32 I0 = FMath::Max(0, FMath::CeilToInt((RX0 - PS - WorldX0) / PS)), I1 = FMath::Min(FMath::CeilToInt(WorldSizeX / PS) - 1, FMath::FloorToInt((RX1 + PS - WorldX0) / PS));
+			const int32 J0 = FMath::Max(0, FMath::CeilToInt((RZ0 - PS - WorldZ0) / PS)), J1 = FMath::Min(FMath::CeilToInt(WorldSizeZ / PS) - 1, FMath::FloorToInt((RZ1 + PS - WorldZ0) / PS));
+			for (int32 j = J0; j <= J1; j++)
+				for (int32 i = I0; i <= I1; i++)
+				{
+					const double X = WorldX0 + i * PS, Z = WorldZ0 + j * PS;
+					const double JX = X + (Hash2(X, Z) - .5) * PS, JZ = Z + (Hash2(Z, X) - .5) * PS;
+					if (!In(JX, JZ)) continue;
+					const double H = LandH(JX, JZ);
+					if (H < .2 || H > 2.6) continue;
+					const double R = Hash2(JX * 1.3, JZ * .7);
+					const FShore S = ShoreInfo(JX, JZ);
+					const double Density = S.Isl->bMainland ? .05 : S.Isl->bMiami ? .2 : .4;
+					if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6) || KeysYards::InFootprint(JX, JZ, 5) || KeysDocks::InFootprint(JX, JZ, 4) || FMath::Abs(JZ - ChainZ(JX)) < 9) continue;
+					if (H < .9 && S.E > .93 && !S.Isl->bMiami)
+					{
+						// mangrove fringe at the water's edge
+						if (bLots) continue;
+						const double Sz = 3 + R * 8;
+						Out.Bushes.Add(FTransform(FRotator(0, R * 360, 0), ToUE(JX, H + .6, JZ), FVector(Sz, Sz * .9, 2.4)));
+						Out.Obs.Add({JX, JZ, 1, 0, Sz * .35, Sz * .35, true, -1});
+						continue;
+					}
+					if (H < .7 || KeysTown::NearEstate(JX, JZ, 26)) continue;
+					const int32 PalmLot = AKeysEstates::PlatParcelAt(JX, JZ);
+					if ((PalmLot >= 0) != bLots) continue;
+					Out.Obs.Add({JX, JZ, 1, 0, .32, .32, true, PalmLot});
+					// a palm (town props.ts, lighter): a leaning, curving trunk and a crown of fronds that rise and droop
+					const double Tall = 6 + Hash2(JZ, JX * 2) * 5;
+					const double Lean = (Hash2(JX * 3, JZ) - .5) * .5, LeanA = Hash2(JX, JZ * 3) * 2 * PI;
+					FTownBatch& PB = PalmLot >= 0 ? Out.Lots.FindOrAdd(PalmLot) : Out.Main;
+					PB.Palm(FVector(JX, H - .1, JZ), Tall, FMath::Cos(LeanA) * Lean * .35, FMath::Sin(LeanA) * Lean * .35, R * 13.7 + JX * .01, 10);
+					Out.Palms++;
+				}
+		}
+
+		// Conch houses (web world/islands.ts): each with its own footprint, wall height and roof pitch, a hip roof of silver tin,
+		// a porch across the front, windows with shutters and a door, and a third of them up on piers.
+		static const uint32 Pastel[] = {0xf7c6d0, 0xfde2a7, 0xa8e0d8, 0xb9d4f5, 0xf9f3e3, 0xd8c6f0, 0xffffff, 0xc9e8c2};
+		static const uint32 Shutter[] = {0x2bb3a8, 0x1f4f8c, 0xffffff, 0x3f8a5a, 0xe4572e};
+		const double HS = 34;
+		const int32 HI0 = FMath::Max(0, FMath::CeilToInt((RX0 - 6 - WorldX0) / HS)), HI1 = FMath::Min(FMath::CeilToInt(WorldSizeX / HS) - 1, FMath::FloorToInt((RX1 + 6 - WorldX0) / HS));
+		const int32 HJ0 = FMath::Max(0, FMath::CeilToInt((RZ0 - 6 - WorldZ0) / HS)), HJ1 = FMath::Min(FMath::CeilToInt(WorldSizeZ / HS) - 1, FMath::FloorToInt((RZ1 + 6 - WorldZ0) / HS));
+		for (int32 hj = HJ0; hj <= HJ1; hj++)
+			for (int32 hi = HI0; hi <= HI1; hi++)
+			{
+				const double X = WorldX0 + hi * HS, Z = WorldZ0 + hj * HS;
+				const double JX = X + (Hash2(X * .7, Z) - .5) * 10, JZ = Z + (Hash2(Z, X * .7) - .5) * 10;
+				if (!In(JX, JZ)) continue;
+				const double H = LandH(JX, JZ);
+				if (H < 1.15) continue;
+				const FShore S = ShoreInfo(JX, JZ);
+				if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || CanalDist(JX, JZ) < 9 || KeysTown::InFootprint(JX, JZ, 14) || FMath::Abs(JZ - ChainZ(JX)) < 16) continue;
+				bool bNearMarina = false;
+				for (const FMarina& Mr : Marinas()) bNearMarina |= FMath::Abs(JX - Mr.SX) < 30 && FMath::Abs(JZ - Mr.SZ) < 30;
+				if (bNearMarina || KeysTown::NearEstate(JX, JZ, 54) || KeysYards::InFootprint(JX, JZ, 12)) continue;   // web waterfront.ts sites clear the conch houses
+				const double R = Hash2(JX * 2.1, JZ * 1.7);
+				if (R > (S.Isl->bMainland ? .12 : .5)) continue;
+				// the house's own dice
+				const double R1 = Hash2(JX * 3.3, JZ), R2 = Hash2(JZ * 1.9, JX), R3 = Hash2(JX + 79.19, JZ), R4 = Hash2(JX, JZ + 79.19);
+				const double SX = FMath::Lerp(.82, 1.3, R1), SZ = FMath::Lerp(.86, 1.26, R2), SY = FMath::Lerp(.88, 1.38, R3);
+				const bool bPiers = R4 < .34;
+				const double Lift = bPiers ? 1.15 : 0, WallH = 3.4 * SY, Base = H + Lift;
+				const double W = 6 * SX * 1.4, D = 7 * SZ * 1.3;
+				// three.js yaw: the island's street grid, sometimes turned a quarter
+				const double Ry = -S.Isl->Th + (Hash2(JZ, JX * 5) < .5 ? 0 : PI / 2);
+				// a house on (or overlapping) an estates parcel goes in that parcel's own batch
+				int32 Lot = AKeysEstates::PlatParcelAt(JX, JZ);
+				for (int32 k = 0; k < 4 && Lot < 0; k++) Lot = AKeysEstates::PlatParcelAt(JX + (k % 2 ? 1 : -1) * W * .5, JZ + (k / 2 ? 1 : -1) * D * .5);
+				if ((Lot >= 0) != bLots) continue;
+				FTownBatch& B = Lot >= 0 ? Out.Lots.FindOrAdd(Lot) : Out.Main;
+				const uint32 Wall = Pastel[int32(FMath::Abs(JX * 31 + JZ)) % 8], Trim = Shutter[int32(FMath::Abs(JZ * 17 + JX)) % 5];
+				const double Cs = FMath::Cos(Ry), Sn = FMath::Sin(Ry);
+				auto At = [&](double LX, double LZ) { return FVector2D(JX + LX * Cs + LZ * Sn, JZ - LX * Sn + LZ * Cs); };
+				Out.Obs.Add({JX, JZ, Cs, -Sn, W / 2, D / 2, false, Lot});
+				B.M.Surf = SurfConcrete;
+				if (bPiers)
+				{
+					B.Box(JX, H + Lift / 2 - .3, JZ, W - .4, Lift + .6, D - .4, 0x8e8b82, 0, Ry);
+					for (int32 sx = -1; sx <= 1; sx += 2) for (int32 sz = -1; sz <= 1; sz += 2) { const FVector2D Q = At(sx * (W / 2 - .3), sz * (D / 2 - .3)); B.Box(Q.X, H + Lift / 2 - .2, Q.Y, .35, Lift + .4, .35, 0xe8e4d8, 0, Ry); }
+				}
+				else B.Box(JX, H - .3 + .25, JZ, W + .3, .5 + .6, D + .3, 0xd8d0be, 0, Ry);
+				B.M.Surf = SurfSiding;
+				B.Box(JX, Base + WallH / 2, JZ, W, WallH, D, Wall, 0, Ry);
+				B.M.Surf = R3 < .7 ? SurfTin : SurfShingle;
+				// the hip roof, silver tin, with a little overhang and its own pitch
+				const double Pitch = FMath::Lerp(.82, 1.35, R2) * 1.2, Over = FMath::Lerp(1.0, 1.12, R1);
+				B.HipRoof(JX, Base + WallH, JZ, W * Over + .6, D * Over + .6, Pitch * FMath::Min(W, D) * .25, KeysTownPaint::Hex(R3 < .7 ? 0xb8bcc2 : 0xc0603a), Ry);
+				// the porch across the front, a porch roof on posts, the door and windows with shutters
+				B.M.Surf = SurfWood;
+				const FVector2D PC = At(0, D / 2 + 1.15);
+				B.Box(PC.X, Base + .1, PC.Y, W, .22, 2.3, 0xf4f2ec, 0, Ry);
+				for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q = At(k * (W / 2 - .2), D / 2 + 2.1); B.Box(Q.X, Base + 1.3, Q.Y, .14, 2.4, .14, 0xffffff, 0, Ry); }
+				const FVector2D PR = At(0, D / 2 + 1.2);
+				B.M.Surf = SurfTin;
+				B.Box(PR.X, Base + 2.55, PR.Y, W + .2, .1, 2.6, 0xb8bcc2, -.12, Ry);
+				B.M.Surf = SurfDefault;
+				const FVector2D Dr = At(W * .18, D / 2 + .04);
+				B.Box(Dr.X, Base + 1.1, Dr.Y, 1.0, 2.1, .08, Trim, 0, Ry);
+				for (double WX : {-W * .25, W * .4})
+				{
+					if (FMath::Abs(WX - W * .18) < 1.0) continue;
+					const FVector2D Q = At(WX, D / 2 + .04);
+					B.M.Surf = SurfGlass; B.Box(Q.X, Base + 1.7, Q.Y, 1.1, 1.3, .06, 0x27414f, 0, Ry); B.M.Surf = SurfDefault;
+					for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q2 = At(WX + k * .8, D / 2 + .05); B.Box(Q2.X, Base + 1.7, Q2.Y, .4, 1.4, .06, Trim, 0, Ry); }
+				}
+				for (int32 sd = -1; sd <= 1; sd += 2)
+					for (double WZ : {-D * .22, D * .22}) { const FVector2D Q = At(sd * (W / 2 + .03), WZ); B.M.Surf = SurfGlass; B.Box(Q.X, Base + 1.7, Q.Y, .06, 1.2, 1.0, 0x27414f, 0, Ry); B.M.Surf = SurfDefault; }
+				const FVector2D Bk = At(-W * .2, -D / 2 - .03);
+				B.M.Surf = SurfGlass;
+				B.Box(Bk.X, Base + 1.7, Bk.Y, 1.1, 1.2, .06, 0x27414f, 0, Ry);
+				B.M.Surf = SurfDefault;
+				// the town style kit: a fish mailbox, maybe a weathervane, a buoy on the porch, the salt and the peeling paint
+				{
+					KeysTownKit::FHouseSpots Hs;
+					const FVector2D FL = At(-W / 2, D / 2 + .04), PF = At(0, D / 2 + 2.3);
+					Hs.Front = KeysTownKit::FWall::Make(FVector(FL.X, Base, FL.Y), FVector(Sn, 0, Cs));
+					Hs.Width = W; Hs.DoorA = W * .18 + W / 2; Hs.WallH = WallH;
+					Hs.PorchFront = FVector(PF.X, Base + .21, PF.Y); Hs.PorchHalf = W / 2;
+					Hs.Ridge = FVector(JX, Base + WallH + Pitch * FMath::Min(W, D) * .25, JZ);
+					Hs.WallC = KeysTownPaint::Hex(Wall);
+					Hs.GroundY = H;
+					KeysTownKit::FKitDice Kd(KeysTownKit::SeedOf(JX, JZ));
+					KeysTownKit::DressHouse(B, Hs, Kd);
+					Out.Houses++;
+				}
+			}
+	}
+
+	FScnOut* GenSceneryChunk(int64 Key)
+	{
+		const FVector2D C = ScnCentre(Key);
+		FScnOut* Out = new FScnOut();
+		GenScenery(C.X - ScnChunk / 2, C.Y - ScnChunk / 2, C.X + ScnChunk / 2, C.Y + ScnChunk / 2, false, *Out);
+		return Out;
+	}
+
+	void AddScnObstacles(const FScnOut& Out)
+	{
+		for (const FScnObs& O : Out.Obs)
+		{
+			if (O.bRound) KeysTown::AddObstacleRound(O.X, O.Z, O.HA, O.Group);
+			else KeysTown::AddObstacleBox(O.X, O.Z, O.AX, O.AZ, O.HA, O.HB, O.Group);
+		}
+	}
+}
+
+void AKeysWorld::CommitSceneryChunk(int64 Key, void* OutPtr)
+{
+	FScnOut* Out = static_cast<FScnOut*>(OutPtr);
+	FScnLive& L = GScnLive.FindOrAdd(Key);
+	// (a square's obstacles go to the walker once, however often the square itself comes and goes)
+	if (!GScnObsDone.Contains(Key)) { GScnObsDone.Add(Key); AddScnObstacles(*Out); GScnPalms += Out->Palms; GScnHouses += Out->Houses; }
+	if (Out->Main.Tris())
+	{
+		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
+		PM->SetupAttachment(Root);
+		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PM->RegisterComponent();
+		Out->Main.M.Commit(PM, 0, VertexColorMaterial());
+		PM->SetCachedMaxDrawDistance(260000.f);
+		L.PM = PM;
+	}
+	if (Out->Bushes.Num() && BushMesh)
+	{
+		UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this);
+		C->SetStaticMesh(BushMesh);
+		C->SetupAttachment(Root);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		C->RegisterComponent();
+		if (BushMID) C->SetMaterial(0, BushMID);
+		C->AddInstances(Out->Bushes, false);
+		C->SetCachedMaxDrawDistance(450000.f);
+		L.Bushes = C;
+	}
+	GScnMade++;
+	delete Out;
+}
+
 void AKeysWorld::BuildScenery()
 {
 	using namespace KeysGeo;
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	UStaticMesh* Sph = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
 	if (!Cube || !Cyl || !Sph) return;
+	for (FScnJob& J : GScnJobs) delete J.Job.Get();
+	GScnJobs.Reset();
+	GScnLive.Reset();
+	GScnHave.Reset();
+	GScnObsDone.Reset();
+	GScnScanT = 0;
+	GScnPalms = GScnHouses = GScnMade = 0;
 
-	// palms and conch houses go into vertex-coloured meshes in 1.2 km chunks (so the far ones cull)
-	TMap<int64, FTownBatch> HouseChunks;
-	TMap<int32, FTownBatch> ParcelBatches;   // what stands on an estates parcel, so building the lot can clear it
-	auto ChunkOf = [](double X, double Z) { return (int64(FMath::FloorToInt(X / 1200)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 1200))); };
-	static const uint32 FrondC[] = {0x3f8a35, 0x4f9a3c, 0x58a443, 0x467f30};
-	UInstancedStaticMeshComponent* Mangroves = MakeISM(TEXT("Mangroves"), Sph, Srgb(.14, .29, .13), .95);
+	// the shore bushes of every square share one mesh and one material
+	BushMesh = Sph;
+	BushMID = UMaterialInstanceDynamic::Create(SolidMaterial(), this);
+	if (BushMID)
+	{
+		BushMID->SetVectorParameterValue(TEXT("Color"), Srgb(.14, .29, .13));
+		BushMID->SetScalarParameterValue(TEXT("Roughness"), .95f);
+	}
 	UInstancedStaticMeshComponent* Glass = MakeISM(TEXT("Towers"), Cube, Srgb(.42, .55, .66), .15);
 	UInstancedStaticMeshComponent* Concrete = MakeISM(TEXT("TowersWhite"), Cube, Srgb(.88, .88, .86), .5);
 
-	// palms and mangroves (kept out of creeks, off the beach, and out of downtown)
-	int32 PalmCount = 0, HouseCount = 0;
-	const double PS = 16;
-	for (double Z = WorldZ0; Z < WorldZ0 + WorldSizeZ; Z += PS)
-		for (double X = WorldX0; X < WorldX0 + WorldSizeX; X += PS)
+	// what stands on the estates' lots: built now, a mesh per lot
+	{
+		FScnOut Lots;
+		double X0 = 1e18, Z0 = 1e18, X1 = -1e18, Z1 = -1e18;
+		if (RealMap())
 		{
-			const double JX = X + (Hash2(X, Z) - .5) * PS, JZ = Z + (Hash2(Z, X) - .5) * PS;
-			const double H = LandH(JX, JZ);
-			if (H < .2 || H > 2.6) continue;
-			const double R = Hash2(JX * 1.3, JZ * .7);
-			const FShore S = ShoreInfo(JX, JZ);
-			const double Density = S.Isl->bMainland ? .05 : S.Isl->bMiami ? .2 : .4;
-			if (R > Density || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 8 || KeysTown::InFootprint(JX, JZ, 6) || KeysYards::InFootprint(JX, JZ, 5) || KeysDocks::InFootprint(JX, JZ, 4) || FMath::Abs(JZ - ChainZ(JX)) < 9) continue;
-			if (H < .9 && S.E > .93 && !S.Isl->bMiami)
-			{
-				// mangrove fringe at the water's edge
-				const double Sz = 3 + R * 8;
-				Mangroves->AddInstance(FTransform(FRotator(0, R * 360, 0), ToUE(JX, H + .6, JZ), FVector(Sz, Sz * .9, 2.4)));
-				KeysTown::AddObstacleRound(JX, JZ, Sz * .35);
-				continue;
-			}
-			if (H < .7 || KeysTown::NearEstate(JX, JZ, 26)) continue;
-			const int32 PalmLot = AKeysEstates::PlatParcelAt(JX, JZ);
-			KeysTown::AddObstacleRound(JX, JZ, .32, PalmLot);
-			// a palm (town props.ts, lighter): a leaning, curving trunk and a crown of fronds that rise and droop
-			const double Tall = 6 + Hash2(JZ, JX * 2) * 5;
-			const double Lean = (Hash2(JX * 3, JZ) - .5) * .5, LeanA = Hash2(JX, JZ * 3) * 2 * PI;
-			FTownBatch& PB = PalmLot >= 0 ? ParcelBatches.FindOrAdd(PalmLot) : HouseChunks.FindOrAdd(ChunkOf(JX, JZ));
-			PB.Palm(FVector(JX, H - .1, JZ), Tall, FMath::Cos(LeanA) * Lean * .35, FMath::Sin(LeanA) * Lean * .35, R * 13.7 + JX * .01, 10);
-			PalmCount++;
+			for (const KeysGeoReal::FPlatLot& R : KeysGeoReal::Plat())
+				for (const FVector2D& Q : R.Poly) { X0 = FMath::Min(X0, Q.X); X1 = FMath::Max(X1, Q.X); Z0 = FMath::Min(Z0, Q.Y); Z1 = FMath::Max(Z1, Q.Y); }
+			X0 -= 30; Z0 -= 30; X1 += 30; Z1 += 30;
 		}
+		else { X0 = Z0 = -1e9; X1 = Z1 = 1e9; }   // (the classic map's lots are all over it)
+		if (X1 > X0) GenScenery(X0, Z0, X1, Z1, true, Lots);
+		AddScnObstacles(Lots);
+		GScnPalms += Lots.Palms; GScnHouses += Lots.Houses;
+		for (TPair<int32, FTownBatch>& C : Lots.Lots)
+		{
+			UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
+			PM->SetupAttachment(Root);
+			PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			PM->RegisterComponent();
+			C.Value.M.Commit(PM, 0, VertexColorMaterial());
+			PM->SetCachedMaxDrawDistance(260000.f);
+			PM->SetVisibility(!ClearedParcels.Contains(C.Key));
+			ParcelScenery.Add(C.Key, PM);
+		}
+	}
 
-	// Conch houses (web world/islands.ts): each with its own footprint, wall height and roof pitch, a hip roof of silver tin,
-	// a porch across the front, windows with shutters and a door, and a third of them up on piers.
-	static const uint32 Pastel[] = {0xf7c6d0, 0xfde2a7, 0xa8e0d8, 0xb9d4f5, 0xf9f3e3, 0xd8c6f0, 0xffffff, 0xc9e8c2};
-	static const uint32 Shutter[] = {0x2bb3a8, 0x1f4f8c, 0xffffff, 0x3f8a5a, 0xe4572e};
-	const double HS = 34;
-	for (double Z = WorldZ0; Z < WorldZ0 + WorldSizeZ; Z += HS)
-		for (double X = WorldX0; X < WorldX0 + WorldSizeX; X += HS)
-		{
-			const double JX = X + (Hash2(X * .7, Z) - .5) * 10, JZ = Z + (Hash2(Z, X * .7) - .5) * 10;
-			const double H = LandH(JX, JZ);
-			if (H < 1.15) continue;
-			const FShore S = ShoreInfo(JX, JZ);
-			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || CanalDist(JX, JZ) < 9 || KeysTown::InFootprint(JX, JZ, 14) || FMath::Abs(JZ - ChainZ(JX)) < 16) continue;
-			bool bNearMarina = false;
-			for (const FMarina& Mr : Marinas()) bNearMarina |= FMath::Abs(JX - Mr.SX) < 30 && FMath::Abs(JZ - Mr.SZ) < 30;
-			if (bNearMarina || KeysTown::NearEstate(JX, JZ, 54) || KeysYards::InFootprint(JX, JZ, 12)) continue;   // web waterfront.ts sites clear the conch houses
-			const double R = Hash2(JX * 2.1, JZ * 1.7);
-			if (R > (S.Isl->bMainland ? .12 : .5)) continue;
-			// the house's own dice
-			const double R1 = Hash2(JX * 3.3, JZ), R2 = Hash2(JZ * 1.9, JX), R3 = Hash2(JX + 79.19, JZ), R4 = Hash2(JX, JZ + 79.19);
-			const double SX = FMath::Lerp(.82, 1.3, R1), SZ = FMath::Lerp(.86, 1.26, R2), SY = FMath::Lerp(.88, 1.38, R3);
-			const bool bPiers = R4 < .34;
-			const double Lift = bPiers ? 1.15 : 0, WallH = 3.4 * SY, Base = H + Lift;
-			const double W = 6 * SX * 1.4, D = 7 * SZ * 1.3;
-			// three.js yaw: the island's street grid, sometimes turned a quarter
-			const double Ry = -S.Isl->Th + (Hash2(JZ, JX * 5) < .5 ? 0 : PI / 2);
-			const int64 Key = (int64(FMath::FloorToInt(JX / 1200)) << 32) ^ int64(uint32(FMath::FloorToInt(JZ / 1200)));
-			// a house on (or overlapping) an estates parcel goes in that parcel's own batch
-			int32 Lot = AKeysEstates::PlatParcelAt(JX, JZ);
-			for (int32 k = 0; k < 4 && Lot < 0; k++) Lot = AKeysEstates::PlatParcelAt(JX + (k % 2 ? 1 : -1) * W * .5, JZ + (k / 2 ? 1 : -1) * D * .5);
-			FTownBatch& B = Lot >= 0 ? ParcelBatches.FindOrAdd(Lot) : HouseChunks.FindOrAdd(Key);
-			const uint32 Wall = Pastel[int32(FMath::Abs(JX * 31 + JZ)) % 8], Trim = Shutter[int32(FMath::Abs(JZ * 17 + JX)) % 5];
-			const double Cs = FMath::Cos(Ry), Sn = FMath::Sin(Ry);
-			auto At = [&](double LX, double LZ) { return FVector2D(JX + LX * Cs + LZ * Sn, JZ - LX * Sn + LZ * Cs); };
-			KeysTown::AddObstacleBox(JX, JZ, Cs, -Sn, W / 2, D / 2, Lot);
-			B.M.Surf = SurfConcrete;
-			if (bPiers)
-			{
-				B.Box(JX, H + Lift / 2 - .3, JZ, W - .4, Lift + .6, D - .4, 0x8e8b82, 0, Ry);
-				for (int32 sx = -1; sx <= 1; sx += 2) for (int32 sz = -1; sz <= 1; sz += 2) { const FVector2D Q = At(sx * (W / 2 - .3), sz * (D / 2 - .3)); B.Box(Q.X, H + Lift / 2 - .2, Q.Y, .35, Lift + .4, .35, 0xe8e4d8, 0, Ry); }
-			}
-			else B.Box(JX, H - .3 + .25, JZ, W + .3, .5 + .6, D + .3, 0xd8d0be, 0, Ry);
-			B.M.Surf = SurfSiding;
-			B.Box(JX, Base + WallH / 2, JZ, W, WallH, D, Wall, 0, Ry);
-			B.M.Surf = R3 < .7 ? SurfTin : SurfShingle;
-			// the hip roof, silver tin, with a little overhang and its own pitch
-			const double Pitch = FMath::Lerp(.82, 1.35, R2) * 1.2, Over = FMath::Lerp(1.0, 1.12, R1);
-			B.HipRoof(JX, Base + WallH, JZ, W * Over + .6, D * Over + .6, Pitch * FMath::Min(W, D) * .25, KeysTownPaint::Hex(R3 < .7 ? 0xb8bcc2 : 0xc0603a), Ry);
-			// the porch across the front, a porch roof on posts, the door and windows with shutters
-			B.M.Surf = SurfWood;
-			const FVector2D PC = At(0, D / 2 + 1.15);
-			B.Box(PC.X, Base + .1, PC.Y, W, .22, 2.3, 0xf4f2ec, 0, Ry);
-			for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q = At(k * (W / 2 - .2), D / 2 + 2.1); B.Box(Q.X, Base + 1.3, Q.Y, .14, 2.4, .14, 0xffffff, 0, Ry); }
-			const FVector2D PR = At(0, D / 2 + 1.2);
-			B.M.Surf = SurfTin;
-			B.Box(PR.X, Base + 2.55, PR.Y, W + .2, .1, 2.6, 0xb8bcc2, -.12, Ry);
-			B.M.Surf = SurfDefault;
-			const FVector2D Dr = At(W * .18, D / 2 + .04);
-			B.Box(Dr.X, Base + 1.1, Dr.Y, 1.0, 2.1, .08, Trim, 0, Ry);
-			for (double WX : {-W * .25, W * .4})
-			{
-				if (FMath::Abs(WX - W * .18) < 1.0) continue;
-				const FVector2D Q = At(WX, D / 2 + .04);
-				B.M.Surf = SurfGlass; B.Box(Q.X, Base + 1.7, Q.Y, 1.1, 1.3, .06, 0x27414f, 0, Ry); B.M.Surf = SurfDefault;
-				for (int32 k = -1; k <= 1; k += 2) { const FVector2D Q2 = At(WX + k * .8, D / 2 + .05); B.Box(Q2.X, Base + 1.7, Q2.Y, .4, 1.4, .06, Trim, 0, Ry); }
-			}
-			for (int32 sd = -1; sd <= 1; sd += 2)
-				for (double WZ : {-D * .22, D * .22}) { const FVector2D Q = At(sd * (W / 2 + .03), WZ); B.M.Surf = SurfGlass; B.Box(Q.X, Base + 1.7, Q.Y, .06, 1.2, 1.0, 0x27414f, 0, Ry); B.M.Surf = SurfDefault; }
-			const FVector2D Bk = At(-W * .2, -D / 2 - .03);
-			B.M.Surf = SurfGlass;
-			B.Box(Bk.X, Base + 1.7, Bk.Y, 1.1, 1.2, .06, 0x27414f, 0, Ry);
-			B.M.Surf = SurfDefault;
-			// the town style kit: a fish mailbox, maybe a weathervane, a buoy on the porch, the salt and the peeling paint
-			{
-				KeysTownKit::FHouseSpots Hs;
-				const FVector2D FL = At(-W / 2, D / 2 + .04), PF = At(0, D / 2 + 2.3);
-				Hs.Front = KeysTownKit::FWall::Make(FVector(FL.X, Base, FL.Y), FVector(Sn, 0, Cs));
-				Hs.Width = W; Hs.DoorA = W * .18 + W / 2; Hs.WallH = WallH;
-				Hs.PorchFront = FVector(PF.X, Base + .21, PF.Y); Hs.PorchHalf = W / 2;
-				Hs.Ridge = FVector(JX, Base + WallH + Pitch * FMath::Min(W, D) * .25, JZ);
-				Hs.WallC = KeysTownPaint::Hex(Wall);
-				Hs.GroundY = H;
-				KeysTownKit::FKitDice Kd(KeysTownKit::SeedOf(JX, JZ));
-				KeysTownKit::DressHouse(B, Hs, Kd);
-				HouseCount++;
-				if (FMath::Abs(JX - KeysTown::OX()) < 700 && FMath::Abs(JZ - KeysTown::OZ()) < 700 && HouseCount % 7 == 0)
-				{
-					double HU, HV, CU, CV;
-					KeysTown::ToLocal(JX + Sn * (D / 2 + 9), JZ + Cs * (D / 2 + 9), HU, HV);
-					KeysTown::ToLocal(JX, JZ, CU, CV);
-					UE_LOG(LogTemp, Log, TEXT("Keys Run: house at %.0f %.0f, its front from town local %.1f %.1f, facing yaw %.2f"), JX, JZ, HU, HV, FMath::Atan2(CV - HV, CU - HU));
-				}
-			}
-		}
-	UE_LOG(LogTemp, Log, TEXT("Keys Run: %d island palms, %d conch houses"), PalmCount, HouseCount);
-	for (TPair<int32, FTownBatch>& C : ParcelBatches)
+	// the squares with land in them; the ones round the boat stand before the first frame
+	for (int32 KZ = FMath::FloorToInt(WorldZ0 / ScnChunk); KZ <= FMath::FloorToInt((WorldZ0 + WorldSizeZ) / ScnChunk); KZ++)
+		for (int32 KX = FMath::FloorToInt(WorldX0 / ScnChunk); KX <= FMath::FloorToInt((WorldX0 + WorldSizeX) / ScnChunk); KX++)
+			if (!RealMap() || KeysGeoReal::ShoreUnder(KX * ScnChunk, KZ * ScnChunk, (KX + 1) * ScnChunk, (KZ + 1) * ScnChunk, 0)) GScnHave.Add(ScnKey(KX, KZ));
 	{
-		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
-		PM->SetupAttachment(Root);
-		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		PM->RegisterComponent();
-		C.Value.M.Commit(PM, 0, VertexColorMaterial());
-		PM->SetCachedMaxDrawDistance(260000.f);
-		PM->SetVisibility(!ClearedParcels.Contains(C.Key));
-		ParcelScenery.Add(C.Key, PM);
+		TArray<int64> First;
+		const double R0 = RealMap() ? 2200 : 1e9;
+		for (int64 K : GScnHave) if (FVector2D::DistSquared(ScnCentre(K), FVector2D(FocusX, FocusZ)) < R0 * R0) First.Add(K);
+		TArray<FScnOut*> Made;
+		Made.SetNumZeroed(First.Num());
+		if (First.Num()) Made[0] = GenSceneryChunk(First[0]);   // (the first alone: it wakes every table the builder reads)
+		ParallelFor(FMath::Max(0, First.Num() - 1), [&](int32 k) { Made[k + 1] = GenSceneryChunk(First[k + 1]); });
+		for (int32 k = 0; k < First.Num(); k++) CommitSceneryChunk(First[k], Made[k]);
 	}
-	for (TPair<int64, FTownBatch>& C : HouseChunks)
-	{
-		UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
-		PM->SetupAttachment(Root);
-		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		PM->RegisterComponent();
-		C.Value.M.Commit(PM, 0, VertexColorMaterial());
-		PM->SetCachedMaxDrawDistance(260000.f);
-	}
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: scenery - %d squares of %d m have land; %d made round the boat (%d island palms, %d conch houses so far), the rest as they come within 3.2 km"), GScnHave.Num(), int32(ScnChunk), GScnMade, GScnPalms, GScnHouses);
 
 	// Miami skyline: Brickell and downtown towers on the mainland
 	const double TS = 60;
-	for (double Z = -3580; Z < -2580; Z += TS)
+	if (!RealMap()) for (double Z = -3580; Z < -2580; Z += TS)
 		for (double X = 300; X < 3880; X += TS)
 		{
 			const double JX = X + (Hash2(X, Z * 1.1) - .5) * 20, JZ = Z + (Hash2(Z * 1.1, X) - .5) * 20;
@@ -515,6 +733,51 @@ void AKeysWorld::BuildScenery()
 			const double W = 22 + Hash2(JX, JZ) * 18;
 			(R > .3 ? Glass : Concrete)->AddInstance(FTransform(FRotator::ZeroRotator, ToUE(JX, H + Ht * .5, JZ), FVector(W, W * (.7 + R), Ht)));
 		}
+}
+
+void AKeysWorld::StreamScenery()
+{
+	if (!GScnHave.Num()) return;
+	constexpr double In = 3200, Out = 4200;   // drawn to 2.6 km
+	const FVector2D Focus(FocusX, FocusZ);
+	for (int32 k = 0; k < GScnJobs.Num(); k++)
+		if (GScnJobs[k].Job.IsReady())
+		{
+			CommitSceneryChunk(GScnJobs[k].Key, GScnJobs[k].Job.Get());
+			GScnJobs.RemoveAtSwap(k);
+			break;   // one a frame
+		}
+	while (GScnJobs.Num() < 2)
+	{
+		int64 Best = 0;
+		double BestD = In * In;
+		bool bAny = false;
+		for (int64 K : GScnHave)
+		{
+			const double D = FVector2D::DistSquared(ScnCentre(K), Focus);
+			if (D >= BestD || GScnLive.Contains(K)) continue;
+			bool bBusy = false;
+			for (const FScnJob& J : GScnJobs) bBusy |= J.Key == K;
+			if (bBusy) continue;
+			BestD = D; Best = K; bAny = true;
+		}
+		if (!bAny) break;
+		FScnJob& J = GScnJobs.AddDefaulted_GetRef();
+		J.Key = Best;
+		J.Job = Async(EAsyncExecution::ThreadPool, [Best] { return GenSceneryChunk(Best); });
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - GScnScanT > 1 || Now < GScnScanT)
+	{
+		GScnScanT = Now;
+		for (auto It = GScnLive.CreateIterator(); It; ++It)
+		{
+			if (FVector2D::DistSquared(ScnCentre(It.Key()), Focus) < Out * Out) continue;
+			if (It.Value().PM.IsValid()) It.Value().PM->DestroyComponent();
+			if (It.Value().Bushes.IsValid()) It.Value().Bushes->DestroyComponent();
+			It.RemoveCurrent();
+		}
+	}
 }
 
 // ---------------------------------------------------------------- water
@@ -865,6 +1128,8 @@ void AKeysWorld::Tick(float DeltaSeconds)
 	ApplyWeather();
 	KeysGeo::TickSea(DeltaSeconds);
 	UpdateWater();
+	StreamTerrain();
+	StreamScenery();
 	StreamMangroves();
 }
 

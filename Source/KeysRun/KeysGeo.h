@@ -198,6 +198,11 @@ namespace KeysGeo
 	const FTruss* BahiaHonda();
 	constexpr double BridgeBentStep = 36;
 	extern double BridgeArchX0, BridgeArchX1;
+	// US-1 itself runs along the chain line from US1X0 to US1X1: the map's own ends, unless the real map says the road
+	// stops short of them (Key West; where US-1 leaves Key Largo for the mainland: KeysGeoReal::RoadX0, RoadX1). Its
+	// deck, bents and chunks are counted from US1X0, which sits a whole number of 720 m (12 m deck pieces, 36 m bents,
+	// 240 m chunks) from the first phase's own corner, so the bridges already built stay put as the map grows west.
+	extern double US1X0, US1X1;
 	// the old bridge: piers every 30 m from OldBridgeX0 to OldBridgeX1, at ChainZ + OldBridgeDZ, with the swing span gone
 	constexpr double OldBridgeDZ = -58;
 	extern double OldBridgeX0, OldBridgeX1, OldBridgeGap0, OldBridgeGap1;

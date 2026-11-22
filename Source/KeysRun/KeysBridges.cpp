@@ -125,11 +125,11 @@ namespace
 void AKeysLandmarks::BuildBridges(FTownBatch&)
 {
 	TArray<FChunk> NewCh, OldCh;
-	const int32 NNew = FMath::CeilToInt((WBX1 - WBX0) / ChunkLen), NOld = FMath::CeilToInt((OldBridgeX1 - OldBridgeX0) / ChunkLen);
+	const int32 NNew = FMath::Max(1, FMath::CeilToInt((US1X1 - US1X0) / ChunkLen)), NOld = FMath::CeilToInt((OldBridgeX1 - OldBridgeX0) / ChunkLen);
 	NewCh.SetNum(NNew); OldCh.SetNum(NOld);
-	for (int32 i = 0; i < NNew; i++) { NewCh[i].X0 = WBX0 + i * ChunkLen; NewCh[i].X1 = NewCh[i].X0 + ChunkLen; }
+	for (int32 i = 0; i < NNew; i++) { NewCh[i].X0 = US1X0 + i * ChunkLen; NewCh[i].X1 = NewCh[i].X0 + ChunkLen; }
 	for (int32 i = 0; i < NOld; i++) { OldCh[i].X0 = OldBridgeX0 + i * ChunkLen; OldCh[i].X1 = OldCh[i].X0 + ChunkLen; OldCh[i].ZOff = OldBridgeDZ; }
-	auto NewAt = [&](double X) -> FChunk& { return NewCh[FMath::Clamp(int32((X - WBX0) / ChunkLen), 0, NNew - 1)]; };
+	auto NewAt = [&](double X) -> FChunk& { return NewCh[FMath::Clamp(int32((X - US1X0) / ChunkLen), 0, NNew - 1)]; };
 	auto OldAt = [&](double X) -> FChunk& { return OldCh[FMath::Clamp(int32((X - OldBridgeX0) / ChunkLen), 0, NOld - 1)]; };
 	auto OnLand = [](double X, double Z) { return LandH(X, Z) > .9 && ShoreInfo(X, Z).D < -4; };
 
@@ -137,7 +137,7 @@ void AKeysLandmarks::BuildBridges(FTownBatch&)
 	constexpr double SlabT = .55, GirderD = 1.1, HalfW = 5.2;
 
 	// ================================================================ US-1: the deck, 12 m at a time (24 m far)
-	for (double X = WBX0; X < WBX1 - 1; X += 12)
+	for (double X = US1X0; X < US1X1 - 1; X += 12)
 	{
 		const double XA = X, XB = X + 12, MX = (XA + XB) / 2;
 		const double ZA = ChainZ(XA), ZB = ChainZ(XB), MZ = (ZA + ZB) / 2;
@@ -204,7 +204,7 @@ void AKeysLandmarks::BuildBridges(FTownBatch&)
 		}
 
 		// ---- far: one deep slab, a solid parapet, the road
-		if (int32(FMath::RoundToDouble((X - WBX0) / 12)) % 2 == 0)
+		if (int32(FMath::RoundToDouble((X - US1X0) / 12)) % 2 == 0)
 		{
 			FTownBatch& Fb = Ch.Far;
 			const double FL = Len * 2, FMX = MX + AX * Len / 2, FMZ = MZ + AZ * Len / 2, FH = (HA + NewDeckH(XB + 12)) / 2;
@@ -219,7 +219,7 @@ void AKeysLandmarks::BuildBridges(FTownBatch&)
 	}
 
 	// ================================================================ US-1: the bents (every 36 m) and the arch piers
-	for (double X = WBX0; X <= WBX1; X += BridgeBentStep)
+	for (double X = US1X0; X <= US1X1; X += BridgeBentStep)
 	{
 		const double Z = ChainZ(X);
 		if (LandH(X, Z) > -.5) continue;

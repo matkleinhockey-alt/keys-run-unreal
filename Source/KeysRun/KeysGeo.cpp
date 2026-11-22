@@ -28,6 +28,7 @@ namespace KeysGeo
 	double WorldX0 = -4300, WorldZ0 = -3100, WorldSizeX = 8600, WorldSizeZ = 8600;
 	double WBX0 = -4150, WBX1 = 4150, WBZ0 = -2950, WBZ1 = 5350;
 	double BridgeArchX0 = -3178, BridgeArchX1 = -3106;
+	double US1X0 = -4150, US1X1 = 4150;
 	double OldBridgeX0 = -3820, OldBridgeX1 = -2010, OldBridgeGap0 = -3200, OldBridgeGap1 = -3080;
 
 	static void BuildNavSegs();
@@ -72,9 +73,10 @@ namespace KeysGeo
 
 	// the real drop-off: z of the 45 m line at x (every 50 m, smoothed), found in Init
 	static TArray<double> GDropZ;
+	static double GDropX0 = 0;   // the first sample: on the first phase's own 50 m points, so the line there does not shift as the map grows west
 	static double DropZ(double X)
 	{
-		const double F = Clamp((X - WorldX0) / 50, 0, GDropZ.Num() - 1.001);
+		const double F = Clamp((X - GDropX0) / 50, 0, GDropZ.Num() - 1.001);
 		const int32 I = int32(F);
 		return GDropZ[I] + (GDropZ[I + 1] - GDropZ[I]) * (F - I);
 	}
@@ -388,19 +390,24 @@ namespace KeysGeo
 			WorldX0 = KeysGeoReal::X0(); WorldZ0 = KeysGeoReal::Z0(); WorldSizeX = KeysGeoReal::SizeX(); WorldSizeZ = KeysGeoReal::SizeZ();
 			WBX0 = WorldX0 + 150; WBX1 = WorldX0 + WorldSizeX - 150; WBZ0 = WorldZ0 + 150; WBZ1 = WorldZ0 + WorldSizeZ - 150;
 			// the Seven Mile Bridge's high span stands over Moser Channel (x about -2820), on the bent grid
-			BridgeArchX0 = WBX0 + FMath::RoundToDouble((-2856 - WBX0) / BridgeBentStep) * BridgeBentStep;
+			// where the road runs, counted from the first phase's corner (see KeysGeo.h)
+			const double Org = WorldX0 - KeysGeoReal::CellI0() * KeysGeoReal::Cell() + 150;
+			US1X0 = Org + FMath::CeilToDouble((FMath::Max(WBX0, KeysGeoReal::RoadX0()) - Org) / 720 - 1e-9) * 720;
+			US1X1 = FMath::Min(WBX1, KeysGeoReal::RoadX1());
+			BridgeArchX0 = US1X0 + FMath::RoundToDouble((-2856 - US1X0) / BridgeBentStep) * BridgeBentStep;
 			BridgeArchX1 = BridgeArchX0 + 2 * BridgeBentStep;
 			// the old Seven Mile Bridge: from Knight's Key across Pigeon Key to Little Duck Key, 58 m on the bay side of the
 			// new one (as it really is at this scale), with its span over Moser Channel gone
 			OldBridgeX1 = -1300; OldBridgeX0 = OldBridgeX1 - 30 * 123;
 			OldBridgeGap0 = BridgeArchX0 + BridgeBentStep - 60; OldBridgeGap1 = OldBridgeGap0 + 120;
 			// the drop-off: going south from US-1, the first water 45 m deep
-			const int32 ND = FMath::CeilToInt(WorldSizeX / 50) + 1;
+			GDropX0 = Org - 150 - FMath::CeilToDouble((Org - 150 - WorldX0) / 50 - 1e-9) * 50;
+			const int32 ND = FMath::CeilToInt((WorldX0 + WorldSizeX - GDropX0) / 50) + 1;
 			TArray<double> Raw;
 			Raw.SetNumUninitialized(ND);
 			for (int32 i = 0; i < ND; i++)
 			{
-				const double X = WorldX0 + i * 50;
+				const double X = GDropX0 + i * 50;
 				double Z = KeysGeoReal::ChainZ(X) + 1200;
 				while (Z < WorldZ0 + WorldSizeZ - 600 && KeysGeoReal::Height(X, Z) > -45) Z += 10;
 				Raw[i] = Z;
@@ -624,7 +631,8 @@ namespace KeysGeo
 		// bridge pilings: US-1 over open water, and the old Seven Mile Bridge with its swing-span gap
 		GPillars.Reset();
 		GPGrid.Reset();
-		for (double X = WBX0; X <= WBX1; X += BridgeBentStep)
+		if (!GReal) { US1X0 = WBX0; US1X1 = WBX1; }
+		for (double X = US1X0; X <= US1X1; X += BridgeBentStep)
 		{
 			const double Z = ChainZ(X);
 			if (LandH(X, Z) > -.5) continue;

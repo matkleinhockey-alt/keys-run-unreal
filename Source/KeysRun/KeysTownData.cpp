@@ -537,7 +537,7 @@ namespace KeysTown
 	{
 		bool UnderBridge(double X, double Z, double Clear)
 		{
-			if (X >= KeysGeo::WBX0 && X <= KeysGeo::WBX1 && FMath::Abs(Z - KeysGeo::ChainZ(X)) < Clear) return true;
+			if (X >= KeysGeo::US1X0 && X <= KeysGeo::US1X1 && FMath::Abs(Z - KeysGeo::ChainZ(X)) < Clear) return true;
 			return X >= KeysGeo::OldBridgeX0 - Clear && X <= KeysGeo::OldBridgeX1 + Clear && FMath::Abs(Z - KeysGeo::ChainZ(X) - KeysGeo::OldBridgeDZ) < Clear;
 		}
 		bool NearMarinaPt(double X, double Z, double R)

@@ -60,7 +60,8 @@ namespace KeysDocks
 // The private docks and boat lifts along the built-up shores of the real map (KeysDocks.cpp, KeysLifts.cpp).
 // Every dock is built into the meshes of its 600 m tile: the structure (seen from far off), hung boats, the small
 // fittings (only close to), what floats (boats afloat and lowered lifts, drawn at the tide) and the night lights.
-// Nothing moves or is rebuilt for a tile more than 600 m from the camera.
+// Nothing moves or is rebuilt for a tile more than 600 m from the camera, and a tile's meshes are only made while it is
+// within 3 km of it.
 UCLASS()
 class KEYSRUN_API AKeysDocks : public AActor
 {
@@ -87,7 +88,15 @@ private:
 		UProceduralMeshComponent* Lamps = nullptr;
 		TArray<FVector> LampAt, UnderAt;   // the lamps and the lights under the water, game metres as (x, z, up)
 		double FloatZ = 0;
+		TArray<int32> DockIdx;             // its docks (KeysDocks::Sites)
+		TArray<UProceduralMeshComponent*> Parts;   // its meshes while it is made (they are also in Meshes, which keeps them alive)
+		int32 TriN[5] = {0, 0, 0, 0, 0};
+		bool bMade = false;
 	};
+	void MakeTile(FTile& Tl);
+	void DropTile(FTile& Tl);
+	void StreamTiles(const FVector2D& Eye, double SyncWithin);
+	int32 MadeTiles = 0;
 	struct FPerson { int32 Dock = 0; FKeysHuman Hm; double Ph = 0; };
 
 	UProceduralMeshComponent* NewMesh(const FVector& AtUE, USceneComponent* Parent, double DrawDistM, bool bShadow);

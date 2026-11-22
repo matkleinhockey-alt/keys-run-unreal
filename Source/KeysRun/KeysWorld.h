@@ -65,6 +65,12 @@ private:
 	void BuildScenery();
 	void BuildMangroves();   // KeysMangrove.cpp: the real map's red mangroves
 	void StreamMangroves();  // grows the mangrove tiles within sight of the boat, takes down those left behind
+	void StreamTerrain();    // the same for the 512 m tiles of land
+	void StreamScenery();    // ... and for the 1200 m squares of palms, shore bushes and conch houses
+	void CommitTerrainTile(int64 Key, void* Tile);
+	void CommitSceneryChunk(int64 Key, void* Out);
+	UPROPERTY() TObjectPtr<UStaticMesh> BushMesh;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> BushMID;
 	void UpdateWater();
 	void ApplySun(double K);
 	void ApplyWeather();
@@ -73,7 +79,6 @@ private:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Terrain;
-	UPROPERTY() TArray<TObjectPtr<UProceduralMeshComponent>> TerrainTiles;   // the land, a mesh per 512 m tile
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Water;
 	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> WaterMID;
 	UPROPERTY() TObjectPtr<class UTexture2D> SimTex[2];

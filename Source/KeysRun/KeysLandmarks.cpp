@@ -61,6 +61,7 @@ void AKeysLandmarks::BeginPlay()
 	FTownBatch B, G;
 	BuildMarinas(B);
 	BuildBridges(B);
+	BuildSideBridges();
 	BuildLighthouse(B, G);
 	BuildPiers(B);
 	BuildEstates(B);
@@ -218,38 +219,47 @@ void AKeysLandmarks::BuildMarinas(FTownBatch&)
 void AKeysLandmarks::BuildLighthouse(FTownBatch& B, FTownBatch& G)
 {
 	// on the real map the light stands on the real Sombrero Key reef
-	const double LX = KeysGeo::RealMap() ? -1831 : -200, LZ = KeysGeo::RealMap() ? 2804 : KeysGeo::ChainZ(-200) + 1455, Focal = 43;
-	LightPos = FVector(LX, Focal - 1.6, LZ);
-	const uint32 Iron = 0x6e4232, White = 0xe8e6df, Dark = 0x22262b;
-	const int32 Sides = 8;
-	const double BaseR = 13, TopR = 3.2;
-	auto Leg = [&](int32 i, double R, double Y) { const double A = double(i) / Sides * 2 * PI; return FVector(LX + FMath::Cos(A) * R, Y, LZ + FMath::Sin(A) * R); };
-	for (int32 i = 0; i < Sides; i++)
+	const double SLX = KeysGeo::RealMap() ? -1831 : -200, SLZ = KeysGeo::RealMap() ? 2804 : KeysGeo::ChainZ(-200) + 1455, SFocal = 43;
+	LightPos = FVector(SLX, SFocal - 1.6, SLZ);
+	// an iron screw-pile reef light, its lantern Focal metres up: Sombrero Key's, and the same build for the other reef
+	// lights the real map lists (KeysGeoReal::Sites: Sand Key, American Shoal, Looe Key, ...), each in its own tile
+	auto Tower = [&G](FTownBatch& B, double LX, double LZ, double Focal)
 	{
-		B.Tube3(Leg(i, BaseR, -3.2), Leg(i, BaseR, 1.2), .42, .42, 6, Dark);
-		B.Tube3(Leg(i, BaseR, 1.2), Leg(i, TopR, Focal - 5), .34, .34, 6, Iron);
-	}
-	const double Rings[] = {1.2, 9, 17, 25, 32, Focal - 5};
-	auto RAt = [&](double Y) { return BaseR + (TopR - BaseR) * ((Y - 1.2) / (Focal - 6.2)); };
-	for (double Y : Rings) for (int32 i = 0; i < Sides; i++) B.Tube3(Leg(i, RAt(Y), Y), Leg((i + 1) % Sides, RAt(Y), Y), .16, .16, 5, Iron);
-	for (int32 k = 0; k < 5; k++)
-		for (int32 i = 0; i < Sides; i++) B.Tube3(Leg(i, RAt(Rings[k]), Rings[k]), Leg((i + 1) % Sides, RAt(Rings[k + 1]), Rings[k + 1]), .11, .11, 4, Iron);
-	B.Tube3(FVector(LX, 1.2, LZ), FVector(LX, Focal - 4.6, LZ), .62, .62, 8, Iron);
-	// the keeper's dwelling slung in the legs, white, with a dark roof and a gallery rail
-	B.Cyl(LX, 19 - 2.1, LZ, 6.4, 6.4, 4.2, White, Sides);
-	for (int32 i = 0; i < Sides; i++) { const double A = (i + .5) / Sides * 2 * PI; B.Box(LX + FMath::Cos(A) * 6.3, 19.3, LZ + FMath::Sin(A) * 6.3, 1.2, 1.4, .1, 0x27414f, 0, -A + PI / 2); }
-	B.Cyl(LX, 22.2 - 1.1, LZ, .05, 7.2, 2.2, Dark, Sides);
-	B.Cyl(LX, 16.8, LZ, 7.6, 7.6, .3, Dark, Sides);
-	for (int32 i = 0; i < Sides; i++) B.Tube3(Leg(i, 7.4, 21.2 - 4), Leg((i + 1) % Sides, 7.4, 21.2 - 4), .08, .08, 4, Dark);
-	// the lantern room: gallery, glazed drum, dome, finial
-	B.Cyl(LX, Focal - 4.65, LZ, 4.6, 4.6, .5, Dark, 16);
-	for (int32 i = 0; i < 16; i++) { const double A = i / 16.0 * 2 * PI; B.Tube3(FVector(LX + FMath::Cos(A) * 4.4, Focal - 4.1, LZ + FMath::Sin(A) * 4.4), FVector(LX + FMath::Cos(A) * 4.4, Focal - 3, LZ + FMath::Sin(A) * 4.4), .06, .06, 4, Dark); }
-	B.Cyl(LX, Focal - 4.1, LZ, 3.1, 3.1, .6, Dark, 16);
-	for (int32 i = 0; i < 8; i++) { const double A = i / 8.0 * 2 * PI; B.Tube3(FVector(LX + FMath::Cos(A) * 3.1, Focal - 3.5, LZ + FMath::Sin(A) * 3.1), FVector(LX + FMath::Cos(A) * 3.1, Focal + .3, LZ + FMath::Sin(A) * 3.1), .07, .07, 4, Dark); }
-	B.Cyl(LX, Focal + .3, LZ, .05, 3.6, 2.4, Dark, 16);
-	B.Tube3(FVector(LX, Focal + 2.5, LZ), FVector(LX, Focal + 4.2, LZ), .1, .1, 5, Dark);
-	// the lamp: a bright lens in the drum, seen from anywhere
-	G.Ball(LX, Focal - 1.6, LZ, 1.5, 0xfff1c8, 1.3, 12);
+		const uint32 Iron = 0x6e4232, White = 0xe8e6df, Dark = 0x22262b;
+		const int32 Sides = 8;
+		const double BaseR = 13, TopR = 3.2;
+		auto Leg = [&](int32 i, double R, double Y) { const double A = double(i) / Sides * 2 * PI; return FVector(LX + FMath::Cos(A) * R, Y, LZ + FMath::Sin(A) * R); };
+		for (int32 i = 0; i < Sides; i++)
+		{
+			B.Tube3(Leg(i, BaseR, -3.2), Leg(i, BaseR, 1.2), .42, .42, 6, Dark);
+			B.Tube3(Leg(i, BaseR, 1.2), Leg(i, TopR, Focal - 5), .34, .34, 6, Iron);
+		}
+		const double Rings[] = {1.2, 9, 17, 25, 32, Focal - 5};
+		auto RAt = [&](double Y) { return BaseR + (TopR - BaseR) * ((Y - 1.2) / (Focal - 6.2)); };
+		for (double Y : Rings) for (int32 i = 0; i < Sides; i++) B.Tube3(Leg(i, RAt(Y), Y), Leg((i + 1) % Sides, RAt(Y), Y), .16, .16, 5, Iron);
+		for (int32 k = 0; k < 5; k++)
+			for (int32 i = 0; i < Sides; i++) B.Tube3(Leg(i, RAt(Rings[k]), Rings[k]), Leg((i + 1) % Sides, RAt(Rings[k + 1]), Rings[k + 1]), .11, .11, 4, Iron);
+		B.Tube3(FVector(LX, 1.2, LZ), FVector(LX, Focal - 4.6, LZ), .62, .62, 8, Iron);
+		// the keeper's dwelling slung in the legs, white, with a dark roof and a gallery rail
+		B.Cyl(LX, 19 - 2.1, LZ, 6.4, 6.4, 4.2, White, Sides);
+		for (int32 i = 0; i < Sides; i++) { const double A = (i + .5) / Sides * 2 * PI; B.Box(LX + FMath::Cos(A) * 6.3, 19.3, LZ + FMath::Sin(A) * 6.3, 1.2, 1.4, .1, 0x27414f, 0, -A + PI / 2); }
+		B.Cyl(LX, 22.2 - 1.1, LZ, .05, 7.2, 2.2, Dark, Sides);
+		B.Cyl(LX, 16.8, LZ, 7.6, 7.6, .3, Dark, Sides);
+		for (int32 i = 0; i < Sides; i++) B.Tube3(Leg(i, 7.4, 21.2 - 4), Leg((i + 1) % Sides, 7.4, 21.2 - 4), .08, .08, 4, Dark);
+		// the lantern room: gallery, glazed drum, dome, finial
+		B.Cyl(LX, Focal - 4.65, LZ, 4.6, 4.6, .5, Dark, 16);
+		for (int32 i = 0; i < 16; i++) { const double A = i / 16.0 * 2 * PI; B.Tube3(FVector(LX + FMath::Cos(A) * 4.4, Focal - 4.1, LZ + FMath::Sin(A) * 4.4), FVector(LX + FMath::Cos(A) * 4.4, Focal - 3, LZ + FMath::Sin(A) * 4.4), .06, .06, 4, Dark); }
+		B.Cyl(LX, Focal - 4.1, LZ, 3.1, 3.1, .6, Dark, 16);
+		for (int32 i = 0; i < 8; i++) { const double A = i / 8.0 * 2 * PI; B.Tube3(FVector(LX + FMath::Cos(A) * 3.1, Focal - 3.5, LZ + FMath::Sin(A) * 3.1), FVector(LX + FMath::Cos(A) * 3.1, Focal + .3, LZ + FMath::Sin(A) * 3.1), .07, .07, 4, Dark); }
+		B.Cyl(LX, Focal + .3, LZ, .05, 3.6, 2.4, Dark, 16);
+		B.Tube3(FVector(LX, Focal + 2.5, LZ), FVector(LX, Focal + 4.2, LZ), .1, .1, 5, Dark);
+		// the lamp: a bright lens in the drum, seen from anywhere
+		G.Ball(LX, Focal - 1.6, LZ, 1.5, 0xfff1c8, 1.3, 12);
+	};
+	Tower(B, SLX, SLZ, SFocal);
+	if (KeysGeo::RealMap())
+		for (const KeysGeoReal::FSite& S : KeysGeoReal::Sites())
+			if (S.Kind == TEXT("light")) Tower(LmAt(S.X, S.Z), S.X, S.Z, S.Name.StartsWith(TEXT("Looe")) ? 24 : 36);
 	// Faro Blanco Marina's lighthouse: a white tower with a red cap
 	for (const KeysGeo::FMarina& M : KeysGeo::Marinas())
 	{
@@ -261,6 +271,39 @@ void AKeysLandmarks::BuildLighthouse(FTownBatch& B, FTownBatch& G)
 		B.Cyl(TX, 13.8, TZ, 2.4, 2.4, .25, 0x22262b, 12);
 		G.Ball(TX, 15.1, TZ, .9, 0xfff1c8, 1, 10);
 		B.Box(TX, 2, TZ + M.Dir * 2.1, 1, 2, .1, 0x5a4a38);
+	}
+}
+
+// ---------------------------------------------------------------- the road bridges that are not on US-1's line
+// KeysGeoReal::Sites "bridge" (Jewfish Creek, where US-1 leaves Key Largo for the mainland; Card Sound): a plain
+// concrete deck on pile bents from one end to the other, humped 18 m over the middle as the real ones are, so a boat
+// passes under. They go in the landmark tiles; the piles are not yet solid to the boat.
+void AKeysLandmarks::BuildSideBridges()
+{
+	if (!KeysGeo::RealMap()) return;
+	for (const KeysGeoReal::FSite& S : KeysGeoReal::Sites())
+	{
+		if (S.Kind != TEXT("bridge")) continue;
+		const double DX = S.X2 - S.X, DZ = S.Z2 - S.Z, L = FMath::Sqrt(DX * DX + DZ * DZ);
+		if (L < 20) continue;
+		const double Ang = FMath::Atan2(DZ, DX), PX = -FMath::Sin(Ang), PZ = FMath::Cos(Ang);
+		const int32 N = FMath::Max(2, FMath::RoundToInt32(L / 12));
+		auto DeckH = [](double T) { return 5.6 + 12.4 * FMath::Square(FMath::Sin(T * PI)); };
+		for (int32 i = 0; i < N; i++)
+		{
+			const double T0 = double(i) / N, T1 = double(i + 1) / N, TM = (T0 + T1) / 2, Len = L / N;
+			const double MX = S.X + DX * TM, MZ = S.Z + DZ * TM, H0 = DeckH(T0), H1 = DeckH(T1), H = (H0 + H1) / 2, Pt = FMath::Atan2(H1 - H0, Len);
+			FTownBatch& B = LmAt(MX, MZ);
+			B.Box(MX, H - .6, MZ, Len + .3, 1.2, 10.4, 0xd8d1c0, 0, -Ang, Pt);
+			B.Box(MX, H + .03, MZ, Len + .3, .06, 8.6, 0x3e4146, 0, -Ang, Pt);
+			for (int32 sg = -1; sg <= 1; sg += 2) B.Box(MX + PX * 4.95 * sg, H + .55, MZ + PZ * 4.95 * sg, Len + .3, 1.1, .3, 0xd8d1c0, 0, -Ang, Pt);
+			if (i % 3 != 1) continue;
+			// a bent: two piles and a cap, down to the bottom (or the ground)
+			const double G = KeysGeo::LandH(MX, MZ), Floor = G > -.3 ? G - .3 : -FMath::Clamp(KeysGeo::DepthAt(MX, MZ) + .5, 1.5, 12.0);
+			B.Box(MX, H - 1.6, MZ, 1.1, .8, 9.6, 0xcfc8b6, 0, -Ang);
+			for (int32 sg = -1; sg <= 1; sg += 2) B.Box(MX + PX * 3.6 * sg, (H - 2 + Floor) / 2, MZ + PZ * 3.6 * sg, .9, H - 2 - Floor, .9, 0xc9c2b1, 0, -Ang);
+		}
+		UE_LOG(LogTemp, Log, TEXT("Keys Run: %s built off the chain line, %.0f m from %.0f, %.0f"), *S.Name, L, S.X, S.Z);
 	}
 }
 
