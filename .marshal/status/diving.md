@@ -13,7 +13,8 @@ guesses".
 Evidence is in `/Users/mat/Documents/Unreal Projects/KeysRun-devkit/lanes/KeysRun-diving/`, called `L/` below:
 `L/shots/<tag>/KRScript_NN.png` and `L/log_<tag>.log`. Every scuba run was made with requests R1-R4 applied in the
 working tree (never committed) and the gear granted in memory with R1's `own=` test command; a scripted run writes
-no save. The lane's own files also build with the hub files untouched (the last build before this commit).
+no save. The lane's own files also build and run with the hub files untouched: the last build before this
+commit, and `L/log_nopatch.log` (a free dive, a fish speared, `KRTp checked 48 destinations, 0 bad`, no errors).
 
 Two criteria are not ticked as passed but handed on: 9 (the frame-time comparison is inside the noise of a shared
 machine, see R6) and the hub halves of 3, 4 and 5 (requests R1-R5, with patches).
