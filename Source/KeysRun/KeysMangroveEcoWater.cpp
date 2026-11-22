@@ -1,0 +1,693 @@
+// What lives in the water under the mangroves and on the mud (part of the ecosystem, KeysMangroveEco.cpp):
+//  - schools of small fish (silversides, pilchards, juvenile snappers and grunts) that mill in the shade of the prop
+//    roots, scatter from the boat, a diver, a bird's strike or a predator and close up again; on the ebb they leave
+//    the roots for the deeper edge or the creek's mouth, on the flood they go back in
+//  - what hunts them: snook lying under the edge of the roots, a pack of jacks working along it, juvenile tarpon
+//    that roll, a small lemon shark, a barracuda hanging still. When one is hungry and bait is in reach it rushes it,
+//    and the bait showers out of the water
+//  - needlefish at the surface, mullet that jump, a nurse shark asleep on the bottom, a stingray on the shallow edge,
+//    upside-down jellyfish on the floor of the calm ponds, a horseshoe crab
+//  - mangrove tree crabs on the roots (they drop off when the boat comes near) and fiddler crabs on the mud the low
+//    tide bares (they go down their burrows)
+// Everything is an instance of one small mesh per kind, shaded by the school fish's material (M_KR_Boid: it beats the
+// tail), made near the camera only: fish to 70-80 m, crabs to 45 m, the big ones to 150 m.
+#include "KeysMangroveEcoInt.h"
+#include "KeysGeo.h"
+#include "KeysGeoReal.h"
+#include "KeysLife.h"
+#include "KeysFeed.h"
+#include "KeysMesh.h"
+#include "KeysTown.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "StaticMeshAttributes.h"
+#include "MeshDescription.h"
+#include "Materials/MaterialInstanceDynamic.h"
+
+namespace KeysMangroveEco
+{
+	namespace
+	{
+		// Key: a KeysLife species model ("+": its full creature model), or one of the shapes made here ("*")
+		struct FPoolSpec { const TCHAR* Key; double LenMin, LenMax, Cull; };
+		const FPoolSpec PoolSpecs[NumPools] = {
+			{TEXT("silverside"), .09, .13, 70},      // silverside
+			{TEXT("herring"), .12, .17, 80},         // pilchard
+			{TEXT("mangrove"), .14, .24, 80},        // juvenile snapper
+			{TEXT("grunt"), .12, .20, 80},           // juvenile grunt
+			{TEXT("*needle"), .38, .58, 70},         // needlefish
+			{TEXT("bonefish"), .30, .42, 130},       // mullet
+			{TEXT("barracuda"), .60, .90, 150},      // barracuda
+			{TEXT("lemonshark"), .85, 1.25, 160},    // juvenile lemon shark
+			{TEXT("nurse"), .95, 1.45, 160},         // nurse shark
+			{TEXT("+stingray"), .75, 1.0, 140},      // stingray
+			{TEXT("*jelly"), .18, .30, 55},          // upside-down jellyfish
+			{TEXT("snook"), .55, .85, 150},          // snook
+			{TEXT("jackcrevalle"), .45, .65, 150},   // jack
+			{TEXT("tarpon"), .75, 1.15, 160},        // juvenile tarpon
+			{TEXT("*treecrab"), .075, .095, 45},     // mangrove tree crab
+			{TEXT("*fiddler"), .07, .09, 40},       // fiddler crab
+			{TEXT("*horseshoe"), .42, .55, 60},      // horseshoe crab
+		};
+		const FPoolSpec& SpecOf(int32 Kind) { return PoolSpecs[Kind - Silverside]; }
+		FLinearColor Hex(uint32 C) { return KeysTownPaint::Hex(C); }
+
+		void BuildShape(const FString& Key, FKeysMesh& M)
+		{
+			if (Key == TEXT("*needle"))
+			{
+				// long, thin and green-backed, with a beak
+				const FLinearColor Back = Hex(0x6f9a7a), Side = Hex(0xcfe0d6);
+				M.AddTube(FVector(-.4, 0, 0), FVector(-.1, 0, 0), .012, .03, 6, Side);
+				M.AddTube(FVector(-.1, 0, 0), FVector(.26, 0, 0), .03, .022, 6, Back);
+				M.AddTube(FVector(.26, 0, 0), FVector(.5, 0, 0), .014, .003, 5, Back);
+				M.AddTri(FVector(-.4, 0, 0), FVector(-.5, 0, .06), FVector(-.5, 0, -.06), Back, FVector(0, 1, 0));
+				M.AddTri(FVector(-.4, 0, 0), FVector(-.5, 0, -.06), FVector(-.5, 0, .06), Back, FVector(0, -1, 0));
+				M.AddTri(FVector(-.3, 0, .02), FVector(-.2, 0, .02), FVector(-.3, 0, .07), Back, FVector(0, 1, 0));
+				M.AddTri(FVector(-.3, 0, .02), FVector(-.3, 0, .07), FVector(-.2, 0, .02), Back, FVector(0, -1, 0));
+			}
+			else if (Key == TEXT("*jelly"))
+			{
+				// Cassiopea: it lies on its bell with its frilled arms up
+				const FLinearColor Bell = Hex(0x7d7a52), Rim = Hex(0xcfc9a0), Arm = Hex(0x8fa07a), Frill = Hex(0xd9e2c8);
+				M.AddTube(FVector(0, 0, 0), FVector(0, 0, .07), .5, .46, 12, Rim);
+				M.AddTube(FVector(0, 0, .07), FVector(0, 0, .13), .46, .05, 12, Bell);
+				for (int32 a = 0; a < 8; a++)
+				{
+					const double An = a * PI / 4 + .3, Cx = FMath::Cos(An), Sy = FMath::Sin(An);
+					M.AddTube(FVector(Cx * .1, Sy * .1, .1), FVector(Cx * .3, Sy * .3, .24), .07, .05, 5, Arm);
+					M.AddTube(FVector(Cx * .3, Sy * .3, .24), FVector(Cx * .37, Sy * .37, .33), .08, .01, 5, Frill);
+				}
+			}
+			else if (Key == TEXT("*horseshoe"))
+			{
+				const FLinearColor Shell = Hex(0x6a5a3a), Dark = Hex(0x4f4229);
+				M.AddTube(FVector(.22, 0, 0), FVector(.22, 0, .1), .3, .22, 10, Shell);
+				M.AddTube(FVector(.22, 0, .1), FVector(.2, 0, .16), .22, .02, 10, Shell);
+				M.AddTube(FVector(.02, 0, .05), FVector(-.3, 0, .04), .2, .09, 8, Dark);
+				M.AddTube(FVector(-.3, 0, .04), FVector(-.9, 0, .03), .025, .004, 4, Dark);
+			}
+			else
+			{
+				// a crab: a wide shell, eight legs, two claws (a fiddler's one great pale claw)
+				const bool bFid = Key == TEXT("*fiddler");
+				const FLinearColor Shell = Hex(bFid ? 0x8a7a5a : 0x4a4030), Leg = Hex(bFid ? 0xb8a070 : 0x6a4a34), Claw = Hex(bFid ? 0xf2d9a8 : 0x8a4030);
+				M.AddRoundBox(FVector(0, 0, .22), FVector(.62, .9, .3), .1, Shell, FQuat::Identity, 1);
+				for (const double Sd : {-1.0, 1.0})
+					for (int32 l = 0; l < 4; l++)
+					{
+						const double X = .22 - l * .16;
+						M.AddTube(FVector(X, Sd * .42, .22), FVector(X * 1.2, Sd * .78, .34), .05, .04, 4, Leg);
+						M.AddTube(FVector(X * 1.2, Sd * .78, .34), FVector(X * 1.4, Sd * 1.0, 0), .04, .015, 4, Leg);
+					}
+				M.AddRoundBox(FVector(.44, -.3, .2), FVector(.3, .18, .14), .05, Claw, FQuat::Identity, 1);
+				if (bFid) M.AddRoundBox(FVector(.5, .34, .3), FVector(.7, .3, .26), .1, Claw, FQuat(FVector(0, 1, 0), -.5), 1);
+				else M.AddRoundBox(FVector(.44, .3, .2), FVector(.3, .18, .14), .05, Claw, FQuat::Identity, 1);
+				for (const double Sd : {-1.0, 1.0}) M.AddTube(FVector(.26, Sd * .16, .34), FVector(.3, Sd * .18, .52), .025, .03, 4, Hex(0x1a1a1a));
+			}
+		}
+
+		// one kind's mesh and its instances, made the first time one of that kind comes near
+		UInstancedStaticMeshComponent* EnsurePool(AKeysMangroveEco* A, FEco& E, int32 Ix)
+		{
+			if (A->Pools.Num() < NumPools) A->Pools.SetNum(NumPools);
+			if (A->Pools[Ix] || E.Pools[Ix].bTried || !A->MID) return A->Pools[Ix];
+			E.Pools[Ix].bTried = true;
+			const FString Key = PoolSpecs[Ix].Key;
+			FKeysMesh M;
+			if (Key.StartsWith(TEXT("*"))) BuildShape(Key, M);
+			else if (Key.StartsWith(TEXT("+")) ? !AKeysLife::BuildCreatureMesh(Key.Mid(1), M, 1) : !AKeysLife::BuildSchoolMesh(Key, M, Ix <= Grunt - Silverside ? 2 : 1))   // (the small fish, in their hundreds, take the school fish's cheaper far model)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("KREco: no model for %s"), *Key);
+				return nullptr;
+			}
+			M.SyncKinds();
+			// normalize as the school fish are: nose at +X 50, tail at -50, whatever its length
+			double MinX = 1e9, MaxX = -1e9;
+			for (const FVector& V : M.V) { MinX = FMath::Min(MinX, V.X); MaxX = FMath::Max(MaxX, V.X); }
+			const double Kk = 100.0 / FMath::Max(1.0, MaxX - MinX), Cx = (MinX + MaxX) * .5;
+			FMeshDescription MD;
+			FStaticMeshAttributes Attr(MD);
+			Attr.Register();
+			TVertexAttributesRef<FVector3f> Pos = Attr.GetVertexPositions();
+			TVertexInstanceAttributesRef<FVector3f> Nrm = Attr.GetVertexInstanceNormals();
+			TVertexInstanceAttributesRef<FVector4f> Col = Attr.GetVertexInstanceColors();
+			TVertexInstanceAttributesRef<FVector2f> UVs = Attr.GetVertexInstanceUVs();
+			UVs.SetNumChannels(2);
+			const FPolygonGroupID Grp = MD.CreatePolygonGroup();
+			Attr.GetPolygonGroupMaterialSlotNames()[Grp] = FName(TEXT("Mat"));
+			TArray<FVertexInstanceID> Inst;
+			Inst.SetNum(M.V.Num());
+			for (int32 i = 0; i < M.V.Num(); i++)
+			{
+				const FVertexID V = MD.CreateVertex();
+				Pos[V] = FVector3f((M.V[i] - FVector(Cx, 0, 0)) * Kk);
+				const FVertexInstanceID I = MD.CreateVertexInstance(V);
+				Nrm[I] = FVector3f(M.N[i]);
+				Col[I] = FVector4f(M.C[i].R, M.C[i].G, M.C[i].B, 1);
+				UVs.Set(I, 0, FVector2f(M.UV.IsValidIndex(i) ? M.UV[i] : FVector2D::ZeroVector));
+				UVs.Set(I, 1, FVector2f(M.K[i]));
+				Inst[i] = I;
+			}
+			int32 Tris = 0;
+			for (int32 i = 0; i + 2 < M.T.Num(); i += 3)
+			{
+				const int32 Va = M.T[i], Vb = M.T[i + 1], Vc = M.T[i + 2];
+				const FVector Fn = FVector::CrossProduct(M.V[Vb] - M.V[Va], M.V[Vc] - M.V[Va]);
+				if (Fn.SizeSquared() < 1e-12) continue;
+				const bool bFlip = FVector::DotProduct(Fn, M.N[Va] + M.N[Vb] + M.N[Vc]) > 0;
+				MD.CreateTriangle(Grp, {Inst[Va], Inst[bFlip ? Vc : Vb], Inst[bFlip ? Vb : Vc]});
+				Tris++;
+			}
+			UStaticMesh* SM = NewObject<UStaticMesh>(A, *FString::Printf(TEXT("Eco_%d"), Ix));
+			SM->GetStaticMaterials().Add(FStaticMaterial(A->MID, FName(TEXT("Mat"))));
+			SM->SetPositiveBoundsExtension(FVector(40));
+			SM->SetNegativeBoundsExtension(FVector(40));
+			UStaticMesh::FBuildMeshDescriptionsParams Bp;
+			Bp.bFastBuild = true;
+			Bp.bMarkPackageDirty = false;
+			Bp.bBuildSimpleCollision = false;
+			SM->BuildFromMeshDescriptions({&MD}, Bp);
+			SM->CalculateExtendedBounds();
+			A->Meshes.Add(SM);
+			UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(A, *FString::Printf(TEXT("EcoPool_%d"), Ix));
+			C->SetStaticMesh(SM);
+			C->SetupAttachment(A->Root);
+			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			C->NumCustomDataFloats = 8;   // tail phase, its rate, when, amplitude, body bend, flash, shade, seed (M_KR_Boid)
+			C->SetCastShadow(Ix >= Barracuda - Silverside);
+			C->SetMaterial(0, A->MID);
+			C->SetCullDistances(0, int32(PoolSpecs[Ix].Cull * 100));
+			C->bAffectDistanceFieldLighting = false;
+			C->RegisterComponent();
+			A->Pools[Ix] = C;
+			E.Pools[Ix].Tris = Tris;
+			UE_LOG(LogTemp, Log, TEXT("KREco: %s mesh, %d triangles, drawn to %.0f m"), KindName(Ix + Silverside), Tris, PoolSpecs[Ix].Cull);
+			return C;
+		}
+
+		// an instance: where, which way it heads (game axes), how long, and what its tail is doing
+		void Put(FEco& E, int32 Kind, const FVector& P, const FVector& Fwd, double Roll, double Len, double Phase, double Freq, double Amp, double Bend, double Flash, double Shade, double Seed, const FVector& Scale = FVector(1))
+		{
+			FPoolE& Pl = E.Pools[Kind - Silverside];
+			FRotator R = FRotationMatrix::MakeFromX(D2U(Fwd.GetSafeNormal(.0001, FVector(1, 0, 0)))).Rotator();
+			R.Roll = FMath::RadiansToDegrees(Roll);
+			Pl.Xf.Add(FTransform(R, G2U(P), Scale * Len));
+			const float D[8] = {float(FMath::Fmod(Phase, 2 * PI)), float(Freq), float(E.Now), float(Amp), float(Bend), float(FMath::Clamp(Flash, 0.0, 1.0)), float(Shade), float(Seed)};
+			Pl.Data.Append(D, 8);
+		}
+
+		bool IsHunter(int32 K) { return K == Snook || K == Jack || K == Tarpon || K == LemonShark || K == Barracuda; }
+		// how much water a kind wants under it to lie somewhere
+		double NeedDepth(int32 K) { return K == Tarpon || K == Jack ? .7 : K == LemonShark || K == NurseShark || K == Barracuda || K == Snook ? .45 : .25; }
+
+		// the bait goes up: a quarter of the school leaves the water, and everything with wings hears of it
+		void Shower(FEco& E, FSchoolE& Sc, const FVector2D& From, uint8 Hunter)
+		{
+			Sc.Scatter = 1;
+			Sc.ThreatP = From;
+			Sc.HitT = E.Now;
+			int32 Up = 0;
+			for (FFishE& F : Sc.Fish)
+			{
+				if (Up >= 34 || FMath::FRand() > .3) continue;
+				const FVector2D Away = (FVector2D(F.P.X, F.P.Z) - From).GetSafeNormal() + FVector2D(FMath::FRandRange(-.6, .6), FMath::FRandRange(-.6, .6));
+				F.Air = 1;
+				F.P.Y = E.Sea + .02;
+				F.V = FVector(Away.X * FMath::FRandRange(1.0, 2.6), FMath::FRandRange(2.0, 4.2), Away.Y * FMath::FRandRange(1.0, 2.6));
+				Up++;
+			}
+			if (E.Life)
+				for (int32 k = 0; k < 4; k++) E.Life->Splash(Sc.C.X + FMath::FRandRange(-1.2, 1.2), Sc.C.Y + FMath::FRandRange(-1.2, 1.2), 9, k == 0 ? .9 : .4);
+			E.Sound(TEXT("shower"), Sc.Kind, FVector(Sc.C.X, E.Sea, Sc.C.Y), FMath::Min(1.f, Sc.N / 80.f));
+			FShower& Sh = E.Showers.AddDefaulted_GetRef();
+			Sh.Id = E.NextShower++; Sh.P = Sc.C; Sh.T = E.Now; Sh.Prey = Sc.Kind; Sh.Hunter = Hunter;
+		}
+	}
+
+	FSchoolE* NearestSchool(FEco& E, const FVector2D& P, double R, double* OutD)
+	{
+		FSchoolE* Best = nullptr;
+		double BestD = R * R;
+		for (TPair<int64, FTileE*>& T : E.Tiles)
+		{
+			if (FMath::Abs(T.Value->C.X - P.X) > 400 + R || FMath::Abs(T.Value->C.Y - P.Y) > 400 + R) continue;
+			for (FSchoolE& S : T.Value->Schools)
+			{
+				const double D = FVector2D::DistSquared(S.C, P);
+				if (D < BestD) { BestD = D; Best = &S; }
+			}
+		}
+		if (OutD && Best) *OutD = FMath::Sqrt(BestD);
+		return Best;
+	}
+
+	FSchoolE* FindSchool(FEco& E, int32 Id)
+	{
+		for (TPair<int64, FTileE*>& T : E.Tiles)
+			for (FSchoolE& S : T.Value->Schools) if (S.Id == Id) return &S;
+		return nullptr;
+	}
+
+	int32 BaitNear(FEco& E, const FVector2D& P, double R)
+	{
+		int32 N = 0;
+		for (TPair<int64, FTileE*>& T : E.Tiles)
+		{
+			if (FMath::Abs(T.Value->C.X - P.X) > 400 + R || FMath::Abs(T.Value->C.Y - P.Y) > 400 + R) continue;
+			for (FSchoolE& S : T.Value->Schools) if (FVector2D::DistSquared(S.C, P) < R * R) N += S.N;
+		}
+		return N;
+	}
+
+	FGroup* NearestGroup(FEco& E, const FVector2D& P, double R, int32 Kind)
+	{
+		FGroup* Best = nullptr;
+		double BestD = R * R;
+		for (TPair<int64, FTileE*>& T : E.Tiles)
+		{
+			if (FMath::Abs(T.Value->C.X - P.X) > 400 + R || FMath::Abs(T.Value->C.Y - P.Y) > 400 + R) continue;
+			for (FGroup& G : T.Value->Groups)
+			{
+				if (G.Kind != Kind) continue;
+				const double D = FVector2D::DistSquared(G.C, P);
+				if (D < BestD) { BestD = D; Best = &G; }
+			}
+		}
+		return Best;
+	}
+
+	// ---------------------------------------------------------------- making a tile's water
+	void SpawnWater(FEco& E, FTileE& T, const FPlan& P)
+	{
+		for (const FSpot& Sp : P.Spots)
+		{
+			const FVector2D P2(Sp.P.X, Sp.P.Z);
+			const double R1 = EHash(Sp.Seed * 1e-6, 1.0), R2 = EHash(Sp.Seed * 1e-6, 2.0);
+			if (Sp.Kind >= Silverside && Sp.Kind <= Grunt)
+			{
+				FSchoolE& S = T.Schools.AddDefaulted_GetRef();
+				S.Kind = Sp.Kind; S.Id = E.NextSchool++; S.N = Sp.N; S.Seed = Sp.Seed;
+				S.Home = P2; S.Mouth = Sp.Mouth; S.Out = Sp.Out; S.bBank = Sp.Site.Bank != 0;
+				// each school turns at its own height of tide: all are out by dead low and all in by high water
+				S.Th = -.55 + .6 * R1;
+				S.bOut = E.Tide < S.Th;
+				S.C = S.bOut ? S.Mouth : S.Home;
+				S.R = .5 + .08 * FMath::Sqrt(double(S.N)) * (Sp.Kind == Silverside ? 1.2 : 1);
+				S.Mill = R2 * 6;
+				S.Floor = FloorAt(S.C.X, S.C.Y);
+			}
+			else if (Sp.Kind == TreeCrab || Sp.Kind == Fiddler)
+			{
+				FCrabs& C = T.Crabs.AddDefaulted_GetRef();
+				C.Kind = Sp.Kind; C.Site = Sp.Site; C.C = Sp.Kind == TreeCrab ? FVector2D(Sp.Site.X, Sp.Site.Z) : P2; C.Out = Sp.Out; C.N = Sp.N; C.Seed = Sp.Seed;
+				C.FloorY = FloorAt(P2.X, P2.Y);
+			}
+			else if (Sp.Kind >= Needlefish && Sp.Kind <= Horseshoe)
+			{
+				FGroup& G = T.Groups.AddDefaulted_GetRef();
+				G.Kind = Sp.Kind; G.Seed = Sp.Seed; G.Home = G.C = P2; G.Out = Sp.Out; G.bBank = Sp.Site.Bank != 0;
+				G.Yaw = 2 * PI * R1;
+				G.Hunger = 8 + 50 * R2;
+				const FPoolSpec& K = SpecOf(Sp.Kind);
+				for (int32 i = 0; i < Sp.N; i++)
+				{
+					FSwim& M = G.M.AddDefaulted_GetRef();
+					const double A = 2 * PI * EHash(Sp.Seed * 1e-6 + i, 3.0), Rr = (Sp.Kind == Jelly ? 4.5 : Sp.Kind == Mullet ? 2.2 : Sp.Kind == Needlefish ? 1.4 : 1.1) * FMath::Sqrt(EHash(Sp.Seed * 1e-6 + i, 4.0)) * (Sp.N > 1 ? 1 : 0);
+					M.Off = FVector2D(FMath::Cos(A), FMath::Sin(A)) * Rr;
+					M.Len = FMath::Lerp(K.LenMin, K.LenMax, EHash(Sp.Seed * 1e-6 + i, 5.0));
+					M.Ph = 10 * EHash(Sp.Seed * 1e-6 + i, 6.0);
+					M.T = 4 + 30 * EHash(Sp.Seed * 1e-6 + i, 7.0);
+					M.P = FVector(P2.X + M.Off.X, -.3, P2.Y + M.Off.Y);
+					M.Fwd = FVector(FMath::Cos(G.Yaw + A * (Sp.Kind == Jelly ? 1 : .1)), 0, FMath::Sin(G.Yaw + A * (Sp.Kind == Jelly ? 1 : .1)));
+				}
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------- every frame
+	void UpdateWater(FEco& E, FTileE& T)
+	{
+		const double Dt = E.Dt;
+		const FVector2D Cam2(E.Cam.X, E.Cam.Z);
+		const bool bBoatMoving = E.BoatSpd > .8;
+
+		// ---- the schools of small fish
+		for (FSchoolE& S : T.Schools)
+		{
+			const double DCam = FVector2D::Distance(S.C, Cam2);
+			if (DCam > 600) continue;
+			// the tide says where it belongs: in under the roots, or out at the edge (and never where the water has gone)
+			const bool bWantOut = E.Tide < S.Th || E.Sea - FloorAt(S.Home.X, S.Home.Y) < .1;
+			const FVector2D Goal = bWantOut ? S.Mouth : S.Home;
+			const FVector2D ToG = Goal - S.C;
+			const double Lg = ToG.Size();
+			if (Lg > .05) S.C += ToG / Lg * FMath::Min(Lg, 1.3 * Dt);
+			S.bOut = FVector2D::DistSquared(S.C, S.Home) > 4;
+			const bool bWasAwake = S.bAwake;
+			if (!S.bAwake && DCam < 105) S.bAwake = true;
+			else if (S.bAwake && DCam > 130) { S.bAwake = false; S.Fish.Empty(); }
+			if (!S.bAwake) continue;
+			S.Floor = FloorAt(S.C.X, S.C.Y);
+			const double Depth = FMath::Max(.06, E.Sea - S.Floor), Thick = FMath::Clamp(Depth * .36, .03, .4);
+			S.Y = E.Sea - FMath::Clamp(Depth * .5, .05, .55);
+			const FPoolSpec& K = SpecOf(S.Kind);
+			if (!bWasAwake)
+			{
+				S.Fish.SetNum(S.N);
+				for (int32 i = 0; i < S.N; i++)
+				{
+					FFishE& F = S.Fish[i];
+					const double A = 2 * PI * EHash(S.Seed * 1e-6 + i, 1.0), Rr = FMath::Sqrt(EHash(S.Seed * 1e-6 + i, 2.0));
+					F.Slot = FVector(FMath::Cos(A) * Rr, EHash(S.Seed * 1e-6 + i, 3.0) * 2 - 1, FMath::Sin(A) * Rr);
+					F.Len = float(FMath::Lerp(K.LenMin, K.LenMax, EHash(S.Seed * 1e-6 + i, 4.0)));
+					F.Seed = float(EHash(S.Seed * 1e-6 + i, 5.0));
+					F.Shade = float(.85 + .25 * EHash(S.Seed * 1e-6 + i, 6.0));
+					F.Ph = F.Seed * 6;
+					F.P = FVector(S.C.X + F.Slot.X * S.R, S.Y + F.Slot.Y * Thick, S.C.Y + F.Slot.Z * S.R);
+					F.V = FVector::ZeroVector;
+					F.Fwd = FVector(-F.Slot.Z, 0, F.Slot.X).GetSafeNormal(.01, FVector(1, 0, 0));
+				}
+			}
+			E.SchoolsAwake++;
+			// what frightens them: the hull under way, a diver
+			S.Scatter = FMath::Max(0.0, S.Scatter - Dt * .38);
+			const double DB = FVector2D::Distance(S.C, E.Boat);
+			if (DB < 9 && bBoatMoving) { S.Scatter = FMath::Max(S.Scatter, FMath::Min(1.0, .25 + (1 - DB / 9) * (.4 + E.BoatSpd * .2))); S.ThreatP = E.Boat; }
+			if (E.bDiver && FVector2D::Distance(S.C, FVector2D(E.Diver.X, E.Diver.Z)) < 3.2) { S.Scatter = FMath::Max(S.Scatter, .6); S.ThreatP = FVector2D(E.Diver.X, E.Diver.Z); }
+			S.Mill += Dt * (.22 + S.Scatter * .6) * ((S.Seed & 1) ? 1 : -1);
+			const double Cm = FMath::Cos(S.Mill), Sm = FMath::Sin(S.Mill), Spread = S.R * (1 + S.Scatter * 1.6);
+			const bool bDraw = DCam < K.Cull + 10;
+			for (FFishE& F : S.Fish)
+			{
+				if (F.Air > 0)
+				{
+					// out of the water: it falls back
+					F.V.Y -= 9.8 * Dt;
+					F.P += F.V * Dt;
+					if (F.P.Y < E.Sea - .02 && F.V.Y < 0) { F.Air = 0; F.V *= .3; }
+				}
+				else
+				{
+					const FVector Want(S.C.X + (F.Slot.X * Cm - F.Slot.Z * Sm) * Spread, S.Y + F.Slot.Y * Thick, S.C.Y + (F.Slot.X * Sm + F.Slot.Z * Cm) * Spread);
+					FVector Acc = (Want - F.P) * 5.0 - F.V * 3.2;
+					if (S.Scatter > .05)
+					{
+						const FVector2D Away = (FVector2D(F.P.X, F.P.Z) - S.ThreatP).GetSafeNormal();
+						Acc += FVector(Away.X, 0, Away.Y) * S.Scatter * 10 + FVector(FMath::FRandRange(-1.0, 1.0), 0, FMath::FRandRange(-1.0, 1.0)) * S.Scatter * 5;
+					}
+					F.V += Acc * Dt;
+					const double Sp = F.V.Size();
+					if (Sp > 3.6) F.V *= 3.6 / Sp;
+					F.P += F.V * Dt;
+					F.P.Y = FMath::Clamp(F.P.Y, FMath::Min(S.Floor + .03, E.Sea - .04), E.Sea - .03);
+				}
+				const double Sp = F.V.Size();
+				if (Sp > .04) F.Fwd = FMath::Lerp(F.Fwd, F.V / Sp, FMath::Min(1.0, Dt * 9)).GetSafeNormal(.001, F.Fwd);
+				F.Ph += float((7 + Sp * 16) * Dt);
+				F.Flash = float(FMath::Max(0.0, F.Flash - Dt * 3));
+				if (S.Scatter > .4 && FMath::FRand() < Dt * 2) F.Flash = 1;
+				if (bDraw) Put(E, S.Kind, F.P, F.Fwd, F.Flash * .9, F.Len, F.Ph, 7 + Sp * 16, FMath::Min(1.0, .3 + Sp * .5), 0, F.Flash, F.Shade, F.Seed);
+			}
+		}
+
+		// ---- the ones that swim alone or in a few
+		const double FeedNow = E.Phase == 1 || E.Phase == 3 ? 1.7 : 1, TideRun = FMath::Abs(E.Tide) < .7 ? 1.3 : 1;
+		for (FGroup& G : T.Groups)
+		{
+			const double DCam = FVector2D::Distance(G.C, Cam2);
+			const FPoolSpec& K = SpecOf(G.Kind);
+			G.bActive = DCam < K.Cull + 20;
+			if (!G.bActive) continue;
+			G.T += Dt;
+			const double DB = FVector2D::Distance(G.C, E.Boat);
+			// --- where it lies: off the small fish it is working, wherever they are on this tide; else at home
+			FVector2D Station = G.Home;
+			if (IsHunter(G.Kind) || G.Kind == Mullet || G.Kind == Needlefish)
+			{
+				G.Wander -= Dt;
+				if (G.Wander <= 0)
+				{
+					G.Wander = 1.5;
+					double Ds = 0;
+					FSchoolE* Sc = IsHunter(G.Kind) ? NearestSchool(E, G.State == GHold ? G.C : G.Home, 60, &Ds) : nullptr;
+					G.Prey = Sc ? Sc->Id : -1;
+					FVector2D St = Sc ? Sc->C + Sc->Out * (G.Kind == Snook ? 2.2 : G.Kind == Barracuda ? 4.5 : 9) : G.Home;
+					// (somewhere with water enough for it)
+					for (int32 k = 0; k < 8 && (E.Sea - FloorAt(St.X, St.Y) < NeedDepth(G.Kind) || !Wet(St.X, St.Y)); k++) St += G.Out * 3;
+					G.Aim = St;
+				}
+				Station = G.Aim.IsNearlyZero() ? G.Home : G.Aim;
+				if (G.Kind == Jack || G.Kind == Mullet || G.Kind == LemonShark)
+				{
+					// they work along the edge, to and fro
+					const FVector2D Tn(-G.Out.Y, G.Out.X);
+					const double Sw = (G.Kind == LemonShark ? 26 : 16) * FMath::Sin(E.Now * (G.Kind == Mullet ? .05 : .08) + (G.Seed & 255));
+					const FVector2D Q = Station + Tn * Sw;
+					if (Wet(Q.X, Q.Y) && E.Sea - FloorAt(Q.X, Q.Y) > NeedDepth(G.Kind) * .8) Station = Q;
+				}
+			}
+			// --- hunger, the bait in reach, the rush
+			double Speed = G.Kind == Jack ? 1.3 : G.Kind == Mullet ? .7 : G.Kind == LemonShark ? .8 : G.Kind == Horseshoe ? .05 : G.Kind == Stingray ? .35 : .5;
+			if (IsHunter(G.Kind))
+			{
+				if (G.State == GHold)
+				{
+					G.Hunger -= Dt * FeedNow * TideRun;
+					if (G.Hunger <= 0)
+					{
+						double Ds = 0;
+						FSchoolE* Sc = NearestSchool(E, G.C, 30, &Ds);
+						if (Sc && Sc->bAwake && E.Now - Sc->HitT > 18 && Sc->Fish.Num())
+						{
+							G.State = GRush; G.Prey = Sc->Id; G.Aim = Sc->C; G.T = 0; G.RushD = Ds;
+						}
+						else G.Hunger = 4;   // hungry, and nothing in reach: it waits where it is
+					}
+				}
+				else if (G.State == GRush)
+				{
+					Speed = 6.5;
+					FSchoolE* Sc = FindSchool(E, G.Prey);
+					if (Sc) G.Aim = Sc->C;
+					Station = G.Aim;
+					if (!Sc || G.T > 6) { G.State = GReturn; G.T = 0; }
+					else if (FVector2D::Distance(G.C, G.Aim) < 1.3)
+					{
+						Shower(E, *Sc, G.C - (G.Aim - G.C).GetSafeNormal() * 1.5, G.Kind);
+						G.State = GReturn; G.T = 0;
+						G.Hunger = (G.Kind == Barracuda || G.Kind == LemonShark ? 70 : 32) + 45 * FMath::FRand();
+						if (LinkDue(E, LinkRush, 2))
+							UE_LOG(LogTemp, Log, TEXT("KREco link rush: %d %s, hungry (%s, %s), with %d %s %.0f m off: they rush them at %.0f, %.0f and the bait showers out of the water"),
+								G.M.Num(), KindName(G.Kind), PhaseWord(E), TideWord(E), Sc->N, KindName(Sc->Kind), G.RushD, Sc->C.X, Sc->C.Y);
+					}
+				}
+				else if (G.State == GReturn)
+				{
+					// it carries on through and comes round
+					Speed = 2.2;
+					if (G.T > 2.5) G.State = GHold;
+				}
+			}
+			// --- the boat: it gives way to a hull under way
+			if (DB < 6 && bBoatMoving && G.Kind != Jelly && G.Kind != Horseshoe && G.State != GRush) { G.State = GFlee; G.FleeT = 2.2; }
+			if (G.State == GFlee)
+			{
+				G.FleeT -= Dt;
+				Speed = G.Kind == Stingray || G.Kind == Barracuda ? 5 : 3.5;
+				const FVector2D Away = (G.C - E.Boat).GetSafeNormal();
+				const FVector2D Q = G.C + Away * 6;
+				Station = Wet(Q.X, Q.Y) ? Q : G.C;
+				if (G.FleeT <= 0) G.State = GHold;
+			}
+			if (G.Kind == Horseshoe)
+			{
+				// it trundles over the bottom, turning now and then
+				G.Yaw += FMath::Sin(E.Now * .05 + (G.Seed & 63)) * .1 * Dt;
+				const FVector2D Q = G.C + FVector2D(FMath::Cos(G.Yaw), FMath::Sin(G.Yaw)) * 2;
+				Station = Wet(Q.X, Q.Y) && FVector2D::Distance(Q, G.Home) < 12 ? Q : G.Home;
+			}
+			else if (G.Kind == Stingray && G.State == GHold)
+			{
+				const double A = E.Now * .03 + (G.Seed & 127);
+				const FVector2D Q = G.Home + FVector2D(FMath::Cos(A), FMath::Sin(A * 1.3)) * 9;
+				if (Wet(Q.X, Q.Y)) Station = Q;
+			}
+			else if (G.Kind == NurseShark && E.Phase != 0) Speed = 0;   // asleep on the bottom by day; it cruises at night
+			else if (G.Kind == NurseShark)
+			{
+				const double A = E.Now * .04 + (G.Seed & 127);
+				const FVector2D Q = G.Home + FVector2D(FMath::Cos(A), FMath::Sin(A)) * 10;
+				if (Wet(Q.X, Q.Y)) Station = Q;
+			}
+			const FVector2D ToS = Station - G.C;
+			const double Ls = ToS.Size();
+			FVector2D GV = FVector2D::ZeroVector;
+			if (Ls > .3 && Speed > 0)
+			{
+				GV = ToS / Ls * FMath::Min(Speed, Ls * 1.5);
+				G.C += GV * Dt;
+				G.Yaw += WrapPi(FMath::Atan2(GV.Y, GV.X) - G.Yaw) * FMath::Min(1.0, Dt * 2.5);
+			}
+			else if (G.Kind == Snook || G.Kind == Barracuda)
+			{
+				// lying still, head to the small fish
+				if (const FSchoolE* Sc = FindSchool(E, G.Prey)) G.Yaw += WrapPi(FMath::Atan2(Sc->C.Y - G.C.Y, Sc->C.X - G.C.X) - G.Yaw) * FMath::Min(1.0, Dt);
+			}
+			const double Floor = FloorAt(G.C.X, G.C.Y), Depth = FMath::Max(.05, E.Sea - Floor);
+			G.Depth = Depth;
+			const bool bDraw = DCam < K.Cull;
+			const double Gs = GV.Size();
+			for (int32 i = 0; i < G.M.Num(); i++)
+			{
+				FSwim& M = G.M[i];
+				M.Ph += Dt * (3 + Gs * 5);
+				M.T -= Dt;
+				// its place in the group, and how deep it swims
+				double Y = E.Sea - FMath::Min(Depth * .55, .6);
+				double Pitch = 0, Roll = 0, Amp = FMath::Min(1.0, .12 + Gs * .35), Freq = 3 + Gs * 5;
+				FVector Scale(1);
+				if (G.Kind == Needlefish) Y = E.Sea - .05;
+				else if (G.Kind == NurseShark || G.Kind == Stingray || G.Kind == Horseshoe || G.Kind == Jelly) Y = FloorAt(G.Home.X + M.Off.X, G.Home.Y + M.Off.Y) + (G.Kind == Jelly ? .01 : G.Kind == Horseshoe ? .02 : .07);
+				else if (G.Kind == LemonShark) Y = FMath::Max(Floor + .16, E.Sea - .32);
+				else if (G.Kind == Snook) Y = FMath::Max(Floor + .12, E.Sea - .45);
+				if (G.Kind == Jelly)
+				{
+					// it pulses where it lies
+					const double Pu = FMath::Sin(E.Now * 1.6 + M.Ph);
+					Scale = FVector(1 + .06 * Pu, 1 + .06 * Pu, 1 - .12 * Pu);
+					M.P = FVector(G.Home.X + M.Off.X, Y, G.Home.Y + M.Off.Y);
+					if (bDraw) Put(E, G.Kind, M.P, M.Fwd, 0, M.Len, 0, 0, 0, 0, 0, .9 + .2 * EHash(M.Ph, 1.0), M.Ph, Scale);
+					continue;
+				}
+				// a mullet jumps: more when something is after it, or the boat goes by
+				if (G.Kind == Mullet && M.Air <= 0 && M.T <= 0)
+				{
+					M.T = FMath::FRandRange(5.0, 40.0) / (DB < 25 && bBoatMoving ? 5 : NearestGroup(E, G.C, 14, Jack) || NearestGroup(E, G.C, 14, Snook) ? 4 : 1);
+					M.Air = 1;
+					M.V = FVector(M.Fwd.X * 2.2, 3.4 + FMath::FRand(), M.Fwd.Z * 2.2);
+					M.P.Y = E.Sea;
+				}
+				// a tarpon rolls: up to the top, its back out, and down
+				if (G.Kind == Tarpon && M.T <= 0) { M.T = FMath::FRandRange(14.0, 40.0) / FeedNow; M.Roll = 1.6; E.Sound(TEXT("roll"), G.Kind, M.P, .5f); if (E.Life && DCam < 110) E.Life->Splash(M.P.X, M.P.Z, 3, .3); }
+				if (M.Air > 0)
+				{
+					M.V.Y -= 9.8 * Dt;
+					M.P += M.V * Dt;
+					Pitch = FMath::Atan2(M.V.Y, 2.2);
+					if (M.P.Y < E.Sea - .05 && M.V.Y < 0) { M.Air = 0; E.Sound(TEXT("jump"), G.Kind, M.P, .5f); if (E.Life && DCam < 130) E.Life->Splash(M.P.X, M.P.Z, 6, .45); }
+				}
+				else
+				{
+					if (M.Roll > 0) { M.Roll -= Dt; const double U = 1 - M.Roll / 1.6; Y = FMath::Lerp(Y, E.Sea + .04, FMath::Sin(PI * U)); Pitch = .5 * FMath::Cos(PI * U); }
+					const double Cy = FMath::Cos(G.Yaw), Sy = FMath::Sin(G.Yaw);
+					const FVector Want(G.C.X + M.Off.X * Cy - M.Off.Y * Sy, Y, G.C.Y + M.Off.X * Sy + M.Off.Y * Cy);
+					const FVector D = Want - M.P;
+					const double Follow = G.State == GRush ? 6 : 2;
+					M.P += D * FMath::Min(1.0, Dt * Follow);
+					if (FMath::Abs(M.P.Y - Y) > 1.5) M.P.Y = Y;
+					// a needlefish darts a body length now and then
+					if (G.Kind == Needlefish && FMath::FRand() < Dt * .25) M.P += M.Fwd * .5;
+				}
+				const FVector Head = FVector(FMath::Cos(G.Yaw), 0, FMath::Sin(G.Yaw));
+				FVector Fw = FMath::Lerp(M.Fwd, Head, FMath::Min(1.0, Dt * 3)).GetSafeNormal(.001, Head);
+				M.Fwd = Fw;
+				if (Pitch != 0) Fw = (FVector(Fw.X, 0, Fw.Z).GetSafeNormal() * FMath::Cos(Pitch) + FVector(0, FMath::Sin(Pitch), 0));
+				if (G.Kind == NurseShark || G.Kind == Horseshoe || G.Kind == Stingray) { Amp *= G.Kind == Stingray ? 0 : .5; }
+				if (bDraw) Put(E, G.Kind, M.P, Fw, Roll, M.Len, M.Ph, Freq, G.Kind == Horseshoe ? 0 : Amp, 0, 0, .9 + .2 * EHash(i + 1.0, G.Seed * 1e-6), EHash(i + 2.0, G.Seed * 1e-6));
+			}
+		}
+
+		// ---- the crabs
+		for (FCrabs& C : T.Crabs)
+		{
+			const FPoolSpec& K = SpecOf(C.Kind);
+			if (FVector2D::DistSquared(C.C, Cam2) > FMath::Square(K.Cull + 6)) continue;
+			const double DB = FVector2D::Distance(C.C, E.Boat);
+			if (C.Kind == TreeCrab)
+			{
+				// up the root above the tide; when the boat comes close they let go and drop, and climb out again later
+				if (!C.bGone && DB < 10 && E.BoatSpd > .3) { C.bGone = true; C.T = 0; E.Sound(TEXT("crabdrop"), C.Kind, FVector(C.C.X, E.Sea, C.C.Y), .2f); }
+				else if (C.bGone && DB > 15) { C.T += Dt; if (C.T > 16) { C.bGone = false; C.Hide = 1; } }
+				if (C.bGone) C.Hide = FMath::Min(2.0, C.Hide + Dt * 2.4); else C.Hide = FMath::Max(0.0, C.Hide - Dt * .12);
+				for (int32 i = 0; i < C.N; i++)
+				{
+					const double H1 = EHash(C.Seed * 1e-6 + i, 1.0), H2 = EHash(C.Seed * 1e-6 + i, 2.0);
+					const int32 Root = i % 2;
+					// its height on the root: a slow wander, and never under water (down the root is toward the mud)
+					double U = .12 + .3 * H1 + .08 * FMath::Sin(E.Now * .12 + H2 * 20);
+					for (int32 k = 0; k < 6 && RootPoint(C.Site, Root, U).Y < E.Sea + .1; k++) U -= .06;
+					U = FMath::Max(.02, U);
+					const FVector On = RootPoint(C.Site, Root, U), Next = RootPoint(C.Site, Root, U + .05);
+					FVector P = On;
+					double Scale = 1;
+					if (C.bGone)
+					{
+						// falling, each a moment after the last, into the water and gone
+						const double Tf = FMath::Max(0.0, C.Hide * .42 - i * .08);
+						P.Y = On.Y - 4.9 * Tf * Tf;
+						if (P.Y < E.Sea) { if (P.Y > E.Sea - .12 && E.Life && C.Hide < 1.9) E.Life->Splash(P.X, P.Z, 2, .18); continue; }
+					}
+					else if (C.Hide > 0)
+					{
+						// climbing back out from the waterline
+						double Uw = U;
+						for (int32 k = 0; k < 12 && RootPoint(C.Site, Root, Uw).Y > E.Sea + .03; k++) Uw += .06;
+						P = RootPoint(C.Site, Root, FMath::Lerp(U, FMath::Min(Uw, .95), FMath::Clamp(C.Hide, 0.0, 1.0)));
+					}
+					Put(E, C.Kind, P, (Next - On).GetSafeNormal(.001, FVector(1, 0, 0)) * (H2 < .5 ? 1 : -1), 0, FMath::Lerp(K.LenMin, K.LenMax, H1) * Scale, 0, 0, 0, 0, 0, .85 + .3 * H2, H1);
+				}
+			}
+			else
+			{
+				// fiddlers: out on the mud while it is bare, down their burrows when the boat is near or the water is back
+				const bool bBare = C.FloorY > E.Sea + .006;
+				const bool bScared = DB < 11 && E.BoatSpd > .6;
+				if (bScared || !bBare) { C.T = 0; C.Hide = FMath::Min(1.0, C.Hide + Dt * (bScared ? 3.5 : .5)); }
+				else { C.T += Dt; if (C.T > 5) C.Hide = FMath::Max(0.0, C.Hide - Dt * .5); }
+				if (C.Hide >= 1) continue;
+				for (int32 i = 0; i < C.N; i++)
+				{
+					const double H1 = EHash(C.Seed * 1e-6 + i, 1.0), H2 = EHash(C.Seed * 1e-6 + i, 2.0), H3 = EHash(C.Seed * 1e-6 + i, 3.0);
+					const double A = 2 * PI * H1, R = 1.7 * FMath::Sqrt(H2);
+					// (the nearest to the boat go first, the rest a moment after)
+					const double Mine = FMath::Clamp(C.Hide * 1.6 - H3 * .6, 0.0, 1.0);
+					if (Mine >= 1) continue;
+					const double Step = .05 * FMath::Sin(E.Now * .7 + H3 * 30);
+					const FVector P(C.C.X + FMath::Cos(A) * R + Step, C.FloorY + .008 - Mine * .05, C.C.Y + FMath::Sin(A) * R);
+					const double Wave = FMath::Max(0.0, FMath::Sin(E.Now * 3 + H3 * 40)) * .5;   // the big claw goes up and down
+					const double Yaw = 2 * PI * H3;
+					Put(E, C.Kind, P, FVector(FMath::Cos(Yaw), 0, FMath::Sin(Yaw)), Wave, FMath::Lerp(K.LenMin, K.LenMax, H2) * (1 - Mine), 0, 0, 0, 0, 0, .85 + .3 * H1, H1);
+				}
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------- the instances, laid out for this frame
+	void FlushPools(AKeysMangroveEco* A, FEco& E)
+	{
+		for (int32 Ix = 0; Ix < NumPools; Ix++)
+		{
+			FPoolE& Pl = E.Pools[Ix];
+			const int32 N = Pl.Xf.Num();
+			if (!N && !Pl.Shown) continue;
+			UInstancedStaticMeshComponent* C = EnsurePool(A, E, Ix);
+			if (!C) { Pl.Shown = 0; continue; }
+			const int32 Have = C->GetInstanceCount();
+			if (N > Have)
+			{
+				TArray<FTransform> More;
+				More.Append(Pl.Xf.GetData() + Have, N - Have);
+				C->AddInstances(More, false, true);
+			}
+			// what was drawn last frame and is not this frame is shrunk to nothing where it was
+			const int32 Was = FMath::Min(Pl.Shown, C->GetInstanceCount());
+			for (int32 i = N; i < Was; i++) Pl.Xf.Add(FTransform(FQuat::Identity, i < N ? FVector::ZeroVector : G2U(E.Cam), FVector(.0001)));
+			if (Pl.Xf.Num()) C->BatchUpdateInstancesTransforms(0, Pl.Xf, true, false, false);
+			for (int32 i = 0; i < N; i++) C->SetCustomData(i, TArrayView<const float>(Pl.Data.GetData() + i * 8, 8), false);
+			C->MarkRenderStateDirty();
+			Pl.Shown = N;
+			E.FishDrawn += N;
+		}
+	}
+}
