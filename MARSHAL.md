@@ -17,7 +17,7 @@ once).
 | `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | merged 2026-11-21 |
 | `lowerkeys` | Map Phase 3 (Lower Keys, then Key Largo; brief written by the marshal) | `lane/lowerkeys` | removed (branch kept) | merged 2026-11-22 |
 | `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | running since 2026-11-22, in the user's "ecosystem" Terminal window |
-| `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | running since 2026-11-22 (background agent) |
+| `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | merged 2026-11-22 |
 | `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | running since 2026-11-22 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
@@ -182,3 +182,16 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   sample was taken while the lane was building, not comparable). Not yet fixed by this part: seagrass in canals,
   Largo Sound, creek stain. Merge the rest when the lane reports.
 - 2026-11-22: `lane/diving` created from `main` (this entry), run as a background agent.
+- 2026-11-22: `water2` merged in full (lane at 231c0eb) with R1-R5: nothing planted in canals or ways out and a
+  round edge to the reef dressing (`KeysReef`), the bank rule fades out between charted 0.75 and 1.1 m
+  (`RealDepthAt`; charted 1.0 m now plays 0.89 m, was 0.44), a cut from the Layton canal to Layton Channel
+  (`p2_canals.txt`; `canals.py` needs the same if p2 is re-baked), creeks by rule (`KeysGeo::CreekWater`: calm,
+  stained water between mangrove banks anywhere), bird-and-bait hotspots dealt round the boat. Marshal's runs:
+  real map `tpcheck` 48, 0 bad; dock audit 545, zero overlaps; 33.3 ms at the reef, Layton, Carysfort, the Largo
+  shelf, a Lower Keys creek and Florida Bay (a first run read 100-330 ms from its second minute on while another
+  lane was compiling; the re-run was clean). Classic map `tpcheck` 19, 0 bad; at its reef the frame is 34.1 ms
+  (draw 33.3, GPU 33.8), the same as after the first part of this lane; not measured before the lane. R2 re-deals
+  docks and houses (8,375 houses, was 8,493; the old screenshot spot at -1150, 452 now has a dock and reads zone
+  "Hawk Channel"). Open from the lane: R6 the real Largo Sound is land in p4 (bake takes enclosed water for land;
+  the teleport spot is the ocean shelf), Blackwater Sound cut off; R7 reef names for p1 and p2 and reef crests
+  playing as Flats; R8 46 of 195 canals have no 1 m way out to sea (4 in the Upper Keys).
