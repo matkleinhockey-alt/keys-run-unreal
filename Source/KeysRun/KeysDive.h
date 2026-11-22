@@ -55,6 +55,11 @@ namespace KeysDive
 		double Exertion = 0, KickPhase = 0;
 		bool bKicking = false, bNarcosis = false, bBlackedOut = false;
 		double BlackoutT = 0;
+		// scuba (KeysScuba.h sets these each step; all off, the breath-hold rules run exactly as they always have):
+		// breathing from a cylinder (the breath hold does not run down), the jacket trimmed neutral (no buoyancy
+		// either way), and the surface key's swim speed held down to a safe ascent (0 = the freediver's)
+		bool bOnGas = false, bNeutral = false;
+		double AscendCap = 0, AscendCapSprint = 0;
 		TArray<EEvent> Events;
 		double Depth() const { return FMath::Max(0.0, -Y); }
 		double Speed() const { return FMath::Sqrt(VX * VX + VY * VY + VZ * VZ); }
