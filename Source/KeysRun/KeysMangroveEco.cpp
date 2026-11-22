@@ -451,7 +451,9 @@ namespace KeysMangroveEco
 	{
 		FVector2D B = P + Out * Dist;
 		for (int32 k = 0; k < 12 && (KeysGeo::DepthAt(B.X, B.Y) < .8 || KeysGeo::LandH(B.X, B.Y) > -.05); k++) B += Out * 4;
-		return FString::Printf(TEXT("tp=%.0f,%.0f,%.3f"), B.X, B.Y, FMath::Atan2(-(P.X - B.X), -(P.Y - B.Y)));
+		// (and lying along the shore a little short of it, so the chase camera sees it past the boat's bow)
+		const FVector2D Tn(-Out.Y, Out.X), B2 = B - Tn * (Dist * .9);
+		return FString::Printf(TEXT("bow on tp=%.0f,%.0f,%.3f alongside tp=%.0f,%.0f,%.3f"), B.X, B.Y, FMath::Atan2(-(P.X - B.X), -(P.Y - B.Y)), B2.X, B2.Y, FMath::Atan2(-Tn.X, -Tn.Y));
 	}
 }
 
@@ -469,6 +471,7 @@ AKeysMangroveEco::AKeysMangroveEco()
 	LiveMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("EcoBirds"));
 	LiveMesh->SetupAttachment(Root);
 	LiveMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	LiveMesh->SetCastShadow(false);   // (rebuilt every frame: its shadow would be too)
 	StillMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("EcoBirdsStill"));
 	StillMesh->SetupAttachment(Root);
 	StillMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -575,6 +578,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 		S.bJob = false;
 		if (!S.Tiles.Contains(P->Key) && FVector2D::Distance(P->C, S.Boat) < 1300)
 		{
+			const double Ts = FPlatformTime::Seconds();
 			FTileE* T = new FTileE();
 			T->Key = P->Key; T->C = P->C; T->Roosts = P->Roosts; T->Wade = P->Wade;
 			T->RoostUsed.Init(false, T->Roosts.Num());
@@ -584,6 +588,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 			for (const FSpot& Sp : P->Spots) if (Sp.Kind == Manatee) { T->Haunts.Add(Sp); T->Armed.Add(true); }
 			S.Tiles.Add(P->Key, T);
 			S.bStillDirty = true;
+			if (S.bScript) UE_LOG(LogTemp, Log, TEXT("KREco tile at %.0f, %.0f planned: %d trees, %d birds, %d schools, %d others; set up in %.1f ms"), T->C.X, T->C.Y, P->Sites, T->Birds.Num(), T->Schools.Num(), T->Groups.Num() + T->Crabs.Num(), (FPlatformTime::Seconds() - Ts) * 1000);
 		}
 		delete P;
 	}
@@ -805,8 +810,16 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 				if ((G.Kind == Snook || G.Kind == Jack || G.Kind == Tarpon || G.Kind == LemonShark || G.Kind == Barracuda) && FVector2D::Distance(G.C, S.Boat) < 120) { G.Hunger = 0; N++; }
 		UE_LOG(LogTemp, Log, TEXT("KREco test: %d packs of predators within 120 m of the boat made hungry"), N);
 	}
-	else if (C0 == TEXT("find") && A.Num() > 1)
+	else if (C0 == TEXT("findall"))
 	{
+		// the nearest of every kind
+		for (int32 k = 0; k < NumKinds; k++) DebugCmd(FString::Printf(TEXT("find1 %s %s"), KindName(k), A.Num() > 1 ? *A[1] : TEXT("9")));
+	}
+	else if ((C0 == TEXT("find") || C0 == TEXT("find1")) && A.Num() > 1)
+	{
+		// (a kind's name may be two words: the distance is the last one if it is a number)
+		if (A.Num() > 2 && !A.Last().IsNumeric()) { for (int32 i = 2; i < A.Num(); i++) A[1] += TEXT(" ") + A[i]; A.SetNum(2); }
+		else if (A.Num() > 3) { for (int32 i = 2; i + 1 < A.Num(); i++) A[1] += TEXT(" ") + A[i]; A[2] = A.Last(); A.SetNum(3); }
 		// the nearest few of a kind (by a piece of its name) among the tiles planned round the boat
 		struct FHit { double D; FVector2D P, O; int32 Kind; };
 		TArray<FHit> Hits;
@@ -821,7 +834,7 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		}
 		Hits.Sort([](const FHit& X, const FHit& Y) { return X.D < Y.D; });
 		const double Dist = A.Num() > 2 ? FCString::Atod(*A[2]) : 12;
-		for (int32 i = 0; i < FMath::Min(4, Hits.Num()); i++)
+		for (int32 i = 0; i < FMath::Min(C0 == TEXT("find1") ? 1 : 4, Hits.Num()); i++)
 			UE_LOG(LogTemp, Log, TEXT("KREco find %s: at %.0f, %.0f, %.0f m from the boat; %s"), KindName(Hits[i].Kind), Hits[i].P.X, Hits[i].P.Y, Hits[i].D, *TpFor(Hits[i].P, Hits[i].O, Dist));
 		if (!Hits.Num()) UE_LOG(LogTemp, Log, TEXT("KREco find %s: none in the %d tiles planned round the boat"), *A[1], S.Tiles.Num());
 	}

@@ -1,0 +1,57 @@
+diff --git a/Source/KeysRun/KeysBoatPawn.cpp b/Source/KeysRun/KeysBoatPawn.cpp
+index 41c5d26..01c2d86 100644
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -1,6 +1,7 @@
+ #include "KeysBoatPawn.h"
+ #include "KeysGeoReal.h"
+ #include "KeysMangroveLife.h"
++#include "KeysMangroveEco.h"
+ #include "Components/TextRenderComponent.h"
+ #include "KeysGarden.h"
+ #include "KeysCharter.h"
+@@ -804,6 +805,7 @@ void AKeysBoatPawn::RunTestScript(double T)
+ 				FString Out;
+ 				for (const TPair<FString, int32>& K : Tally) Out += FString::Printf(TEXT(" %s %d%%"), *K.Key, K.Value / 4);
+ 				UE_LOG(LogTemp, Log, TEXT("KRPicks at %.0f, %.0f zone %s depth %.1f m:%s"), X, Z, *Here.Zone, DepthAt(X, Z), *Out);
++				if (KeysMangroveEco::BiteScale(X, Z) < 1) UE_LOG(LogTemp, Log, TEXT("KRPicks bait is thick here: the wait for a bite x%.2f"), KeysMangroveEco::BiteScale(X, Z));
+ 			}
+ 		}
+ 		else if (Cmd == TEXT("spots"))
+@@ -1027,6 +1029,7 @@ void AKeysBoatPawn::RunTestScript(double T)
+ 		else if (Cmd.StartsWith(TEXT("pirates"))) { if (AKeysVisitors* Vs = AKeysVisitors::Get(this)) Vs->SummonPirates(Cmd.Len() > 8 ? FCString::Atod(*Cmd.Mid(8)) : 300); }   // pirates or pirates=120
+ 		else if (Cmd.StartsWith(TEXT("lc:"))) { if (AKeysLocals* Lc = AKeysLocals::Get(this)) { const FString R = Lc->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript lc %s"), *R); } }
+ 		else if (Cmd.StartsWith(TEXT("dk:"))) { if (AKeysDocks* Dk = AKeysDocks::Get(this)) { const FString R = Dk->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript dk %s"), *R); } }   // the docks' test hooks (KeysDocks.h)
++		else if (Cmd.StartsWith(TEXT("eco:"))) { if (AKeysMangroveEco* Ec = AKeysMangroveEco::Get()) Ec->DebugCmd(Cmd.Mid(4)); }   // the mangrove ecosystem's test hooks (KeysMangroveEco.h)
+ 		else if (Cmd.StartsWith(TEXT("yd:"))) { if (AKeysYards* Yd = AKeysYards::Get(this)) { const FString R = Yd->DebugCmd(Cmd.Mid(3)); UE_LOG(LogTemp, Log, TEXT("KRScript yd %s"), *R); } }   // the yards' test hooks (KeysYards.h)
+ 		else if (Cmd.StartsWith(TEXT("give=")))
+ 		{
+@@ -3386,7 +3389,7 @@ void AKeysBoatPawn::UpdateFishing(double Dt, double T)
+ 			AKeysLife* L = AKeysLife::Get(this);
+ 			if (L) Spot = L->SpotAt(Bob.X, Bob.Z);
+ 			Zone = Spot.Zone;
+-			BiteT = Rand(4, 10) * AKeysLife::BiteTimeScale(Spot) * (BaitCasts > 0 ? .6 : 1);
++			BiteT = Rand(4, 10) * AKeysLife::BiteTimeScale(Spot) * (BaitCasts > 0 ? .6 : 1) * KeysMangroveEco::BiteScale(Bob.X, Bob.Z);   // (sooner where the small fish are thick under the mangroves)
+ 			Key.Reset();
+ 			Sp = nullptr;
+ 			if (L) L->OnCastLanded(Spot, Bob.X, Bob.Z);
+diff --git a/Source/KeysRun/KeysLife.cpp b/Source/KeysRun/KeysLife.cpp
+index 86b1a5f..645b9f1 100644
+--- a/Source/KeysRun/KeysLife.cpp
++++ b/Source/KeysRun/KeysLife.cpp
+@@ -1,6 +1,7 @@
+ #include "KeysLife.h"
+ #include "Materials/MaterialInstanceDynamic.h"
+ #include "KeysFeed.h"
++#include "KeysMangroveEco.h"
+ #include "KeysWrecks.h"
+ #include "KeysSea.h"
+ #include "KeysBoatPawn.h"
+@@ -2638,6 +2639,7 @@ FString AKeysLife::PickSpecies(const FKeysFishSpot& S, double BobX, double BobZ)
+ 		V *= B > 0 ? 1 + 4 * Of * B : 1 - .45 * Of;
+ 		if (Hump && (R.Key == TEXT("amberjack") || R.Key == TEXT("blackfin") || R.Key == TEXT("kingfish"))) V *= 4;
+ 		V *= KeysFeed::Mul(R.Key, KeysFeed::HourNow(this));   // the ones feeding now take the bait more often
++		V *= KeysMangroveEco::PickBoost(R.Key, BobX, BobZ);   // and the ones you can see lying under the mangroves here
+ 		Tot += V;
+ 		W.Add(V);
+ 	}

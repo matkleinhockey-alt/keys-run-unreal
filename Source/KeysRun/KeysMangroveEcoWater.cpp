@@ -113,6 +113,7 @@ namespace KeysMangroveEco
 			if (A->Pools.Num() < NumPools) A->Pools.SetNum(NumPools);
 			if (A->Pools[Ix] || E.Pools[Ix].bTried || !A->MID) return A->Pools[Ix];
 			E.Pools[Ix].bTried = true;
+			const double T0 = FPlatformTime::Seconds();
 			const FString Key = PoolSpecs[Ix].Key;
 			FKeysMesh M;
 			if (Key.StartsWith(TEXT("*"))) BuildShape(Key, M);
@@ -175,14 +176,14 @@ namespace KeysMangroveEco
 			C->SetupAttachment(A->Root);
 			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			C->NumCustomDataFloats = 8;   // tail phase, its rate, when, amplitude, body bend, flash, shade, seed (M_KR_Boid)
-			C->SetCastShadow(Ix >= Barracuda - Silverside);
+			C->SetCastShadow(false);
 			C->SetMaterial(0, A->MID);
 			C->SetCullDistances(0, int32(PoolSpecs[Ix].Cull * 100));
 			C->bAffectDistanceFieldLighting = false;
 			C->RegisterComponent();
 			A->Pools[Ix] = C;
 			E.Pools[Ix].Tris = Tris;
-			UE_LOG(LogTemp, Log, TEXT("KREco: %s mesh, %d triangles, drawn to %.0f m"), KindName(Ix + Silverside), Tris, PoolSpecs[Ix].Cull);
+			UE_LOG(LogTemp, Log, TEXT("KREco: %s mesh, %d triangles, drawn to %.0f m, made in %.1f ms"), KindName(Ix + Silverside), Tris, PoolSpecs[Ix].Cull, (FPlatformTime::Seconds() - T0) * 1000);
 			return C;
 		}
 
@@ -666,11 +667,17 @@ namespace KeysMangroveEco
 	// ---------------------------------------------------------------- the instances, laid out for this frame
 	void FlushPools(AKeysMangroveEco* A, FEco& E)
 	{
+		// (the meshes are made one a frame from the start, before anything needs them: making one takes a few ms)
+		for (int32 Ix = 0; Ix < NumPools; Ix++) if (!E.Pools[Ix].bTried) { EnsurePool(A, E, Ix); break; }
 		for (int32 Ix = 0; Ix < NumPools; Ix++)
 		{
 			FPoolE& Pl = E.Pools[Ix];
 			const int32 N = Pl.Xf.Num();
 			if (!N && !Pl.Shown) continue;
+			// laying a kind's instances out again costs the same however few they are, so each kind is laid out every
+			// other frame (turn about), and the ones that hardly move (jellyfish, crabs, a sleeping shark) every eighth
+			const int32 Kind = Ix + Silverside, Every = Kind == Jelly || Kind == TreeCrab || Kind == Fiddler || Kind == Horseshoe || Kind == NurseShark ? 8 : 2;
+			if ((GFrameCounter + Ix) % Every != 0 && N <= Pl.Shown + 8) continue;
 			UInstancedStaticMeshComponent* C = EnsurePool(A, E, Ix);
 			if (!C) { Pl.Shown = 0; continue; }
 			const int32 Have = C->GetInstanceCount();

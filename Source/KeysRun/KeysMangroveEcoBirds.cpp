@@ -5,7 +5,8 @@
 //
 // Each bird is a few dozen triangles built from its pose (body, an S of neck, head and bill, legs, two-part wings),
 // written into one of two meshes: the ones that are moving, rebuilt every frame, and the ones standing still or far
-// off, rebuilt only when one of them changes. They are drawn a quarter larger than life, as the old still waders were,
+// off, rebuilt only when one of them changes. They are drawn half as large again as life (the old still waders were
+// drawn large too),
 // so they read from a boat.
 #include "KeysMangroveEcoInt.h"
 #include "KeysGeo.h"
@@ -119,7 +120,7 @@ namespace KeysMangroveEco
 
 		// One bird from its pose. Every bird writes the same number of vertices whatever it is doing (a folded wing is
 		// drawn shut, not left out), so a mesh's layout only changes when a bird joins or leaves it.
-		void Emit(FSoup& Buf, const FBird& B)
+		void Emit(FSoup& Buf, const FBird& B, bool bFar)
 		{
 			const FBirdSpec& K = Specs[B.Kind];
 			FPen Pen{Buf};
@@ -132,7 +133,7 @@ namespace KeysMangroveEco
 			const FVector Hip = bAir ? B.P : bSwim ? B.P - Up * BodyR * .45 : B.P + Up * LegL;
 			const FVector Body = Hip + A * BodyL * .1;
 			const FLinearColor BodyC = Hex(K.BodyC), BellyC = Hex(K.BellyC), NeckC = Hex(K.NeckC), LegC = Hex(K.LegC), WingC = Hex(K.WingC), TipC = Hex(K.TipC), BillC = Hex(K.BillC);
-			Pen.Egg(Body, A, Rt, Dn, BodyL, BodyR * .95, BodyR, BodyC, BellyC, 6);
+			Pen.Egg(Body, A, Rt, Dn, BodyL, BodyR * .95, BodyR, BodyC, BellyC, bFar ? 4 : 6);
 			// the neck: an S at rest, straight down the line of a strike, folded back on the shoulders asleep or (herons) in flight
 			const FVector Sh = Body + A * BodyL * .36 + Dn * BodyR * .25;
 			const double NL = K.Neck * S, Nk = FMath::Max(B.Neck, B.Peck);
@@ -152,8 +153,8 @@ namespace KeysMangroveEco
 				HeadPitch = -.1 - .65 * Nk;
 			}
 			const double Nr = FMath::Max(.014, K.Body * (B.Kind == Anhinga ? .05 : .075)) * S;
-			Pen.Prism(Sh - A * BodyR * .3, Bend, Nr * 1.25, Nr, NeckC);
-			Pen.Prism(Bend, Head, Nr, Nr * .8, NeckC);
+			if (bFar) Pen.Prism(Sh - A * BodyR * .3, Head, Nr * 1.25, Nr * .8, NeckC);
+			else { Pen.Prism(Sh - A * BodyR * .3, Bend, Nr * 1.25, Nr, NeckC); Pen.Prism(Bend, Head, Nr, Nr * .8, NeckC); }
 			const FVector Hd = (F * FMath::Cos(HeadPitch) + Up * FMath::Sin(HeadPitch)).GetSafeNormal(), HdUp = Up * FMath::Cos(HeadPitch) - F * FMath::Sin(HeadPitch);
 			const double HeadR = K.Head * S;
 			Pen.Egg(Head + Hd * HeadR * .5, Hd, Rt, HdUp, HeadR * 2.8, HeadR, HeadR, Hex(K.HeadC), Hex(K.BillShape == 3 ? K.NeckC : K.HeadC), 5);
@@ -162,9 +163,10 @@ namespace KeysMangroveEco
 			const double BL = K.Bill * S, Br = FMath::Max(.008, K.Head * .32) * S;
 			const FVector Mid = B0 + Hd * BL * .5;
 			const FVector Tip = K.BillShape == 1 ? Mid + (Hd * .45 - HdUp * .26) * BL : B0 + Hd * BL;
-			Pen.Prism(B0, Mid, Br, Br * .65, BillC);
-			Pen.Prism(Mid, Tip, Br * .65, Br * .2, BillC);
-			if (K.BillShape == 2) Pen.Prism(Tip - Hd * .035 * S, Tip + Hd * .03 * S, .03 * S, .026 * S, BillC);
+			if (bFar) Pen.Prism(B0, Tip, Br, Br * .3, BillC);
+			else { Pen.Prism(B0, Mid, Br, Br * .65, BillC); Pen.Prism(Mid, Tip, Br * .65, Br * .2, BillC); }
+			if (bFar) {}
+			else if (K.BillShape == 2) Pen.Prism(Tip - Hd * .035 * S, Tip + Hd * .03 * S, .03 * S, .026 * S, BillC);
 			else if (K.BillShape == 3) Pen.Prism(B0 - HdUp * .035 * S, Tip - HdUp * .012 * S, .034 * S, .01 * S, Hex(0x7a5c48));
 			else Pen.Prism(Tip, Tip, 0, 0, BillC);
 			// the legs: wading or perched they stand, walking they swing, in flight the long ones trail
@@ -181,8 +183,8 @@ namespace KeysMangroveEco
 					Foot = B.P + Rt * .045 * S * Sd + F * (.02 * Sd * S + Swing) - Up * (K.Wade > 0 && B.State != BPerch && B.State != BRoost && B.State != BDry ? .3 : 0.0);
 					Knee = FMath::Lerp(HipS, Foot, .5) - F * .035 * S + Up * FMath::Max(0.0, Swing) * .4;
 				}
-				Pen.Prism(HipS, Knee, Lr, Lr, LegC);
-				Pen.Prism(Knee, Foot, Lr, Lr * .8, LegC);
+				if (bFar) Pen.Prism(HipS, Foot, Lr * 1.3, Lr, LegC);
+				else { Pen.Prism(HipS, Knee, Lr, Lr, LegC); Pen.Prism(Knee, Foot, Lr, Lr * .8, LegC); }
 			}
 			// the wings: shoulder to wrist, wrist to tip; folded they lie shut along the body
 			const double W = B.Wing, Th = bAir ? FMath::Sin(B.Ph * 2 * PI * B.FlapHz) * (B.State == BDive ? .1 : .7) + .08 : -.22;
@@ -203,7 +205,7 @@ namespace KeysMangroveEco
 			Pen.Tri2(Tail + Rt * TailW, Tail - Rt * TailW, Tail - A * TailL - Dn * TailL * (bAir ? 0 : .25), B.Kind == Anhinga ? TipC : WingC, WingC * .7f);
 			// what an osprey or a kingfisher carries off
 			const double Fl = B.bCarry ? (B.Kind == Osprey ? .3 : .09) * S : 0;
-			Pen.Egg(Body - Dn * (BodyR + Fl * .25) - A * Fl * .1, A, Rt, Dn, Fl, Fl * .14, Fl * .2, Hex(0x8a98a0), Hex(0xe8ecec), 4);
+			if (!bFar) Pen.Egg(Body - Dn * (BodyR + Fl * .25) - A * Fl * .1, A, Rt, Dn, Fl, Fl * .14, Fl * .2, Hex(0x8a98a0), Hex(0xe8ecec), 4);
 		}
 
 		// where its feet are: on the bottom, but never so deep that the water is over its knees (it keeps to the shallow side)
@@ -267,7 +269,7 @@ namespace KeysMangroveEco
 				B.Kind = Sp.Kind; B.Rook = Sp.Rook; B.Out = Sp.Out; B.Site = Sp.Site; B.bHasSite = Sp.Rook < 0;
 				B.Seed = Sp.Seed + i * 7919;
 				const double R1 = EHash(B.Seed * 1e-6, 1.0 + i), R2 = EHash(B.Seed * 1e-6, 2.0 + i);
-				B.Sz = (B.Kind == Kingfisher ? 1.5 : B.Kind == GreenHeron ? 1.4 : 1.25) * (.94 + .12 * R1);
+				B.Sz = (B.Kind == Kingfisher ? 1.9 : B.Kind == GreenHeron ? 1.7 : 1.5) * (.94 + .12 * R1);
 				B.Yaw = 2 * PI * R2;
 				B.Ph = 10 * R1;
 				B.FlapHz = Specs[B.Kind].FlapHz * (.9 + .2 * R2);
@@ -637,7 +639,7 @@ namespace KeysMangroveEco
 					if (Sc && Sc->N >= 12)
 					{
 						B.Prey = Sc->Id;
-						if (Ds < 4.6 && E.Sea - FloorAt(B.P.X, B.P.Z) <= Wade + .12)
+						if (Ds < 4.6 && E.Sea - Sc->Floor > .06 && E.Sea - FloorAt(B.P.X, B.P.Z) <= Wade + .12)
 						{
 							// in reach: it strikes the more often the thicker they are
 							if (Sc->Scatter < .25 && FMath::FRand() < FMath::Clamp(Sc->N / 60.0, .25, 1.0) * .5)
@@ -735,9 +737,10 @@ namespace KeysMangroveEco
 		for (const FBird& B : T.Birds)
 		{
 			if (B.State == BAway || B.bStill != bStillPass || (B.State == BFly && B.FlyT < 0 && B.Next != BAway && B.From.Y > 15)) continue;
-			if (FVector2D::DistSquared(FVector2D(B.P.X, B.P.Z), Cam2) > FMath::Square(Specs[B.Kind].Draw)) continue;
+			const double D2 = FVector2D::DistSquared(FVector2D(B.P.X, B.P.Z), Cam2);
+			if (D2 > FMath::Square(Specs[B.Kind].Draw)) continue;
 			if (B.State == BSwim && B.P.Y < E.Sea - .4) continue;
-			Emit(Buf, B);
+			Emit(Buf, B, D2 > 70.0 * 70.0);   // (past 70 m a bird is drawn in half the pieces)
 			if (bStillPass) E.StillN++; else E.BirdsMoved++;
 		}
 	}
