@@ -518,7 +518,7 @@ void AKeysDiver::HandleScubaEvents()
 void AKeysDiver::BreathSound(bool bInhale)
 {
 	AKeysAudio* A = AKeysAudio::Get(this);
-	if (!A || !bCamUnder) return;
+	if (!A || !bCamUnder || (DbgOff & 1)) return;
 	const double Ex = DvClamp(S.Exertion, 0, 1);
 	const double Period = FMath::Lerp(5.2, 2.6, Ex);
 	if (bInhale)
@@ -1064,6 +1064,9 @@ void AKeysDiver::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	const double Dt = FMath::Min(.05, double(DeltaSeconds));
 	const double T = GetWorld()->GetTimeSeconds();
+	// test hook (dv:prof=1): where this actor's frame goes, in six laps, logged every 150 frames
+	double LapT = FPlatformTime::Seconds();
+	auto Lap = [&](int32 i) { if (!bDbgProf) return; const double Now = FPlatformTime::Seconds(); ProfMs[i] += (Now - LapT) * 1000; LapT = Now; };
 	FrameEvents.Reset();
 	if (bDiving)
 	{
@@ -1106,6 +1109,7 @@ void AKeysDiver::Tick(float DeltaSeconds)
 			}
 		}
 	}
+	Lap(0);
 	if (bDiving)
 	{
 		UpdateCamera(Dt, T);
@@ -1130,7 +1134,9 @@ void AKeysDiver::Tick(float DeltaSeconds)
 			AssistAim(MuzzleWorld(), Aim, Tg, AimTarget, 0, NextShotRange(), &Eye);
 		}
 	}
+	Lap(1);
 	UpdateBoatKit(T);
+	Lap(2);
 	if (DbgBoatView > 0)
 	{
 		// test hook: a camera standing off the cockpit, on the rack (1), on the flag (2) or on the whole boat (3); it
@@ -1150,10 +1156,23 @@ void AKeysDiver::Tick(float DeltaSeconds)
 	UpdateSpearedFish(Dt, T);
 	UpdateFishFill();
 	UpdateUnderwaterLook(Dt);
+	Lap(3);
 	UpdateBubbles(Dt, T);
 	UpdateSnow(Dt, T);
 	UpdateSeeps(Dt, T);
+	Lap(4);
 	DrawParticles();
+	Lap(5);
+	if (bDbgProf && ++ProfN >= 150)
+	{
+		int32 Alive = 0;
+		for (const FBubble& B : Bubbles) if (B.Age >= 0) Alive++;
+		UE_LOG(LogTemp, Log, TEXT("KRScuba prof (ms a frame, %d frames, scuba %d): step %.3f, camera gun gauge light %.3f, boat kit %.3f, lines fish look %.3f, bubbles snow seeps %.3f, draw particles %.3f; total %.3f; %d bubbles alive"),
+			ProfN, Sc.bOn ? 1 : 0, ProfMs[0] / ProfN, ProfMs[1] / ProfN, ProfMs[2] / ProfN, ProfMs[3] / ProfN, ProfMs[4] / ProfN, ProfMs[5] / ProfN,
+			(ProfMs[0] + ProfMs[1] + ProfMs[2] + ProfMs[3] + ProfMs[4] + ProfMs[5]) / ProfN, Alive);
+		ProfN = 0;
+		for (double& M : ProfMs) M = 0;
+	}
 }
 
 void AKeysDiver::UpdateCamera(double Dt, double T)
@@ -1222,7 +1241,7 @@ void AKeysDiver::UpdateModel(double T)
 	FinL->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(FMath::Sin(Ph) * (.25 + K * .5)), 0, 0));
 	FinR->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(FMath::Sin(Ph + PI) * (.25 + K * .5)), 0, 0));
 	Body->SetVisibility(CamMode == 1, true);
-	Kit->SetVisibility(CamMode == 1 && Sc.bOn);
+	Kit->SetVisibility(CamMode == 1 && Sc.bOn && !(DbgOff & 8));
 }
 
 void AKeysDiver::UpdateGun(double Dt)
@@ -1585,7 +1604,7 @@ void AKeysDiver::UpdateBubbles(double Dt, double T)
 			// the exhaust under her chin that tails off as the breath ends. They are bigger than a freediver's trickle,
 			// rise faster, and break the surface where the boat can see them.
 			LastEqDepth = Depth;
-			if (Sc.bExhaling)
+			if (Sc.bExhaling && !(DbgOff & 2))
 			{
 				const double Env = 1 - .6 * DvClamp((Sc.BreathPh - .45) / .45, 0, 1);
 				// (fewer leave her the deeper she is: they have further to rise and each one grows on the way, so the
@@ -1875,6 +1894,16 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 		return;
 	}
 	if (Cmd == TEXT("boatview")) { DbgBoatView = FCString::Atoi(*Arg); return; }
+	if (Cmd == TEXT("off"))
+	{
+		// test hook: parts of the scuba side switched off, to find what a frame costs (1 the regulator's sound, 2 its
+		// bubbles, 4 the rack and flag on the boat, 8 the worn set)
+		DbgOff = FCString::Atoi(*Arg);
+		BoatRack->SetVisibility(!(DbgOff & 4)); BoatFlag->SetVisibility(!(DbgOff & 4));
+		UE_LOG(LogTemp, Log, TEXT("KRScuba off %d"), DbgOff);
+		return;
+	}
+	if (Cmd == TEXT("prof")) { bDbgProf = FCString::Atoi(*Arg) != 0; ProfN = 0; for (double& M : ProfMs) M = 0; return; }
 	if (Cmd == TEXT("light")) { const int32 V = FCString::Atoi(*Arg); TorchMode = V == 1 ? 1 : V == 0 ? 2 : 0; return; }
 	if (!bDiving) return;
 	if (Cmd == TEXT("psi")) { Sc.Psi = DvClamp(FCString::Atod(*Arg), 0, KeysScuba::FullPsi); }
