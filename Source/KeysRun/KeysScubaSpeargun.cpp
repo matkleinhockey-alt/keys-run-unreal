@@ -8,7 +8,7 @@ namespace
 {
 	FLinearColor HpHex(uint32 H) { return FLinearColor::FromSRGBColor(FColor(uint8(H >> 16), uint8(H >> 8), uint8(H))); }
 
-	const uint32 HpBlack = 0x131518, HpOlive = 0x56663a, HpOliveDark = 0x3f4c2d, HpSteel = 0xa7adb3, HpShaft = 0x17191c, HpGrey = 0x55595e, HpMono = 0xd9dde0;
+	const uint32 HpBlack = 0x131518, HpOlive = 0x4b5a33, HpOliveDark = 0x394529, HpSteel = 0xa7adb3, HpShaft = 0x17191c, HpGrey = 0x55595e, HpMono = 0xd9dde0;
 
 	// smooth-shaded triangle with the winding Unreal wants (front face: Dot(Cross(B-A, C-A), N) < 0)
 	void HpTri(FKeysMesh& M, const FVector& A, const FVector& B, const FVector& C, const FVector& NA, const FVector& NB, const FVector& NC, const FLinearColor& Col)
@@ -300,7 +300,7 @@ namespace KeysSpeargun
 		const double Front = ShaftPoke * .5, Back = Front - ShaftLen;
 		Sh.Surf = SurfMetalPaint;
 		HpTube(Sh, At + FVector(Back, 0, 0), At + FVector(Front, 0, 0), ShaftR, ShaftR, bLod ? 5 : 8, Shaft, true);
-		AddHead(Sh, At + FVector(Front + HeadLen, 0, 0), FVector::XAxisVector, FVector::ZAxisVector, 1, 14, bLod);
+		AddHead(Sh, At + FVector(Front + HeadLen, 0, 0), FVector::XAxisVector, FVector::ZAxisVector, HeadScale, 22, bLod);
 		// the notches the wishbone drops into (shark fins), and the slide ring with its eye
 		Sh.Surf = SurfMetalPaint;
 		const double FinX = BandAnchorX - BandLong - WishBack - (BarrelLen + Front);
@@ -308,8 +308,8 @@ namespace KeysSpeargun
 			for (int32 k = 0; k < 2; k++)
 				Sh.AddRoundBox(At + FVector(FinX - .008 - k * .06, 0, ShaftR + .0025), FVector(.014, .0026, .007), .001, Shaft, FQuat::Identity, 1);
 		Sh.Surf = SurfSteel;
-		HpTube(Sh, At + FVector(RingX - .007, 0, 0), At + FVector(RingX + .007, 0, 0), .0068, .0068, 8, Steel, true);
-		HpTube(Sh, At + FVector(RingX, 0, -.0068), At + FVector(RingX, 0, -.013), .0026, .0026, 5, Steel, true);
+		HpTube(Sh, At + FVector(RingX - .009, 0, 0), At + FVector(RingX + .009, 0, 0), .0078, .0078, 8, Steel, true);
+		HpTube(Sh, At + FVector(RingX, 0, -.0078), At + FVector(RingX, 0, -.016), .003, .003, 5, Steel, true);
 		Sh.Surf = SurfDefault;
 	}
 
@@ -327,13 +327,13 @@ namespace KeysSpeargun
 			const double t = double(i) / Seg;
 			const FVector P = Ring * ((1 - t) * (1 - t)) + Mid * (2 * t * (1 - t)) + Hook * (t * t);
 			// braided: the cable's colour alternates strand by strand
-			HpTube(M, Prev, P, .0017, .0017, 5, i % 2 ? Cable : HpHex(0x7f858a));
+			HpTube(M, Prev, P, .0026, .0026, 5, i % 2 ? Cable : HpHex(0x7f858a));
 			Prev = P;
 		}
 		// the crimped sleeves at each end
 		const FVector T0 = (Mid - Ring).GetSafeNormal(), T1 = (Mid - Hook).GetSafeNormal();
-		HpTube(M, Ring + T0 * .012, Ring + T0 * .034, .0032, .0032, 6, Crimp, true);
-		HpTube(M, Hook + T1 * .012, Hook + T1 * .03, .0032, .0032, 6, Crimp, true);
+		HpTube(M, Ring + T0 * .012, Ring + T0 * .04, .0046, .0046, 6, Crimp, true);
+		HpTube(M, Hook + T1 * .012, Hook + T1 * .036, .0046, .0046, 6, Crimp, true);
 		M.Surf = SurfDefault;
 	}
 
@@ -356,7 +356,7 @@ namespace KeysSpeargun
 		// the shaft where it lies when the gun is loaded, and its leader
 		const FVector Off(BarrelLen + ShaftPoke * .5, 0, RailY);
 		BuildShaft(Shaft, true, Off);
-		BuildLeader(Shaft, Off + FVector(RingX, 0, -.013), LeaderHook(), LeaderLen);
+		BuildLeader(Shaft, Off + FVector(RingX, 0, -.016), LeaderHook(), LeaderLen);
 	}
 
 	void AddShaftThroughFish(FKeysMesh& M, double HalfY, double HalfZ)
@@ -367,7 +367,7 @@ namespace KeysSpeargun
 		const double Sc = 1.25;
 		const double Through = FMath::Sqrt(FMath::Square(HalfY * Dn.Y) + FMath::Square(HalfZ * Dn.Z)) / FMath::Max(.2, Dn.Y * Dn.Y + Dn.Z * Dn.Z) + .03;
 		const FVector Collar = C + Dn * Through;                    // the back of the head's collar sits at the skin
-		const FVector Tip = Collar + Dn * (HeadLen * Sc);
+		const FVector Tip = Collar + Dn * (.17 * Sc);
 		const FVector Tail = C - Dn * (Through + .5);
 		const uint8 Keep = M.Surf;
 		M.Surf = SurfMetalPaint;

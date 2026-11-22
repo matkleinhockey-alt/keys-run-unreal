@@ -16,13 +16,14 @@ namespace KeysSpeargun
 {
 	constexpr double BarrelLen = .78, BarrelR = .014, ShaftR = .0035, BandR = .0075;
 	constexpr double RailY = BarrelR + .0045 + ShaftR;          // the shaft's axis above the barrel's (it lies on the rail)
-	constexpr double ShaftPoke = .3, ShaftLen = 1.0;            // the shaft's mesh has its origin half the poke behind the head's base
-	constexpr double HeadLen = .17;                             // tip to the back of the collar
+	constexpr double ShaftPoke = .15, ShaftLen = .92;           // the shaft's mesh has its origin half the poke behind the head's base
+	constexpr double HeadScale = 1.3;                           // the head on the gun, against AddHead's own sizes
+	constexpr double HeadLen = .17 * HeadScale;                 // tip to the back of the collar
 	constexpr double RollerX = BarrelLen - .04, RollerR = .021, RollerY = .034, RollerHalfW = .015;
 	constexpr double BandAnchorX = RollerX, BandShort = .32, BandLong = .5;
 	constexpr double WishBack = .03;                            // the wishbone's bridle runs this far back from the band ends to the shaft's notch
-	constexpr double RingX = -.16;                              // the slide ring, in the shaft mesh's frame
-	constexpr double LeaderLen = .36;
+	constexpr double RingX = -.045;                              // the slide ring, in the shaft mesh's frame
+	constexpr double LeaderLen = .34;
 	inline double BandZ(double BandRad) { return RollerR + BandRad; }   // a band lies on top of its roller
 	inline FVector LeaderHook() { return FVector(BarrelLen - .012, 0, -BarrelR - .008); }
 	inline FVector ReelAt() { return FVector(.05, 0, -.062); }
