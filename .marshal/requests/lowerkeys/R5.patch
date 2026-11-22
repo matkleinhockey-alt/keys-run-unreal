@@ -1,0 +1,24 @@
+diff --git a/Source/KeysRun/KeysBoatPawn.cpp b/Source/KeysRun/KeysBoatPawn.cpp
+--- a/Source/KeysRun/KeysBoatPawn.cpp	2026-11-22 01:50:28
++++ b/Source/KeysRun/KeysBoatPawn.cpp	2026-11-22 01:50:28
+@@ -1,4 +1,5 @@
+ #include "KeysBoatPawn.h"
++#include "KeysGeoReal.h"
+ #include "KeysMangroveLife.h"
+ #include "Components/TextRenderComponent.h"
+ #include "KeysGarden.h"
+@@ -1582,6 +1583,14 @@
+ 		Out.Add({TEXT("Boot Key flat"), TEXT("mangrove flat"), -1150, 452});
+ 	}
+ 	for (const FHump& Hm : Humps()) Out.Add({Hm.Name, Hm.bPatch ? TEXT("patch reef") : TEXT("offshore hump"), Hm.X, ChainZ(Hm.X) + Hm.DZ});
++	// the Lower Keys and Key Largo (KeysGeoReal::Sites, from Tools/geo/sites_p3.py): the reefs by name, and the open
++	// water asked for by name off the towns and harbors
++	if (RealMap())
++		for (const KeysGeoReal::FSite& S : KeysGeoReal::Sites())
++		{
++			if (S.Kind == TEXT("reef")) Out.Add({S.Name, TEXT("the reef"), S.X, S.Z - 90});
++			else if (S.Kind == TEXT("spot")) Out.Add({S.Name, TEXT("open water"), S.X, S.Z});
++		}
+ 	if (const AKeysLife* L = AKeysLife::Get(this))
+ 	{
+ 		TArray<FKeysMarker> Mk;

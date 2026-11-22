@@ -1,0 +1,32 @@
+# named places (Tools/geo/sites_p3.py): kind|name|x|z|x2|z2|value. Marina names are invented.
+us1|US-1|23500.0|0.0|27000.0|0.0|0.00
+light|Molasses Reef Light|26260.0|-2640.0|0.0|0.0|1.50
+light|Carysfort Reef Light|34020.0|-8190.0|0.0|0.0|1.30
+light|Elbow Reef Light|31570.0|-6060.0|0.0|0.0|2.20
+reef|Molasses Reef|26248.6|-2870.5|0.0|0.0|5.90
+reef|French Reef|27340.0|-3250.0|0.0|0.0|1.20
+reef|Grecian Rocks|29720.0|-5340.0|0.0|0.0|1.20
+reef|Key Largo Dry Rocks|30070.0|-5730.0|0.0|0.0|1.40
+reef|Elbow Reef|31570.0|-6060.0|0.0|0.0|2.20
+reef|Carysfort Reef|34020.0|-8190.0|0.0|0.0|1.30
+reef|Pickles Reef|24630.0|-2240.0|0.0|0.0|1.90
+marina|Mosquito Bank Marina|24249.3|-5716.5|24310.0|-5660.0|1.80
+marina|Hammock Point Docks|25101.0|-6019.4|25240.0|-5830.0|1.91
+marina|Sound Side Landing|27106.7|-7500.8|27060.0|-7530.0|2.14
+marina|Angelfish Cut Docks|32358.2|-12281.9|32380.0|-12340.0|2.97
+marina|Dispatch Slough Basin|32953.3|-12180.0|33070.0|-11980.0|2.20
+marina|North Sound Landing|33423.5|-12731.2|33280.0|-12910.0|1.96
+bridge|Card Sound Bridge|29708.0|-12328.0|29915.6|-12135.6|0.00
+bridge|Jewfish Creek Bridge|27801.7|-9055.2|28231.9|-8420.2|0.00
+water|Largo Sound|27390.0|-6660.0|0.0|0.0|1.00
+water|Blackwater Sound|26440.0|-8790.0|0.0|0.0|2.40
+water|Barnes Sound|29000.0|-11050.0|0.0|0.0|2.80
+water|Card Sound|31440.0|-12960.0|0.0|0.0|3.70
+water|Tarpon Basin|25680.0|-7100.0|0.0|0.0|1.60
+water|Buttonwood Sound|24630.0|-6660.0|0.0|0.0|2.40
+town|Key Largo|24884.5|-6069.2|0.0|0.0|0.00
+spot|Off Rock Harbor|25170.0|-5110.0|0.0|0.0|0.00
+spot|Largo Sound|27570.0|-6640.0|0.0|0.0|0.00
+spot|Off Carysfort Reef|33770.0|-8350.0|0.0|0.0|0.00
+spot|Blackwater Sound|26440.0|-8790.0|0.0|0.0|0.00
+spot|Barnes Sound|29000.0|-11050.0|0.0|0.0|0.00

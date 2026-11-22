@@ -1,0 +1,195 @@
+# aids to navigation: NOAA ENC Direct to GIS (public domain). x z kind number lit name
+23939.2 -6163.9 R 58 1 Baker Cut Light 58
+26425.9 -5936.7 G 3 0 Largo Sound Channel Daybeacon 3
+29738.1 -12154.1 R 24 1 Barnes Point Light 24
+29736.6 -11846.1 G 27 0 Barnes Point Daybeacon 27
+28574.0 -8140.3 R 16 0 Garden Cove Daybeacon 16
+28567.4 -8118.4 G 15 0 Garden Cove Daybeacon 15
+28619.8 -8096.8 G 13 0 Garden Cove Daybeacon 13
+28779.4 -8062.9 G 9 0 Garden Cove Daybeacon 9
+28786.5 -8079.5 R 10 0 Garden Cove Daybeacon 10
+28945.9 -8159.1 R 4 0 Garden Cove Daybeacon 4
+32677.6 -12488.7 G 3 0 Grayvik Daybeacon 3
+32804.3 -12120.4 R 2 0 Harbor Course Creek Daybeacon 2
+33271.7 -12924.6 R 12 0 Angelfish Creek Daybeacon 12
+33742.6 -13429.7 G 23 0 Broad Creek Daybeacon 23
+33222.7 -11919.0 R 4 0 Dispatch Creek Channel Daybeacon 4
+33317.2 -12138.6 G 11 0 Villa Channel Daybeacon 11
+33362.2 -12126.0 R 10 0 Villa Channel Daybeacon 10
+33377.4 -12084.5 G 7 0 Villa Channel Daybeacon 7
+33441.3 -12043.9 R 4 0 Villa Channel Daybeacon 4
+34152.9 -13191.7 G 17 0 Broad Creek Daybeacon 17
+34025.0 -12520.8 R 4 0 Angelfish Creek Daybeacon 4
+24173.0 -6310.7 G 57 0 Baker Cut Daybeacon 57A
+24205.0 -5581.3 R 2 1 Harborage Yacht Club Entrance Light 2
+25328.6 -7243.4 R 52 0 Grouper Creek Daybeacon 52A
+25322.4 -5904.6 G 3 0 Madeira Drive Canal Dayeacon 3
+28460.3 -7921.6 R 26 0 Hawk Channel Garden Cove Daybeacon 26
+28814.7 -8092.7 R 8 0 Garden Cove Daybeacon 8
+28878.5 -8105.8 R 6 0 Garden Cove Daybeacon 6
+30879.3 -12916.3 R 16 0 Card Bank Daybeacon 16
+33213.7 -12972.1 R 14 1 Angelfish Creek Light 14
+33001.2 -12030.2 G 19 0 Dispatch Creek Channel Daybeacon 19
+33103.8 -11978.9 G 13 0 Dispatch Creek Channel Daybeacon 13
+33426.2 -12035.3 G 3 0 Villa Channel Daybeacon 3
+34029.2 -13370.3 R 20 0 Broad Creek Daybeacon 20
+34320.5 -12678.7 R 8 0 Broad Creek Daybeacon 8
+24333.2 -5706.5 R 8 0 Mariners Club Marina Daybeacon 8
+24877.4 -5586.5 G 1 1 Molasses Reef Marina Channel Light 1
+25399.2 -5491.3 R 2 1 Mosquito Bank Light 2
+26093.6 -7227.8 R 46 0 Tarpon Basin Daybeacon 46A
+26204.3 -7376.1 R 44 0 Tarpon Basin Daybeacon 44
+26172.5 -7250.9 R 46 1 Tarpon Basin Light 46
+26124.1 -6230.7 G 11 0 Largo Sound Channel Daybeacon 11
+26150.3 -6165.6 R 10 0 Largo Sound Channel Daybeacon 10
+26193.5 -6104.1 G 7 0 Largo Sound Channel Daybeacon 7
+28341.7 -9417.4 G 29 1 Jewfish Creek Light 29
+28325.0 -7764.1 G 27 0 Hawk Channel Garden Cove Daybeacon 27
+28450.0 -8116.1 G 19 0 Garden Cove Daybeacon 19
+28511.6 -8121.0 G 17 0 Garden Cove Daybeacon 17
+29123.4 -6637.5 G 33 0 Key Largo Daybeacon 33
+32657.4 -12474.4 R 2 0 Grayvik Daybeacon 2
+33083.1 -12002.3 R 16 0 Dispatch Creek Channel Daybeacon 16
+33753.1 -10850.5 G 25 1 Key Largo Light 25
+24255.1 -6402.4 R 56 0 Baker Cut Daybeacon 56A
+24340.9 -5670.9 R 4 0 Mariners Club Marina Daybeacon 4
+25494.3 -7450.9 R 52 0 Grouper Creek Daybeacon 52
+24872.1 -5618.2 G 5 0 Molasses Reef Marina Channel Daybeacon 5
+25398.0 -5815.2 R 6 0 Port Largo Channel Daybeacon 6
+26025.5 -7204.5 R 48 1 Tarpon Basin Light 48
+26153.8 -6142.7 R 8 0 Largo Sound Channel Daybeacon 8A
+26432.6 -5948.6 R 4 0 Largo Sound Channel Daybeacon 4
+27693.1 -8612.6 R 38 1 Blackwater Sound Light 38
+29751.1 -12153.5 G 23 0 Barnes Point Daybeacon 23
+29719.6 -11850.2 R 26 1 Barnes Point Light 26
+28691.9 -8072.6 G 11 0 Garden Cove Daybeacon 11A
+28742.2 -8088.7 R 12 0 Garden Cove Daybeacon 12
+33504.7 -13418.5 G 29 0 Broad Creek Daybeacon 29
+33262.6 -12178.8 G 15 0 Villa Channel Daybeacon 15
+33408.6 -12057.7 R 6 0 Villa Channel Daybeacon 6
+33967.7 -12607.7 G 5 0 Angelfish Creek Daybeacon 5
+33990.5 -12637.4 R 8 0 Angelfish Creek Daybeacon 8
+34330.0 -10300.5 R 4 0 Turtle Harbor Daybeacon 4
+35247.9 -12250.9 R 24 0 Old Rhodes Key Daybeacon 24
+25336.1 -7248.2 G 53 0 Grouper Creek Daybeacon 53
+24872.0 -5601.4 G 3 0 Molasses Reef Marina Channel Daybeacon 3
+25128.7 -5757.3 R 4 0 Hidden Bay Daybeacon 4
+25335.3 -5885.1 G 1 0 Madeira Drive Canal Dayeacon 1
+26220.3 -7371.9 G 43 0 Grouper Creek Daybeacon 43
+26692.6 -7976.4 R 40 0 Blackwater Sound Daybeacon 40
+26142.2 -6140.2 G 9 1 Largo Sound Channel Light 9
+26264.7 -6056.0 G 5 0 Largo Sound Channel Daybeacon 5
+26271.1 -6059.5 R 6 0 Largo Sound Channel Daybeacon 6
+29744.0 -12008.0 G 25 0 Barnes Point Daybeacon 25
+28385.6 -7974.2 R 22 0 Hawk Channel Garden Cove Daybeacon 22
+28610.0 -7156.7 R 32 0 Key Largo Daybeacon 32A
+28962.8 -8120.4 G 3 0 Garden Cove Daybeacon 3
+30589.0 -12646.4 G 21 0 Card Bank Daybeacon 21
+33044.0 -12011.6 G 17 0 Dispatch Creek Channel Daybeacon 17
+33225.0 -12196.5 G 21 0 Villa Channel Daybeacon 21
+33283.2 -12182.7 R 16 0 Villa Channel Daybeacon 16
+33505.8 -12816.2 R 10 0 Angelfish Creek Daybeacon 10
+33203.7 -11937.5 R 6 0 Dispatch Creek Channel Daybeacon 6
+33317.5 -12166.1 R 14 0 Villa Channel Daybeacon 14
+33286.7 -11871.3 R 2 1 Ocean Reef Harbor Entrance Light 2
+33395.8 -12083.2 R 8 0 Villa Channel Daybeacon 8
+34056.5 -12418.8 G 3 0 Angelfish Creek Daybeacon 3A
+34084.9 -12379.7 R 2 1 Angelfish Creek Light 2
+34394.5 -12497.7 R 2 0 Broad Creek Daybeacon 2
+34643.2 -10308.5 G 3 0 Turtle Harbor Daybeacon 3
+24399.5 -6519.5 G 55 1 Baker Cut Light 55
+24334.7 -5686.3 R 6 0 Mariners Club Marina Daybeacon 6
+24881.7 -5584.8 R 2 1 Molasses Reef Marina Channel Light 2
+25388.7 -5690.6 R 4 0 Port Largo Channel Daybeacon 4
+27828.3 -8684.8 R 36 0 Blackwater Sound Daybeacon 36
+28246.1 -9335.8 R 30 0 Jewfish Creek Daybeacon 30
+28397.7 -8009.2 G 21 0 Hawk Channel Garden Cove Daybeacon 21
+28427.7 -7945.2 R 24 0 Hawk Channel Garden Cove Daybeacon 24
+28629.5 -8125.9 R 14 0 Garden Cove Daybeacon 14
+28825.3 -8036.5 G 7 0 Garden Cove Daybeacon 7
+32667.9 -12497.7 G 1 0 Grayvik Daybeacon 1
+32814.7 -12114.2 G 1 0 Harbor Course Creek Daybeacon 1
+33499.3 -13432.6 R 30 0 Broad Creek Daybeacon 30
+33112.0 -11994.1 R 10 0 Dispatch Creek Channel Daybeacon 10
+33157.4 -11964.8 R 8 0 Dispatch Creek Channel Daybeacon 8
+33678.1 -13437.1 R 26 0 Broad Creek Daybeacon 26
+33717.2 -13444.2 R 24 0 Broad Creek Daybeacon 24
+33193.8 -11923.8 G 5 0 Dispatch Creek Channel Daybeacon 5
+34223.7 -12925.7 G 13 0 Broad Creek Daybeacon 13
+34057.5 -12440.6 R 2 0 Angelfish Creek Daybeacon 2A
+34316.8 -12757.0 G 9 0 Broad Creek Daybeacon 9
+34327.2 -12622.1 R 6 0 Broad Creek Daybeacon 6
+34343.1 -12566.3 G 3 0 Broad Creek Daybeacon 3
+24267.5 -6388.6 G 57 0 Baker Cut Daybeacon 57
+24316.7 -5638.5 G 1 0 Mariners Club Marina Daybeacon 1
+24350.9 -5650.1 R 2 0 Mariners Club Marina Daybeacon 2
+25663.1 -7403.0 R 50 1 Tarpon Basin Light 50
+25832.2 -7314.3 R 48 0 Tarpon Basin Daybeacon 48A
+25435.4 -5925.1 G 7 1 Port Largo Channel Light 7
+25788.8 -5729.6 R 2 0 Madeira Drive Canal Daybeacon 2
+28096.7 -9154.3 R 32 0 Jewfish Creek Daybeacon 32
+30563.1 -12657.4 R 20 1 Card Bank Light 20
+30892.2 -12903.0 G 17 1 Card Bank Light 17
+29405.7 -8038.5 R 32 1 Key Largo Light 32
+32673.5 -12466.0 R 4 0 Grayvik Daybeacon 4
+33021.5 -12034.8 R 20 0 Dispatch Creek Channel Daybeacon 20
+33442.0 -12012.1 G 1 0 Villa Channel Daybeacon 1
+34063.0 -12400.7 G 3 0 Angelfish Creek Daybeacon 3
+35269.1 -11746.1 R 2 0 Turtle Harbor West Shoal Daybecon 2
+24300.2 -6456.4 R 56 0 Baker Cut Daybeacon 56
+25215.5 -7175.3 R 54 1 Grouper Creek Light 54
+25156.8 -5733.4 R 2 0 Hidden Bay Daybeacon 2
+25414.3 -5931.3 R 8 0 Port Largo Channel Daybeacon 8
+26177.4 -7494.8 R 42 0 Tarpon Basin Daybeacon 42
+26198.5 -6109.9 R 8 0 Largo Sound Channel Daybeacon 8
+27846.0 -8683.5 G 37 0 Blackwater Sound Daybeacon 37
+28019.6 -8964.6 R 34 1 Jewfish Creek Light 34
+28235.9 -9306.7 G 31 0 Jewfish Creek Daybeacon 31
+29890.2 -12321.8 R 22 1 Barnes Point Light 22
+28517.6 -8141.8 R 18 0 Garden Cove Daybeacon 18
+28478.9 -7948.5 G 25 0 Hawk Channel Garden Cove Daybeacon 25
+28736.1 -8062.9 G 11 0 Garden Cove Daybeacon 11
+28891.2 -8080.9 G 5 0 Garden Cove Daybeacon 5
+29020.3 -8198.8 R 2 0 Garden Cove Daybeacon 2
+29020.5 -8143.9 G 1 0 Garden Cove Daybeacon 1
+30733.7 -12794.0 R 18 0 Card Bank Daybeacon 18
+30745.9 -12783.9 G 19 0 Card Bank Daybeacon 19
+33579.3 -13451.2 G 27 0 Broad Creek Daybeacon 27
+33148.1 -11947.1 G 9 0 Dispatch Creek Channel Daybeacon 9
+33237.9 -12198.3 R 20 0 Villa Channel Daybeacon 20
+33210.7 -11901.7 G 3 0 Dispatch Creek Channel Daybeacon 3
+33340.0 -12143.8 R 12 0 Villa Channel Daybeacon 12
+33352.1 -12110.3 G 9 0 Villa Channel Daybeacon 9
+33452.9 -12026.1 R 2 0 Villa Channel Daybeacon 2
+34010.3 -12559.2 R 6 1 Angelfish Creek Light 6
+34072.5 -12371.5 G 1 0 Angelfish Creek Daybeacon 1
+34385.7 -12494.5 G 1 0 Broad Creek Daybeacon 1
+34897.0 -10367.8 G 1 0 Turtle Harbor Daybeacon 1
+24922.6 -4132.1 G 37 0 Key Largo Daybeacon 37
+31601.2 -6013.4 R 6 1 Elbow Reef Light 6
+26230.5 -2654.8 R 10 1 Molasses Reef Light 10
+26586.0 -5844.7 R 2 1 Largo Sound Channel Light 2
+26449.6 -4980.9 G 35 1 Mosquito Bank Light 35
+27359.0 -10461.1 G 1 0 Manatee Creek Approach Daybeacon 1
+27274.4 -11066.4 G 9 0 Manatee Creek Daybeacon 9
+27170.6 -10947.9 R 2 0 The Moorings Daybeacon 2
+27315.4 -11025.7 R 6 0 Manatee Creek Daybeacon 6
+27291.2 -11027.7 G 5 0 Manatee Creek Daybeacon 5
+27143.8 -10947.9 G 1 0 The Moorings Daybeacon 1
+27285.3 -11078.3 R 10 0 Manatee Creek Daybeacon 10
+27911.3 -10899.9 R 2 0 Manatee Bay Daybeacon 2
+27427.5 -10480.9 R 2 0 Manatee Creek Approach Daybeacon 2
+27646.0 -11886.5 G 5 0 Manatee Bay Daybeacon 5
+27131.5 -10966.7 G 3 0 The Moorings Daybeacon 3
+27314.6 -11047.4 R 8 0 Manatee Creek Daybeacon 8
+27155.9 -10967.8 R 4 0 The Moorings Daybeacon 4
+27690.1 -11772.7 G 3 0 Manatee Bay Daybeacon 3
+31181.3 -9061.4 G 0 1 Basin Hills Light 31BH
+32986.4 -10297.8 G 27 0 Key Largo Daybeacon 27
+34113.2 -10166.8 R 6 0 Turtle Harbor Daybeacon 6
+31927.8 -9566.9 G 29 0 Key Largo Daybeacon 29
+34313.1 -10001.7 G 5 0 Turtle Harbor Daybeacon 5
+31272.2 -10350.3 R 6 0 6
+31242.1 -10344.0 G 7 0 7
+31307.4 -10326.9 R 4 0 4
+31288.4 -10312.9 G 3 0 3

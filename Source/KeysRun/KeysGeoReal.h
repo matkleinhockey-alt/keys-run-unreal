@@ -51,6 +51,22 @@ namespace KeysGeoReal
 	// metres outside the edge of the nearest way dredged from a canal's mouth to deep water (negative in it), 1e9 if none near
 	double WayOutDist(double X, double Z);
 
+	// a named place of a later phase (Tools/geo/sites_p3.py, <phase>_sites.txt), for the hub to build on. Kind: "light"
+	// (a reef light: Value is the depth it stands in), "reef" (Value the depth on its crest), "marina" (an invented
+	// name; X2, Z2 a point in open water off it, Value the depth there), "bridge" (a road bridge that is not on the
+	// chain line, from X, Z to X2, Z2), "spot" (somewhere worth a teleport: Value is a heading), "town" (a place name)
+	struct FSite
+	{
+		FString Kind, Name;
+		double X = 0, Z = 0, X2 = 0, Z2 = 0, Value = 0;
+	};
+	const TArray<FSite>& Sites();
+	// US-1 itself: the chain line carries the road only between these x. West of RoadX0 (Key West) and east of RoadX1
+	// (where US-1 leaves Key Largo for the mainland) the line goes on as the axis of the keys, with no road or bridge
+	// on it. The map's own ends when no phase says otherwise.
+	double RoadX0();
+	double RoadX1();
+
 	// mangrove cover on the height grid's cells (Tools/geo/bake_mangrove.py): 0 none, 1..127 the fringe wading in the
 	// shallows, 200..255 mangrove on (low) ground
 	uint8 MangroveCell(int32 I, int32 J);
@@ -63,11 +79,12 @@ namespace KeysGeoReal
 	int32 CellI0();
 	int32 CellJ0();
 
-	// The map is baked in phases, one .kgeo each, that tile it: p1 (the Middle Keys), p2 (the Upper Keys) and p2_bay (the
-	// strip of Florida Bay north of p1). Everything below answers for the whole map, whichever files a point falls in.
+	// The map is baked in phases, one .kgeo each, that tile it: p1 (the Middle Keys), p2 (the Upper Keys), p2_bay (the
+	// strip of Florida Bay north of p1), p3 (the Lower Keys), p4 (Key Largo) and p4_bay (the bay north of the rest).
+	// Everything below answers for the whole map, whichever files a point falls in.
 	bool Load(const TCHAR* Phase);    // the first phase alone
 	bool Add(const TCHAR* Phase);     // another phase beside what is loaded (false, and no change, if its file is missing)
-	bool LoadAll();                   // p1 and every later phase that is there: the real map
+	bool LoadAll();                   // p1 and every later phase that is there (a missing one is left out): the real map
 	bool Loaded();
 	int32 Phases();                   // how many files are loaded
 	int32 PhaseAt(double X, double Z);   // which of them a point is in (0 = p1)
@@ -77,6 +94,9 @@ namespace KeysGeoReal
 	double SizeZ();
 	double Height(double X, double Z);   // metres: + land, - the depth of water
 	double Shore(double X, double Z);    // metres from the shoreline: + at sea, - on land
+	// is any cell of this box on land or within D metres of it? (what scenery built by tile asks before it makes one:
+	// most of the map is open water)
+	bool ShoreUnder(double X0, double Z0, double X1, double Z1, double D);
 	int32 IslandAt(double X, double Z);  // the nearest island's index
 	double ChainZ(double X);             // US-1's line
 	double ChainSlope(double X);
