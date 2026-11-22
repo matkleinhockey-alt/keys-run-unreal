@@ -2319,6 +2319,20 @@ void AKeysBoatPawn::UpdateBoat(double Dt, double T)
 				if (T - CollideMsgT > 2) { CollideMsgT = T; ShowToast(TEXT("Bumped a bridge piling!")); }
 			}
 		}
+	// private docks, their lifts and the boats tied up at them (KeysDocks): she stops against them. A hull that is
+	// already inside one (set down there by a test command) is let out again.
+	if (RealMap())
+		for (const double OffL : {0.0, S.Len * .42, -S.Len * .38})
+		{
+			const double Mg = S.Beam * .5 - .15;
+			if (KeysDocks::InFootprint(NX + Fx * OffL, NZ + Fz * OffL, Mg) && !KeysDocks::InFootprint(X + Fx * OffL, Z + Fz * OffL, Mg))
+			{
+				NX = X; NZ = Z;
+				Speed *= ((OffL >= 0) == (Speed >= 0)) ? .1 : .6;
+				if (T - CollideMsgT > 3) { CollideMsgT = T; ShowToast(TEXT("Bumped a dock! Back off with S.")); }
+				break;
+			}
+		}
 	X = Clamp(NX, WBX0, WBX1);
 	Z = Clamp(NZ, WBZ0, WBZ1);
 	if (NX < WBX0 + 1 || NX > WBX1 - 1 || NZ < WBZ0 + 1 || NZ > WBZ1 - 1)

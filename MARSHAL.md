@@ -149,3 +149,7 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   (Marathon, Key Colony) are not cut; one mouth has no deep water in reach; packaged perf not run.
 - 2026-11-22: `lane/lowerkeys` created from `main` (c5d3ab2 + this entry) for map Phase 3, run as a background agent.
   The marshal fixes dock collision on `main` meanwhile (`KeysBoatPawn`, `KeysDocks`).
+- 2026-11-22: dock collision (marshal, `KeysBoatPawn.cpp`): the player's hull stops against a private dock, its lift
+  and a boat tied up there (`KeysDocks::InFootprint` at bow, middle and stern, half a beam of margin), with a toast;
+  a hull already inside one is let out. Tested by driving at an open-water dock (stops 4.8 m off the head, backs
+  away) and a canal dock. Not covered: traffic boats, the yards' floats and fuel dock, marina and estate docks.
