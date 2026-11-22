@@ -1,0 +1,307 @@
+# aids to navigation: NOAA ENC Direct to GIS (public domain). x z kind number lit name
+10659.8 425.6 R 44 1 Long Key Light 44
+11070.3 -268.2 G 1 0 Channel Five Daybeacon 1
+8677.5 -2111.3 R 2 0 Long Key Daybeacon 2
+8288.4 -3330.1 R 2 1 Arsenic Bank Light 2
+8353.9 -3279.7 G 1 1 Arsenic Bank Light 1
+9352.9 -1215.0 R 4 0 Long Key Bank Daybeacon 4X
+10156.9 -861.2 G 3 0 Layton Channel Daybeacon 3
+9615.1 -1322.9 R 2 0 Long Key Bank Daybeacon 2X
+10918.8 -1617.9 G 1 0 Long Key Daybeacon 1X
+9747.0 -1998.2 G 1 1 Long Key Light 1
+10226.6 -937.2 G 1 0 Layton Channel Daybeacon 1
+12589.4 -1179.1 R 4 0 Matecumbe Harbor Daybeacon 4
+12564.2 -792.1 G 13 0 Caloosa Cove Channel Daybeacon 13
+12591.9 -1143.4 R 6 0 Matecumbe Harbor Daybeacon 6
+12665.8 -818.8 R 16 0 Caloosa Cove Channel Daybeacon 16
+12655.9 -818.7 G 17 0 Caloosa Cove Channel Daybeacon 17
+12477.9 -791.7 R 10 0 Caloosa Cove Channel Daybeacon 10
+12396.5 -841.2 G 9 0 Caloosa Cove Channel Daybeacon 9
+12587.1 -1212.6 R 2 0 Matecumbe Harbor Daybeacon 2
+12629.2 -796.1 R 14 0 Caloosa Cove Channel Daybeacon 14
+12739.8 -892.9 G 21 0 Caloosa Cove Channel Daybeacon 21
+12284.8 -503.9 R 2 1 Caloosa Cove Channel Light 2
+12279.8 -600.6 R 4 0 Caloosa Cove Channel Daybeacon 4
+12299.2 -682.5 R 6 0 Caloosa Cove Channel Daybeacon 6
+11369.5 -532.9 R 4 0 Florida Bay Channel Five Daybeacon 4
+14369.2 -2280.4 R 16 0 Lignumvitae Channel Daybeacon 16
+12380.5 -820.2 R 8 0 Caloosa Cove Channel Daybeacon 8
+14326.6 -2265.0 G 15 0 Lignumvitae Channel Daybeacon 15
+12740.0 -880.7 R 20 0 Caloosa Cove Channel Daybeacon 20
+12693.3 -842.1 R 18 0 Caloosa Cove Channel Daybeacon 18
+12691.6 -854.5 G 19 0 Caloosa Cove Channel Daybeacon 19
+12593.2 -812.8 G 15 0 Caloosa Cove Channel Daybeacon 15
+12595.9 -1186.7 G 3 0 Matecumbe Harbor Daybeacon 3
+12593.9 -1226.6 G 1 0 Matecumbe Harbor Daybeacon 1
+12582.7 -1284.8 R 2 1 Lower Matecumbe Light 2
+12566.6 -780.9 R 12 0 Caloosa Cove Channel Daybeacon 12
+12611.7 -1120.2 G 7 0 Matecumbe Harbor Daybeacon 7
+12487.4 -808.2 G 11 0 Caloosa Cove Channel Daybeacon 11
+14716.4 -1768.0 G 9 0 Lignumvitae Channel Daybeacon 9
+14947.5 -1902.9 G 9 0 Indian Key Channel Daybeacon 9A
+15019.6 -1792.5 R 8 0 Indian Key Channel Daybeacon 8A
+14980.3 -1923.8 R 10 0 Indian Key Channel Daybeacon 10A
+14991.9 -1810.8 G 7 0 Indian Key Channel Daybeacon 7A
+15039.5 -1851.6 R 10 0 Indian Key Channel Daybeacon 10
+14975.1 -1739.2 G 7 0 Indian Key Channel Daybeacon 7
+14582.7 -1324.6 R 4 0 Lignumvitae Channel Daybeacon 4
+14696.3 -1459.0 R 6 0 Lignumvitae Channel Daybeacon 6
+16070.9 -281.1 G 43 0 Alligator Reef Daybeacon 43
+15914.9 -1526.0 G 3 0 Upper Matecumbe West Channel Daybeacon 3
+15852.5 -1697.3 G 9 0 Upper Matecumbe West Channel Daybeacon 9
+15546.8 -1605.1 R 6 0 Tea Table Channel Daybeacon 6
+15233.5 -1128.8 R 2 0 Indian Key Channel Daybeacon 2
+15076.6 -1524.3 G 5 0 Indian Key Channel Daybeacon 5
+15005.6 -1859.2 G 9 0 Indian Key Daybeacon 9
+14921.8 -1938.3 G 11 0 Indian Key Channel Daybeacon 11
+14734.3 -1639.3 R 8 0 Lignumvitae Channel Daybeacon 8
+14563.5 -1241.5 R 2 0 Lignumvitae Channel Daybeacon 2
+14547.0 -1250.5 G 1 0 Lignumvitae Channel Daybeacon 1
+14470.6 -1906.2 G 13 0 Lignumvitae Channel Daybeacon 13
+15886.9 -1605.3 G 5 0 Upper Matecumbe West Channel Daybeacon 5
+15627.7 -1127.6 R 2 0 Tea Table Channel Daybeacon 2
+15611.7 -1127.6 G 1 0 Tea Table Channel Daybeacon 1
+15505.5 -1593.4 G 5 0 Tea Table Channel Daybeacon 5
+15208.3 -1334.2 R 4 0 Indian Key Channel Daybeacon 4
+14685.5 -1484.1 G 5 0 Lignumvitae Channel Daybeacon 5
+14698.5 -1873.3 R 12 0 Lignumvitae Channel Daybeacon 12
+15158.6 -1321.3 G 3 0 Indian Key Channel Daybeacon 3
+15099.5 -1537.2 R 6 0 Indian Key Channel Daybeacon 6
+15778.3 -961.9 R 42 0 Teatable Key Daybeacon 42
+15940.1 -1464.7 G 1 0 Upper Matecumbe West Channel Daybeacon 1
+15863.1 -1692.5 R 8 0 Upper Matecumbe West Channel Daybeacon 8
+15490.1 -1368.5 G 3 0 Tea Table Channel Daybeacon 3
+14579.8 -1326.8 G 3 0 Lignumvitae Channel Daybeacon 3
+15910.8 -1608.7 R 6 0 Upper Matecumbe West Channel Daybeacon 6
+14935.9 -1962.3 R 12 0 Indian Key Daybeacon 12
+14673.4 -1827.3 G 11 0 Lignumvitae Channel Daybeacon 11
+14496.6 -1917.5 R 14 0 Lignumvitae Channel Daybeacon 14
+15952.1 -1468.3 R 2 0 Upper Matecumbe West Channel Daybeacon 2
+15546.3 -1399.2 R 4 0 Tea Table Channel Daybeacon 4
+15168.9 -1109.6 G 1 0 Indian Key Channel Daybeacon 1
+15011.5 -1737.8 R 8 0 Indian Key Channel Daybeacon 8
+13639.9 -2767.9 G 95 0 Bowlegs Cut Daybeacon 95
+13556.0 -2711.7 G 97 0 Bowlegs Cut Daybeacon 97
+13553.5 -2725.8 R 98 1 Bowlegs Cut Light 98
+13732.4 -2831.4 G 93 1 Bowlegs Cut Light 93
+13729.5 -2842.8 R 92 0 Bowlegs Cut Daybeacon 92
+13645.0 -2788.1 R 94 0 Bowlegs Cut Daybeacon 94
+14877.2 -3041.7 G 91 0 Lignumvitae Key Daybeacon 91A
+16957.7 -3639.8 R 82 0 Cotton Key Daybeacon 82
+16180.2 -1774.0 R 2 0 La Siesta Resort Daybeacon 2
+16183.2 -2521.3 R 16 0 Shell Key Channel Daybeacon 16
+16210.7 -2649.0 G 17 0 Shell Key Channel Daybeacon 17
+15659.8 -2328.2 G 13 0 Race Channel 13B
+15495.8 -2561.6 R 18 0 Race Daybeacon 18B
+16660.5 -3501.4 R 84 0 Shell Key Daybeacon 84
+15795.4 -2066.7 R 10 0 Teatable Daybeacon 10
+15711.2 -1911.9 R 8 0 Tea Table Channel Daybeacon 8
+16168.1 -3323.1 R 88 0 Shell Key Daybeacon 88
+15362.8 -2634.2 G 19 0 Race Channel 19B
+16431.7 -2896.7 G 21 0 Shell Key Channel Daybeacon 21
+15818.0 -2196.2 R 12 0 Race Channel Daybeacon 12B
+15693.3 -1918.8 G 7 0 Tea Table Channel Daybeacon 7
+14914.7 -2332.6 G 15 0 Indian Key Channel Daybeacon 15
+17449.2 -3870.4 R 80 0 Cotton Key Daybeacon 80
+16161.4 -1758.3 G 1 0 La Siesta Resort Daybeacon 1
+16162.0 -1792.0 G 3 0 La Siesta Resort Daybeacon 3
+14974.6 -2164.7 R 14 0 Indian Key Channel Daybeacon 14
+17492.2 -3825.6 G 81 1 Cotton Key Light 81
+16660.3 -2403.4 G 3 0 Little Basin East Daybeacon 3
+16185.6 -1795.3 R 4 0 La Siesta Resort Daybeacon 4
+16328.7 -2716.3 R 20 0 Shell Key Channel Daybeacon 20
+16234.3 -2633.8 R 18 0 Shell Key Channel Daybeacon 18
+16046.5 -2389.0 R 14 0 Shell Key Channel Daybeacon 14
+15859.7 -2181.2 R 12 0 Shell Key Channel Daybeacon 12
+15846.9 -2192.2 G 11 0 Shell Key Channel Daybeacon 11
+16203.3 -3307.6 G 87 1 Shell Key Light 87
+15778.2 -2085.5 G 9 0 Teatable Daybeacon 9
+16129.1 -3311.3 G 89 0 Shell Key Daybeacon 89
+16076.8 -3310.5 G 91 0 Shell Key Daybeacon 91
+15572.7 -2407.1 G 15 0 Race Channel 15B
+15388.9 -2670.4 R 20 0 Race Channel 20B
+14955.8 -2334.0 R 16 0 Indian Key Channel Daybeacon 16
+14974.9 -2633.1 R 18 0 Indian Key Channel Daybeacon 18
+14949.6 -2669.6 G 17 0 Indian Key Channel Daybeacon 17
+16650.1 -2404.1 R 4 0 Little Basin East Daybeacon 4
+16394.3 -3371.4 R 86 0 Shell Key Daybeacon 86
+15673.5 -2369.7 R 14 0 Race Channel 14B
+16447.6 -2880.8 R 22 0 Shell Key Channel Daybeacon 22
+15800.1 -2182.1 G 11 0 Race Channel Daybeacon 11B
+16677.1 -2423.1 G 1 0 Little Basin East Daybeacon 1
+16655.8 -2425.8 R 2 0 Little Basin East Daybeacon 2
+16303.5 -2742.4 G 19 0 Shell Key Channel Daybeacon 19
+16145.2 -2543.0 G 15 0 Shell Key Channel Daybeacon 15
+15932.8 -2257.0 G 13 0 Shell Key Channel Daybeacon 13
+16079.5 -3324.8 R 90 1 Shell Key Light 90
+15596.0 -2409.9 R 16 0 Race Channel 16B
+15471.0 -2533.7 G 17 0 Race Channel 17B
+14938.1 -2176.6 G 13 0 Indian Key Channel Daybeacon 13
+18571.7 -2409.5 R 4 0 Windley Key Channel Daybeacon 4
+17476.6 -2644.0 G 1 0 Bay Hammock Daybeacon 1
+18859.2 -2427.4 R 2 1 Snake Creek Light 2
+18731.0 -3592.0 R 12 1 Snake Creek Light 12
+17955.4 -2595.3 G 7 0 Whale Harbor Channel Daybeacon 7
+18145.1 -2389.0 R 4 0 Whale Harbor Channel Daybeacon 4A
+18385.3 -2750.8 R 4 0 Windley Key West Channel Daybeacon 4
+17504.1 -2624.7 G 3 0 Bay Hammock Daybeacon 3
+18557.8 -2458.1 G 1 0 Windley Key West Channel Daybeacon 1
+17996.8 -2672.3 G 5 0 Holiday Isle Marina Daybeacon 5
+17853.1 -2945.1 G 13 0 Windley Pass Daybeacon 13
+18436.4 -2652.4 G 3 0 Windley Key West Channel Daybeacon 3
+18204.8 -2332.3 R 4 0 Whale Harbor Channel Daybeacon 4
+17928.8 -3032.3 R 14 0 Windley Pass Daybeacon 14
+18479.2 -2584.2 R 2 0 Windley Key West Channel Daybeacon 2
+17976.9 -2637.2 G 1 0 Holiday Isle Marina Daybeacon 1
+18837.3 -2447.7 G 3 0 Snake Creek Daybeacon 3
+18817.0 -2592.2 G 7 0 Snake Creek Daybeacon 7
+17985.0 -3228.4 R 16 0 Windley Pass Daybeacon 16
+18278.3 -2252.3 R 2 0 Whale Harbor Channel Daybeacon 2
+20167.3 -3138.4 G 1 0 Coral Harbour Club Daybeacon 1
+18802.1 -2483.5 G 5 0 Snake Creek Daybeacon 5
+18575.5 -2344.9 R 2 0 Windley Key Channel Daybeacon 2
+19895.3 -3046.6 G 1 0 Ocean Harbor Daybeacon 1
+18533.3 -2767.7 G 9 0 Windley Key Channel Daybeacon 9
+18280.4 -2223.0 G 1 1 Whale Harbor Light 1
+18543.2 -2644.4 G 7 0 Windley Key Channel Daybeacon 7
+18812.2 -2643.1 G 7 0 Snake Creek Daybeacon 7A
+19911.5 -3054.8 R 2 0 Ocean Harbor Daybeacon 2
+18543.5 -2771.0 R 10 0 Windley Key Channel Daybeacon 10
+18852.7 -2419.2 G 1 0 Snake Creek Daybeacon 1
+18808.2 -2522.6 R 4 0 Snake Creek Daybeacon 4A
+18792.1 -2730.3 R 8 0 Snake Creek Daybeacon 8
+18004.9 -2668.9 R 4 0 Holiday Isle Marina Daybeacon 4
+18510.2 -2530.6 G 1 0 Windley Key West Channel Daybeacon 1A
+18844.9 -2594.7 R 6 0 Snake Creek Daybeacon 6A
+18250.8 -2274.3 G 3 0 Whale Harbor Channel Daybeacon 3
+17855.3 -2862.8 R 12 0 Windley Pass Daybeacon 12
+18404.7 -2706.8 G 3 0 Windley Key West Channel Daybeacon 3A
+17974.3 -2613.1 R 8 0 Whale Harbor Channel Daybeacon 8
+17425.9 -2345.5 R 6 0 Holiday Isle Marina Daybeacon 6
+18817.8 -2547.0 R 6 0 Snake Creek Daybeacon 6
+18568.2 -2374.9 G 3 0 Windley Key Channel Daybeacon 3
+17902.3 -2654.5 G 9 0 Whale Harbor Channel Daybeacon 9
+17823.3 -2885.1 G 11 0 Windley Pass Daybeacon 11
+18026.5 -2552.5 R 6 0 Whale Harbor Channel Daybeacon 6
+18076.4 -2461.4 G 5 0 Whale Harbor Channel Daybeacon 5
+17953.5 -3238.4 G 15 0 Windley Pass Daybeacon 15
+18755.0 -2736.2 G 9 0 Snake Creek Daybeacon 9
+17984.7 -2632.6 R 2 0 Holiday Isle Marina Daybeacon 2
+18746.2 -3534.3 R 10 0 Snake Creek Daybeacon 10
+20181.4 -3151.3 R 2 1 Coral Harbour Club Light 2
+18816.3 -2474.4 R 4 0 Snake Creek Daybeacon 4
+18562.6 -2520.0 R 6 0 Windley Key Channel Daybeacon 6
+18547.2 -2705.0 R 8 0 Windley Key Channel Daybeacon 8
+20017.6 -4166.4 R 78 1 Cowpens Light 78
+20286.8 -4348.6 R 74 0 Cowpens Daybeacon 74A
+20207.9 -4238.6 R 76 0 Cowpens Daybeacon 76A
+20234.0 -4258.9 R 76 0 Cowpens Daybeacon 76
+18737.6 -4021.6 R 78 0 East Key Daybeacon 78A
+20397.8 -4483.8 R 74 0 Cowpens Daybeacon 74
+20401.8 -4462.7 G 73 0 Cowpens Daybeacon 73A
+20453.9 -4489.7 G 73 1 Cowpens Light 73
+20292.1 -4335.2 G 75 0 Cowpens Daybeacon 75
+20849.7 -4648.6 G 15 0 Tavernier Creek Daybeacon 15
+21273.0 -3540.3 R 2 0 Tavernier Creek Daybeacon 2
+21964.5 -4130.2 R 4 0 Tavernier Ocean Shores Daybeacon 4
+22394.5 -4242.4 G 7 0 Ocean Point Daybeacon 7
+22038.4 -5094.9 R 62 1 Hammer Point Light 62
+21765.6 -4383.9 R 2 0 Community Harbor Daybeacon 2
+21209.4 -3790.3 R 10 0 Tavernier Creek Daybeacon 10
+21202.3 -3693.3 G 7 0 Tavernier Creek Daybeacon 7
+22168.6 -4116.1 R 2 0 Blue Waters Trailer Village Daybeacon 2
+21217.6 -3623.1 G 5 0 Tavernier Creek Daybeacon 5
+22218.3 -4701.8 R 4 0 Hammer Point Harbor Daybeacon 4
+21910.4 -4927.3 R 64 0 Hammer Point Daybeacon 64
+22151.1 -4153.2 R 6 0 Blue Waters Trailer Village Daybeacon 6
+22133.5 -4138.5 G 5 0 Blue Waters Trailer Village Daybeacon 5
+21976.7 -3836.2 R 4 0 Tavernier Key Daybeacon 4
+22397.0 -4194.0 G 3 0 Ocean Point Daybeacon 3
+22155.1 -4108.6 G 1 1 Blue Waters Trailer Village Light 1
+23043.6 -4950.7 R 2 1 Key Largo Ocean Resort Light 2
+21323.5 -4791.1 R 68 0 Ramshorn Shoal Daybeacon 68
+22416.5 -4196.1 R 2 0 Ocean Point Daybeacon 2
+22161.9 -4128.7 R 4 0 Blue Waters Trailer Village Daybeacon 4
+20780.7 -4681.7 R 18 0 Tavernier Creek Daybeacon 18
+21987.3 -4079.2 R 2 0 Tavernier Ocean Shores Daybeacon 2
+22231.6 -4708.0 G 3 0 Hammer Point Harbor Daybeacon 3
+20866.7 -4637.7 R 14 0 Tavernier Creek Daybeacon 14
+21264.8 -3586.4 R 4 0 Tavernier Creek Daybeacon 4
+21393.1 -4794.8 G 67 0 Ramshorn Shoal Daybeacon 67
+21749.8 -4357.0 G 3 0 Community Harbor Daybeacon 3
+21329.2 -4776.8 G 69 0 Ramshorn Shoal Daybeacon 69
+21263.1 -3532.6 G 1 0 Tavernier Creek Daybeacon 1
+21774.7 -4385.8 G 1 0 Community Harbor Daybeacon 1
+21177.8 -3768.7 G 9 0 Tavernier Creek Daybeacon 9
+23027.9 -4913.0 G 1 0 Key Largo Ocean Resort Daybeacon 1
+21380.1 -4809.6 R 66 0 Ramshorn Shoal Daybeacon 66
+21228.8 -3569.7 G 3 0 Tavernier Creek Daybeacon 3
+22752.8 -3537.4 R 2 1 Tavernier Key Light 2
+22233.4 -4772.6 G 1 0 Hammer Point Harbor Daybeacon 1
+21239.2 -3642.9 R 6 0 Tavernier Creek Daybeacon 6
+22142.4 -4125.8 G 3 0 Blue Waters Trailer Village Daybeacon 3
+21177.6 -3856.7 G 13 0 Tavernier Creek Daybeacon 13
+22657.2 -4377.6 R 4 0 Harry Harris Park Daybeacon 4
+21214.7 -3876.7 R 12 0 Tavernier Creek Daybeacon 12
+21555.7 -4847.8 G 65 1 Ramshorn Shoal Light 65
+22425.2 -4210.0 R 4 0 Ocean Point Daybeacon 4
+21213.6 -4798.2 R 70 1 Ramshorn Shoal Light 70
+20865.8 -4660.7 R 16 0 Tavernier Creek Daybeacon 16
+21808.0 -4900.2 R 64 0 Hammer Point Daybeacon 64A
+21725.4 -4342.7 R 4 0 Community Harbor Daybeacon 4
+20813.4 -4687.1 G 71 1 Ramshorn Shoal Light 71
+22479.4 -3560.7 G 3 0 Tavernier Key Daybeacon 3
+22665.7 -4344.2 G 1 0 Harry Harris Park Daybeacon 1
+22219.6 -4765.2 R 2 0 Hammer Point Harbor Daybeacon 2
+20781.5 -4658.0 G 17 0 Tavernier Creek Daybeacon 17
+22412.7 -4239.8 R 6 0 Ocean Point Daybeacon 6
+22405.8 -4215.8 G 5 0 Ocean Point Daybeacon 5
+21976.1 -4996.3 R 62 0 Hammer Point Daybeacon 62A
+21234.2 -3701.0 R 8 0 Tavernier Creek Daybeacon 8
+22678.1 -4349.4 R 2 0 Harry Harris Park Daybeacon 2
+22201.1 -5862.2 G 61 1 Pigeon Key Light 61
+22098.4 -5632.7 R 60 1 Pigeon Key Light 60A
+23084.7 -5978.7 R 60 1 Baker Cut Light 60
+23331.9 -6001.7 G 59 0 Baker Cut Daybeacon 59
+11164.8 -113.0 R 2 1 Channel Five Light 2
+17488.0 -837.0 G 41 0 Upper Matecumbe Daybeacon 41
+21169.3 -1020.0 R 14 1 Davis Reef Light 14
+19787.4 -1774.0 R 40 1 Hen and Chickens Shoal Light 40
+10642.3 -1060.5 r 2 0 Oceanside Isle Buoy 2
+10628.6 -1051.0 g 1 0 Oceanside Isle Buoy 1
+10631.8 -1097.3 r 6 0 Oceanside Isle Buoy 6
+10624.4 -1088.3 g 5 0 Oceanside Isle Buoy 5
+14176.2 -1630.5 r 8 0 Wheel Ditch Channel Buoy 8A
+14054.3 -1589.4 g 9 0 Wheel Ditch Channel Buoy 9A
+14039.3 -1596.7 r 10 0 Wheel Ditch Channel Buoy 10A
+15792.8 -1817.7 g 15 0 Yellow Shark Channel Buoy 15
+15071.6 -1661.1 r 6 0 Plant Channel Buoy 6
+14959.3 -1654.0 g 7 0 Plant Channel Buoy 7
+15508.4 -1742.8 r 2 0 Plant Channel Buoy 2
+15294.2 -1704.0 r 4 0 Plant Channel Buoy 4
+14698.6 -1701.3 r 2 0 Wheel Ditch Channel Buoy 2A
+14960.9 -1667.2 r 8 0 Plant Channel Buoy 8
+14836.4 -1652.9 r 10 0 Plant Channel Buoy 10
+15509.7 -1728.0 g 1 0 Plant Channel Buoy 1
+15307.3 -1692.8 g 3 0 Plant Channel Buoy 3
+14598.6 -1716.1 g 3 0 Wheel Ditch Channel Buoy 3A
+15781.4 -1850.9 r 16 0 Yellow Shark Channel Buoy 16
+14758.2 -1696.5 g 11 0 Plant Channel Buoy 11
+14680.3 -1678.4 g 1 0 Wheel Ditch Channel Buoy 1A
+14802.3 -1688.9 r 12 0 Plant Channel Buoy 12
+15840.0 -2013.4 g 19 0 Yellow Shark Channel Buoy 19
+16258.3 -2171.6 r 26 0 Yellow Shark Channel Buoy 26A
+16147.4 -2054.9 r 24 0 Yellow Shark Channel Buoy 24A
+16181.3 -2122.7 r 24 0 Yellow Shark Channel Buoy 24B
+16163.4 -2129.0 g 23 0 Yellow Shark Channel Buoy 23B
+16122.1 -2036.8 r 24 0 Yellow Shark Channel Buoy 24
+16244.0 -2164.3 r 26 0 Yellow Shark Channel Buoy 26
+15999.5 -2042.7 r 22 0 Yellow Shark Channel Buoy 22A
+16116.9 -2056.1 g 23 0 Yellow Shark Channel Buoy 23A
+16322.4 -2203.2 r 28 0 Yellow Shark Channel Buoy 28
+16002.6 -2058.8 g 23 0 Yellow Shark Channel Buoy 23
+16314.4 -2206.0 g 27 0 Yellow Shark Channel Buoy 27
+15914.4 -2041.1 r 22 0 Yellow Shark Channel Buoy 22
+15840.3 -1969.2 r 18 0 Yellow Shark Channel Buoy 18
+15896.0 -2067.0 g 21 0 Yellow Shark Channel Buoy 21
+16212.2 -2162.3 g 25 0 Yellow Shark Channel Buoy 25
