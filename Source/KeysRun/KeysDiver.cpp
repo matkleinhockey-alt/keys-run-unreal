@@ -648,9 +648,10 @@ void AKeysDiver::UpdateTorch(double Dt)
 	const double Cp = FMath::Cos(CamPitch);
 	const FVector Fw(-FMath::Sin(CamYaw) * Cp, FMath::Sin(CamPitch), -FMath::Cos(CamYaw) * Cp);
 	const FRotator Rot = GDir2U(Fw).Rotation();
-	const FVector Pos = CamMode == 0 ? CamPosUE + CamRotUE.Quaternion().RotateVector(FVector(12, -20, -14)) : G2U(FVector(S.X, S.Y, S.Z) + Fw * .75);
+	// (the beam starts past the muzzle in the dive-mask view, so the gun in her other hand is not lit white by it)
+	const FVector Pos = CamMode == 0 ? CamPosUE + CamRotUE.Quaternion().RotateVector(FVector(140, -10, -10)) : G2U(FVector(S.X, S.Y, S.Z) + Fw * 1.5);
 	Torch->SetWorldLocationAndRotation(Pos, Rot);
-	Torch->SetIntensity(float(TorchW * 9000));
+	Torch->SetIntensity(float(TorchW * 800));
 }
 
 // The cylinder rack in the cockpit and the diver-down flag over it. They ride on the boat's own mesh component (found
@@ -1286,7 +1287,10 @@ void AKeysDiver::UpdateGun(double Dt)
 	if (bShow)
 	{
 		GunFill->SetWorldLocation(CamPosUE + CamQ.RotateVector(FVector(-10, -45, 55)));
-		GunFill->SetIntensity(bDbgGunShow ? 900.f : 230.f);
+		// less of it where the water is dark (deep, or with the sun down), or the gun would glow
+		const AKeysWorld* Wd = AKeysWorld::Get(this);
+		const double Amb = DvClamp(1 - S.Depth() / 32, .12, 1) * (Wd && Wd->SunDir().Z < .14 ? .3 : 1);
+		GunFill->SetIntensity(float((bDbgGunShow ? 900 : 230) * Amb));
 	}
 	GunBandL->SetVisibility(bShow);
 	GunBandR->SetVisibility(bShow);
