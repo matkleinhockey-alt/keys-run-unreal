@@ -1,5 +1,5 @@
 diff --git a/Source/KeysRun/KeysBoatPawn.cpp b/Source/KeysRun/KeysBoatPawn.cpp
-index 41c5d26..996d250 100644
+index 41c5d26..ba4f1b3 100644
 --- a/Source/KeysRun/KeysBoatPawn.cpp
 +++ b/Source/KeysRun/KeysBoatPawn.cpp
 @@ -1090,6 +1090,22 @@ void AKeysBoatPawn::RunTestScript(double T)
@@ -40,17 +40,18 @@ index 41c5d26..996d250 100644
  		D->AirMul = (bTankLive ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1) * (BuffOn(TEXT("diner.mahi")) ? 1.05 : 1);
  		// the rest of the kit (web sim/shop.ts): fins swim faster, the wide mask sees further, the band gun reaches and
  		// draws quicker, the reel conversion shortens a speared fish's run; every shot spends a shaft
-@@ -1249,7 +1268,8 @@ void AKeysBoatPawn::ToggleDive()
+@@ -1249,7 +1268,9 @@ void AKeysBoatPawn::ToggleDive()
  			return Left;
  		};
  		D->EnterWater(X, Z, H);
 -		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
 +		if (D->OnScuba()) ShowToast(TEXT("Overboard on scuba - WASD and the mouse to swim and look, Space / C up / down (you hover when you let go), Shift to sprint. Hold G for the gauge, T the dive light, X swaps cylinders at the boat. Click to fire, R to reload. J to get back aboard."), 6);
++		else if (KeysScuba::HasSet(this) && KeysScuba::WantScuba()) ShowToast(TEXT("The cylinder is empty, so you are over on a breath (Scuba Steve's fills it). WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
 +		else ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
  	}
  	else if (D->RequestReboard()) { SyncChaseCam(); bCamInit = false; }
  	else if (ReboardT < 0 && !D->IsBlackedOut())
-@@ -1283,6 +1303,10 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
+@@ -1283,6 +1304,10 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
  	B.LookYaw = MX * .004;
  	B.LookPitch = -MY * .004;
  	D->SetButtons(B);
@@ -61,7 +62,7 @@ index 41c5d26..996d250 100644
  	if (Hit(EKeys::J)) ToggleDive();
  	if (Hit(EKeys::F)) if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen();   // prise open a wreck's box (sim/treasure.ts)
  	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) ShowToast(D->CycleView() + TEXT(" - press 1 to switch"));
-@@ -1505,6 +1529,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
+@@ -1505,6 +1530,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
  	if (bGear && Owned.Contains(Eff)) { ShowToast(FString::Printf(TEXT("You already own the %s."), It.Name)); return; }
  	if (Eff.StartsWith(TEXT("tackle.")) && Eff == TEXT("tackle.braid80") && Owned.Contains(TEXT("tackle.braid130"))) { ShowToast(TEXT("You already fish 130 lb. The 80 lb rig would be a step down.")); return; }
  	{ FString Why; if (ServiceRefuse(Eff, Why)) { ShowToast(Why, 7); return; } }   // refused before charging (sim/services.ts canBuy)
@@ -69,7 +70,7 @@ index 41c5d26..996d250 100644
  	if (Cash < It.Price) { ShowToast(FString::Printf(TEXT("%s is $%s and you have $%s. Sell fillets at a weigh-in (E at a marina dock)."), It.Name, *Commas(It.Price), *Commas(Cash)), 4); return; }
  	Cash -= It.Price;
  	const double T = GetWorld()->GetTimeSeconds();
-@@ -1526,6 +1551,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
+@@ -1526,6 +1552,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
  	else if (Eff == TEXT("dive.tank")) { AddCount(TEXT("dive.fill"), 1); Msg += TEXT(" Steve throws in the first fill. Each dive past 2 m spends one."); }
  	else if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
  	else if (Eff == TEXT("bait.ballyhoo")) { BaitCasts += 6; Msg += TEXT(" Quicker bites on your next 6 casts."); }
@@ -77,7 +78,7 @@ index 41c5d26..996d250 100644
  	else if (ServiceResolve(Eff, Msg)) {}   // the motel, the cabaret, the scratch-off, the wash, the socks (KeysTags.cpp)
  	else if (Eff == TEXT("casino.slot"))
  	{
-@@ -1998,6 +2024,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
+@@ -1998,6 +2025,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
  	if (IsDiving()) { HandleDiveInput(PC, Dt); return; }
  	if (IsAshore()) { HandleWalkInput(PC, Dt); return; }
  	if (Hit(EKeys::J)) { ToggleDive(); return; }

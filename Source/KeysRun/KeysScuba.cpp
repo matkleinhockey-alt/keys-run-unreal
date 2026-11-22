@@ -243,7 +243,8 @@ namespace KeysScuba
 		const double Psi = CylinderPsi(P, 0);
 		Out.Add(TPair<FString, bool>(FString::Printf(TEXT("Scuba cylinder: %s psi, about %d min at 10 m"), *ScCommas(FMath::RoundToInt(Psi)), FMath::RoundToInt(SecondsLeft(Psi, 10, .45) / 60)), Psi >= 50));
 		if (Cylinders(P) > 1) Out.Add(TPair<FString, bool>(FString::Printf(TEXT("Spare cylinder: %s psi"), *ScCommas(FMath::RoundToInt(CylinderPsi(P, 1)))), CylinderPsi(P, 1) >= 50));
-		Out.Add(TPair<FString, bool>(GScubaWant ? TEXT("Going over on scuba") : TEXT("Going over on a breath (set in the rack)"), GScubaWant));
+		if (GScubaWant && !WillDive(P)) Out.Add(TPair<FString, bool>(TEXT("Scuba chosen, but the cylinders are empty: on a breath until Steve fills them"), false));
+		else Out.Add(TPair<FString, bool>(GScubaWant ? TEXT("Going over on scuba") : TEXT("Going over on a breath (set in the rack)"), GScubaWant));
 		if (P->HasGear(TEXT("dive.tank"))) Out.Add(TPair<FString, bool>(TEXT("Pony bottle: the bail-out on scuba"), P->CountOf(TEXT("dive.fill")) > 0));
 		Out.Add(TPair<FString, bool>(Owns(P, FxComputer) ? TEXT("Wrist computer: ascent rate, safety stop, time left") : TEXT("No dive computer: the gauge only"), Owns(P, FxComputer)));
 		if (Owns(P, FxLight)) Out.Add(TPair<FString, bool>(TEXT("Dive light for ledges and wrecks"), true));

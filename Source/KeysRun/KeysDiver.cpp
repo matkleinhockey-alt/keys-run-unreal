@@ -1945,8 +1945,6 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 	else if (Cmd == TEXT("reload")) Gun = FGun();
 	else if (Cmd == TEXT("fwd")) { if (AKeysBoatPawn* Pw = Pawn()) { CamYaw = PrevYaw = Pw->BoatH(); CamPitch = FCString::Atod(*Arg); } }   // look along the boat's heading, pitch = Arg
 	else if (Cmd == TEXT("gunshow")) bDbgGunShow = FCString::Atoi(*Arg) != 0;
-	else if (Cmd == TEXT("drawpose")) { Gun.ReloadT = 0; Gun.Draw = DvClamp(FCString::Atod(*Arg), 0, .95); bDrawLatched = bDrawing = true; }   // part-way through hauling the bands back
-	else if (Cmd == TEXT("draw")) bDrawQueued = true;   // R, as pressed: haul the bands back once the new shaft is in
 	else if (Cmd == TEXT("air")) S.Air = S.AirMaxV * DvClamp(FCString::Atod(*Arg), 0, 1);
 	else if (Cmd == TEXT("swim")) bDebugSwim = FCString::Atoi(*Arg) != 0;
 	else if (Cmd == TEXT("haul")) bDebugHaul = FCString::Atoi(*Arg) != 0;

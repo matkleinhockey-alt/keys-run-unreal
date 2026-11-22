@@ -96,8 +96,9 @@ public:
 	TFunction<void(bool bInhale, double Depth, double Effort)> OnBreath;
 
 	// ---- test hooks for -KRScript (depth=N, look=yaw,pitch, aimfish, spear, reload, air=frac, swim=0/1, haul=0/1;
-	// scuba: scuba=0/1 and scubatest before going over; psi=N, gauge=0/1, light=0/1/2, swap, orbit=yaw,pitch,dist,
-	// topside=0/1, hover, gaslog, ascend=0/1/2, sprint=0/1, nearfish, kit)
+	// scuba: scuba=0/1, scubatest, kit, mode, light=0/1/9 (off/on/auto) and boatview=0..3 at any time; in the water
+	// psi=N, nload=F, gauge=0/1, swap, orbit=yaw,pitch,dist|off, topside=0/1, hover, gaslog[=secs], ascend=0/1/2,
+	// sprint=0/1, nearfish; the gun: gunshow=0/1; fwd=pitch looks along the boat's heading)
 	void DebugCmd(const FString& Cmd, const FString& Arg);
 
 	// ---- tuning from the Settings menu
