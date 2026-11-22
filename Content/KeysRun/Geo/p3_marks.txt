@@ -50,7 +50,7 @@
 -22930.6 -2426.6 G 23 0 Cow Key Channel Daybeacon 23
 -24219.3 -3612.9 R 6 0 Garrison Bight Channel Daybeacon 6
 -24745.1 -2582.8 R 2 1 Key West Bight Channel Light 2
--22867.2 -2301.9 R 22 0 Cow Key Channel Daybeacon 22
+-22872.2 -2301.9 R 22 0 Cow Key Channel Daybeacon 22
 -24543.3 -2765.4 G 31 0 Key West Harbor Main Channel Turning Basin Daybeacon 31
 -24070.3 -3698.0 G 13 1 Garrison Bight Channel Light 13
 -24144.2 -3669.0 R 10 0 Garrison Bight Channel Daybeacon 10
@@ -228,7 +228,7 @@
 -14755.6 -1837.4 R 4 0 Upper Sugarloaf Sound Daybeacon 4
 -14828.7 -1932.9 G 5 0 Upper Sugarloaf Sound Daybeacon 5
 -12760.4 -1265.7 R 14 0 Kemp Channel Daybeacon 14
--12630.9 -2299.0 R 8 0 Tropical Marina Daybeacon 8
+-12632.8 -2294.4 R 8 0 Tropical Marina Daybeacon 8
 -14223.5 -2480.5 G 1 0 Cudjoe Key Daybeacon 1A
 -14213.3 -2550.4 R 6 0 Cudjoe Key Daybeacon 6A
 -14275.3 -2750.4 R 4 0 Cudjoe Key Daybeacon 4B

@@ -1,6 +1,8 @@
 #include "KeysGeoReal.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 namespace KeysGeoReal
 {
@@ -102,9 +104,10 @@ namespace KeysGeoReal
 			G.JOff = FMath::RoundToInt32((G.Z0 - GZ0) / GCell);
 		}
 		// US-1's line runs the length of the map: each stretch of x from the first grid loaded that covers it
+		// (sampled on the first phase's own points, so its line is the same to the last digit however far the map grows west)
 		GChainStep = GGrids[0].ChainStep;
-		GChainX0 = GX0;
-		const int32 NC = FMath::CeilToInt32((MaxX - MinX) / GChainStep) + 1;
+		GChainX0 = GGrids[0].ChainX0 - FMath::CeilToDouble((GGrids[0].ChainX0 - MinX) / GChainStep - 1e-9) * GChainStep;
+		const int32 NC = FMath::CeilToInt32((MaxX - GChainX0) / GChainStep) + 1;
 		GChain.SetNumUninitialized(NC);
 		GRoadX0 = MinX; GRoadX1 = MaxX;
 		for (int32 i = 0; i < NC; i++)
@@ -112,7 +115,12 @@ namespace KeysGeoReal
 			const double X = GChainX0 + i * GChainStep;
 			const FGrid* Src = nullptr;
 			for (const FGrid& G : GGrids) if (X >= G.X0 - 1 && X <= G.X1 + 1) { Src = &G; break; }
-			if (!Src) Src = &GGrids[0];
+			if (!Src)
+			{
+				// past the ends: the grid that reaches nearest
+				double BestD = 1e30;
+				for (const FGrid& G : GGrids) { const double D = X < G.X0 ? G.X0 - X : X - G.X1; if (D < BestD) { BestD = D; Src = &G; } }
+			}
 			// the road itself may stop short of the map's ends (Key West; where US-1 leaves Key Largo for the mainland)
 			if (i == 0) GRoadX0 = FMath::Max(MinX, Src->RoadA);
 			if (i == NC - 1) GRoadX1 = FMath::Min(MaxX, Src->RoadB);
@@ -357,7 +365,9 @@ namespace KeysGeoReal
 		for (const TCHAR* Phase : {TEXT("p2"), TEXT("p2_bay")}) Add(Phase);
 		const double T2 = FPlatformTime::Seconds();
 		const int64 B2 = GBytes;
-		for (const TCHAR* Phase : {TEXT("p3"), TEXT("p4"), TEXT("p4_bay")}) Add(Phase);
+		// (-KRNoPhase3 leaves them out: the map as it was before the Lower Keys and Key Largo, for comparing)
+		if (!FParse::Param(FCommandLine::Get(), TEXT("KRNoPhase3")))
+			for (const TCHAR* Phase : {TEXT("p3"), TEXT("p4"), TEXT("p4_bay")}) Add(Phase);
 		int64 Cells = 0;
 		for (const FGrid& G : GGrids) Cells += int64(G.NX) * G.NZ;
 		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: the map is %d grids, %d x %d cells from (%.0f, %.0f) to (%.0f, %.0f), %d islands, %d marks; p1 %.1f MB in %.0f ms, Phase 2 %.1f MB in %.0f ms, Phase 3 %.1f MB in %.0f ms"),

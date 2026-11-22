@@ -1,0 +1,235 @@
+diff --git a/Source/KeysRun/KeysHUD.cpp b/Source/KeysRun/KeysHUD.cpp
+--- a/Source/KeysRun/KeysHUD.cpp	2026-11-22 01:23:42
++++ b/Source/KeysRun/KeysHUD.cpp	2026-11-22 01:32:15
+@@ -40,7 +40,7 @@
+ namespace
+ {
+ 	const FLinearColor Teal(.35f, .85f, .85f), Gold(1.f, .82f, .35f), Red(1.f, .3f, .25f), Dim(.75f, .8f, .85f);
+-	int32 ChartN = 320;   // chart texture size (the real map's chart is drawn finer, for its depth bands)
++	int32 ChartNX = 320, ChartNZ = 320;   // chart texture size: the map's own shape (the real map is many times longer than it is tall), drawn finer on the real map for its depth bands
+ 	constexpr int32 GpsW = 256, GpsH = 148;      // GPS texture, covering a little more than the screen so it can scroll between redraws
+ 	constexpr double GpsMargin = 1.15;
+ 	constexpr int32 NumSonarCols = 85;             // 256 px canvas / 3 px per ping in the JS
+@@ -104,18 +104,21 @@
+ void AKeysHUD::BuildChart()
+ {
+ 	KeysGeo::Init();
+-	ChartN = RealMap() ? 1024 : 320;
+-	Chart = UTexture2D::CreateTransient(ChartN, ChartN, PF_B8G8R8A8);
++	// the real map's chart is as long as the map: 2048 pixels along the keys (32 m a pixel on the 65 km map), and as
++	// many down as keeps the pixels square. (It was a 1024 square, of which the long map used a strip 300 pixels tall.)
++	ChartNX = RealMap() ? 2048 : 320;
++	ChartNZ = RealMap() ? FMath::Clamp(FMath::RoundToInt32(ChartNX * WorldSizeZ / WorldSizeX), 64, 2048) : 320;
++	Chart = UTexture2D::CreateTransient(ChartNX, ChartNZ, PF_B8G8R8A8);
+ 	if (!Chart) return;
+ 	Chart->SRGB = true;
+ 	Chart->Filter = TF_Bilinear;
+ 	TArray<FColor> Px;
+-	Px.SetNumUninitialized(ChartN * ChartN);
++	Px.SetNumUninitialized(ChartNX * ChartNZ);
+ 	const FLinearColor Land(.86f, .80f, .62f);
+-	for (int32 j = 0; j < ChartN; j++)
+-		for (int32 i = 0; i < ChartN; i++)
++	for (int32 j = 0; j < ChartNZ; j++)
++		for (int32 i = 0; i < ChartNX; i++)
+ 		{
+-			const double X = ChartX0() + (i + .5) / ChartN * ChartSize(), Z = ChartZ0() + (j + .5) / ChartN * ChartSize();
++			const double X = WorldX0 + (i + .5) / ChartNX * WorldSizeX, Z = WorldZ0 + (j + .5) / ChartNZ * WorldSizeZ;
+ 			const double H = LandH(X, Z);
+ 			FLinearColor C;
+ 			// off the edge of the map (the real one is wider than it is tall): plain chart paper
+@@ -128,7 +131,7 @@
+ 				const double K = FMath::Clamp(FMath::Loge(D + 1) / FMath::Loge(401.0), 0.0, 1.0);
+ 				C = FMath::Lerp(FLinearColor(.62f, .86f, .93f), FLinearColor(.10f, .28f, .52f), float(K));
+ 			}
+-			Px[j * ChartN + i] = FColor(uint8(C.R * 255), uint8(C.G * 255), uint8(C.B * 255), 255);
++			Px[j * ChartNX + i] = FColor(uint8(C.R * 255), uint8(C.G * 255), uint8(C.B * 255), 255);
+ 		}
+ 	if (RealMap())
+ 	{
+@@ -138,11 +141,11 @@
+ 		static const FLinearColor BandC[] = {FLinearColor(.74f, .80f, .60f), FLinearColor(.45f, .80f, .74f), FLinearColor(.60f, .87f, .88f), FLinearColor(.74f, .92f, .96f),
+ 			FLinearColor(.66f, .86f, .95f), FLinearColor(.54f, .77f, .92f), FLinearColor(.40f, .63f, .84f), FLinearColor(.26f, .46f, .72f), FLinearColor(.14f, .30f, .55f)};
+ 		TArray<int8> Band;
+-		Band.SetNumUninitialized(ChartN * ChartN);
+-		for (int32 j = 0; j < ChartN; j++)
+-			for (int32 i = 0; i < ChartN; i++)
++		Band.SetNumUninitialized(ChartNX * ChartNZ);
++		for (int32 j = 0; j < ChartNZ; j++)
++			for (int32 i = 0; i < ChartNX; i++)
+ 			{
+-				const double X = ChartX0() + (i + .5) / ChartN * ChartSize(), Z = ChartZ0() + (j + .5) / ChartN * ChartSize();
++				const double X = WorldX0 + (i + .5) / ChartNX * WorldSizeX, Z = WorldZ0 + (j + .5) / ChartNZ * WorldSizeZ;
+ 				int8 B = -2;   // off the chart
+ 				if (X >= WorldX0 && X <= WorldX0 + WorldSizeX && Z >= WorldZ0 && Z <= WorldZ0 + WorldSizeZ)
+ 				{
+@@ -154,23 +157,23 @@
+ 						while (B < 8 && D >= BandM[B]) B++;
+ 					}
+ 				}
+-				Band[j * ChartN + i] = B;
++				Band[j * ChartNX + i] = B;
+ 			}
+-		for (int32 j = 0; j < ChartN; j++)
+-			for (int32 i = 0; i < ChartN; i++)
++		for (int32 j = 0; j < ChartNZ; j++)
++			for (int32 i = 0; i < ChartNX; i++)
+ 			{
+-				const int8 B = Band[j * ChartN + i];
++				const int8 B = Band[j * ChartNX + i];
+ 				if (B < 0)
+ 				{
+ 					// the shoreline inked round the land
+-					if (B == -1 && ((i + 1 < ChartN && Band[j * ChartN + i + 1] >= 0) || (j + 1 < ChartN && Band[(j + 1) * ChartN + i] >= 0) || (i > 0 && Band[j * ChartN + i - 1] >= 0) || (j > 0 && Band[(j - 1) * ChartN + i] >= 0)))
+-						Px[j * ChartN + i] = FColor(96, 84, 60, 255);
++					if (B == -1 && ((i + 1 < ChartNX && Band[j * ChartNX + i + 1] >= 0) || (j + 1 < ChartNZ && Band[(j + 1) * ChartNX + i] >= 0) || (i > 0 && Band[j * ChartNX + i - 1] >= 0) || (j > 0 && Band[(j - 1) * ChartNX + i] >= 0)))
++						Px[j * ChartNX + i] = FColor(96, 84, 60, 255);
+ 					continue;
+ 				}
+ 				FLinearColor C = BandC[B];
+-				const int8 R = i + 1 < ChartN ? Band[j * ChartN + i + 1] : B, Dn = j + 1 < ChartN ? Band[(j + 1) * ChartN + i] : B;
++				const int8 R = i + 1 < ChartNX ? Band[j * ChartNX + i + 1] : B, Dn = j + 1 < ChartNZ ? Band[(j + 1) * ChartNX + i] : B;
+ 				if ((R >= 0 && R != B) || (Dn >= 0 && Dn != B)) C = C * .8f;
+-				Px[j * ChartN + i] = FColor(uint8(C.R * 255), uint8(C.G * 255), uint8(C.B * 255), 255);
++				Px[j * ChartNX + i] = FColor(uint8(C.R * 255), uint8(C.G * 255), uint8(C.B * 255), 255);
+ 			}
+ 	}
+ 	FTexture2DMipMap& Mip = Chart->GetPlatformData()->Mips[0];
+@@ -182,9 +185,13 @@
+ 
+ FVector2D AKeysHUD::ChartXY(double GX, double GZ, float X, float Y, float Size) const
+ {
+-	return FVector2D(X + (GX - ChartX0()) / ChartSize() * Size, Y + (GZ - ChartZ0()) / ChartSize() * Size);
++	// (what is off the part of the map on show goes far off the screen: a dot drawn there is not seen)
++	if (!ChartIn(GX, GZ)) return FVector2D(-100000, -100000);
++	return FVector2D(X + (GX - CvX0) / CvW * Size, Y + (GZ - CvZ0) / CvW * Size);
+ }
+ 
++bool AKeysHUD::ChartIn(double GX, double GZ) const { return GX >= CvX0 && GX <= CvX0 + CvW && GZ >= CvZ0 && GZ <= CvZ0 + CvH; }
++
+ void AKeysHUD::DrawWxBlobs(TFunctionRef<FVector2D(double, double)> Pt, double PxPerM, float X0, float Y0, float X1, float Y1)
+ {
+ 	TArray<KeysWx::FCellView> Cs;
+@@ -656,18 +663,27 @@
+ void AKeysHUD::DrawChart(AKeysBoatPawn* P)
+ {
+ 	if (!Chart) return;
+-	// the chart texture is square; the real map is wider than tall, so only its own band of the square is shown
++	// What part of the map is on show (CvX0, CvZ0, CvW across, CvH down, game metres). The big chart (M) is the whole
++	// map. The little one in the corner is the whole map too while that is small; on the long real map it is the
++	// 12 km round the boat, or the keys would be a thread 20 pixels tall.
+ 	const bool bReal = RealMap(), bBig = P->bBigMap;
+-	const float V0 = float((WorldZ0 - ChartZ0()) / ChartSize()), VH = float(WorldSizeZ / ChartSize());
+-	float Size = (bBig ? (bReal ? 1240 : 760) : (bReal ? 330 : 250)) * U;
++	CvX0 = WorldX0; CvZ0 = WorldZ0; CvW = WorldSizeX; CvH = WorldSizeZ;
++	if (bReal && !bBig && WorldSizeX > 20000)
++	{
++		CvW = 12000; CvH = FMath::Min(WorldSizeZ, 6000.0);
++		CvX0 = FMath::Clamp(P->BoatX() - CvW / 2, WorldX0, WorldX0 + WorldSizeX - CvW);
++		CvZ0 = FMath::Clamp(P->BoatZ() - CvH / 2, WorldZ0, WorldZ0 + WorldSizeZ - CvH);
++	}
++	const float VH = float(CvH / CvW);
++	float Size = (bBig ? (bReal ? 1540 : 760) : (bReal ? 330 : 250)) * U;
+ 	if (bBig && bReal) Size = FMath::Min3(Size, Canvas->SizeX - 60 * U, (Canvas->SizeY - 110 * U) / VH);
+ 	const float VisH = Size * VH;
+ 	const float X = bBig ? Canvas->SizeX * .5f - Size * .5f : Canvas->SizeX - Size - 24 * U;
+ 	const float VisY = bBig ? Canvas->SizeY * .5f - VisH * .5f : 24 * U;
+-	const float Y = VisY - V0 * Size;
++	const float Y = VisY;
+ 	DrawRect(FLinearColor(0, 0, 0, .5f), X - 4 * U, VisY - 4 * U, Size + 8 * U, VisH + 8 * U);
+-	DrawTexture(Chart, X, VisY, Size, VisH, 0, V0, 1, VH, FLinearColor::White, BLEND_Opaque);
+-	DrawWxBlobs([&](double GX, double GZ) { return ChartXY(GX, GZ, X, Y, Size); }, Size / ChartSize(), X, VisY, X + Size, VisY + VisH);
++	DrawTexture(Chart, X, VisY, Size, VisH, float((CvX0 - WorldX0) / WorldSizeX), float((CvZ0 - WorldZ0) / WorldSizeZ), float(CvW / WorldSizeX), float(CvH / WorldSizeZ), FLinearColor::White, BLEND_Opaque);
++	DrawWxBlobs([&](double GX, double GZ) { return ChartXY(GX, GZ, X, Y, Size); }, Size / CvW, X, VisY, X + Size, VisY + VisH);
+ 	if (bReal) DrawRealChart(P, X, Y, Size, VisY, VisH);
+ 	// marinas
+ 	for (const FMarina& M : Marinas())
+@@ -697,7 +713,7 @@
+ 				const double HL = K.Len * .8;
+ 				const FVector2D A0 = ChartXY(K.X - FMath::Cos(K.Ang) * HL, K.Z - FMath::Sin(K.Ang) * HL, X, Y, Size);
+ 				const FVector2D A1 = ChartXY(K.X + FMath::Cos(K.Ang) * HL, K.Z + FMath::Sin(K.Ang) * HL, X, Y, Size);
+-				DrawLine(A0.X, A0.Y, A1.X, A1.Y, FLinearColor(.78f, .6f, .2f), 2.5f * U);
++				if (A0.X > -90000 && A1.X > -90000) DrawLine(A0.X, A0.Y, A1.X, A1.Y, FLinearColor(.78f, .6f, .2f), 2.5f * U);
+ 			}
+ 			else if (K.Kind == 3)
+ 			{
+@@ -710,7 +726,7 @@
+ 				const bool bFound = Wk && P->WrecksFound.Contains(Wk->Id);
+ 				const FLinearColor WC = bFound ? FLinearColor(.75f, .08f, .1f) : FLinearColor(.12f, .1f, .18f);
+ 				if (bFound) DrawRect(FLinearColor(1.f, .95f, .8f, .7f), A.X - 6 * U, A.Y - 6 * U, 12 * U, 12 * U);
+-				DrawLine(A0.X, A0.Y, A1.X, A1.Y, WC, (bFound ? 3.f : 2.f) * U);
++				if (A0.X > -90000 && A1.X > -90000) DrawLine(A0.X, A0.Y, A1.X, A1.Y, WC, (bFound ? 3.f : 2.f) * U);
+ 				DrawLine(A.X - 4 * U, A.Y - 4 * U, A.X + 4 * U, A.Y + 4 * U, WC, 1.5f * U);
+ 				DrawLine(A.X - 4 * U, A.Y + 4 * U, A.X + 4 * U, A.Y - 4 * U, WC, 1.5f * U);
+ 				if (P->bBigMap) Text(bFound && Wk ? FString(Wk->Name) : FString(TEXT("WK")), A.X + 7 * U, A.Y - 8 * U, .55f, bFound ? FLinearColor(.45f, .03f, .05f) : FLinearColor(.1f, .1f, .1f));
+@@ -740,7 +756,7 @@
+ 			for (int32 i = 0; i < Mk.Num(); i++)
+ 			{
+ 				const FVector2D A = ChartXY(Mk[i].X, Mk[i].Z, X, Y, Size), Bn = ChartXY(Mk[(i + 1) % Mk.Num()].X, Mk[(i + 1) % Mk.Num()].Z, X, Y, Size);
+-				DrawLine(A.X, A.Y, Bn.X, Bn.Y, FLinearColor(1.f, .45f, .1f, .5f), 1.5f * U);
++				if (A.X > -90000 && Bn.X > -90000) DrawLine(A.X, A.Y, Bn.X, Bn.Y, FLinearColor(1.f, .45f, .1f, .5f), 1.5f * U);
+ 			}
+ 			for (int32 i = 0; i < Mk.Num(); i++)
+ 			{
+@@ -823,7 +839,7 @@
+ 	auto Line = [&](double AX, double AZ, double BX, double BZ, const FLinearColor& C, float W)
+ 	{
+ 		const FVector2D A = ChartXY(AX, AZ, X, Y, Size), B = ChartXY(BX, BZ, X, Y, Size);
+-		DrawLine(A.X, A.Y, B.X, B.Y, C, W);
++		if (A.X > -90000 && B.X > -90000) DrawLine(A.X, A.Y, B.X, B.Y, C, W);
+ 	};
+ 	auto Runs = [&](double X0, double X1, double DZ, double GapA, double GapB, const FLinearColor& C, float W)
+ 	{
+@@ -877,19 +893,33 @@
+ 	if (!bBig) return;
+ 	// soundings in feet, on a grid, clear of the land and of the edge
+ 	const FLinearColor Snd(.16f, .25f, .42f, .85f);
+-	for (double Gz = WorldZ0 + 300; Gz < WorldZ0 + WorldSizeZ - 200; Gz += 560)
+-		for (double Gx = WorldX0 + 300 + (int32((Gz - WorldZ0) / 560) % 2) * 280; Gx < WorldX0 + WorldSizeX - 200; Gx += 560)
++	// (on a grid counted from the map's origin, not its corner, so they stay put as the map grows; twice as far apart
++	// on a chart twice as long, so they stay as many pixels apart)
++	const double SndStep = 560 * FMath::Max(1.0, FMath::RoundToDouble(CvW / 31800.0));
++	for (double Gz = FMath::CeilToDouble((CvZ0 + 300) / SndStep) * SndStep; Gz < CvZ0 + CvH - 200; Gz += SndStep)
++		for (double Gx = FMath::CeilToDouble((CvX0 + 300) / SndStep) * SndStep + (FMath::Abs(FMath::RoundToInt32(Gz / SndStep)) % 2) * SndStep / 2; Gx < CvX0 + CvW - 200; Gx += SndStep)
+ 		{
+ 			if (KeysGeoReal::Shore(Gx, Gz) < 45) continue;
+ 			const FVector2D A = ChartXY(Gx, Gz, X, Y, Size);
+ 			Text(FString::FromInt(FMath::RoundToInt(DepthFast(Gx, Gz) * 3.28)), A.X, A.Y - 7 * U, .62f, Snd, nullptr, true);
+ 		}
+ 	// the keys by name
+-	for (const KeysGeoReal::FIsl& I : KeysGeoReal::Islands())
++	// (the biggest first, and none over another's name: there are some 150 named keys on the whole map)
++	TArray<const KeysGeoReal::FIsl*> Named;
++	const double MinArea = 30000 * FMath::Max(1.0, CvW / 31800.0);
++	for (const KeysGeoReal::FIsl& I : KeysGeoReal::Islands()) if (!I.Name.IsEmpty() && I.Area >= MinArea && ChartIn(I.X, I.Z)) Named.Add(&I);
++	Named.Sort([](const KeysGeoReal::FIsl& A, const KeysGeoReal::FIsl& B) { return A.Area > B.Area; });
++	TArray<FBox2D> Taken;
++	for (const KeysGeoReal::FIsl* I : Named)
+ 	{
+-		if (I.Name.IsEmpty() || I.Area < 30000) continue;
+-		const FVector2D A = ChartXY(I.X, I.Z, X, Y, Size);
+-		Text(I.Name, A.X, A.Y - 8 * U, .72f, FLinearColor(.22f, .13f, .04f), nullptr, true);
++		const FVector2D A = ChartXY(I->X, I->Z, X, Y, Size);
++		const double HalfW = I->Name.Len() * 2.7 * U, HalfH = 5 * U;
++		const FBox2D Box(FVector2D(A.X - HalfW, A.Y - 8 * U - HalfH), FVector2D(A.X + HalfW, A.Y - 8 * U + HalfH));
++		bool bFree = true;
++		for (const FBox2D& T : Taken) bFree &= !T.Intersect(Box);
++		if (!bFree) continue;
++		Taken.Add(Box);
++		Text(I->Name, A.X, A.Y - 8 * U, .72f, FLinearColor(.22f, .13f, .04f), nullptr, true);
+ 	}
+ 	Text(TEXT("Soundings in feet at low water. Red triangles and green squares are the daybeacons: red, right, returning."), X, VisY + VisH + 8 * U, .8f, FLinearColor::White);
+ 	Text(TEXT("Not for navigation. Depths and elevation: NOAA NCEI / USGS. Aids to navigation: NOAA ENC. Coastline (c) OpenStreetMap contributors, ODbL."), X, VisY + VisH + 30 * U, .7f, Dim);
+diff --git a/Source/KeysRun/KeysHUD.h b/Source/KeysRun/KeysHUD.h
+--- a/Source/KeysRun/KeysHUD.h	2026-11-22 01:23:42
++++ b/Source/KeysRun/KeysHUD.h	2026-11-22 01:32:15
+@@ -95,6 +95,9 @@
+ 	float Wrapped(const FString& S, float X, float Y, float W, float Scale, const FLinearColor& C = FLinearColor::White);
+ 	void Bar(float X, float Y, float W, float H, float Fill, const FLinearColor& C);
+ 	FVector2D ChartXY(double GX, double GZ, float X, float Y, float Size) const;
++	// the part of the map the chart is showing now (game metres; set by DrawChart), and whether a point is in it
++	double CvX0 = 0, CvZ0 = 0, CvW = 1, CvH = 1;
++	bool ChartIn(double GX, double GZ) const;
+ 	// the storm cells as weather-radar rain blobs (green - yellow - red toward the core), clipped to a box; Pt maps game
+ 	// meters to the screen, PxPerM is its scale
+ 	void DrawWxBlobs(TFunctionRef<FVector2D(double, double)> Pt, double PxPerM, float X0, float Y0, float X1, float Y1);

@@ -27,10 +27,9 @@ from kgeo import KGeo
 
 # invented: no real marina, shop or brand carries these (checked against the names in the OSM extras when run)
 MARINA_NAMES = {
-    'p3': ['Conch Light Marina', 'Salt Pond Basin', 'Stock Island Shrimp Docks', 'Cow Key Fuel Dock', 'Boca Chica Basin', 'Saddlebunch Landing',
-           'Sugarloaf Sound Marina', 'Bow Channel Boatworks', 'Cudjoe Gardens Dock', 'Kemp Channel Landing', 'Summerland Fuel and Bait', 'Niles Channel Marina',
-           'Ramrod Hole Docks', 'Torch Key Landing', 'Pine Channel Marina', 'Key Deer Boat Basin', 'Spanish Harbor Docks', 'Newfound Harbor Marina',
-           'Bight Street Docks', 'Old Turtle Kraals Basin'],
+    # west to east as the bake finds them: Key West, four on Stock Island, Cudjoe, Summerland, Big Pine
+    'p3': ['Wreckers Wharf Marina', 'Salt Pond Basin', 'Shrimp Road Docks', 'Cow Key Fuel Dock', 'Boca Chica Basin', 'Cudjoe Cut Docks',
+           'Summerland Fuel and Bait', 'Spanish Harbor Docks', 'Saddlebunch Landing', 'Bow Channel Boatworks', 'Niles Channel Landing', 'Torch Key Landing'],
     'p4': ['Rock Harbor Marina', 'Mandalay Flats Dock', 'Largo Sound Landing', 'Garden Cove Basin', 'Jewfish Creek Fuel Dock', 'Blackwater Sound Marina',
            'Point Lowe Docks', 'Molasses Run Marina', 'Newport Cut Basin', 'Lake Largo Landing', 'Pirate Lagoon Docks', 'Adams Cut Marina',
            'Steamboat Creek Dock', 'Card Sound Landing', 'Dispatch Creek Basin', 'Angelfish Creek Docks', 'Rattlesnake Key Landing', 'Sunset Cove Marina',
@@ -81,7 +80,8 @@ def main():
             seen.add(r['name'])
             out.append(('reef', r['name'], r['pts'][0], r['pts'][1], 0, 0, r['depth']))
     # ---- marinas: the sites, west to east, each with an invented name and its open water
-    real_names = set()
+    real_names = set(e.get('tags', {}).get('name', '').strip().lower() for e in json.load(open(os.path.join(raw, f'osm_{pl.get("src", phase)}_extra.json')))['elements']
+                     if e.get('tags', {}).get('leisure') == 'marina')
     sites = []
     for m in pl.get('marinas', []):
         p = m['pts']

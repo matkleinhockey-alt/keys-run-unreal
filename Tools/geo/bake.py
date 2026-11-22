@@ -561,7 +561,7 @@ def main():
             more['road'] = [round(max(rx0, rw), 1), round(min(rx1, re_), 1)]
 
     places = dict(
-        phase=phase, rect=[x0, x1, z0, z1], scale=F.SCALE, theta_deg=math.degrees(F.THETA),
+        phase=phase, **(dict(src=src) if P.get('gen', 2) >= 3 else {}), rect=[x0, x1, z0, z1], scale=F.SCALE, theta_deg=math.degrees(F.THETA),
         attribution='Coastlines, roads and place names (c) OpenStreetMap contributors, ODbL 1.0. Elevation and bathymetry: NOAA NCEI / USGS (public domain).',
         islands=islands,
         us1_bridges=ways(lambda t: t.get('highway') == 'trunk' and t.get('bridge'), True),
@@ -578,6 +578,11 @@ def main():
         **more,
     )
 
+    if P.get('gen', 2) >= 3:
+        # OpenStreetMap's marina names are real businesses' names, which the project does not use: the sites are kept,
+        # the names are not (sites_p3.py gives each an invented one)
+        for m in places['marinas']:
+            m['name'] = ''
     os.makedirs(out, exist_ok=True)
     with open(f'{out}/{phase}.kgeo', 'wb') as f:
         f.write(b'KGEO' + struct.pack('<i', 2))

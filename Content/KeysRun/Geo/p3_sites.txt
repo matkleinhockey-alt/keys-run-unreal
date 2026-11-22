@@ -10,14 +10,14 @@ reef|Eastern Sambo|-21050.0|1720.0|0.0|0.0|3.20
 reef|Middle Sambo|-21440.0|1590.0|0.0|0.0|4.20
 reef|Western Sambo|-22750.0|1460.0|0.0|0.0|5.10
 reef|Sand Key|-28350.0|450.0|0.0|0.0|1.00
-marina|Conch Light Marina|-24654.2|-2501.5|-24650.0|-2520.0|4.06
+marina|Wreckers Wharf Marina|-24654.2|-2501.5|-24650.0|-2520.0|4.06
 marina|Salt Pond Basin|-22793.9|-2535.7|-22840.0|-2610.0|4.69
-marina|Stock Island Shrimp Docks|-22784.8|-2231.2|-22890.0|-2360.0|1.83
+marina|Shrimp Road Docks|-22784.8|-2231.2|-22890.0|-2360.0|1.83
 marina|Cow Key Fuel Dock|-22369.1|-2218.6|-22220.0|-2170.0|2.54
 marina|Boca Chica Basin|-22329.2|-1756.8|-22340.0|-1760.0|2.67
-marina|Saddlebunch Landing|-14031.0|-2632.5|-14190.0|-2680.0|2.20
-marina|Sugarloaf Sound Marina|-12603.8|-2296.4|-12670.0|-2290.0|1.98
-marina|Bow Channel Boatworks|-8536.0|-2276.6|-8470.0|-2280.0|1.97
+marina|Cudjoe Cut Docks|-14031.0|-2632.5|-14190.0|-2680.0|2.20
+marina|Summerland Fuel and Bait|-12603.8|-2296.4|-12670.0|-2290.0|1.98
+marina|Spanish Harbor Docks|-8536.0|-2276.6|-8470.0|-2280.0|1.97
 town|Key West|-24725.8|-2265.0|0.0|0.0|0.00
 town|Stock Island|-22564.5|-2009.1|0.0|0.0|0.00
 town|Big Pine Key|-9054.2|-1383.5|0.0|0.0|0.00
