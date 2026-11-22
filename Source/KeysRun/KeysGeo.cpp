@@ -33,6 +33,7 @@ namespace KeysGeo
 
 	static void BuildNavSegs();
 	static void BuildMangNear();
+	static void BuildCreekWater();
 	static FLinearColor DepthRGBSrgb(double D);
 	bool RealMap() { return GReal; }
 	static double GTideForce = 9;
@@ -583,6 +584,7 @@ namespace KeysGeo
 		}
 		if (GReal) BuildNavSegs();
 		if (GReal) BuildMangNear();
+		if (GReal) BuildCreekWater();
 
 		GSea = {{TEXT("Calm"), .8, .5, TEXT("glassy, a long, lazy ground swell."), 1.5},
 				{TEXT("Choppy"), 1.3, 1.2, TEXT("a steady trade wind, swells with afternoon chop on top."), 7},
@@ -725,7 +727,8 @@ namespace KeysGeo
 	}
 
 	double CanalDist(double X, double Z) { return GReal ? KeysGeoReal::CanalDist(X, Z) : 1e9; }
-	double ShelterDist(double X, double Z) { return FMath::Min(CreekDist(X, Z), CanalDist(X, Z)); }
+	// (water the map itself shows to be a creek counts as one: 14 m is where the shelter of a named creek's bank ends)
+	double ShelterDist(double X, double Z) { return FMath::Min3(CreekDist(X, Z), CanalDist(X, Z), 14 * (1 - CreekWater(X, Z))); }
 
 	// ground height: beaches slope into the water, creeks carve through, golf courses and the runway are graded flat
 	// the town is built on fill (web depth.ts TOWN_FILL, in the frame of MARINAS[0]): the ground under the pad is raised to
@@ -913,6 +916,104 @@ namespace KeysGeo
 	}
 	bool InMarkedChannel(double X, double Z) { return GReal && GNavSegs.Num() && NavChannelK(X, Z) > .3; }
 
+	// Creeks by rule. The named creeks (KeysMangroveLife) are the Middle Keys' only; everywhere else a creek is whatever
+	// narrow water the map has between two mangrove banks: a water cell with mangrove ground within reach on both sides of
+	// it, along the grid or its diagonals, no more than 80 m apart. Per cell of the real map's grid, 255 in such water,
+	// feathered three cells into the open; a residential canal is never one (its water stays clear). Built once.
+	static TArray<uint8> GCreekW;
+	// The water mesh asks about every vertex every frame, and nearly all of the sea is nowhere near a creek: a coarse
+	// grid (16 x 16 cells to one) says so at once, without touching the big one.
+	static TArray<uint8> GCreekAny;
+	static int32 GCreekNX = 0, GCreekNZ = 0, GCreekAnyNX = 0;
+	static double GCreekX0 = 0, GCreekZ0 = 0, GCreekInv = 0;
+	static void BuildCreekWater()
+	{
+		const int32 NX = KeysGeoReal::NX(), NZ = KeysGeoReal::NZ();
+		GCreekW.Reset();
+		GCreekW.SetNumZeroed(NX * NZ);
+		if (!GMangNear.Num()) return;
+		const double C = KeysGeoReal::Cell(), GX0 = KeysGeoReal::X0(), GZ0 = KeysGeoReal::Z0();
+		constexpr int32 Reach = 6, MaxGap = 8;   // cells: how far a bank may be on one side, and from bank to bank
+		ParallelFor(NZ, [&](int32 J)
+		{
+			if (J < Reach || J >= NZ - Reach) return;
+			for (int32 I = Reach; I < NX - Reach; I++)
+			{
+				// (255 - 5 x 34: mangrove within five cells, or there is nothing to find)
+				if (GMangNear[J * NX + I] < 85 || KeysGeoReal::MangroveCell(I, J) >= 200) continue;
+				static const int32 AX[4] = {1, 0, 1, 1}, AZ[4] = {0, 1, 1, -1};
+				bool bCreek = false;
+				for (int32 a = 0; a < 4 && !bCreek; a++)
+				{
+					int32 Fwd = 0, Back = 0;
+					for (int32 k = 1; k <= Reach && !Fwd; k++) if (KeysGeoReal::MangroveCell(I + AX[a] * k, J + AZ[a] * k) >= 200) Fwd = k;
+					if (!Fwd) continue;
+					for (int32 k = 1; k <= Reach && !Back; k++) if (KeysGeoReal::MangroveCell(I - AX[a] * k, J - AZ[a] * k) >= 200) Back = k;
+					bCreek = Back && Fwd + Back - 1 <= MaxGap;
+				}
+				if (!bCreek) continue;
+				const double X = GX0 + I * C, Z = GZ0 + J * C;
+				if (KeysGeoReal::Shore(X, Z) <= 0 || KeysGeoReal::CanalDist(X, Z) < 14) continue;   // dry ground between two stands; a canal
+				GCreekW[J * NX + I] = 255;
+			}
+		});
+		// which 16 x 16 blocks have any (and the blocks round them, which the feather and a lookup's corners reach into):
+		// the feather is only worked there, and CreekWater looks here first
+		GCreekNX = NX; GCreekNZ = NZ; GCreekX0 = GX0; GCreekZ0 = GZ0; GCreekInv = 1 / C;
+		GCreekAnyNX = (NX >> 4) + 1;
+		const int32 AnyNZ = (NZ >> 4) + 1;
+		TArray<uint8> Own;
+		Own.SetNumZeroed(GCreekAnyNX * AnyNZ);
+		ParallelFor(AnyNZ, [&](int32 b)
+		{
+			for (int32 J = b << 4; J < FMath::Min(NZ, (b + 1) << 4); J++)
+				for (int32 I = 0; I < NX; I++) if (GCreekW[J * NX + I]) Own[b * GCreekAnyNX + (I >> 4)] = 1;
+		});
+		GCreekAny.Reset();
+		GCreekAny.SetNumZeroed(GCreekAnyNX * AnyNZ);
+		int64 N = 0;
+		for (int32 b = 0; b < AnyNZ; b++)
+			for (int32 a = 0; a < GCreekAnyNX; a++)
+			{
+				if (!Own[b * GCreekAnyNX + a]) continue;
+				for (int32 q = FMath::Max(0, b - 1); q <= FMath::Min(AnyNZ - 1, b + 1); q++)
+					for (int32 r = FMath::Max(0, a - 1); r <= FMath::Min(GCreekAnyNX - 1, a + 1); r++) GCreekAny[q * GCreekAnyNX + r] = 1;
+				for (int32 J = b << 4; J < FMath::Min(NZ, (b + 1) << 4); J++)
+					for (int32 I = a << 4; I < FMath::Min(NX, (a + 1) << 4); I++) N += GCreekW[J * NX + I] == 255;
+			}
+		TArray<uint8> Tmp;
+		for (int32 Pass = 0; Pass < 3; Pass++)
+		{
+			Tmp = GCreekW;
+			ParallelFor(AnyNZ, [&](int32 b)
+			{
+				for (int32 a = 0; a < GCreekAnyNX; a++)
+				{
+					if (!GCreekAny[b * GCreekAnyNX + a]) continue;
+					for (int32 J = FMath::Max(1, b << 4); J < FMath::Min(NZ - 1, (b + 1) << 4); J++)
+						for (int32 I = FMath::Max(1, a << 4); I < FMath::Min(NX - 1, (a + 1) << 4); I++)
+						{
+							int32 M = 0;
+							for (int32 v = -1; v <= 1; v++) for (int32 u = -1; u <= 1; u++) M = FMath::Max(M, int32(Tmp[(J + v) * NX + I + u]) - (u && v ? 90 : 64));
+							if (M > Tmp[J * NX + I]) GCreekW[J * NX + I] = uint8(M);
+						}
+				}
+			});
+		}
+		UE_LOG(LogTemp, Log, TEXT("Keys Run: %.2f km2 of creek water between mangrove banks, found on the map"), N * C * C * 1e-6);
+	}
+	double CreekWater(double X, double Z)
+	{
+		if (!GReal || !GCreekAny.Num()) return 0;
+		const int32 NX = GCreekNX;
+		const double FX = Clamp((X - GCreekX0) * GCreekInv, 0, NX - 1.001), FZ = Clamp((Z - GCreekZ0) * GCreekInv, 0, GCreekNZ - 1.001);
+		const int32 I = int32(FX), J = int32(FZ);
+		if (!GCreekAny[(J >> 4) * GCreekAnyNX + (I >> 4)]) return 0;
+		const double U = FX - I, V = FZ - J;
+		const uint8* P = GCreekW.GetData() + J * NX + I;
+		return ((P[0] * (1 - U) + P[1] * U) * (1 - V) + (P[NX] * (1 - U) + P[NX + 1] * U) * V) / 255.0;
+	}
+
 	// the real bottom: NOAA's soundings, easing up to the shoreline, with the marinas dredged
 	static double RealDepthAt(double X, double Z)
 	{
@@ -921,7 +1022,11 @@ namespace KeysGeo
 		// the banks: the survey grid averages a bank's crown away (hardly anything reads under a metre), so what it has
 		// under 2.4 m is drawn down toward a low-tide flat - a bank charted at 1.3 m plays as 0.7 m, one at 1 m as 0.45 m.
 		// Deeper water is as surveyed.
-		if (D < 2.4) D = .25 + 2.15 * FMath::Pow((D - .3) / 2.1, 2.2);
+		// That holds for a bank's crown, which the survey reads under a metre or so. Water it reads deeper is a floor, not
+		// a crown: the bottom of a sound or of one of Florida Bay's basins, flat for hundreds of metres, and drawing those
+		// down shut them to boats. So the rule fades out between 0.75 and 1.1 m: under 0.75 as before, 1.1 m and more as
+		// surveyed (charted 1 m plays as 0.9 m, not 0.45, and floats a 43-footer at low water).
+		if (D < 2.4) D = Lerp(.25 + 2.15 * FMath::Pow((D - .3) / 2.1, 2.2), D, SS(.75, 1.1, D));
 		// the marked channels are kept open between their daybeacons
 		if (SD > 1 && D < NavDepth && GNavSegs.Num())
 		{

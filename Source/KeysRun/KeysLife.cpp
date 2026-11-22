@@ -56,6 +56,7 @@ namespace
 {
 	constexpr double LifeVSC = 1.35;
 	constexpr int32 LifePopTarget = 24;
+	constexpr double HotspotBoxX = 15900, HotspotBoxZ = 6560;   // half the map as it was before the Lower Keys and Key Largo (31.8 x 13.1 km): the water the hotspots are dealt over, round the boat
 	constexpr double LifePopR = 230;
 
 	double LRand(double A, double B) { return FMath::FRandRange(A, B); }
@@ -1443,7 +1444,8 @@ void AKeysLife::SpawnHotspot(const FString& Zone)
 		if (Big.Num())
 		{
 			const FHump* H = Big[FMath::FRand() < .55 ? 0 : FMath::Min(1, Big.Num() - 1)];
-			for (int32 k = 0; k < 40 && !bOk; k++)
+			const bool bInReach = !bHaveBoat || !RealMap() || (FMath::Abs(H->X - BoatX) < HotspotBoxX && FMath::Abs(ChainZ(H->X) + H->DZ - BoatZ) < HotspotBoxZ);   // (a hump the boat is nowhere near is no use to her)
+			for (int32 k = 0; k < 40 && !bOk && bInReach; k++)
 			{
 				X = H->X + LRand(-260, 260);
 				Z = ChainZ(H->X) + H->DZ + LRand(-260, 260);
@@ -1451,10 +1453,18 @@ void AKeysLife::SpawnHotspot(const FString& Zone)
 			}
 		}
 	}
+	// The hotspots belong to the water round the boat, not to the whole map. They are dealt over a box the size the map
+	// was before it grew west and north (the Middle and Upper Keys: 417 km2), centred on her; the map is 3.1 times that
+	// now, and dealt over all of it there was a third as much to find. One left far behind is dealt again near her
+	// (UpdateHotspots).
+	const double BoxX = bHaveBoat ? BoatX : -120, BoxZ = bHaveBoat ? BoatZ : 0;
+	const double ReachX = RealMap() ? HotspotBoxX : 1e9, ReachZ = RealMap() ? HotspotBoxZ : 1e9;   // (the classic map is smaller than the box: all of it, as ever)
+	const double BX0 = FMath::Max(WBX0 + 100, BoxX - ReachX), BX1 = FMath::Min(WBX1 - 100, BoxX + ReachX);
+	const double BZ0 = FMath::Max(WBZ0 + 100, BoxZ - ReachZ), BZ1 = FMath::Min(WBZ1 - 100, BoxZ + ReachZ);
 	for (int32 k = 0; k < 500 && !bOk; k++)
 	{
-		X = LRand(WBX0 + 100, WBX1 - 100);
-		Z = LRand(WBZ0 + 100, WBZ1 - 100);
+		X = LRand(BX0, FMath::Max(BX0, BX1));
+		Z = LRand(BZ0, FMath::Max(BZ0, BZ1));
 		if (!FarFromBoat(X, Z)) continue;
 		// cheap rejections before the full zone test
 		const double DZ = DZAt(X, Z);
@@ -1497,6 +1507,38 @@ void AKeysLife::SpawnHotspot(const FString& Zone)
 
 void AKeysLife::UpdateHotspots(double Dt, double T)
 {
+	// a hotspot the boat has left far behind is dealt again in her water: one a second, so a long run does not cost a
+	// hitch. One whose kind of water is not to be had near her (a bridge hotspot off Carysfort) stays where it was.
+	HotspotDealT -= Dt;
+	if (bHaveBoat && RealMap() && HotspotDealT <= 0 && Hotspots.Num())
+	{
+		HotspotDealT = 1;
+		auto IsNear = [this](const FKeysHotspot& H) { return FMath::Abs(H.X - BoatX) <= HotspotBoxX * 1.3 && FMath::Abs(H.Z - BoatZ) <= HotspotBoxZ * 1.3; };
+		int32 Near = 0, Far = -1;
+		for (int32 k = 0; k < Hotspots.Num(); k++)
+		{
+			const int32 i = (HotspotCursor + k) % Hotspots.Num();
+			if (IsNear(Hotspots[i])) Near++;
+			else if (Far < 0) Far = i;
+		}
+		if (Far >= 0)
+		{
+			FKeysHotspot Kept = Hotspots[Far];
+			const int32 N0 = Hotspots.Num();
+			Hotspots.RemoveAt(Far);
+			SpawnHotspot(Kept.Zone);
+			if (Hotspots.Num() < N0) Hotspots.Insert(MoveTemp(Kept), Far);
+			else Near++;
+			HotspotCursor = Far + 1;
+		}
+		if (Near != HotspotNearLogged)
+		{
+			HotspotNearLogged = Near;
+			int32 In2km = 0;
+			for (const FKeysHotspot& H : Hotspots) In2km += LHyp(H.X - BoatX, H.Z - BoatZ) < 2000 ? 1 : 0;
+			if (Near == Hotspots.Num() || Far < 0 || Near % 10 == 0) UE_LOG(LogTemp, Log, TEXT("KRLife hotspots: %d of %d dealt round the boat at %.0f, %.0f; %d of them within 2 km"), Near, Hotspots.Num(), BoatX, BoatZ, In2km);
+		}
+	}
 	const FLinearColor WeedC = LLin(LHex(0xc69a33));
 	for (FKeysHotspot& H : Hotspots)
 	{

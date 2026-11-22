@@ -108,6 +108,9 @@ namespace KeysGeo
 	// how far inside the dredged cut of a marina basin (web depth.ts marinaCutDepth): > 0 inside
 	double MarinaCutDepth(double X, double Z);
 	double CreekDist(double X, double Z);
+	// real map: 0..1, how much this water is a creek by the map's own showing - narrow water between two mangrove banks,
+	// anywhere (the named creeks of CreekDist are the Middle Keys' alone). Calm and tea-stained; never a canal.
+	double CreekWater(double X, double Z);
 	// real map: metres outside the nearest residential canal's edge (negative in it), 1e9 when none is near
 	double CanalDist(double X, double Z);
 	// the nearer of a creek's bank and a canal's wall: water inside is out of the wind and the swell

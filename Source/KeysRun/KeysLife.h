@@ -295,6 +295,9 @@ private:
 	double PopT = 0, NowT = 0;
 	double BoatX = 0, BoatZ = 0, BoatSpd = 0, CamX = 0, CamZ = 0, CamY = 2;
 	bool bHaveBoat = false;
+	double HotspotDealT = 0;            // till the next look for a hotspot left behind (UpdateHotspots)
+	int32 HotspotNearLogged = -1;
+	int32 HotspotCursor = 0;            // where the look starts, so one that cannot be moved does not hold up the rest
 	bool bBait = false, bTunaClosing = false, bStrikePending = false;
 	double BaitX = 0, BaitZ = 0;
 	FKeysTunaStrike Pending;

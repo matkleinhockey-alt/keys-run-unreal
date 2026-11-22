@@ -1020,7 +1020,7 @@ void AKeysWorld::UpdateWater()
 				? FMath::Max(KeysOcean::Foam(X, Z) * (.3 + .7 * Caps) * (1 - SStep(8, 40, MinLen)), SStep(.75, 1.3, Crest) * .12 * Caps)
 				: SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
 			// (a creek through the mangroves is in the lee of everything: no whitecaps, no wash on its banks)
-			const double LeeCreek = RealMap() ? SStep(0, 14, CreekDist(X, Z)) : 1.0, LeeCanal = RealMap() ? SStep(-1, 10, CanalDist(X, Z)) : 1.0;
+			const double LeeCreek = RealMap() ? SStep(0, 14, FMath::Min(CreekDist(X, Z), 14 * (1 - CreekWater(X, Z)))) : 1.0, LeeCanal = RealMap() ? SStep(-1, 10, CanalDist(X, Z)) : 1.0;
 			const double Lee = FMath::Min(LeeCreek, LeeCanal);
 			F *= Lee;
 			// white lines along the arms of a fresh wake, where the crests are tallest
