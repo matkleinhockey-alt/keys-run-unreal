@@ -1,0 +1,21 @@
+diff --git a/Source/KeysRun/KeysTownData.cpp b/Source/KeysRun/KeysTownData.cpp
+index efeea01..c746ad9 100644
+--- a/Source/KeysRun/KeysTownData.cpp
++++ b/Source/KeysRun/KeysTownData.cpp
+@@ -1,6 +1,7 @@
+ #include "KeysTownData.h"
+ #include "KeysSea.h"
+ #include "KeysGeo.h"
++#include "KeysScuba.h"
+ 
+ // Ported from the web game: packages/shared/src/world/town.ts (lots, streets, props, interiors, NPCs, walkability),
+ // world/casino.ts (the Gaff & Gill floor), content/venues.ts (names, greetings, shelves), apps/client/src/entities/town/paint.ts
+@@ -936,6 +937,8 @@ namespace KeysTown
+ 				 {TEXT("wetsuit"), TEXT("3 mm shorty wetsuit"), TEXT("Warmth is air. Shivering burns it faster than swimming does."), 750, TEXT("dive.wetsuit")},
+ 				 {TEXT("tank-pony"), TEXT("Slung pony bottle and reg"), TEXT("The big one: more than twice as long on the bottom."), 4500, TEXT("dive.tank")},
+ 				 {TEXT("fill"), TEXT("Air fill"), TEXT("Tops the bottle back up. Steve will do it while you wait."), 12, TEXT("dive.fill")}}});
++			// the scuba set, its cylinders, the dive light and the cylinder fill (names, words and prices in KeysScuba.cpp)
++			for (const KeysScuba::FShopRow& R : KeysScuba::ShopRows()) A.Last().Sells.Add({R.Id, R.Name, R.Blurb, R.Price, R.Effect});
+ 			A.Add({TEXT("liquor"), TEXT("Cheap Beer & Lotto"), TEXT("Wine - Spirits - Scratch-offs"),
+ 				{TEXT("ID. Yes, you. Fine, go on."), TEXT("Scratch-offs are by the register. Hope is extra.")},
+ 				{{TEXT("sixer"), TEXT("Six-pack for the cooler"), TEXT("The deck party notices."), 9, TEXT("liquor.sixer")},

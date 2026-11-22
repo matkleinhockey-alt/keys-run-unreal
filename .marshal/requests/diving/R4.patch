@@ -1,0 +1,25 @@
+diff --git a/Source/KeysRun/KeysHUD2.cpp b/Source/KeysRun/KeysHUD2.cpp
+index 91ea6ff..415d9e4 100644
+--- a/Source/KeysRun/KeysHUD2.cpp
++++ b/Source/KeysRun/KeysHUD2.cpp
+@@ -2,6 +2,7 @@
+ #include "KeysBoatPawn.h"
+ #include "KeysKit.h"
+ #include "KeysGeo.h"
++#include "KeysScuba.h"
+ #include "KeysLocals.h"
+ #include "KeysHandgun.h"
+ #include "KeysTreasure.h"
+@@ -404,6 +405,12 @@ void AKeysHUD::DrawGear(AKeysBoatPawn* P)
+ 	const double Air = (bTank ? 2.2 : 1) * (P->HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (P->HasGear(TEXT("dive.fins")) ? 1.1 : 1);
+ 	Row(FString::Printf(TEXT("Bottom time %d s -> %d s"), 90, FMath::RoundToInt(90 * Air)), Air > 1.01);
+ 	if (P->HasGear(TEXT("dive.tank"))) Row(FString::Printf(TEXT("Air fills: %d (one per dive past 2 m)"), P->CountOf(TEXT("dive.fill"))), bTank);
++	// the scuba set: cylinders and what is in them, scuba or a breath for the next dive, the logbook (KeysScuba.h)
++	{
++		TArray<TPair<FString, bool>> ScRows;
++		KeysScuba::LoadoutRows(P, ScRows);
++		for (const TPair<FString, bool>& R : ScRows) Row(R.Key, R.Value);
++	}
+ 	Row(P->HasGear(TEXT("spear.long")) ? TEXT("Speargun reach 18 m -> 24 m") : TEXT("Speargun reach 18 m"), P->HasGear(TEXT("spear.long")));
+ 	Row(FString::Printf(TEXT("Pistol magazine %d rounds%s"), P->HasGear(TEXT("handgun.extmag")) ? 18 : 12, P->HasGear(TEXT("handgun.dot")) ? TEXT(", red dot: a 45% tighter group") : TEXT("")), P->HasGear(TEXT("handgun.extmag")) || P->HasGear(TEXT("handgun.dot")));
+ 	Row(FString::Printf(TEXT("Lots held: %d of 3"), P->Estates.Num()), P->Estates.Num() > 0);

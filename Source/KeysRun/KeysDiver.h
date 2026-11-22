@@ -148,6 +148,7 @@ private:
 	void BeginScuba();
 	void FinishDive();
 	void HandleScubaEvents();
+	void BreathSound(bool bInhale);
 	void UpdateGauge(double Dt);
 	void UpdateTorch(double Dt);
 	void UpdateBoatKit(double T);

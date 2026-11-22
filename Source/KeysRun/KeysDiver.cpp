@@ -576,10 +576,49 @@ void AKeysDiver::HandleScubaEvents()
 			if (P) P->ShowMsg(TEXT("That was a bad one. You will feel it for the rest of the afternoon."), 5);
 			break;
 		case KeysScuba::EEvent::Winded: Name = TEXT("winded"); break;
-		case KeysScuba::EEvent::BreathIn: if (OnBreath) OnBreath(true, S.Depth(), S.Exertion); break;
-		case KeysScuba::EEvent::BreathOut: if (OnBreath) OnBreath(false, S.Depth(), S.Exertion); break;
+		case KeysScuba::EEvent::BreathIn: BreathSound(true); if (OnBreath) OnBreath(true, S.Depth(), S.Exertion); break;
+		case KeysScuba::EEvent::BreathOut: BreathSound(false); if (OnBreath) OnBreath(false, S.Depth(), S.Exertion); break;
 		}
 		if (Name) UE_LOG(LogTemp, Log, TEXT("KRScuba event: %s at %.1f m, %.0f psi, %.0f s into the dive"), Name, S.Depth(), Sc.Psi, Sc.Secs);
+	}
+}
+
+// The regulator, through the audio actor's own one-shot synth (it already muffles everything under water): the breath
+// in is the demand valve's click and a dry hiss that rises as the lungs fill; the breath out is a low rumble with a
+// run of bubble pops over it, more of them and closer together when she is working.
+void AKeysDiver::BreathSound(bool bInhale)
+{
+	AKeysAudio* A = AKeysAudio::Get(this);
+	if (!A || !bCamUnder) return;
+	const double Ex = DvClamp(S.Exertion, 0, 1);
+	const double Period = FMath::Lerp(5.2, 2.6, Ex);
+	if (bInhale)
+	{
+		const float Len = float(Period * .38);
+		FKeysBurst Click;
+		Click.Filter = KeysDSP::EFilter::Bandpass; Click.Freq = 1500; Click.Q = 5; Click.Gain = .05f; Click.Att = .002f; Click.Dur = .035f;
+		A->Burst(Click);
+		FKeysBurst Hiss;
+		Hiss.Filter = KeysDSP::EFilter::Bandpass; Hiss.Freq = 620; Hiss.FreqTo = 980; Hiss.Q = 1.4f;
+		Hiss.Gain = float(.085 + .04 * Ex); Hiss.Att = Len * .35f; Hiss.Dur = Len;
+		A->Burst(Hiss);
+	}
+	else
+	{
+		const float Len = float(Period * .45);
+		FKeysBurst Rumble;
+		Rumble.Filter = KeysDSP::EFilter::Lowpass; Rumble.Freq = 260; Rumble.FreqTo = 150; Rumble.Q = 1;
+		Rumble.Gain = float(.1 + .05 * Ex); Rumble.Att = .06f; Rumble.Dur = Len;
+		A->Burst(Rumble);
+		const int32 N = 9 + int32(Ex * 8);
+		for (int32 i = 0; i < N; i++)
+		{
+			FKeysBurst B;
+			const double U = (i + FMath::FRand()) / N;
+			B.Filter = KeysDSP::EFilter::Bandpass; B.Freq = float(DvRand(280, 900)); B.FreqTo = B.Freq * 1.5f; B.Q = 6;
+			B.Gain = float(DvRand(.05, .1) * (1 - .6 * U)); B.Att = .004f; B.Dur = float(DvRand(.05, .11)); B.Delay = float(U * Len * .9);
+			A->Burst(B);
+		}
 	}
 }
 
@@ -967,7 +1006,7 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 		const bool bWasOut = Shot.bAlive;
 		TryFire();
 		// the gun's thump: the school fish around bolt (the fish the shaft passes are spooked when it lands)
-		if (!bWasOut && Shot.bAlive) if (AKeysSchools* Sc = AKeysSchools::Get(this)) Sc->Startle(S.X, S.Z, 8);
+		if (!bWasOut && Shot.bAlive) if (AKeysSchools* Sch = AKeysSchools::Get(this)) Sch->Startle(S.X, S.Z, 8);
 	}
 	// the latch lets go by itself once the gun is seated, or when the hands are busy
 	if (bDrawLatched && (CanFire(Gun) || !HandsFree())) { bDrawLatched = false; bDrawing = false; }
@@ -1375,7 +1414,7 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 {
 	if (FishMode == 0) { FishOnLine->SetVisibility(false); return; }
 	FishOnLine->SetVisibility(true);
-	double Pitch = 0, Yaw = 0, Roll = 0, Sc = 1;
+	double Pitch = 0, Yaw = 0, Roll = 0, FishSc = 1;
 	if (FishMode == 3 || FishMode == 4)
 	{
 		KillT += Dt;
@@ -1423,7 +1462,7 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 		Pitch = FMath::Sin(T * Fq * .7) * Amp * .5;
 		Yaw = FishHead + FMath::Sin(T * Fq) * Amp;
 		Roll = FMath::Sin(T * Fq * 1.4 + .6) * Amp * .6;
-		Sc = 1 + FMath::Sin(T * Fq * 2) * .04 * (Fight + Ex);
+		FishSc = 1 + FMath::Sin(T * Fq * 2) * .04 * (Fight + Ex);
 	}
 	else
 	{
@@ -1435,7 +1474,7 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 		if (FleeT > 2.4) { FishMode = 0; FishOnLine->ClearAllMeshSections(); return; }
 	}
 	FishOnLine->SetWorldLocationAndRotation(G2U(FishPos), FRotator(FMath::RadiansToDegrees(Pitch), YawDeg(Yaw), FMath::RadiansToDegrees(Roll)));
-	FishOnLine->SetWorldScale3D(FVector(Sc));
+	FishOnLine->SetWorldScale3D(FVector(FishSc));
 }
 
 // ================================================================ the look under the surface
