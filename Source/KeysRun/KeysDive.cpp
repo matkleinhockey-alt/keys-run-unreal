@@ -62,7 +62,7 @@ namespace KeysDive
 		}
 		else { S.bKicking = false; S.KickPhase = 0; }
 
-		if (S.Y < 0) S.VY += BuoyancyAccel(FMath::Max(0.0, -S.Y)) * Dt;
+		if (S.Y < 0) { if (!S.bNeutral) S.VY += BuoyancyAccel(FMath::Max(0.0, -S.Y)) * Dt; }
 		else S.VY -= 9.8 * Dt;
 
 		// drag on the velocity relative to the water, split along and across the body
@@ -82,7 +82,8 @@ namespace KeysDive
 		if (bKicks && In.bAscend && S.Y < 0)
 		{
 			const double Ease = DClamp(-S.Y / AscendEaseDepth, 0, 1);
-			const double Target = (In.bSprint ? AscendSpeedSprint : AscendSpeed) * Ease;
+			const double Up = S.AscendCap > 0 ? (In.bSprint ? S.AscendCapSprint : S.AscendCap) : (In.bSprint ? AscendSpeedSprint : AscendSpeed);
+			const double Target = Up * Ease;
 			if (S.VY < Target) S.VY += (Target - S.VY) * FMath::Min(1.0, AscendResponse * Dt);
 		}
 
@@ -125,7 +126,7 @@ namespace KeysDive
 		const double ExRate = TargetEx > S.Exertion ? ExertionRiseRate : ExertionFallRate;
 		S.Exertion += (TargetEx - S.Exertion) * FMath::Min(1.0, Dt * ExRate);
 		const bool bAtSurface = Depth <= SurfaceEps && S.VY >= -.05;
-		if (bAtSurface) S.Air = FMath::Min(S.AirMaxV, S.Air + (S.AirMaxV / 3) * Dt);
+		if (bAtSurface || S.bOnGas) S.Air = FMath::Min(S.AirMaxV, S.Air + (S.AirMaxV / 3) * Dt);
 		else S.Air = FMath::Max(0.0, S.Air - AirBurnRate(Depth, S.Exertion) * Dt);
 
 		Integrate(S, In, T, Dt, true, SwimMul);

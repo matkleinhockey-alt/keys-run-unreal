@@ -10,9 +10,11 @@
 #include "KeysWorld.h"
 #include "KeysData.h"
 #include "KeysAudio.h"
+#include "KeysScubaSpeargun.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/PostProcessComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
@@ -119,12 +121,10 @@ namespace
 		return C;
 	}
 
-	// the gun (gun-viewmodel.ts): a 78 cm reef gun, in its own frame (meters, +X out the muzzle, Z up)
-	// a black wooden reef gun after the user's reference photo: a tall stock with a muzzle block, two pairs of thick
-	// black bands, a full-length shaft with a flopper, a reel under the stock ahead of a raked pistol grip
-	constexpr double BarrelLen = .78, StockW = .03, StockH = .046, BarrelR = StockW * .5, ShaftR = .0035, BandR = .0075;
-	constexpr double RailY = StockH * .5 + ShaftR, ShaftPoke = .3, ShaftLen = 1.0;
-	constexpr double BandAnchorX = BarrelLen - .05, BandShort = .32, BandLong = .5;
+	// the gun (gun-viewmodel.ts): a 78 cm roller gun, in its own frame (meters, +X out the muzzle, Z up), rebuilt on the
+	// user's reference picture. Its meshes and their sizes are in KeysScubaSpeargun.h; the animation is in UpdateGun.
+	using KeysSpeargun::BarrelLen; using KeysSpeargun::BandR; using KeysSpeargun::RailY;
+	using KeysSpeargun::ShaftPoke; using KeysSpeargun::BandAnchorX; using KeysSpeargun::BandShort; using KeysSpeargun::BandLong;
 	const FVector ReadyPos(.6, .2, -.14), LoadPos(.5, .2, -.3);   // camera frame, meters (forward, right, up)
 
 	// view, camera-frame helper: a camera-relative offset (forward, right, up) in game meters
@@ -156,6 +156,26 @@ AKeysDiver::AKeysDiver()
 	Body = MakePMC(this, Root, TEXT("Body"));
 	FinL = MakePMC(this, Body, TEXT("FinL"));
 	FinR = MakePMC(this, Body, TEXT("FinR"));
+	Kit = MakePMC(this, Body, TEXT("ScubaKit"));
+	Gauge = MakePMC(this, Root, TEXT("Gauge"));
+	GaugeFace = MakePMC(this, Gauge, TEXT("GaugeFace"));
+	Gauge->SetCastShadow(false);
+	GaugeFace->SetCastShadow(false);
+	Gauge->LightingChannels.bChannel1 = true;       // the fill light that shows a speared fish also reads the gauge
+	GaugeFace->LightingChannels.bChannel1 = true;
+	BoatRack = MakePMC(this, Root, TEXT("BoatRack"));
+	BoatFlag = MakePMC(this, Root, TEXT("BoatFlag"));
+	Torch = CreateDefaultSubobject<USpotLightComponent>(TEXT("Torch"));
+	Torch->SetupAttachment(Root);
+	Torch->SetUsingAbsoluteLocation(true);
+	Torch->SetUsingAbsoluteRotation(true);
+	Torch->SetIntensityUnits(ELightUnits::Candelas);
+	Torch->SetCastShadows(false);
+	Torch->SetInnerConeAngle(9.f);
+	Torch->SetOuterConeAngle(21.f);
+	Torch->SetAttenuationRadius(2400.f);
+	Torch->SetLightColor(FLinearColor(1.f, .96f, .86f));
+	Torch->SetVisibility(false);
 	GunBase = MakePMC(this, Root, TEXT("GunBase"));
 	GunBandL = MakePMC(this, GunBase, TEXT("GunBandL"));
 	GunBandR = MakePMC(this, GunBase, TEXT("GunBandR"));
@@ -164,6 +184,22 @@ AKeysDiver::AKeysDiver()
 	GunGlove = MakePMC(this, GunBase, TEXT("GunGlove"));
 	GunHandL = MakePMC(this, GunBase, TEXT("GunHandL"));
 	GunWish = MakePMC(this, GunBase, TEXT("GunWish"));
+	GunLeader = MakePMC(this, GunBase, TEXT("GunLeader"));
+	// the gun is matt black and held in her own shadow: a small fill from over the left shoulder, on a lighting channel
+	// of its own so it touches the gun and nothing on the reef
+	GunFill = CreateDefaultSubobject<UPointLightComponent>(TEXT("GunFill"));
+	GunFill->SetupAttachment(Root);
+	GunFill->SetUsingAbsoluteLocation(true);
+	GunFill->SetIntensityUnits(ELightUnits::Lumens);
+	GunFill->SetCastShadows(false);
+	GunFill->SetSourceRadius(20.f);
+	GunFill->SetSoftSourceRadius(40.f);
+	GunFill->SetAttenuationRadius(420.f);
+	GunFill->SetLightColor(FLinearColor(.9f, .97f, 1.f));
+	GunFill->LightingChannels.bChannel0 = false;
+	GunFill->LightingChannels.bChannel2 = true;
+	GunFill->SetVisibility(false);
+	GunWorn = MakePMC(this, Body, TEXT("GunWorn"));
 	Lines = MakePMC(this, Root, TEXT("Lines"));
 	FishOnLine = MakePMC(this, Root, TEXT("FishOnLine"));
 	FishOnLine->LightingChannels.bChannel1 = true;
@@ -220,156 +256,64 @@ void AKeysDiver::BeginPlay()
 	}
 	// ---- the first-person speargun and the gloved hands holding it
 	{
-		const FLinearColor Stock = Hex(0x3a2a1f), Steel = Hex(0xe2e7eb), Band = Hex(0x2a2d31), Glove = Hex(0x1c1e21),
-			Suit = Hex(0x2a2e2c), Mono = Hex(0xd9dde0), ReelC = Hex(0x222528), Grey = Hex(0x55595e);
+		const FLinearColor Glove = Hex(0x1c1e21), Suit = Hex(0x2a2e2c), Grey = Hex(0x55595e);
 		FKeysMesh M;
-		M.Surf = SurfWood;
-		// the stock, butt to muzzle, a little deeper at the back where it meets the grip
-		M.AddRoundBox(FVector((BarrelLen - .2) * .5, 0, 0), FVector(BarrelLen + .2, StockW, StockH), .008, Stock, FQuat::Identity, 2);
-		M.AddRoundBox(FVector(-.13, 0, -.006), FVector(.15, StockW + .004, StockH + .016), .01, Stock, FQuat::Identity, 2);
-		// the butt pad and the muzzle block with its band slots
-		M.Surf = SurfRubber;
-		M.AddRoundBox(FVector(-.205, 0, -.006), FVector(.012, StockW + .006, StockH + .02), .005, Band, FQuat::Identity, 2);
-		M.Surf = SurfMetalPaint;
-		M.AddRoundBox(FVector(BarrelLen - .02, 0, .004), FVector(.06, StockW + .016, StockH + .02), .008, Hex(0x101214), FQuat::Identity, 2);
-		M.Surf = SurfSteel;
-		Tube(M, FVector(BarrelLen - .055, 0, RailY - .002), FVector(BarrelLen + .012, 0, RailY - .002), .0055, .0055, 8, Steel, true);   // shaft guide
-		// the closed track the shaft rides in along the top, the band holes in the back of the muzzle, the line
-		// hook under its nose and the rubber butt cap
-		M.Surf = SurfMetalPaint;
-		M.AddRoundBox(FVector((BarrelLen - .25) * .5, 0, StockH * .5 + .001), FVector(BarrelLen - .1, .011, .004), .0015, Hex(0x0c0d0e), FQuat::Identity, 1);
-		M.Surf = SurfSteel;
-		for (int32 Side = -1; Side <= 1; Side += 2)   // polished edges of the track
-			M.AddRoundBox(FVector((BarrelLen - .25) * .5, Side * .0062, StockH * .5 + .0028), FVector(BarrelLen - .1, .0014, .0016), .0006, Steel, FQuat::Identity, 1);
-		M.Surf = SurfWood;
-		for (int32 Side = -1; Side <= 1; Side += 2)   // a lighter inlaid stripe down each side of the stock
-			M.AddRoundBox(FVector((BarrelLen - .3) * .5 + .02, Side * (StockW * .5 + .0004), .004), FVector(BarrelLen - .25, .001, .006), .0005, Hex(0x8a5a32), FQuat::Identity, 1);
-		M.Surf = SurfMetalPaint;
-		for (int32 Side = -1; Side <= 1; Side += 2)
-			for (int32 k = 0; k < 2; k++)
-				Tube(M, FVector(BarrelLen - .051, Side * (StockW * .275 + BandR), StockH * .5 + BandR * (1.1 - 2.15 * k)), FVector(BarrelLen - .049, Side * (StockW * .275 + BandR), StockH * .5 + BandR * (1.1 - 2.15 * k)), BandR * 1.25, BandR * 1.25, 10, Hex(0x050505), true);
-		M.Surf = SurfSteel;
-		Tube(M, FVector(BarrelLen + .005, 0, -StockH * .5 - .004), FVector(BarrelLen - .02, 0, -StockH * .5 - .012), .0025, .0025, 6, Steel, true);
-		M.Surf = SurfRubber;
-		KeysShapes::AddBlob(M, FVector(-.212, 0, -.008), FVector(.016, (StockW + .012) * .5, (StockH + .03) * .5), FQuat::Identity, Band, 12, 6);
-		// the pistol grip, raked back, with its trigger and guard
-		M.Surf = SurfWood;
-		const FVector GripTop(-.07, 0, -.025), GripBot(-.115, 0, -.135);
-		M.AddRoundBox((GripTop + GripBot) * .5, FVector(.036, .028, (GripTop - GripBot).Size()), .011, Stock,
-			FRotationMatrix::MakeFromZ(GripTop - GripBot).ToQuat(), 2);
-		M.AddRoundBox(GripBot + FVector(-.004, 0, -.006), FVector(.044, .032, .014), .006, Stock, FRotationMatrix::MakeFromZ(GripTop - GripBot).ToQuat(), 2);
-		M.Surf = SurfRubber;
-		for (int32 k = 0; k < 3; k++)
+		KeysSpeargun::BuildGun(M, false);
 		{
-			const FVector Q = FMath::Lerp(GripTop, GripBot, .3 + .22 * k) + FVector(.019, 0, 0);
-			KeysShapes::AddBlob(M, Q, FVector(.005, .0135, .008), FQuat::Identity, Hex(0x1a1c1e), 8, 4);   // finger ridges
-		}
-		M.Surf = SurfSteel;
-		M.AddRoundBox(FVector(-.055, -StockW * .5 - .004, -.002), FVector(.018, .004, .007), .0015, Steel, FQuat(FVector::YAxisVector, -.2), 1);   // safety
-		Tube(M, FVector(-.04, 0, -.024), FVector(-.046, 0, -.055), .0035, .003, 6, Grey);   // trigger
-		M.Surf = SurfMetalPaint;
-		Tube(M, FVector(-.005, 0, -.023), FVector(-.004, 0, -.07), .0035, .0035, 6, Stock, true);
-		Tube(M, FVector(-.004, 0, -.07), FVector(-.075, 0, -.08), .0035, .0035, 6, Stock, true);
-		// the reel under the stock ahead of the guard: a spool of white mono on a short stem
-		const FVector ReelC0(.05, 0, -.062);
-		M.Surf = SurfMetalPaint;
-		Tube(M, FVector(.05, 0, -.02), ReelC0, .006, .006, 6, ReelC);
-		{
-			// the turning part on its own component, built about the axle (local Y), so it can spin as line pays out
+			// the reel's turning part on its own component, built about the axle (local Y), so it can spin as line pays out
 			FKeysMesh Rl;
-			const FVector O = FVector::ZeroVector;
-			Rl.Surf = SurfMetalPaint;
-			Tube(Rl, O + FVector(0, -.016, 0), O + FVector(0, .016, 0), .036, .036, 18, ReelC, true);
-			Rl.Surf = SurfDefault;
-			Tube(Rl, O + FVector(0, -.013, 0), O + FVector(0, .0175, 0), .031, .031, 18, Mono, true);
-			Rl.Surf = SurfMetalPaint;
-			for (int32 Side = -1; Side <= 1; Side += 2)
-				Tube(Rl, O + FVector(0, Side * .0165, 0), O + FVector(0, Side * .0185, 0), .039, .039, 20, ReelC, true);   // flanges
-			// three lightening holes in the outer flange (pale), so you can see it turn
-			for (int32 k = 0; k < 3; k++)
-			{
-				const double A = k * 2 * PI / 3;
-				const FVector Hc = O + FVector(FMath::Cos(A) * .025, -.0189, FMath::Sin(A) * .025);
-				Tube(Rl, Hc, Hc + FVector(0, -.0008, 0), .0055, .0055, 10, Grey, true);
-			}
-			Rl.Surf = SurfSteel;
-			Tube(Rl, O + FVector(0, -.018, 0), O + FVector(0, -.027, 0), .008, .008, 10, Grey, true);   // hub
-			Tube(Rl, O + FVector(0, -.025, 0), O + FVector(-.012, -.025, -.024), .0035, .0035, 6, Grey, true);   // crank arm
-			Rl.Surf = SurfRubber;
-			Tube(Rl, O + FVector(-.012, -.026, -.024), O + FVector(-.012, -.042, -.024), .0055, .005, 8, Band, true);   // knob
+			KeysSpeargun::BuildReel(Rl);
 			Rl.Commit(GunReel, 0, VC);
-			GunReel->SetRelativeLocation(ReelC0 * 100);
+			GunReel->SetRelativeLocation(KeysSpeargun::ReelAt() * 100);
 		}
-		M.Surf = SurfSteel;
-		Tube(M, FVector(.09, -.004, -StockH * .5 - .002), FVector(.09, -.004, -StockH * .5 - .014), .0022, .0022, 6, Grey, true);   // line guide
-		// the line from the spool up to the muzzle, sagging a touch
-		M.Surf = SurfDefault;
-		{
-			FVector Prev = ReelC0 + FVector(.03, 0, .01);
-			const FVector End(BarrelLen - .03, -.012, -StockH * .5 - .004);
-			for (int32 i = 1; i <= 8; i++)
-			{
-				const double t = i / 8.0;
-				const FVector P = FMath::Lerp(ReelC0 + FVector(.03, 0, .01), End, t) + FVector(0, 0, -.018 * FMath::Sin(t * PI));
-				Tube(M, Prev, P, .0009, .0009, 4, Mono);
-				Prev = P;
-			}
-		}
-		// the hands, black gloves and a dark wetsuit: the right round the pistol grip, finger by the trigger
-		M.Surf = SurfDefault;
-		const int32 HandFrom = M.V.Num();
-		AddGripHand(M, FMath::Lerp(GripBot, GripTop, .5) + FVector(-.004, .002, 0), GripTop - GripBot, FVector(-.6, .8, 0), .017, .95, .25, true,
-			FVector(-.42, .2, -.42), Glove, Suit, Glove);
-		M.SetSurfFrom(HandFrom, SurfRubber);
 		M.Commit(GunBase, 0, VC);
-		// the left hand, holding the stock ahead of the reel, back of the hand toward you (hidden while loading)
+		// the hands, black gloves and a dark wetsuit: the right round the pistol grip, finger by the trigger (a section
+		// of its own, so the gun can be shown without it)
+		{
+			FKeysMesh Hr;
+			const FVector GripTop = KeysSpeargun::GripTop(), GripBot = KeysSpeargun::GripBot();
+			AddGripHand(Hr, FMath::Lerp(GripBot, GripTop, .5) + FVector(-.004, .002, 0), GripTop - GripBot, FVector(-.6, .8, 0), .017, .95, .25, true,
+				FVector(-.42, .2, -.42), Glove, Suit, Glove);
+			Hr.SetSurfFrom(0, SurfRubber);
+			Hr.Commit(GunBase, 1, VC);
+		}
+		// the left hand, under the barrel ahead of the reel, back of the hand toward you (hidden while loading)
 		FKeysMesh L;
-		AddGripHand(L, FVector(.15, 0, -.004), FVector::XAxisVector, FVector(0, -.5, -.85), .024, .9, 0, true, FVector(-.2, -.42, -.42), Glove, Suit, Glove);
+		AddGripHand(L, FVector(.17, 0, -.002), FVector::XAxisVector, FVector(0, -.5, -.85), .018, .9, 0, true, FVector(-.2, -.42, -.42), Glove, Suit, Glove);
 		{
 			// a dive computer on the wrist, just up the forearm from the hand
-			const FVector Hc(.15, 0, -.004), El(-.2, -.42, -.42);
+			const FVector Hc(.17, 0, -.002), El(-.2, -.42, -.42);
 			const FVector Dw = (El - Hc).GetSafeNormal(), Wp = Hc + Dw * .155 + FVector(0, -.012, -.02);
-			const FVector Out = FVector::CrossProduct(Dw, FVector::XAxisVector).GetSafeNormal() * -1;
 			Tube(L, Wp - Dw * .011, Wp + Dw * .011, .037, .037, 14, Hex(0x0e0f10));
 			L.AddRoundBox(Wp + FVector(-.006, -.03, .008), FVector(.032, .014, .032), .006, Hex(0x2b2e31), FRotationMatrix::MakeFromXZ(Dw, FVector(0, -1, .3)).ToQuat(), 2);
 			L.AddRoundBox(Wp + FVector(-.006, -.0375, .009), FVector(.024, .002, .024), .004, Hex(0x3c5560), FRotationMatrix::MakeFromXZ(Dw, FVector(0, -1, .3)).ToQuat(), 1);
-			(void)Out;
 		}
 		L.SetSurfFrom(0, SurfRubber);
 		L.Commit(GunHandL, 0, VC);
-		FKeysMesh B;   // a unit pair of bands along +X, one over the other, scaled per frame
-		B.Surf = SurfRubber;
-		Tube(B, FVector(0, 0, 0), FVector(1, 0, 0), 1, 1, 8, Band);
-		Tube(B, FVector(0, 0, -2.15), FVector(1, 0, -2.15), 1, 1, 8, Band);
-		B.Commit(GunBandL, 0, VC);
-		B.Commit(GunBandR, 0, VC);
-		// the wishbone: a stiff loop of braided line joining the band pairs over the shaft, a steel bead at each end
-		FKeysMesh Wb;
-		Wb.Surf = SurfRubber;
-		const double Wr = StockW * .275 + BandR;
-		FVector Prev(0, -Wr, -BandR);
-		for (int32 i = 1; i <= 10; i++)
-		{
-			const double A = PI * i / 10;
-			const FVector P(0, -Wr * FMath::Cos(A), -BandR + (Wr + .004) * FMath::Sin(A));
-			Tube(Wb, Prev, P, .0022, .0022, 6, Hex(0x6d7277));
-			Prev = P;
-		}
-		Wb.Surf = SurfSteel;
+		// a unit pair of bands along +X for each side, scaled per frame
 		for (int32 Side = -1; Side <= 1; Side += 2)
-			Ellipsoid(Wb, FVector(0, Side * Wr, -BandR * .2), FVector(BandR * 1.15), 8, Hex(0x9aa1a7));
+		{
+			FKeysMesh B;
+			KeysSpeargun::BuildBandPair(B, Side);
+			B.Commit(Side < 0 ? GunBandL : GunBandR, 0, VC);
+		}
+		FKeysMesh Wb;
+		KeysSpeargun::BuildWishbone(Wb);
 		Wb.Commit(GunWish, 0, VC);
-		// the shaft: polished steel the length of the gun, a cone tip with its flopper, shark fins where the bands hook
 		FKeysMesh Sh;
-		Sh.Surf = SurfSteel;
-		const double Front = ShaftPoke * .5, Back = Front - ShaftLen;
-		Tube(Sh, FVector(Back, 0, 0), FVector(Front, 0, 0), ShaftR, ShaftR, 8, Steel, true);
-		Tube(Sh, FVector(Front, 0, 0), FVector(Front + .03, 0, 0), ShaftR * 1.1, .0004, 8, Steel);
-		Sh.AddRoundBox(FVector(Front - .022, 0, .006), FVector(.05, .0015, .006), .0007, Steel, FQuat(FVector::YAxisVector, .18), 1);
-		const double FinX = BandAnchorX - BandLong - (BarrelLen + Front);
-		for (int32 k = 0; k < 2; k++)
-			Sh.AddRoundBox(FVector(FinX - k * .06, 0, ShaftR + .003), FVector(.014, .0025, .007), .001, Steel, FQuat::Identity, 1);
+		KeysSpeargun::BuildShaft(Sh, false);
 		Sh.Commit(GunShaft, 0, VC);
+		// the same gun, plainer, in her right hand in the chase view: the gun and its bands, and the shaft with its
+		// leader as a second section that goes when the shaft does
+		{
+			FKeysMesh Cg, Cs;
+			KeysSpeargun::BuildCarried(Cg, Cs);
+			Cg.Commit(GunWorn, 0, VC);
+			Cs.Commit(GunWorn, 1, VC);
+			// the grip in the hand at the end of her right arm, the barrel along her line of travel
+			GunWorn->SetRelativeLocation(FVector(.34, .568, .16) * 100);
+			GunWorn->SetVisibility(false);
+		}
 		// the loading hand: a glove closed round the wishbone, pulling it back along the gun
 		FKeysMesh Gl;
 		Gl.Surf = SurfSteel;
@@ -380,6 +324,12 @@ void AKeysDiver::BeginPlay()
 		GunBase->SetVisibility(false, true);
 		GunBase->SetCastShadow(false);
 		GunBandL->SetCastShadow(false); GunBandR->SetCastShadow(false); GunShaft->SetCastShadow(false); GunGlove->SetCastShadow(false); GunHandL->SetCastShadow(false); GunWish->SetCastShadow(false); GunReel->SetCastShadow(false);
+		GunLeader->SetCastShadow(false);
+		for (UProceduralMeshComponent* Gc : {GunBase.Get(), GunBandL.Get(), GunBandR.Get(), GunShaft.Get(), GunGlove.Get(), GunHandL.Get(), GunWish.Get(), GunReel.Get(), GunLeader.Get()})
+		{
+			Gc->LightingChannels.bChannel2 = true;
+			Gc->MarkRenderStateDirty();
+		}
 	}
 	// ---- the underwater look: extinction, visibility, lens wetting (world/underwater)
 	if (UMaterialInterface* UW = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Underwater.M_KR_Underwater")))
@@ -395,6 +345,9 @@ void AKeysDiver::BeginPlay()
 		BubbleMID = UMaterialInstanceDynamic::Create(BM, this);
 		BubbleMID->SetScalarParameterValue(TEXT("Bright"), .55f);
 	}
+	Gauge->SetVisibility(false, true);
+	Kit->SetVisibility(false);
+	Pops.SetNum(48);
 	Bubbles.SetNum(420);
 	Muzzle.SetNum(120);
 	for (FPuff& P : Muzzle) P.Life = 0;
@@ -430,8 +383,332 @@ void AKeysDiver::EnterWater(double BoatX, double BoatZ, double BoatH)
 	bPrevSpearActive = bShotHadFight = false;
 	LastEqDepth = 0;
 	FovV = 58;
+	DiveSecs = DiveMaxDepth = 0;
+	EnterT = GetWorld()->GetTimeSeconds();
+	BeginScuba();
 	Body->SetVisibility(CamMode == 1, true);
+	Kit->SetVisibility(CamMode == 1 && Sc.bOn);
 	GunBase->SetVisibility(true, true);
+}
+
+// ================================================================ scuba (KeysScuba.h)
+void AKeysDiver::BeginScuba()
+{
+	Sc = KeysScuba::FState();
+	ExhAcc = 0; GlanceW = 0; GlanceAutoT = 0; PsiUsedBefore = 0;
+	bDebugGlance = bDbgOrbit = bDbgTopside = bDebugSprint = bHelloSaid = false;
+	DebugAscend = 0; HoverT = GasLogT = FishLogT = -1;
+	AKeysBoatPawn* P = Pawn();
+	if (!P || !KeysScuba::WillDive(P))
+	{
+		UE_LOG(LogTemp, Log, TEXT("KRScuba enter: breath-hold (set owned %d, scuba chosen %d)"), KeysScuba::HasSet(P) ? 1 : 0, KeysScuba::WantScuba() ? 1 : 0);
+		return;
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	CylIx = KeysScuba::BestCylinder(P);
+	Sc.bOn = true;
+	Sc.Psi = Sc.StartPsi = KeysScuba::CylinderPsi(P, CylIx);
+	Sc.bComputer = KeysScuba::Owns(P, KeysScuba::FxComputer);
+	Sc.bBailAvail = P->HasGear(TEXT("dive.tank")) && P->CountOf(TEXT("dive.fill")) > 0;
+	Sc.RateMul = KeysScuba::CarryRateMul(Now) * (P->HasGear(TEXT("dive.wetsuit")) ? .94 : 1);   // warmth is air
+	Sc.bNoSprint = KeysScuba::Aching(Now);
+	Sc.NLoad = KeysScuba::CarryLoad(Now);
+	KeysScuba::FKitLook Look;
+	Look.bComputer = Sc.bComputer;
+	Look.bPony = P->HasGear(TEXT("dive.tank"));
+	Look.bLight = KeysScuba::Owns(P, KeysScuba::FxLight);
+	const int32 Sig = (Look.bComputer ? 1 : 0) | (Look.bPony ? 2 : 0) | (Look.bLight ? 4 : 0);
+	if (Sig != KitSig)
+	{
+		KitSig = Sig;
+		FKeysMesh M;
+		KitTris = KeysScuba::BuildWornKit(M, Look);
+		M.Commit(Kit, 0, AKeysWorld::VertexColorMaterial());
+		FKeysMesh G;
+		KeysScuba::BuildConsole(G, Sc.bComputer);
+		G.Commit(Gauge, 0, AKeysWorld::VertexColorMaterial());
+		FaceSig = -1;
+	}
+	UE_LOG(LogTemp, Log, TEXT("KRScuba enter: scuba, cylinder %d at %.0f psi, computer %d, bail-out %d, gas rate x%.2f, load %.2f, kit %d triangles"),
+		CylIx + 1, Sc.Psi, Sc.bComputer ? 1 : 0, Sc.bBailAvail ? 1 : 0, Sc.RateMul, Sc.NLoad, KitTris);
+}
+
+// the dive is over (aboard again, by the ladder or hauled out): the cylinder goes back in the rack with what is left in
+// it, and the dive goes in the logbook
+void AKeysDiver::FinishDive()
+{
+	AKeysBoatPawn* P = Pawn();
+	KeysScuba::FLog L;
+	L.Site = KeysScuba::SiteNear(P, S.X, S.Z);
+	L.MaxDepth = DiveMaxDepth; L.Secs = DiveSecs; L.bScuba = Sc.bOn;
+	if (Sc.bOn)
+	{
+		const double Now = GetWorld()->GetTimeSeconds();
+		KeysScuba::SetCylinderPsi(P, CylIx, Sc.Psi);
+		L.PsiUsed = PsiUsedBefore + Sc.StartPsi - Sc.Psi; L.bStop = Sc.bStopDone; L.bFast = Sc.bFastEver;
+		KeysScuba::LeaveCarry(Now, Sc.NLoad, Sc.bBent, Sc.RateMul >= 1.5, Sc.bStopDone);
+		UE_LOG(LogTemp, Log, TEXT("KRScuba back aboard: cylinder %d at %.0f psi (%.0f used this dive), max %.1f m, %.0f s under"), CylIx + 1, Sc.Psi, L.PsiUsed, DiveMaxDepth, DiveSecs);
+	}
+	if (DiveMaxDepth >= 2 && DiveSecs >= 8)
+	{
+		const FString Line = KeysScuba::AddLog(P, L);
+		UE_LOG(LogTemp, Log, TEXT("KRScuba log: %s"), *Line);
+		if (Sc.bOn && P) P->ShowMsg(TEXT("Logbook: ") + Line, 6);
+	}
+	if (Sc.bOn && P) P->SaveEconomy();
+	Sc = KeysScuba::FState();
+}
+
+void AKeysDiver::HandleScubaEvents()
+{
+	AKeysBoatPawn* P = Pawn();
+	for (const KeysScuba::EEvent E : Sc.Events)
+	{
+		const TCHAR* Name = nullptr;
+		switch (E)
+		{
+		case KeysScuba::EEvent::Reserve:
+			Name = TEXT("reserve"); GlanceAutoT = 4;
+			if (P) P->ShowMsg(TEXT("Reserve: 500 psi. Turn the dive and start up."), 4.5);
+			break;
+		case KeysScuba::EEvent::Critical:
+			Name = TEXT("critical"); GlanceAutoT = 4;
+			if (P) P->ShowMsg(TEXT("200 psi. Surface now - slowly."), 4.5);
+			break;
+		case KeysScuba::EEvent::Bailout:
+			Name = TEXT("bail-out");
+			// the pony bottle is the bail-out on scuba: switching to it is what spends its fill
+			if (P) { P->UseOne(TEXT("dive.fill")); P->ShowMsg(TEXT("Cylinder empty - you are on the pony bottle. It is a few minutes of air: go up."), 5); }
+			break;
+		case KeysScuba::EEvent::OutOfGas:
+			Name = TEXT("out of gas");
+			if (P) P->ShowMsg(TEXT("Out of gas. It is one breath to the surface: swim up, breathing out."), 5);
+			break;
+		case KeysScuba::EEvent::StopAsked:
+			Name = TEXT("stop asked");
+			if (P && Sc.bComputer) P->ShowMsg(TEXT("The computer asks for a safety stop: level off at 5 m for a minute."), 5);
+			break;
+		case KeysScuba::EEvent::StopDone:
+			Name = TEXT("stop done");
+			if (P) P->ShowMsg(TEXT("Safety stop done: a clean profile. You will breathe easier on the next dive."), 5);
+			break;
+		case KeysScuba::EEvent::FastAscent:
+			Name = TEXT("fast ascent");
+			if (P) P->ShowMsg(TEXT("Too fast. Ease off: Space alone comes up at the safe rate."), 4);
+			break;
+		case KeysScuba::EEvent::Bent:
+			Name = TEXT("bent");
+			if (P) P->ShowMsg(TEXT("You came up too fast. Your joints ache and your head pounds: no sprinting, and the gas goes quicker, for a while."), 6);
+			break;
+		case KeysScuba::EEvent::BentBad:
+			Name = TEXT("bent badly");
+			if (P) P->ShowMsg(TEXT("That was a bad one. You will feel it for the rest of the afternoon."), 5);
+			break;
+		case KeysScuba::EEvent::Winded: Name = TEXT("winded"); break;
+		case KeysScuba::EEvent::BreathIn: BreathSound(true); if (OnBreath) OnBreath(true, S.Depth(), S.Exertion); break;
+		case KeysScuba::EEvent::BreathOut: BreathSound(false); if (OnBreath) OnBreath(false, S.Depth(), S.Exertion); break;
+		}
+		if (Name) UE_LOG(LogTemp, Log, TEXT("KRScuba event: %s at %.1f m, %.0f psi, %.0f s into the dive"), Name, S.Depth(), Sc.Psi, Sc.Secs);
+	}
+}
+
+// The regulator, through the audio actor's own one-shot synth (it already muffles everything under water): the breath
+// in is the demand valve's click and a dry hiss that rises as the lungs fill; the breath out is a low rumble with a
+// run of bubble pops over it, more of them and closer together when she is working.
+void AKeysDiver::BreathSound(bool bInhale)
+{
+	AKeysAudio* A = AKeysAudio::Get(this);
+	if (!A || !bCamUnder || (DbgOff & 1)) return;
+	const double Ex = DvClamp(S.Exertion, 0, 1);
+	const double Period = FMath::Lerp(5.2, 2.6, Ex);
+	if (bInhale)
+	{
+		const float Len = float(Period * .38);
+		FKeysBurst Click;
+		Click.Filter = KeysDSP::EFilter::Bandpass; Click.Freq = 1500; Click.Q = 5; Click.Gain = .05f; Click.Att = .002f; Click.Dur = .035f;
+		A->Burst(Click);
+		FKeysBurst Hiss;
+		Hiss.Filter = KeysDSP::EFilter::Bandpass; Hiss.Freq = 620; Hiss.FreqTo = 980; Hiss.Q = 1.4f;
+		Hiss.Gain = float(.085 + .04 * Ex); Hiss.Att = Len * .35f; Hiss.Dur = Len;
+		A->Burst(Hiss);
+	}
+	else
+	{
+		const float Len = float(Period * .45);
+		FKeysBurst Rumble;
+		Rumble.Filter = KeysDSP::EFilter::Lowpass; Rumble.Freq = 260; Rumble.FreqTo = 150; Rumble.Q = 1;
+		Rumble.Gain = float(.1 + .05 * Ex); Rumble.Att = .06f; Rumble.Dur = Len;
+		A->Burst(Rumble);
+		const int32 N = 9 + int32(Ex * 8);
+		for (int32 i = 0; i < N; i++)
+		{
+			FKeysBurst B;
+			const double U = (i + FMath::FRand()) / N;
+			B.Filter = KeysDSP::EFilter::Bandpass; B.Freq = float(DvRand(280, 900)); B.FreqTo = B.Freq * 1.5f; B.Q = 6;
+			B.Gain = float(DvRand(.05, .1) * (1 - .6 * U)); B.Att = .004f; B.Dur = float(DvRand(.05, .11)); B.Delay = float(U * Len * .9);
+			A->Burst(B);
+		}
+	}
+}
+
+KeysScuba::FHud AKeysDiver::ScubaHud() const
+{
+	KeysScuba::FHud H;
+	if (!bDiving || !Sc.bOn) return H;
+	H.bOn = true;
+	H.bGas = !Sc.bOutOfGas;
+	H.Source = Sc.bOnBailout ? TEXT("Bail-out bottle") : TEXT("Cylinder");
+	const double Gas = Sc.bOnBailout ? Sc.BailPsi : Sc.Psi;
+	H.Psi = FMath::RoundToInt(Gas / 10) * 10;
+	H.Frac = Sc.GasFrac();
+	H.bLow = Sc.bOnBailout || Sc.Psi < KeysScuba::ReservePsi;
+	H.bCritical = Sc.bOnBailout || Sc.Psi < KeysScuba::CriticalPsi;
+	if (Sc.bComputer)
+	{
+		const double Rate = FMath::Max(Sc.RateNow, KeysScuba::GasRate(S.Depth(), 0, Sc.RateMul)) * (Sc.bOnBailout ? KeysScuba::PonyRatio : 1);
+		H.MinLeft = FMath::FloorToInt32(Gas / Rate / 60);
+		H.Dive = FString::Printf(TEXT("%d:%02d  max %.1f m"), int32(Sc.Secs) / 60, int32(Sc.Secs) % 60, Sc.MaxDepth);
+		if (Sc.bStopAsked && !Sc.bStopDone)
+		{
+			const int32 Left = FMath::CeilToInt32(KeysScuba::StopSecs - Sc.StopT);
+			H.Stop = FString::Printf(TEXT("Stop %d:%02d"), Left / 60, Left % 60);
+		}
+	}
+	return H;
+}
+
+FString AKeysDiver::ToggleLight()
+{
+	if (!KeysScuba::Owns(Pawn(), KeysScuba::FxLight)) return TEXT("No dive light aboard - Scuba Steve's sells one.");
+	TorchMode = (TorchMode + 1) % 3;
+	return TorchMode == 0 ? TEXT("Dive light: comes on in the dark") : TorchMode == 1 ? TEXT("Dive light on") : TEXT("Dive light off");
+}
+
+bool AKeysDiver::TorchWanted() const
+{
+	if (S.Depth() > 14) return true;
+	if (const AKeysWorld* Wd = AKeysWorld::Get(this)) return Wd->SunDir().Z < .14;
+	return false;
+}
+
+FString AKeysDiver::SwapCylinder()
+{
+	AKeysBoatPawn* P = Pawn();
+	if (!bDiving || !Sc.bOn || !P) return FString();
+	if (KeysScuba::Cylinders(P) < 2) return TEXT("There is only the one cylinder. Scuba Steve's sells a second for the boat.");
+	if (S.Depth() > 1.5 || !bCanReboard) return TEXT("Cylinders are swapped at the surface, at the boat.");
+	const int32 Other = 1 - CylIx;
+	const double OtherPsi = KeysScuba::CylinderPsi(P, Other);
+	if (OtherPsi <= Sc.Psi) return FString::Printf(TEXT("The other cylinder has less in it (%.0f psi). Keeping this one."), OtherPsi);
+	KeysScuba::SetCylinderPsi(P, CylIx, Sc.Psi);
+	PsiUsedBefore += Sc.StartPsi - Sc.Psi;
+	CylIx = Other;
+	Sc.Psi = Sc.StartPsi = OtherPsi;
+	Sc.bOutOfGas = Sc.bOnBailout = false;
+	Sc.bReserveSaid = Sc.bCriticalSaid = false;
+	RackSig = -1;
+	UE_LOG(LogTemp, Log, TEXT("KRScuba swap: now on cylinder %d at %.0f psi"), CylIx + 1, Sc.Psi);
+	return FString::Printf(TEXT("Cylinders swapped at the ladder: %.0f psi on your back."), Sc.Psi);
+}
+
+// the gauge console, lifted into the dive-mask view by the left hand: held up while the key is down, and by itself for a
+// few seconds when the gas reaches the reserve
+void AKeysDiver::UpdateGauge(double Dt)
+{
+	const bool bCan = bDiving && Sc.bOn && CamMode == 0 && !S.bBlackedOut;
+	const bool bWant = bCan && (bGlanceKey || bDebugGlance || GlanceAutoT > 0);
+	GlanceAutoT = FMath::Max(0.0, GlanceAutoT - Dt);
+	GlanceW += ((bWant ? 1.0 : 0.0) - GlanceW) * FMath::Min(1.0, Dt * 7);
+	const bool bShow = bCan && GlanceW > .02;
+	if (Gauge->IsVisible() != bShow) Gauge->SetVisibility(bShow, true);
+	if (!bShow) return;
+	const double E = GlanceW * GlanceW * (3 - 2 * GlanceW);
+	// camera frame (forward, right, up), meters: up from below the left of the view to just left of centre
+	const FVector Off = FMath::Lerp(FVector(.42, -.3, -.5), FVector(.34, -.075, -.045), E);
+	const FQuat CamQ = CamRotUE.Quaternion();
+	Gauge->SetWorldLocationAndRotation(CamPosUE + CamQ.RotateVector(Off * 100), CamQ * FRotator(-6 + (1 - E) * 30, 10, -5).Quaternion());
+	const double Gas = Sc.bOnBailout ? Sc.BailPsi : Sc.Psi;
+	const KeysScuba::FHud H = ScubaHud();
+	const int32 Mins = int32(Sc.Secs) / 60;
+	const int32 Sig = FMath::RoundToInt(Gas / 20) + FMath::RoundToInt(S.Depth() * 10) * 211 + Mins * 77003 + (H.MinLeft + 1) * 1300021;
+	if (Sig != FaceSig)
+	{
+		FaceSig = Sig;
+		FKeysMesh M;
+		KeysScuba::BuildConsoleFace(M, Gas, S.Depth(), Mins, H.MinLeft, Sc.bComputer);
+		M.Commit(GaugeFace, 0, AKeysWorld::VertexColorMaterial());
+	}
+}
+
+// the dive light: a narrow warm beam from the left hand (or from her shoulder in the chase view) along the look
+void AKeysDiver::UpdateTorch(double Dt)
+{
+	const bool bWant = bDiving && !S.bBlackedOut && S.Depth() > .5 && (TorchMode == 1 || (TorchMode == 0 && TorchWanted())) && KeysScuba::Owns(Pawn(), KeysScuba::FxLight);
+	TorchW += ((bWant ? 1.0 : 0.0) - TorchW) * FMath::Min(1.0, Dt * 6);
+	const bool bOn = TorchW > .02;
+	if (Torch->IsVisible() != bOn) Torch->SetVisibility(bOn);
+	if (!bOn) return;
+	const double Cp = FMath::Cos(CamPitch);
+	const FVector Fw(-FMath::Sin(CamYaw) * Cp, FMath::Sin(CamPitch), -FMath::Cos(CamYaw) * Cp);
+	const FRotator Rot = GDir2U(Fw).Rotation();
+	// (the beam starts past the muzzle in the dive-mask view, so the gun in her other hand is not lit white by it)
+	const FVector Pos = CamMode == 0 ? CamPosUE + CamRotUE.Quaternion().RotateVector(FVector(140, -10, -10)) : G2U(FVector(S.X, S.Y, S.Z) + Fw * 1.5);
+	Torch->SetWorldLocationAndRotation(Pos, Rot);
+	Torch->SetIntensity(float(TorchW * 60));
+}
+
+// The cylinder rack in the cockpit and the diver-down flag over it. They ride on the boat's own mesh component (found
+// by its name, so the boat's files are not touched): nothing is built, and the boat is as it was, until a cylinder is
+// owned. The rigged set stands in the rack until she goes over with it on; the flag flies while she is in the water.
+void AKeysDiver::UpdateBoatKit(double T)
+{
+	AKeysBoatPawn* P = Pawn();
+	if (!P) return;
+	const int32 Cyl = KeysScuba::Cylinders(P);
+	if (Cyl == 0)
+	{
+		if (RackSig != 0) { RackSig = 0; BoatRack->ClearAllMeshSections(); BoatFlag->ClearAllMeshSections(); }
+		return;
+	}
+	if (!bBoatKitTried)
+	{
+		bBoatKitTried = true;
+		TArray<UProceduralMeshComponent*> Comps;
+		P->GetComponents<UProceduralMeshComponent>(Comps);
+		for (UProceduralMeshComponent* C : Comps)
+			if (C->GetFName() == FName(TEXT("Boat")))
+			{
+				BoatRack->AttachToComponent(C, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+				BoatFlag->AttachToComponent(C, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+				break;
+			}
+	}
+	const bool bDown = bDiving && Sc.bOn;
+	// slot one: the set (or just the cylinder, before the rest is bought); slot two: the other cylinder
+	const bool bFirst = !bDown, bSecond = Cyl > 1;
+	const bool bRigged = KeysScuba::HasSet(P);
+	const int32 Sig = 1 + (bFirst ? 2 : 0) + (bSecond ? 4 : 0) + (bRigged ? 8 : 0) + int32(GetTypeHash(P->Spec().Id) & 0xffff) * 16;
+	if (Sig != RackSig)
+	{
+		RackSig = Sig;
+		FKeysMesh M;
+		KeysScuba::BuildBoatRack(M, P->Spec(), bFirst, bRigged, bSecond);
+		M.Commit(BoatRack, 0, AKeysWorld::VertexColorMaterial());
+		UE_LOG(LogTemp, Log, TEXT("KRScuba rack: set aboard %d (rigged %d), second cylinder %d, %d triangles"), bFirst ? 1 : 0, bRigged ? 1 : 0, bSecond ? 1 : 0, M.T.Num() / 3);
+	}
+	if (bDiving)
+	{
+		// it flutters only while the camera is out of the water to see it (every other frame); from below it hangs as
+		// it was last drawn, so a dive does not pay for a mesh rebuilt every frame
+		const bool bSeen = !bCamUnder && (++FlagTick & 1);
+		if (BoatFlag->GetNumSections() == 0 || bSeen)
+		{
+			FKeysMesh F;
+			KeysScuba::BuildFlag(F, P->Spec(), T);
+			F.Commit(BoatFlag, 0, AKeysWorld::VertexColorMaterial());
+		}
+	}
+	else if (BoatFlag->GetNumSections() > 0) BoatFlag->ClearAllMeshSections();
 }
 
 bool AKeysDiver::RequestReboard()
@@ -444,6 +721,11 @@ bool AKeysDiver::RequestReboard()
 
 void AKeysDiver::ExitToBoat()
 {
+	if (bDiving) FinishDive();
+	Kit->SetVisibility(false);
+	Gauge->SetVisibility(false, true);
+	Torch->SetVisibility(false);
+	TorchW = 0;
 	bDiving = false; bCanReboard = false; WakingT = 0;
 	Shot = FShot();
 	if (Speared.bOn) EndFight();
@@ -474,12 +756,14 @@ FString AKeysDiver::CycleView()
 {
 	CamMode = 1 - CamMode;
 	Body->SetVisibility(bDiving && CamMode == 1, true);
+	Kit->SetVisibility(bDiving && CamMode == 1 && Sc.bOn);
 	return CamMode == 0 ? TEXT("Dive mask view") : TEXT("Chase view");
 }
 
 FString AKeysDiver::AscentWarning() const
 {
 	if (!bDiving) return FString();
+	if (Sc.OnGas()) return KeysScuba::Warning(Sc, S);
 	const double Depth = S.Depth(), Af = AirFrac();
 	const double Margin = S.Air - Depth / 1.2;
 	if (Af < .12 || Margin < 4) return TEXT("SURFACE NOW - air critical");
@@ -492,8 +776,11 @@ double AKeysDiver::TunnelAmount() const
 {
 	if (!bDiving) return 0;
 	if (S.bBlackedOut) return 1;
-	const double Af = AirFrac();
-	return (Af < .25 ? FMath::Min(1.0, (.25 - Af) / .25) : 0) * .85;
+	const double Af = BreathFrac();
+	const double Tun = (Af < .25 ? FMath::Min(1.0, (.25 - Af) / .25) : 0) * .85;
+	// a bend: the edges of the view throb
+	if (Sc.bOn && Sc.bBent) return FMath::Max(Tun, .3 + .12 * FMath::Sin(GetWorld()->GetTimeSeconds() * 2.2));
+	return Tun;
 }
 
 void AKeysDiver::FixedStep(double Dt, double T)
@@ -516,10 +803,39 @@ void AKeysDiver::FixedStep(double Dt, double T)
 	}
 	FInput In;
 	In.bFwd = Btn.bFwd || bDebugSwim; In.bBack = Btn.bBack; In.bLeft = Btn.bLeft; In.bRight = Btn.bRight;
-	In.bAscend = Btn.bAscend; In.bDescend = Btn.bDescend; In.bSprint = Btn.bSprint;
+	In.bAscend = Btn.bAscend || DebugAscend > 0; In.bDescend = Btn.bDescend; In.bSprint = Btn.bSprint || bDebugSprint || DebugAscend > 1;
 	In.LookYaw = CamYaw; In.LookPitch = CamPitch;
-	Step(S, In, T, Dt, SwimMul * 1.6);   // 1.6: long freediving fins
+	// on scuba the same step runs between the cylinder's rules (both do nothing on a breath-hold dive); the set and
+	// its short fins are slower through the water than the freediver's long blades
+	KeysScuba::PreStep(Sc, S, In, Dt);
+	Step(S, In, T, Dt, Sc.bOn ? SwimMul * KeysScuba::SwimK * (Sc.bBent ? .85 : 1) : SwimMul * 1.6);   // 1.6: long freediving fins
+	KeysScuba::PostStep(Sc, S, Dt);
+	if (Sc.bOn) HandleScubaEvents();
 	if (DebugHoldDepth >= 0) { S.Y = FMath::Max(-DebugHoldDepth, KeysSea::SeafloorHeightAt(S.X, S.Z) + .6); S.VY = 0; }
+	if (S.Depth() > KeysDive::SurfaceEps) DiveSecs += Dt;
+	DiveMaxDepth = FMath::Max(DiveMaxDepth, S.Depth());
+	// test logs: the hover (20 s with the keys let go) and the gas used over a stretch
+	if (HoverT >= 0)
+	{
+		HoverT += Dt;
+		if (HoverT >= 20)
+		{
+			UE_LOG(LogTemp, Log, TEXT("KRScuba hover: 20 s with no input from %.2f m: vertical drift %.3f m, sideways %.2f m (the current), now at %.2f m, scuba %d"),
+				-HoverY0, FMath::Abs(S.Y - HoverY0), FVector2D(S.X - HoverX0, S.Z - HoverZ0).Size(), S.Depth(), Sc.bOn ? 1 : 0);
+			HoverT = -1;
+		}
+	}
+	if (GasLogT >= 0)
+	{
+		GasLogT += Dt;
+		if (GasLogT >= GasLogSecs)
+		{
+			const double Used = GasLogPsi0 - Sc.Psi;
+			UE_LOG(LogTemp, Log, TEXT("KRScuba gas: %.0f s at %.1f m, exertion %.2f: %.0f psi used (%.3f psi/s); a full cylinder at this rate lasts %.1f min, this one %.1f min more"),
+				GasLogT, S.Depth(), S.Exertion, Used, Used / GasLogT, KeysScuba::FullPsi / FMath::Max(1e-6, Used / GasLogT) / 60, Sc.Psi / FMath::Max(1e-6, Used / GasLogT) / 60);
+			GasLogT = -1;
+		}
+	}
 	FrameEvents.Append(S.Events);
 	bCanReboard = S.Depth() < 1.5 && FVector2D(S.X - BX, S.Z - BZ).Size() < 6;
 	UpdateSpear(Dt, T);
@@ -626,7 +942,7 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 		const bool bWasOut = Shot.bAlive;
 		TryFire();
 		// the gun's thump: the school fish around bolt (the fish the shaft passes are spooked when it lands)
-		if (!bWasOut && Shot.bAlive) if (AKeysSchools* Sc = AKeysSchools::Get(this)) Sc->Startle(S.X, S.Z, 8);
+		if (!bWasOut && Shot.bAlive) if (AKeysSchools* Sch = AKeysSchools::Get(this)) Sch->Startle(S.X, S.Z, 8);
 	}
 	// the latch lets go by itself once the gun is seated, or when the hands are busy
 	if (bDrawLatched && (CanFire(Gun) || !HandsFree())) { bDrawLatched = false; bDrawing = false; }
@@ -669,6 +985,13 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 				if (!AKeysLife::BuildCreatureMesh(Target->Key, M, Scale))
 					KeysMesh::BuildFish(M, KeysMesh::FishLength(Target->Weight), Sp ? Sp->Color : FLinearColor::Gray, false);
 				M.SmoothNormals();
+				{
+					// the shaft through it, the head and its open flopper out the far side (sized from the fish's own girth)
+					double HalfY = .02, HalfZ = .03;
+					for (const FVector& Vv : M.V)
+						if (FMath::Abs(Vv.X) < 12) { HalfY = FMath::Max(HalfY, FMath::Abs(Vv.Y) / 100); HalfZ = FMath::Max(HalfZ, FMath::Abs(Vv.Z) / 100); }
+					KeysSpeargun::AddShaftThroughFish(M, HalfY, HalfZ);
+				}
 				M.Commit(FishOnLine, 0, AKeysWorld::VertexColorMaterial());
 				FishMode = 3; KillT = 0;
 				FishPos = FishTgt = Hit.Point;
@@ -741,6 +1064,9 @@ void AKeysDiver::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	const double Dt = FMath::Min(.05, double(DeltaSeconds));
 	const double T = GetWorld()->GetTimeSeconds();
+	// test hook (dv:prof=1): where this actor's frame goes, in six laps, logged every 150 frames
+	double LapT = FPlatformTime::Seconds();
+	auto Lap = [&](int32 i) { if (!bDbgProf) return; const double Now = FPlatformTime::Seconds(); ProfMs[i] += (Now - LapT) * 1000; LapT = Now; };
 	FrameEvents.Reset();
 	if (bDiving)
 	{
@@ -766,15 +1092,37 @@ void AKeysDiver::Tick(float DeltaSeconds)
 			if (bDiving)
 			{
 				const FVector2D W = WaterVelocity(S.X, S.Y, S.Z, T, KeysSea::SeafloorHeightAt(S.X, S.Z));
-				L->SetDiver(true, S.X, S.Z, FVector2D(S.VX - W.X, S.VZ - W.Y).Size(), S.Y);
+				// fish bolt from speed: a diver on scuba, breathing easy and not sprinting, reads as slower than she is,
+				// so they let her come closer than a freediver finning down on them
+				const double Rel = FVector2D(S.VX - W.X, S.VZ - W.Y).Size();
+				const double Seen = Sc.OnGas() && S.Exertion < .8 && !(DbgOff & 16) ? Rel * KeysScuba::FishCalmK : Rel;
+				L->SetDiver(true, S.X, S.Z, Seen, S.Y);
+				if (FishLogT >= 0 && T >= FishLogT)
+				{
+					FishLogT = T + 2;
+					TArray<FTarget> Tg;
+					GetTargets(Tg);
+					double Near = 1e9;
+					for (const FTarget& F : Tg) Near = FMath::Min(Near, ((F.A + F.B) * .5 - FVector(S.X, S.Y, S.Z)).Size());
+					UE_LOG(LogTemp, Log, TEXT("KRScuba fish: swimming %.2f m/s, the fish see %.2f m/s (scuba %d), nearest fish %.1f m of %d"), Rel, Seen, Sc.OnGas() ? 1 : 0, Near, Tg.Num());
+				}
 			}
 		}
 	}
+	Lap(0);
 	if (bDiving)
 	{
 		UpdateCamera(Dt, T);
 		UpdateModel(T);
 		UpdateGun(Dt);
+		UpdateGauge(Dt);
+		UpdateTorch(Dt);
+		if (Sc.bOn && !bHelloSaid && T - EnterT > 6.5)
+		{
+			bHelloSaid = true;
+			if (AKeysBoatPawn* P = Pawn())
+				P->ShowMsg(FString::Printf(TEXT("On scuba: %.0f psi. You hover where you stop. Space comes up at the safe rate; with Shift it is a bolt, and it costs you."), Sc.Psi), 6);
+		}
 		if (AKeysBoatPawn* P = Pawn()) P->ApplyDiveCamera(CamPosUE, CamRotUE, CamFovH);
 		// the live reticle: what the aim assist would lock onto right now (strength 0, so it only reports)
 		{
@@ -786,19 +1134,50 @@ void AKeysDiver::Tick(float DeltaSeconds)
 			AssistAim(MuzzleWorld(), Aim, Tg, AimTarget, 0, NextShotRange(), &Eye);
 		}
 	}
+	Lap(1);
+	UpdateBoatKit(T);
+	Lap(2);
+	if (DbgBoatView > 0)
+	{
+		// test hook: a camera standing off the cockpit, on the rack (1), on the flag (2) or on the whole boat (3); it
+		// rides the boat's own mesh, in the water or out of it
+		if (AKeysBoatPawn* P = Pawn(); P && BoatRack->GetAttachParent() && BoatRack->GetAttachParent() != Root)
+		{
+			const FTransform Bt = BoatRack->GetAttachParent()->GetComponentTransform();
+			const FVector Base = KeysScuba::RackBase(P->Spec());
+			const FVector Eye = Base + (DbgBoatView == 1 ? FVector(1.5, 1.7, 1.7) : DbgBoatView == 2 ? FVector(-2.6, 3.4, 2.4) : FVector(-6.5, 5.5, 4.2));
+			const FVector Aim = Base + (DbgBoatView == 1 ? FVector(0, 0, .5) : DbgBoatView == 2 ? FVector(-.4, 0, 1.75) : FVector(1.5, .8, .8));
+			const FVector EyeW = Bt.TransformPosition(Eye * 100), AimW = Bt.TransformPosition(Aim * 100);
+			CamPosUE = EyeW; CamRotUE = (AimW - EyeW).Rotation();
+			P->ApplyDiveCamera(CamPosUE, CamRotUE, 70);
+		}
+	}
 	UpdateShaftAndLine(T);
 	UpdateSpearedFish(Dt, T);
 	UpdateFishFill();
 	UpdateUnderwaterLook(Dt);
+	Lap(3);
 	UpdateBubbles(Dt, T);
 	UpdateSnow(Dt, T);
 	UpdateSeeps(Dt, T);
+	Lap(4);
 	DrawParticles();
+	Lap(5);
+	if (bDbgProf && ++ProfN >= 150)
+	{
+		int32 Alive = 0;
+		for (const FBubble& B : Bubbles) if (B.Age >= 0) Alive++;
+		UE_LOG(LogTemp, Log, TEXT("KRScuba prof (ms a frame, %d frames, scuba %d): step %.3f, camera gun gauge light %.3f, boat kit %.3f, lines fish look %.3f, bubbles snow seeps %.3f, draw particles %.3f; total %.3f; %d bubbles alive"),
+			ProfN, Sc.bOn ? 1 : 0, ProfMs[0] / ProfN, ProfMs[1] / ProfN, ProfMs[2] / ProfN, ProfMs[3] / ProfN, ProfMs[4] / ProfN, ProfMs[5] / ProfN,
+			(ProfMs[0] + ProfMs[1] + ProfMs[2] + ProfMs[3] + ProfMs[4] + ProfMs[5]) / ProfN, Alive);
+		ProfN = 0;
+		for (double& M : ProfMs) M = 0;
+	}
 }
 
 void AKeysDiver::UpdateCamera(double Dt, double T)
 {
-	const double Depth = S.Depth(), Af = AirFrac();
+	const double Depth = S.Depth(), Af = BreathFrac();
 	const double Tunnel = Af < .25 ? FMath::Min(1.0, (.25 - Af) / .25) : 0;
 	// The web game's surface transition narrows its 58 degree boat FOV by a quarter under water (a mask magnifies),
 	// and the mask camera narrows it further toward 34 degrees as the air runs out. Vertical degrees, like three.js.
@@ -834,9 +1213,24 @@ void AKeysDiver::UpdateCamera(double Dt, double T)
 	}
 	else
 	{
-		const FVector Pos(S.X - Fw.X * 3.4, S.Y + 1.1 - Fw.Y * 1.2, S.Z - Fw.Z * 3.4);
+		FVector Pos(S.X - Fw.X * 3.4, S.Y + 1.1 - Fw.Y * 1.2, S.Z - Fw.Z * 3.4);
+		if (bDbgOrbit)
+		{
+			// test hook: the chase camera swung round her (yaw 0 is behind her fins)
+			const double Oy = CamYaw + DbgOrbitYaw, Op = FMath::Cos(DbgOrbitPitch);
+			Pos = FVector(S.X + FMath::Sin(Oy) * Op * DbgOrbitDist, S.Y + .1 + FMath::Sin(DbgOrbitPitch) * DbgOrbitDist, S.Z + FMath::Cos(Oy) * Op * DbgOrbitDist);
+		}
 		CamPosUE = G2U(Pos);
 		CamRotUE = (G2U(FVector(S.X, S.Y + .15, S.Z)) - CamPosUE).Rotation();
+	}
+	if (bDbgTopside)
+	{
+		// test hook: standing in the boat, looking over the side at the water above her
+		const AKeysBoatPawn* P = Pawn();
+		const double BX = P ? P->BoatX() : S.X - 4, BZ = P ? P->BoatZ() : S.Z;
+		const FVector2D To = FVector2D(S.X - BX, S.Z - BZ).GetSafeNormal();
+		CamPosUE = G2U(FVector(BX + To.X * 1.75, 1.95, BZ + To.Y * 1.75));
+		CamRotUE = (G2U(FVector(S.X, 0, S.Z)) - CamPosUE).Rotation();
 	}
 }
 
@@ -847,6 +1241,7 @@ void AKeysDiver::UpdateModel(double T)
 	FinL->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(FMath::Sin(Ph) * (.25 + K * .5)), 0, 0));
 	FinR->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(FMath::Sin(Ph + PI) * (.25 + K * .5)), 0, 0));
 	Body->SetVisibility(CamMode == 1, true);
+	Kit->SetVisibility(CamMode == 1 && Sc.bOn && !(DbgOff & 8));
 }
 
 void AKeysDiver::UpdateGun(double Dt)
@@ -870,7 +1265,7 @@ void AKeysDiver::UpdateGun(double Dt)
 	for (int32 Side = -1; Side <= 1; Side += 2)
 	{
 		UProceduralMeshComponent* Bd = Side < 0 ? GunBandL : GunBandR;
-		Bd->SetRelativeLocation(FVector(BandAnchorX * 100, Side * (BarrelR * .55 + BandRad) * 100, (StockH * .5 + BandRad * 1.1) * 100));
+		Bd->SetRelativeLocation(FVector(BandAnchorX * 100, Side * (KeysSpeargun::RollerY - 1.075 * BandRad) * 100, KeysSpeargun::BandZ(BandRad) * 100));   // each pair side by side on top of its roller
 		Bd->SetRelativeRotation(FRotator(0, 180, 0));
 		Bd->SetRelativeScale3D(FVector(BandLen, BandRad, BandRad));
 	}
@@ -901,21 +1296,60 @@ void AKeysDiver::UpdateGun(double Dt)
 	const double RollR = DvLerp(-.12, .25, PoseW) + KickRoll * Snap + (bDrawNow ? FMath::Sin(StrainT * 7.5) * .03 : 0) + FMath::Sin(SwayT * 1.1) * Amt * .6;
 	// three.js rotations: +x pitches the muzzle up (Unreal +pitch), +y turns it left (Unreal -yaw)
 	const FQuat CamQ = CamRotUE.Quaternion();
-	const FVector PosUE = CamPosUE + CamQ.RotateVector((Off + SwayV) * 100);
-	const FQuat Q = CamQ * FRotator(FMath::RadiansToDegrees(PitchR), FMath::RadiansToDegrees(-YawR), FMath::RadiansToDegrees(-RollR)).Quaternion();
+	FVector PosUE = CamPosUE + CamQ.RotateVector((Off + SwayV) * 100);
+	FQuat Q = CamQ * FRotator(FMath::RadiansToDegrees(PitchR), FMath::RadiansToDegrees(-YawR), FMath::RadiansToDegrees(-RollR)).Quaternion();
+	if (bDbgGunShow)
+	{
+		// test hook: the same gun held out and turned to the reference picture's angle (muzzle low and left and toward
+		// the eye, the top of the gun showing), for the side-by-side
+		const FVector Ax = FVector(-.42, -.86, -.3).GetSafeNormal(), Up = FVector(-.62, .12, .78);
+		Q = CamQ * FRotationMatrix::MakeFromXZ(Ax, Up).ToQuat();
+		PosUE = CamPosUE + CamQ.RotateVector(FVector(1.5, .0, -.02) * 100) - Q.RotateVector(FVector(.52, 0, 0) * 100);
+	}
 	GunBase->SetWorldLocationAndRotation(PosUE, Q);
 	// the gun is put away while a speared catch is held up for its photo
 	const AKeysBoatPawn* Pw = Pawn();
 	const bool bShow = CamMode == 0 && !S.bBlackedOut && !(Pw && Pw->FState == EKeysFish::Caught);
 	GunBase->SetVisibility(bShow, false);
+	if (GunFill->IsVisible() != bShow) GunFill->SetVisibility(bShow);
+	if (bShow)
+	{
+		GunFill->SetWorldLocation(CamPosUE + CamQ.RotateVector(FVector(-10, -45, 55)));
+		// less of it where the water is dark (deep, or with the sun down), or the gun would glow
+		const AKeysWorld* Wd = AKeysWorld::Get(this);
+		const double Amb = DvClamp(1 - S.Depth() / 32, .12, 1) * (Wd && Wd->SunDir().Z < .14 ? .3 : 1);
+		GunFill->SetIntensity(float((bDbgGunShow ? 600 : 230) * Amb));
+		if (bDbgGunShow != bGunHandOff) { bGunHandOff = bDbgGunShow; GunBase->SetMeshSectionVisible(1, !bGunHandOff); }
+	}
 	GunBandL->SetVisibility(bShow);
 	GunBandR->SetVisibility(bShow);
 	GunShaft->SetVisibility(bShow && !Speared.bOn && !(Gun.ReloadT > 0 && Recover < .15));
 	GunGlove->SetVisibility(bShow && bGlove);
-	GunHandL->SetVisibility(bShow && !bGlove);
+	GunHandL->SetVisibility(bShow && !bGlove && GlanceW < .25 && !bDbgGunShow);   // the left hand is on the gauge console while it is up
 	// the wishbone flicks up off the shaft as the bands slam forward
-	GunWish->SetRelativeLocation(FVector((BandAnchorX - BandLen) * 100, 0, (StockH * .5 + BandRad * 1.1 + .025 * FMath::Abs(Whip)) * 100));
+	GunWish->SetRelativeLocation(FVector((BandAnchorX - BandLen) * 100, 0, (RailY + .025 * FMath::Abs(Whip)) * 100));
 	GunWish->SetVisibility(bShow);
+	// the leader: from the slide ring on the shaft, in a slack loop, to the hook under the muzzle (rebuilt as the shaft
+	// is fed back in on a reload; it goes with the shaft when that is away)
+	{
+		const bool bLead = GunShaft->IsVisible();
+		if (bLead && FMath::Abs(ShaftOut - LeaderOut) > 1e-4)
+		{
+			LeaderOut = ShaftOut;
+			FKeysMesh Ld;
+			KeysSpeargun::BuildLeader(Ld, FVector(BarrelLen + ShaftPoke * .5 + ShaftOut + KeysSpeargun::RingX, 0, RailY - .016), KeysSpeargun::LeaderHook(), KeysSpeargun::LeaderLen);
+			Ld.Commit(GunLeader, 0, AKeysWorld::VertexColorMaterial());
+		}
+		GunLeader->SetVisibility(bShow && bLead);
+	}
+	// the gun in her hand in the chase view: there while she is awake and not holding up a catch; its shaft is on it
+	// only while the one in the dive-mask view would be
+	{
+		const bool bCarry = bDiving && CamMode == 1 && !S.bBlackedOut && !(Pw && Pw->FState == EKeysFish::Caught);
+		GunWorn->SetVisibility(bCarry);
+		const bool bShaftOn = !Speared.bOn && !Shot.bAlive && FishMode == 0 && !(Gun.ReloadT > 0 && Recover < .15);
+		if (bCarry && bShaftOn != bWornShaft) { bWornShaft = bShaftOn; GunWorn->SetMeshSectionVisible(1, bShaftOn); }
+	}
 	// the reel: the shaft rips line off it in a blur, then it's wound back in while the gun is reloaded
 	{
 		const double Want = Shot.bAlive ? 70.0 : (Gun.ReloadT > 0 && !Speared.bOn && FishMode == 0 ? -9.0 : 0.0);
@@ -930,12 +1364,14 @@ void AKeysDiver::UpdateGun(double Dt)
 void AKeysDiver::UpdateShaftAndLine(double T)
 {
 	FKeysMesh M;
-	const FLinearColor Steel = Hex(0xc9ced3);
 	if (Shot.bAlive)
 	{
 		const double Tip = Shot.Dist, Tail = FMath::Max(0.0, Shot.Dist - .6);
 		auto ToL = [](const FVector& G) { return FVector(G.X, G.Z, G.Y); };   // game -> Unreal axes, meters
-		Tube(M, ToL(Shot.At(Tail)), ToL(Shot.At(Tip)), .00325 * 2, .00325 * 2, 6, Steel, true);
+		// black, with the barbed head leading (both drawn over size, as the old plain shaft was, to read at range)
+		const FVector HeadDir = ToL(Shot.D).GetSafeNormal();
+		Tube(M, ToL(Shot.At(Tail)), ToL(Shot.At(Tip)) - HeadDir * .2, .00325 * 2, .00325 * 2, 6, Hex(0x17191c), true);
+		KeysSpeargun::AddHead(M, ToL(Shot.At(Tip)), HeadDir, FVector::ZAxisVector, 1.6, 14, true);
 		// the shooting line trailing back to the muzzle, sagging a little
 		const FVector TailP = Shot.At(Tail);
 		FVector Prev = ToL(Shot.O);
@@ -980,7 +1416,7 @@ void AKeysDiver::UpdateFishFill()
 	const AKeysBoatPawn* Pw = Pawn();
 	const bool bHeld = FishMode == 3 || FishMode == 4;
 	const bool bCard = bDiving && Pw && Pw->FState == EKeysFish::Caught && Pw->bCardSpeared;
-	const bool bOn = bCamUnder && (bHeld || bCard);
+	const bool bOn = (bCamUnder && (bHeld || bCard)) || (bDiving && GlanceW > .05);   // and the gauge console, while it is up
 	if (bOn)
 	{
 		// up and behind the mask, a little to the right, so the side of the fish facing the lens carries the light
@@ -996,7 +1432,7 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 {
 	if (FishMode == 0) { FishOnLine->SetVisibility(false); return; }
 	FishOnLine->SetVisibility(true);
-	double Pitch = 0, Yaw = 0, Roll = 0, Sc = 1;
+	double Pitch = 0, Yaw = 0, Roll = 0, FishSc = 1;
 	if (FishMode == 3 || FishMode == 4)
 	{
 		KillT += Dt;
@@ -1044,7 +1480,7 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 		Pitch = FMath::Sin(T * Fq * .7) * Amp * .5;
 		Yaw = FishHead + FMath::Sin(T * Fq) * Amp;
 		Roll = FMath::Sin(T * Fq * 1.4 + .6) * Amp * .6;
-		Sc = 1 + FMath::Sin(T * Fq * 2) * .04 * (Fight + Ex);
+		FishSc = 1 + FMath::Sin(T * Fq * 2) * .04 * (Fight + Ex);
 	}
 	else
 	{
@@ -1056,7 +1492,7 @@ void AKeysDiver::UpdateSpearedFish(double Dt, double T)
 		if (FleeT > 2.4) { FishMode = 0; FishOnLine->ClearAllMeshSections(); return; }
 	}
 	FishOnLine->SetWorldLocationAndRotation(G2U(FishPos), FRotator(FMath::RadiansToDegrees(Pitch), YawDeg(Yaw), FMath::RadiansToDegrees(Roll)));
-	FishOnLine->SetWorldScale3D(FVector(Sc));
+	FishOnLine->SetWorldScale3D(FVector(FishSc));
 }
 
 // ================================================================ the look under the surface
@@ -1094,11 +1530,11 @@ void AKeysDiver::UpdateUnderwaterLook(double Dt)
 	}
 	Post->bEnabled = UnderAmt > 0 || Wet > 0;
 	if (AKeysAudio* A = AKeysAudio::Get(this))
-		A->SetUnderwater(bUnder, FMath::Max(0.0, -Y), bDiving ? AirFrac() : 1, bDiving && !S.bBlackedOut && S.Depth() > KeysDive::SurfaceEps, Dt);
+		A->SetUnderwater(bUnder, FMath::Max(0.0, -Y), bDiving ? BreathFrac() : 1, bDiving && !Sc.OnGas() && !S.bBlackedOut && S.Depth() > KeysDive::SurfaceEps, Dt);
 	if (AKeysWorld* W = AKeysWorld::Get(this)) W->SetUnderside(bUnder || UnderAmt > .01);
 }
 
-void AKeysDiver::SpawnBubble(const FVector& P, double R)
+int32 AKeysDiver::SpawnBubble(const FVector& P, double R)
 {
 	int32 I = -1;
 	for (int32 n = 0; n < Bubbles.Num(); n++)
@@ -1111,6 +1547,8 @@ void AKeysDiver::SpawnBubble(const FVector& P, double R)
 	FBubble& B = Bubbles[I];
 	B.Age = 0; B.P = P; B.V = FVector::ZeroVector; B.R0 = R; B.P0 = AtaAt(FMath::Max(0.0, -P.Y));
 	B.WobA = .05 + FMath::FRand() * .12; B.WobF = 1.6 + FMath::FRand() * 2.4; B.WobP = FMath::FRand() * PI * 2;
+	B.bReg = false;
+	return I;
 }
 
 void AKeysDiver::Puff(int32 N, const FVector& P, double RMin, double RMax)
@@ -1160,11 +1598,37 @@ void AKeysDiver::UpdateBubbles(double Dt, double T)
 		const FVector Fw(-FMath::Sin(S.Yaw) * Cp, FMath::Sin(S.Pitch), -FMath::Cos(S.Yaw) * Cp);
 		const FVector Mouth(S.X + Fw.X * .5, S.Y + .12 + Fw.Y * .5, S.Z + Fw.Z * .5);
 		const double Depth = S.Depth();
-		if (Depth > .4)
+		if (Depth > .4 && Sc.OnGas())
+		{
+			// on scuba the only bubbles are the regulator's: nothing on the breath in, then a burst out of both sides of
+			// the exhaust under her chin that tails off as the breath ends. They are bigger than a freediver's trickle,
+			// rise faster, and break the surface where the boat can see them.
+			LastEqDepth = Depth;
+			if (Sc.bExhaling && !(DbgOff & 2))
+			{
+				const double Env = 1 - .6 * DvClamp((Sc.BreathPh - .45) / .45, 0, 1);
+				// (fewer leave her the deeper she is: they have further to rise and each one grows on the way, so the
+				// column stays about as thick and the pool is not emptied by a deep dive)
+				ExhAcc += (15 + 10 * S.Exertion) * Env * H / (1 + Depth / 12);
+				const FVector Rt(FMath::Cos(S.Yaw), 0, -FMath::Sin(S.Yaw));
+				while (ExhAcc >= 1)
+				{
+					ExhAcc -= 1;
+					const double Sd = FMath::FRand() < .5 ? -1 : 1;
+					// (in the dive-mask view they leave from beside her jaw and a little behind the glass, so they stream
+					// up past the edges of the view and not across the middle of it)
+					const FVector At = CamMode == 0 ? Mouth - Fw * .16 + Rt * (Sd * DvRand(.2, .3)) + FVector(DvRand(-.03, .03), DvRand(-.16, -.08), DvRand(-.03, .03))
+						: Mouth + Rt * (Sd * DvRand(.07, .13)) + FVector(DvRand(-.03, .03), DvRand(-.1, -.03), DvRand(-.03, .03));
+					Bubbles[SpawnBubble(At, DvRand(.007, .024))].bReg = true;
+				}
+			}
+			else ExhAcc = FMath::Min(ExhAcc, 1.0);
+		}
+		else if (Depth > .4)
 		{
 			if (Depth > LastEqDepth + 2.4) { LastEqDepth = Depth; Puff(4 + FMath::RandRange(0, 3), Mouth, .004, .011); }
 			else if (Depth < LastEqDepth - 4.8) LastEqDepth = Depth;
-			const double Want = 1 - AirFrac();
+			const double Want = 1 - BreathFrac();
 			const double Rate = .7 + 7.5 * Want * Want + 3.5 * S.Exertion;
 			BubAcc += Rate * H;
 			while (BubAcc >= 1) { BubAcc -= 1; Puff(1, Mouth, .003, .009); }
@@ -1201,12 +1665,29 @@ void AKeysDiver::UpdateBubbles(double Dt, double T)
 		if (B.Age < 0) continue;
 		B.Age += H;
 		const double R = B.R0 * FMath::Pow(B.P0 / AtaAt(FMath::Max(0.0, -B.P.Y)), 1.0 / 3);
-		const double Rise = FMath::Min(.46, .26 * FMath::Sqrt(R / .011));
+		const double Rise = B.bReg ? FMath::Min(.62, .3 * FMath::Sqrt(R / .011)) : FMath::Min(.46, .26 * FMath::Sqrt(R / .011));
 		B.V.X += (Flow.X - B.V.X) * Relax;
 		B.V.Z += (Flow.Y - B.V.Z) * Relax;
 		const double W = B.WobF * (T + B.WobP);
 		B.P += FVector((B.V.X + FMath::Cos(W) * B.WobA) * H, Rise * H, (B.V.Z + FMath::Sin(W * .9) * B.WobA) * H);
-		if (B.P.Y > -.06 || B.Age > 110) B.Age = -1;
+		if (B.P.Y > -.06 || B.Age > 110)
+		{
+			// a regulator bubble breaks at the surface: a ring of froth that spreads and goes
+			if (B.bReg && B.P.Y > -.06)
+			{
+				FPop& Pp = Pops[PopCursor];
+				PopCursor = (PopCursor + 1) % Pops.Num();
+				Pp.P = B.P; Pp.Age = 0; Pp.R = FMath::Max(.09, R * 5);
+			}
+			B.Age = -1;
+		}
+	}
+	for (FPop& Pp : Pops)
+	{
+		if (Pp.Age < 0) continue;
+		Pp.Age += H;
+		Pp.P.X += Flow.X * H; Pp.P.Z += Flow.Y * H;
+		if (Pp.Age > 1.8) Pp.Age = -1;
 	}
 	for (FPuff& P : Muzzle)
 	{
@@ -1336,6 +1817,29 @@ void AKeysDiver::DrawParticles()
 		const double A = FMath::Min(1.0, B.Age * 6) * (B.Age > 108 ? (110 - B.Age) / 2 : 1) * .9;
 		Quad(B.P, R * 2.4, FLinearColor(.88f, .97f, 1.f, float(A)), false);
 	}
+	// the froth where the regulator's bubbles break: flat on the water, seen from the boat (and from below)
+	{
+		const double Tn = GetWorld()->GetTimeSeconds();
+		for (const FPop& Pp : Pops)
+		{
+			if (Pp.Age < 0) continue;
+			const double U = Pp.Age / 1.8;
+			const double Y = WaveH(Pp.P.X, Pp.P.Z, Tn, AmpAt(Pp.P.X, Pp.P.Z), false) + .025;
+			const FVector P = G2U(FVector(Pp.P.X, Y, Pp.P.Z));
+			const double Hs = Pp.R * (1 + 3.2 * U) * 100;
+			const FLinearColor Col(.95f, .98f, 1.f, float((1 - U) * (1 - U) * .85));
+			for (int32 Pass = 0; Pass < 2; Pass++)
+			{
+				// a bubble's ring over a soft white patch
+				const double U0 = Pass == 0 ? 2 : 0, Sz = Pass == 0 ? Hs * 1.3 : Hs;
+				const int32 I = V.Num();
+				V.Add(P + FVector(-Sz, -Sz, Pass * .5)); V.Add(P + FVector(Sz, -Sz, Pass * .5)); V.Add(P + FVector(Sz, Sz, Pass * .5)); V.Add(P + FVector(-Sz, Sz, Pass * .5));
+				UV.Add(FVector2D(U0, 1)); UV.Add(FVector2D(U0 + .999, 1)); UV.Add(FVector2D(U0 + .999, 0)); UV.Add(FVector2D(U0, 0));
+				for (int32 k = 0; k < 4; k++) { N.Add(FVector::UpVector); C.Add(Pass == 0 ? FLinearColor(Col.R, Col.G, Col.B, Col.A * .55f) : Col); }
+				Tr.Append({I, I + 2, I + 1, I, I + 3, I + 2, I, I + 1, I + 2, I, I + 2, I + 3});
+			}
+		}
+	}
 	for (const FBlood& B : Blood)
 		if (B.Age >= 0)
 		{
@@ -1374,8 +1878,54 @@ void AKeysDiver::DrawParticles()
 
 void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 {
+	// ---- scuba, on the boat or in the water
+	if (Cmd == TEXT("scuba")) { KeysScuba::SetWantScuba(FCString::Atoi(*Arg) != 0); UE_LOG(LogTemp, Log, TEXT("KRScuba chosen: %s"), KeysScuba::WantScuba() ? TEXT("scuba") : TEXT("breath-hold")); return; }
+	if (Cmd == TEXT("scubatest")) { KeysScuba::SelfTest(); return; }
+	if (Cmd == TEXT("mode")) { UE_LOG(LogTemp, Log, TEXT("KRScuba mode: %s"), *KeysScuba::ToggleMode(Pawn())); return; }
+	if (Cmd == TEXT("kit"))
+	{
+		const AKeysBoatPawn* P = Pawn();
+		UE_LOG(LogTemp, Log, TEXT("KRScuba kit: set %d, cylinders %d (%.0f / %.0f psi), computer %d, light %d, will dive on scuba %d, worn kit %d triangles, logbook %d"),
+			KeysScuba::HasSet(P) ? 1 : 0, KeysScuba::Cylinders(P), KeysScuba::CylinderPsi(P, 0), KeysScuba::CylinderPsi(P, 1), KeysScuba::Owns(P, KeysScuba::FxComputer) ? 1 : 0,
+			KeysScuba::Owns(P, KeysScuba::FxLight) ? 1 : 0, KeysScuba::WillDive(P) ? 1 : 0, KitTris, KeysScuba::Logbook().Num());
+		TArray<TPair<FString, bool>> Rows;
+		KeysScuba::LoadoutRows(P, Rows);
+		for (const TPair<FString, bool>& R : Rows) UE_LOG(LogTemp, Log, TEXT("KRScuba loadout: %s%s"), *R.Key, R.Value ? TEXT("") : TEXT(" (dim)"));
+		return;
+	}
+	if (Cmd == TEXT("boatview")) { DbgBoatView = FCString::Atoi(*Arg); return; }
+	if (Cmd == TEXT("off"))
+	{
+		// test hook: parts of the scuba side switched off, to find what a frame costs (1 the regulator's sound, 2 its
+		// bubbles, 4 the rack and flag on the boat, 8 the worn set, 16 the fish's calm round a scuba diver)
+		DbgOff = FCString::Atoi(*Arg);
+		BoatRack->SetVisibility(!(DbgOff & 4)); BoatFlag->SetVisibility(!(DbgOff & 4));
+		UE_LOG(LogTemp, Log, TEXT("KRScuba off %d"), DbgOff);
+		return;
+	}
+	if (Cmd == TEXT("prof")) { bDbgProf = FCString::Atoi(*Arg) != 0; ProfN = 0; for (double& M : ProfMs) M = 0; return; }
+	if (Cmd == TEXT("light")) { const int32 V = FCString::Atoi(*Arg); TorchMode = V == 1 ? 1 : V == 0 ? 2 : 0; return; }
 	if (!bDiving) return;
-	if (Cmd == TEXT("depth"))
+	if (Cmd == TEXT("psi")) { Sc.Psi = DvClamp(FCString::Atod(*Arg), 0, KeysScuba::FullPsi); }
+	else if (Cmd == TEXT("nload")) { Sc.NLoad = DvClamp(FCString::Atod(*Arg), 0, 1); }
+	else if (Cmd == TEXT("gauge")) { bDebugGlance = FCString::Atoi(*Arg) != 0; }
+	else if (Cmd == TEXT("swap")) { UE_LOG(LogTemp, Log, TEXT("KRScuba swap: %s"), *SwapCylinder()); }
+	else if (Cmd == TEXT("orbit"))
+	{
+		TArray<FString> P;
+		Arg.ParseIntoArray(P, TEXT(","));
+		bDbgOrbit = P.Num() >= 1 && Arg != TEXT("off");
+		if (P.Num() >= 1) DbgOrbitYaw = FCString::Atod(*P[0]);
+		if (P.Num() >= 2) DbgOrbitPitch = FCString::Atod(*P[1]);
+		if (P.Num() >= 3) DbgOrbitDist = FCString::Atod(*P[2]);
+	}
+	else if (Cmd == TEXT("topside")) { bDbgTopside = FCString::Atoi(*Arg) != 0; }
+	else if (Cmd == TEXT("hover")) { DebugHoldDepth = -1; bDebugSwim = false; DebugAscend = 0; S.VY = 0; HoverT = 0; HoverY0 = S.Y; HoverX0 = S.X; HoverZ0 = S.Z; }
+	else if (Cmd == TEXT("gaslog")) { GasLogT = 0; GasLogPsi0 = Sc.Psi; GasLogSecs = Arg.IsEmpty() ? 120 : FCString::Atod(*Arg); }
+	else if (Cmd == TEXT("ascend")) { DebugAscend = FCString::Atoi(*Arg); if (DebugAscend) DebugHoldDepth = -1; }
+	else if (Cmd == TEXT("sprint")) { bDebugSprint = FCString::Atoi(*Arg) != 0; }
+	else if (Cmd == TEXT("nearfish")) { FishLogT = FCString::Atoi(*Arg) != 0 || Arg.IsEmpty() ? 0 : -1; }
+	else if (Cmd == TEXT("depth"))
 	{
 		const double Fl = KeysSea::SeafloorHeightAt(S.X, S.Z);
 		S.Y = FMath::Max(-FCString::Atod(*Arg), Fl + .6);
@@ -1438,12 +1988,16 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 	else if (Cmd == TEXT("hold")) DebugHoldDepth = FCString::Atod(*Arg);
 	else if (Cmd == TEXT("spear")) bFireQueued = true;
 	else if (Cmd == TEXT("reload")) Gun = FGun();
+	else if (Cmd == TEXT("fwd")) { if (AKeysBoatPawn* Pw = Pawn()) { CamYaw = PrevYaw = Pw->BoatH(); CamPitch = FCString::Atod(*Arg); } }   // look along the boat's heading, pitch = Arg
+	else if (Cmd == TEXT("gunshow")) bDbgGunShow = FCString::Atoi(*Arg) != 0;
 	else if (Cmd == TEXT("air")) S.Air = S.AirMaxV * DvClamp(FCString::Atod(*Arg), 0, 1);
 	else if (Cmd == TEXT("swim")) bDebugSwim = FCString::Atoi(*Arg) != 0;
 	else if (Cmd == TEXT("haul")) bDebugHaul = FCString::Atoi(*Arg) != 0;
 	else if (Cmd == TEXT("chase")) { if (CamMode == 0) CycleView(); }
 	else if (Cmd == TEXT("mask")) { if (CamMode == 1) CycleView(); }
-	UE_LOG(LogTemp, Log, TEXT("KRDive %s %s: pos %.1f %.1f %.1f air %.0f%% floor %.1f"), *Cmd, *Arg, S.X, S.Y, S.Z, AirFrac() * 100, KeysSea::SeafloorHeightAt(S.X, S.Z));
+	UE_LOG(LogTemp, Log, TEXT("KRDive %s %s: pos %.1f %.1f %.1f air %.0f%% floor %.1f"), *Cmd, *Arg, S.X, S.Y, S.Z, BreathFrac() * 100, KeysSea::SeafloorHeightAt(S.X, S.Z));
+	if (Sc.bOn) UE_LOG(LogTemp, Log, TEXT("KRScuba %s %s: %.0f psi (bail-out %.0f), depth %.1f m, %.0f s, ascent %.2f m/s, load %.2f, stop %d/%d %.0f s, hit %.2f, wind %.2f"),
+		*Cmd, *Arg, Sc.Psi, Sc.BailPsi, S.Depth(), Sc.Secs, Sc.AscRate, Sc.NLoad, Sc.bStopAsked ? 1 : 0, Sc.bStopDone ? 1 : 0, Sc.StopT, Sc.Hit, Sc.Wind);
 }
 
 double AKeysDiver::NextShotRange() const

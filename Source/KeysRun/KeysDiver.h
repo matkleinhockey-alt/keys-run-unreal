@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "KeysDive.h"
+#include "KeysScuba.h"
 #include "KeysDiver.generated.h"
 
 class UProceduralMeshComponent;
@@ -26,6 +27,10 @@ struct FKeysDiverButtons
 // cameras, the diver model, the first-person gun, the flying shaft, the float line and the fish on it, breath
 // bubbles, seep bubbles and marine snow, the surface crossing (lens wetting) and the underwater post-process
 // (per-channel extinction, depth-banded visibility), and the Snell's window under the surface (via AKeysWorld).
+// Scuba (KeysScuba.h): when the set is owned and chosen she goes over with it on. This actor then runs the gas, ascent
+// and stop rules round the same fixed step, wears the set in the chase view, lifts the gauge console in the mask view,
+// breathes bubbles out of the regulator, works the dive light, keeps the logbook, and stands the cylinder rack and the
+// diver-down flag in the boat's cockpit.
 UCLASS()
 class KEYSRUN_API AKeysDiver : public AActor
 {
@@ -57,7 +62,10 @@ public:
 
 	// ---- read by the HUD
 	const KeysDive::FState& State() const { return S; }
-	double AirFrac() const { return S.AirMaxV > 0 ? FMath::Clamp(S.Air / S.AirMaxV, 0.0, 1.0) : 0; }
+	// what is left to breathe, 0..1: the breath she is holding, or on scuba the cylinder (so the air bar, the heartbeat
+	// and the fight's warnings all follow the gas without knowing about it)
+	double AirFrac() const { return Sc.OnGas() ? Sc.GasFrac() : BreathFrac(); }
+	double BreathFrac() const { return S.AirMaxV > 0 ? FMath::Clamp(S.Air / S.AirMaxV, 0.0, 1.0) : 0; }
 	FString AscentWarning() const;
 	double TunnelAmount() const;          // 0..1 dark vignette closing in as the air runs out; 1 when blacked out
 	bool IsLoaded() const { return KeysDive::CanFire(Gun); }
@@ -73,7 +81,24 @@ public:
 	bool ShotInFlight() const { return Shot.bAlive; }
 	double UnderwaterAmount() const { return UnderAmt; }
 
-	// ---- test hooks for -KRScript (depth=N, look=yaw,pitch, aimfish, spear, reload, air=frac, swim=0/1, haul=0/1)
+	// ---- scuba (KeysScuba.h)
+	bool OnScuba() const { return bDiving && Sc.bOn; }
+	const KeysScuba::FState& Scuba() const { return Sc; }
+	// the gauge's numbers for the HUD (bOn false on a breath-hold dive: draw the air bar as before)
+	KeysScuba::FHud ScubaHud() const;
+	// hold to lift the gauge console into the dive-mask view (it also comes up by itself when the gas gets low)
+	void SetGlance(bool bHold) { bGlanceKey = bHold; }
+	// the dive light: by itself it comes on in the dark (deep, or at night); the key cycles auto / on / off
+	FString ToggleLight();
+	// at the surface by the boat: hand up the cylinder and take the other one. A toast either way.
+	FString SwapCylinder();
+	// the regulator's sound, for the hub's audio: called at the start of each breath in and each breath out
+	TFunction<void(bool bInhale, double Depth, double Effort)> OnBreath;
+
+	// ---- test hooks for -KRScript (depth=N, look=yaw,pitch, aimfish, spear, reload, air=frac, swim=0/1, haul=0/1;
+	// scuba: scuba=0/1, scubatest, kit, mode, light=0/1/9 (off/on/auto) and boatview=0..3 at any time; in the water
+	// psi=N, nload=F, gauge=0/1, swap, orbit=yaw,pitch,dist|off, topside=0/1, hover, gaslog[=secs], ascend=0/1/2,
+	// sprint=0/1, nearfish; the gun: gunshow=0/1; fwd=pitch looks along the boat's heading)
 	void DebugCmd(const FString& Cmd, const FString& Arg);
 
 	// ---- tuning from the Settings menu
@@ -96,7 +121,8 @@ private:
 		KeysDive::FFight F;
 		FString Label;
 	};
-	struct FBubble { FVector P, V; double Age = -1, R0 = .005, P0 = 1, WobA = 0, WobF = 0, WobP = 0; };
+	struct FBubble { FVector P, V; double Age = -1, R0 = .005, P0 = 1, WobA = 0, WobF = 0, WobP = 0; bool bReg = false; };
+	struct FPop { FVector P; double Age = -1, R = .1; };   // a regulator bubble breaking at the surface
 	struct FPuff { FVector P, V; double Life = 0, Max = 1; };
 	struct FBlood { FVector P, V; double Age = -1, Life = 6, R = .1, Ph = 0, Tone = 0; };
 	struct FSnow { FVector P, V; double Seed; };
@@ -118,7 +144,16 @@ private:
 	void UpdateSeeps(double Dt, double T);
 	void DrawParticles();
 	void UpdateUnderwaterLook(double Dt);
-	void SpawnBubble(const FVector& P, double R);
+	int32 SpawnBubble(const FVector& P, double R);
+	// scuba
+	void BeginScuba();
+	void FinishDive();
+	void HandleScubaEvents();
+	void BreathSound(bool bInhale);
+	void UpdateGauge(double Dt);
+	void UpdateTorch(double Dt);
+	void UpdateBoatKit(double T);
+	bool TorchWanted() const;
 	void Puff(int32 N, const FVector& P, double RMin, double RMax);
 	void GetTargets(TArray<KeysDive::FTarget>& Out) const;
 	FVector MuzzleWorld() const;   // game meters
@@ -136,6 +171,9 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunGlove;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunHandL;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunWish;
+	UPROPERTY() TObjectPtr<class UPointLightComponent> GunFill;     // lights only the first-person gun (lighting channel 2)
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunLeader;  // the braided leader from the slide ring to the muzzle
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunWorn;    // the gun in her hand in the chase view (section 1: its shaft)
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunReel;   // the spool, flanges and crank: spins as the line pays out
 	double ReelAng = 0, ReelSpin = 0;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Lines;     // flying shaft, its tether, the float line and float
@@ -146,6 +184,37 @@ private:
 	UPROPERTY() TObjectPtr<UPostProcessComponent> Post;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> PostMID;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> BubbleMID;
+	// scuba: the worn set (on Body), the gauge console and its needle and digits (dive-mask view), the dive light,
+	// and the rack and flag that ride on the boat's own mesh
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Kit;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Gauge;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GaugeFace;
+	UPROPERTY() TObjectPtr<class USpotLightComponent> Torch;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatRack;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoatFlag;
+	KeysScuba::FState Sc;
+	int32 CylIx = 0, KitSig = -1, RackSig = -1, FaceSig = -1, KitTris = 0;
+	bool bGlanceKey = false, bDebugGlance = false, bBoatKitTried = false;
+	double GlanceW = 0, GlanceAutoT = 0;
+	double LeaderOut = -1;        // the shaft's travel the leader was last built for
+	bool bWornShaft = true, bDbgGunShow = false, bGunHandOff = false;
+	int32 DbgBoatView = 0, FlagTick = 0, ProfN = 0, DbgOff = 0;
+	bool bDbgProf = false;
+	double ProfMs[6] = {0, 0, 0, 0, 0, 0};
+	int32 TorchMode = 0;          // 0 auto, 1 on, 2 off
+	double TorchW = 0;
+	double DiveSecs = 0, DiveMaxDepth = 0, EnterT = 0, PsiUsedBefore = 0;
+	bool bHelloSaid = false;
+	double ExhAcc = 0;
+	TArray<FPop> Pops;
+	int32 PopCursor = 0;
+	// test hooks: the chase camera swung round her, a camera on the boat looking at her bubbles, held keys, the hover and gas logs
+	bool bDbgOrbit = false, bDbgTopside = false, bDebugSprint = false;
+	double DbgOrbitYaw = 0, DbgOrbitPitch = .3, DbgOrbitDist = 3.4;
+	int32 DebugAscend = 0;
+	double HoverT = -1, HoverY0 = 0, HoverX0 = 0, HoverZ0 = 0;
+	double GasLogT = -1, GasLogPsi0 = 0, GasLogSecs = 120;
+	double FishLogT = -1;
 
 	// controller
 	bool bDiving = false, bCanReboard = false, bDefaultChase = false;
