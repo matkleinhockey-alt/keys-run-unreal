@@ -1,0 +1,17 @@
+# aids to navigation: NOAA ENC Direct to GIS (public domain). x z kind number lit name
+-14467.3 -7253.4 R 2 0 Cudjoe Channel Daybeacon 2
+-9348.5 -8041.1 G 55 0 Harbor Key Bank Daybeacon 55
+-9390.3 -8179.0 G 57 1 Harbor Key Bank Light 57
+5449.2 -12773.8 R 4 0 East Cape Daybeacon 4
+6392.3 -12800.1 G 5 1 East Cape Light 5
+4586.0 -12913.4 R 2 1 East Cape Light 2
+5701.1 -8769.4 R 10 1 Oxfoot Bank Light 10
+9951.9 -12648.9 G 9 1 Flamingo Channel Light 9
+8245.8 -12581.6 R 6 0 Joe Kemp Channel Daybeacon 6
+6342.9 -7363.4 R 6 1 Schooner Bank Light 6
+10398.9 -13153.4 R 18 0 Flamingo Channel Daybeacon 18
+10327.7 -13160.8 G 15 1 Flamingo Channel Light 15
+9028.0 -12604.7 R 8 0 Joe Kemp Channel Daybeacon 8
+10306.7 -13127.0 R 16 0 Flamingo Channel Daybeacon 16
+10102.1 -12858.7 R 12 0 Flamingo Channel Daybeacon 12
+10240.6 -13065.8 r 14 0 Flamingo Channel Buoy 14

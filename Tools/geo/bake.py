@@ -73,7 +73,7 @@ PHASES = {
     # Florida Bay and the Gulf north of all the rest, which squares the map off: up to the mainland at Flamingo. Its
     # downloads are the other phases' put together (fetch_p3.sh p4_bay); the DEM is 1 arc-second.
     'p4_bay': dict(rect=(-30060, 23500, -13720, -6920), box=(-82.10, 24.60, -80.45, 25.30), src='p4_bay', pad=60, clip=True, gen=4,
-                   join=[('p3', 'south'), ('p2_bay', 'south'), ('p2', 'south'), ('p4', 'east')], chain_from=['p3', 'p1', 'p2'], cut_marks=True),
+                   join=[('p3', 'south'), ('p2_bay', 'south'), ('p2', 'south'), ('p4', 'east')], chain_from=['p3', 'p1', 'p2'], cut_marks=True, low_land=-.15),
 }
 JOIN_FADE = 30    # cells over which a joined edge's correction fades out
 CUT_MAX, CUT_HALF_W = 20.0, 8.0   # marked channel legs: how much land a leg may clip and still be cut, and how wide
@@ -207,7 +207,9 @@ def main():
                     q = (rs.uniform(mnx, mxx), rs.uniform(mnz, mxz))
                     if p.contains(Point(*q)):
                         pts.append(q)
-                if np.mean(sample(np.array([q[0] for q in pts]), np.array([q[1] for q in pts])) > .1) < .5:
+                # (the mainland behind Florida Bay is marsh and mangrove at the height of the tide: 'low_land' counts
+                # anything not under water)
+                if np.mean(sample(np.array([q[0] for q in pts]), np.array([q[1] for q in pts])) > P.get('low_land', .1)) < .5:
                     continue
             polys.append(p)
         # cut to the working rectangle; an island belongs to this phase when most of what is left lies in the phase's own

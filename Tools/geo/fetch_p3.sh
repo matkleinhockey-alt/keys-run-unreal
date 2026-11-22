@@ -55,15 +55,37 @@ if [ "$PH" = p4_bay ]; then
     "$HERE/fetch_osm.sh" "$out" "${4//BB/$3}" || { echo "$1 $2 FAILED"; return 1; }
   }
   QC="[out:json][timeout:200];way[\"natural\"=\"coastline\"](BB);out geom;"
-  QE="[out:json][timeout:200];(nwr[\"place\"~\"^(island|islet)$\"](BB);node[\"place\"~\"^(city|town|village|hamlet|locality|suburb)$\"](BB);nwr[\"leisure\"=\"marina\"](BB);nwr[\"natural\"=\"reef\"](BB););out geom;"
+  QE="[out:json][timeout:120];(node[\"place\"~\"^(island|islet)$\"](BB);way[\"place\"~\"^(island|islet)$\"](BB);node[\"place\"~\"^(city|town|village|hamlet|locality|suburb)$\"](BB);node[\"leisure\"=\"marina\"](BB);way[\"leisure\"=\"marina\"](BB););out geom;"
   QM="[out:json][timeout:200];(way[\"natural\"=\"wetland\"](BB);way[\"natural\"=\"wood\"](BB););out geom;"
   A="24.86,-82.10,25.02,-81.41"; B="25.12,-81.45,25.30,-80.60"
   for k in coast extra mangrove; do
     case $k in coast) Q="$QC" ;; extra) Q="$QE" ;; mangrove) Q="$QM" ;; esac
-    piece $k A "$A" "$Q"; piece $k B "$B" "$Q"
+    piece $k A "$A" "$Q"
+    if [ $k = mangrove ] && [ ! -s "$RAW/p4_bay_mangrove_B.json" ]; then
+      # (the Everglades' wetlands in one reply time the servers out: four strips of longitude, put together)
+      parts=(); prev=""
+      for lon in -81.45 -81.20 -80.95 -80.75 -80.60; do
+        if [ -n "$prev" ]; then
+          part="$RAW/p4_bay_mangrove_B$prev.part"
+          [ -s "$part" ] || "$HERE/fetch_osm.sh" "$part" "${Q//BB/25.12,$prev,25.30,$lon}" || echo "mangrove B $prev FAILED"
+          parts+=("$part")
+        fi
+        prev="$lon"
+      done
+      ok=1; for f in "${parts[@]}"; do [ -s "$f" ] || ok=0; done
+      [ $ok = 1 ] && "$PY" -I "$HERE/merge_osm_p3.py" "$RAW/p4_bay_mangrove_B.json" "${parts[@]}"
+    else
+      piece $k B "$B" "$Q"
+    fi
   done
   for k in coast extra mangrove; do
-    for p in A B; do [ -s "$RAW/p4_bay_${k}_$p.json" ] || { echo "p4_bay: piece $k $p is still missing"; exit 1; }; done
+    for p in A B; do
+      [ -s "$RAW/p4_bay_${k}_$p.json" ] && continue
+      # (P4_BAY_PARTIAL=1 goes on without a piece the servers will not give: the coastline pieces are the ones that matter;
+      # without the others the far bay's keys have no names and its mangrove is the bake's own guess at low shores)
+      if [ "$k" != coast ] && [ -n "$P4_BAY_PARTIAL" ]; then echo "p4_bay: going on without piece $k $p"; continue; fi
+      echo "p4_bay: piece $k $p is still missing"; exit 1
+    done
   done
   join() {
     # $1 out, then the inputs that exist

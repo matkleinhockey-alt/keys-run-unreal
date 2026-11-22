@@ -74,32 +74,38 @@ def main():
                 return float(g.chain_z(x))
         return float(G['p1'].chain_z(x))
 
-    # ---- Hawk Channel: the water between the keys and the reef. At each x, going south from US-1's line: past the
-    # last of the keys' own shore, then the widest run of water 4 m deep or more before the bottom drops past 25 m (the
-    # reef's outer slope). The middle of that run, smoothed, checked every 10 m.
+    # ---- Hawk Channel: the water between the keys and the reef. The line is the cheapest way along the map on a 100 m
+    # by 20 m lattice south of US-1's line: water under 4 m costs (under 2.5 m a great deal), so does water within 300 m
+    # of a shore, the open sea past the reef (over 25 m) a little, and every metre of sideways movement a little, at
+    # most 60 m sideways per 100 m run. Then smoothed, and checked every 10 m.
     xs = np.arange(x0 + 900, x1 - 900, 100.0)
-    zs = []
+    zl = np.arange(z0 + 300, z1 - 300, 20.0)
+    INF = 1e12
+    best, back = None, []
     for x in xs:
         c = chain(x)
-        band = np.arange(c + 300, min(z1 - 300, c + 6500), 20.0)
-        d = -at(H, np.full_like(band, x), band)
-        deep = np.nonzero(d > 25)[0]
-        end = deep[0] if len(deep) else len(band)
-        ok = (d >= 4)
-        ok[end:] = False
-        best, cur, run0 = None, 0, 0
-        for k, v in enumerate(list(ok) + [False]):
-            if v:
-                if cur == 0: run0 = k
-                cur += 1
-            else:
-                if cur and (best is None or cur > best[0]): best = (cur, run0)
-                cur = 0
-        zs.append(band[best[1] + best[0] // 2] if best else np.nan)
-    zs = np.array(zs)
-    good = np.isfinite(zs)
-    zs = np.interp(xs, xs[good], zs[good])
-    zs = ndimage.gaussian_filter1d(ndimage.median_filter(zs, 9, mode='nearest'), 8, mode='nearest')
+        d = -at(H, np.full_like(zl, x), zl); sh = at(S, np.full_like(zl, x), zl)
+        d = np.nan_to_num(d, nan=-1.0); sh = np.nan_to_num(sh, nan=-1.0)
+        w = np.where(d < 2.5, 2000.0, np.where(d < 4, 25.0 * (4 - d), 0.0)) + np.clip(300 - sh, 0, 300) / 30.0 + np.where(d > 25, 3.0, 0.0)
+        w = np.where((zl < c + 300) | (sh <= 0), INF, w)
+        if best is None:
+            best = w
+            continue
+        cand = np.full((7, len(zl)), INF)
+        for k, sft in enumerate(range(-3, 4)):
+            src = np.roll(best, sft)
+            if sft > 0: src[:sft] = INF
+            if sft < 0: src[sft:] = INF
+            cand[k] = src + abs(sft) * 20 * .02
+        kbest = np.argmin(cand, axis=0)
+        back.append(kbest - 3)
+        best = cand[kbest, np.arange(len(zl))] + w
+    j = int(np.argmin(best))
+    idx = [j]
+    for bk in reversed(back):
+        j = j - int(bk[j])
+        idx.append(j)
+    zs = ndimage.gaussian_filter1d(zl[np.array(idx[::-1])], 4, mode='nearest')
     px = np.arange(xs[0], xs[-1], 10.0); pz = np.interp(px, xs, zs)
     pd, ps = -at(H, px, pz), at(S, px, pz)
     k = int(np.argmin(pd))

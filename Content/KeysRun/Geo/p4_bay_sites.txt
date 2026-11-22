@@ -1,0 +1,3 @@
+# named places (Tools/geo/sites_p3.py): kind|name|x|z|x2|z2|value. Marina names are invented.
+marina|Snake Bight Landing|10397.3|-13215.7|10270.0|-13120.0|1.93
+spot|Off Flamingo|10250.0|-12190.0|0.0|0.0|0.00
