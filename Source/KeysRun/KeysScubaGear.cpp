@@ -484,9 +484,8 @@ namespace KeysScuba
 		const double W = .62, H = .5;
 		const int32 NU = 14, NV = 8;
 		const FLinearColor Red = SgHex(0xd3202b), White = SgHex(0xf4f4f0);
-		auto P = [&](int32 u, int32 v)
+		auto P = [&](double Fu, double Fv)
 		{
-			const double Fu = double(u) / NU, Fv = double(v) / NV;
 			const double Wave = FMath::Sin(Fu * 7.5 - T * 7 + Fv * 1.3) * .05 * Fu + FMath::Sin(Fu * 3.1 - T * 4.3) * .035 * Fu;
 			return Hoist + FVector(-Fu * W * (1 - .04 * Fu), Wave, -Fv * H - Fu * Fu * .06);
 		};
@@ -494,14 +493,25 @@ namespace KeysScuba
 		for (int32 v = 0; v < NV; v++)
 			for (int32 u = 0; u < NU; u++)
 			{
-				// the stripe: top of the hoist (u 0, v 0) to the bottom of the fly (u 1, v 1)
-				const double Cu = (u + .5) / NU, Cv = (v + .5) / NV;
-				const FLinearColor Col = FMath::Abs(Cu - Cv) < .17 ? White : Red;
-				const FVector A = P(u, v), Bb = P(u + 1, v), C = P(u + 1, v + 1), D = P(u, v + 1);
+				const FVector A = P(double(u) / NU, double(v) / NV), Bb = P(double(u + 1) / NU, double(v) / NV), C = P(double(u + 1) / NU, double(v + 1) / NV), D = P(double(u) / NU, double(v + 1) / NV);
 				const FVector Nn = FVector::CrossProduct(Bb - A, D - A).GetSafeNormal();
-				M.AddQuad(A, Bb, C, D, Col, Nn);
-				M.AddQuad(A, D, C, Bb, Col, -Nn);
+				M.AddQuad(A, Bb, C, D, Red, Nn);
+				M.AddQuad(A, D, C, Bb, Red, -Nn);
 			}
+		// the white stripe, from the top of the hoist to the bottom of the fly, laid a hair off each face of the cloth
+		const double Half = .2;
+		for (int32 u = 0; u < NU * 2; u++)
+		{
+			const double U0 = double(u) / (NU * 2), U1 = double(u + 1) / (NU * 2);
+			auto V0 = [&](double Uu) { return FMath::Clamp(Uu - Half, 0.0, 1.0); };
+			auto V1 = [&](double Uu) { return FMath::Clamp(Uu + Half, 0.0, 1.0); };
+			const FVector A = P(U0, V0(U0)), Bb = P(U1, V0(U1)), C = P(U1, V1(U1)), D = P(U0, V1(U0));
+			const FVector Nn = FVector::CrossProduct(Bb - A, D - A).GetSafeNormal();
+			if (Nn.IsNearlyZero()) continue;
+			const FVector Off = Nn * .003;
+			M.AddQuad(A + Off, Bb + Off, C + Off, D + Off, White, Nn);
+			M.AddQuad(A - Off, D - Off, C - Off, Bb - Off, White, -Nn);
+		}
 		M.Surf = SurfDefault;
 	}
 }

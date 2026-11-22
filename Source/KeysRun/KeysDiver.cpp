@@ -1132,7 +1132,8 @@ void AKeysDiver::Tick(float DeltaSeconds)
 			const FVector Eye = Base + (DbgBoatView == 1 ? FVector(1.5, 1.7, 1.7) : DbgBoatView == 2 ? FVector(-2.6, 3.4, 2.4) : FVector(-6.5, 5.5, 4.2));
 			const FVector Aim = Base + (DbgBoatView == 1 ? FVector(0, 0, .5) : DbgBoatView == 2 ? FVector(-.4, 0, 1.75) : FVector(1.5, .8, .8));
 			const FVector EyeW = Bt.TransformPosition(Eye * 100), AimW = Bt.TransformPosition(Aim * 100);
-			P->ApplyDiveCamera(EyeW, (AimW - EyeW).Rotation(), 70);
+			CamPosUE = EyeW; CamRotUE = (AimW - EyeW).Rotation();
+			P->ApplyDiveCamera(CamPosUE, CamRotUE, 70);
 		}
 	}
 	UpdateShaftAndLine(T);
@@ -1199,7 +1200,7 @@ void AKeysDiver::UpdateCamera(double Dt, double T)
 		const AKeysBoatPawn* P = Pawn();
 		const double BX = P ? P->BoatX() : S.X - 4, BZ = P ? P->BoatZ() : S.Z;
 		const FVector2D To = FVector2D(S.X - BX, S.Z - BZ).GetSafeNormal();
-		CamPosUE = G2U(FVector(BX + To.X * .9, 2.0, BZ + To.Y * .9));
+		CamPosUE = G2U(FVector(BX + To.X * 1.75, 1.95, BZ + To.Y * 1.75));
 		CamRotUE = (G2U(FVector(S.X, 0, S.Z)) - CamPosUE).Rotation();
 	}
 }
@@ -1641,7 +1642,7 @@ void AKeysDiver::UpdateBubbles(double Dt, double T)
 			{
 				FPop& Pp = Pops[PopCursor];
 				PopCursor = (PopCursor + 1) % Pops.Num();
-				Pp.P = B.P; Pp.Age = 0; Pp.R = FMath::Max(.03, R * 2.2);
+				Pp.P = B.P; Pp.Age = 0; Pp.R = FMath::Max(.05, R * 3.2);
 			}
 			B.Age = -1;
 		}
