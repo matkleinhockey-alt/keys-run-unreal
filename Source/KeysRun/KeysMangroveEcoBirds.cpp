@@ -28,15 +28,15 @@ namespace KeysMangroveEco
 		const FBirdSpec Specs[NumBirds] = {
 			// body leg  neck bill head  span speed flap pitch wade flush draw   body      belly     neck      head      bill      leg       wing      tip
 			{.42, .50, .48, .12, .045, 1.40, 9,   2.4, .55, .45, 30, 700, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xe8b030, 0x1c1c1c, 0xf4f4ee, 0xf0f0e8, 0, false},   // great egret
-			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x6f7f92, 0x8a94a2, 0xa09aa6, 0xe8e8e8, 0xd8a838, 0x5a5648, 0x5f6f84, 0x2c3440, 0, false},   // great blue heron
+			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x5a6a80, 0x6f7a8c, 0x8a8494, 0xe8e8e8, 0xd8a838, 0x5a5648, 0x5f6f84, 0x2c3440, 0, false},   // great blue heron
 			{.30, .32, .30, .08, .035, 1.00, 9,   3.0, .50, .30, 24, 450, 0x3c4a66, 0x3c4a66, 0x5a4660, 0x5a4660, 0x4a5a70, 0x4a5240, 0x3c4a66, 0x2c3850, 0, false},   // little blue heron
 			{.30, .30, .24, .16, .035, .95,  10,  3.6, .35, .22, 22, 500, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf0e8e4, 0xd8604a, 0xd0604a, 0xf4f4ee, 0x181818, 1, true},    // white ibis
 			{.40, .40, .32, .17, .040, 1.25, 9.5, 3.0, .40, .32, 26, 600, 0xf2a0b4, 0xf4b4c4, 0xf6ecec, 0xe4e6d4, 0x9aa088, 0xc05060, 0xf08aa6, 0xe0607a, 2, true},    // roseate spoonbill
 			{.42, .07, .28, .07, .040, 1.20, 12,  4.0, 1.0, 0,   20, 400, 0x1c1c1e, 0x242426, 0x1c1c1e, 0x1c1c1e, 0xd09030, 0x141414, 0x26262a, 0x141414, 0, true},    // cormorant
-			{.42, .06, .38, .09, .030, 1.15, 11,  3.5, .90, 0,   20, 400, 0x1a1a1c, 0x1a1a1c, 0x4a3a2a, 0x4a3a2a, 0xd8b040, 0x2a2a20, 0xc8c8c0, 0x1a1a1c, 0, true},    // anhinga
+			{.42, .06, .38, .09, .030, 1.15, 11,  3.5, .90, 0,   20, 400, 0x1a1a1c, 0x1a1a1c, 0x4a3a2a, 0x4a3a2a, 0xd8b040, 0x2a2a20, 0x2c2c30, 0xb8b8b0, 0, true},    // anhinga
 			{.16, .025, .03, .06, .040, .50, 11,  7.0, .90, 0,   14, 200, 0x5a7896, 0xf0f0ee, 0xf0f0ee, 0x4a6888, 0x202428, 0x3a3a3a, 0x4a6888, 0x2a3a50, 0, true},    // belted kingfisher
 			{.22, .14, .14, .07, .035, .65,  9,   4.0, .25, .12, 12, 250, 0x3a5a4a, 0x7a4a3a, 0x7a3a2a, 0x24382e, 0x2a2a2a, 0xd8b838, 0x3a5a4a, 0x24382e, 0, false},   // green heron
-			{.30, .22, .14, .08, .050, 1.10, 9,   2.8, .60, .20, 16, 350, 0x8a9098, 0xc8ccd0, 0xb8bcc0, 0x20242a, 0x1a1a1c, 0xd8c048, 0x6a7078, 0x3a4048, 0, false},   // night heron
+			{.30, .22, .14, .08, .050, 1.10, 9,   2.8, .60, .20, 16, 350, 0x6a727c, 0x9aa0a8, 0x9aa0a8, 0x14181c, 0x1a1a1c, 0xd8c048, 0x555c66, 0x30363e, 0, false},   // night heron
 			{.20, .03, .03, .06, .035, .80,  10,  3.5, .15, 0,   0,  400, 0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0x1a1a1c, 0xf08020, 0x202020, 0xc8ccd0, 0x8a9098, 0, true},    // tern
 			{.34, .10, .06, .035, .050, 1.60, 11, 2.4, .90, 0,   0,  700, 0x4a3a2c, 0xf0ece4, 0xf0ece4, 0xf0ece4, 0x2a2a2a, 0xc8c8b8, 0x4a3a2c, 0x2a2018, 0, true},    // osprey
 			{.55, .10, .38, .30, .060, 2.10, 10,  1.8, .70, 0,   22, 700, 0x9a9288, 0x6b645c, 0xf2efe4, 0xf6e9a8, 0xd9b45e, 0x2a2a2c, 0x6b645c, 0x3a3632, 3, false},   // brown pelican
@@ -187,14 +187,14 @@ namespace KeysMangroveEco
 				else { Pen.Prism(HipS, Knee, Lr, Lr, LegC); Pen.Prism(Knee, Foot, Lr, Lr * .8, LegC); }
 			}
 			// the wings: shoulder to wrist, wrist to tip; folded they lie shut along the body
-			const double W = B.Wing, Th = bAir ? FMath::Sin(B.Ph * 2 * PI * B.FlapHz) * (B.State == BDive ? .1 : .7) + .08 : -.22;
-			const double Half = K.Span * .5 * S * W, Chord = FMath::Max(K.Body * .62, K.Span * .17) * S;
+			const double W = B.Wing, Th = bAir ? FMath::Sin(B.Ph * 2 * PI * B.FlapHz) * (B.State == BDive ? .1 : .7) + .08 : .35;   // (held out to dry: elbows up, hands hanging)
+			const double Half = K.Span * .5 * S * W, Chord = FMath::Max(K.Body * .62, K.Span * .17) * S * (bAir ? 1 : .6);
 			for (const double Sd : {-1.0, 1.0})
 			{
 				const FVector J = Body + A * BodyL * .16 + Dn * BodyR * .55 + Rt * BodyR * .5 * Sd;
 				const double Sweep = B.State == BDive ? .55 : bAir ? 0 : .3;
 				const FVector El = J + (Rt * Sd * FMath::Cos(Th) + Dn * FMath::Sin(Th)) * Half * .45 - A * Half * .45 * Sweep;
-				const double Th2 = Th * 1.25 - (bAir ? .12 : .4);
+				const double Th2 = bAir ? Th * 1.25 - .12 : -.95;
 				const FVector Wt = El + (Rt * Sd * FMath::Cos(Th2) + Dn * FMath::Sin(Th2)) * Half * .55 - A * Half * (.14 + Sweep * .5);
 				const FVector J0 = J + A * Chord * .42 * W, J1 = J - A * Chord * .5 * W, E0 = El + A * Chord * .34 * W, E1 = El - A * Chord * .5 * W;
 				Pen.Tri2(J0, J1, E1, WingC, WingC * .8f);
@@ -271,6 +271,8 @@ namespace KeysMangroveEco
 				const double R1 = EHash(B.Seed * 1e-6, 1.0 + i), R2 = EHash(B.Seed * 1e-6, 2.0 + i);
 				B.Sz = (B.Kind == Kingfisher ? 1.9 : B.Kind == GreenHeron ? 1.7 : 1.5) * (.94 + .12 * R1);
 				B.Yaw = 2 * PI * R2;
+				// (a bird drying its wings on a limb sits across it, its back or its breast to the water)
+				if ((B.Kind == Cormorant || B.Kind == Anhinga) && B.Rook < 0) B.Yaw = FMath::Atan2(Sp.Out.Y, Sp.Out.X) + (R2 < .5 ? PI : 0) + (R1 - .5) * .5;
 				B.Ph = 10 * R1;
 				B.FlapHz = Specs[B.Kind].FlapHz * (.9 + .2 * R2);
 				B.Rank = EHash(B.Seed * 1e-6, 3.0);
@@ -289,7 +291,7 @@ namespace KeysMangroveEco
 				B.P = B.Home;
 				B.State = RestState(E, B);
 				if (B.Kind == Tern || B.Kind == Osprey) { B.State = E.Phase == 0 ? BAway : BPatrol; B.Wing = 1; B.To = B.Home; }
-				else if (B.Kind == NightHeron && B.Rook < 0 && E.Phase == 0) B.State = BStand;   // (it finds its way to the water at its first thought)
+				else if (B.Kind == NightHeron && B.Rook < 0 && E.Phase == 0) B.State = BRoost;   // (it leaves its root for the water at its first thought)
 				else if (B.Rook >= 0 && B.Kind != NightHeron && B.Rank > E.HomeFrac) B.State = BAway;
 				B.Wing = B.State == BDry ? .8 : B.State == BPatrol ? 1 : 0;
 				B.Neck = B.State == BRoost ? -1 : 0;
@@ -310,8 +312,7 @@ namespace KeysMangroveEco
 			if (E.RookCD[r] > 0) continue;
 			E.RookCD[r] = FMath::FRandRange(4.0, 8.0);
 			// the way they go: out over the open water, the same way every day
-			const double Ang = 2 * PI * EHash(Rk[r].C.X * .01, Rk[r].C.Y * .01);
-			FVector2D Dir = Outward(Rk[r].C.X + FMath::Cos(Ang) * Rk[r].R, Rk[r].C.Y + FMath::Sin(Ang) * Rk[r].R);
+			const FVector2D Dir = RookSeaDir(r);
 			int32 Home = 0, All = 0;
 			TArray<FBird*> Go, Come;
 			for (TPair<int64, FTileE*>& T : E.Tiles)
@@ -332,9 +333,7 @@ namespace KeysMangroveEco
 					FBird& B = *Go[i];
 					const FVector Far = B.Perch + FVector(Dir.X * 560 + (i - N * .5) * 6, 22 + i, Dir.Y * 560 + (i - N * .5) * 4);
 					StartFly(B, Far, BAway, 4);
-					B.Delay = i * .45;
-					B.State = BPerch; B.Wing = 0;   // (it waits its turn on the branch; the flight is armed)
-					B.Next = BAway;
+					B.FlyT = -i * .45;   // (each a moment after the one before)
 				}
 				E.bStillDirty = true;
 				E.Sound(TEXT("flight"), Go[0]->Kind, Go[0]->P, FMath::Min(1.f, N / 6.f));
@@ -405,7 +404,8 @@ namespace KeysMangroveEco
 			case BFly:
 			{
 				B.FlyT += Dt;
-				if (B.FlyT < 0) break;
+				if (B.FlyT < 0) { B.Wing = 0; break; }
+				B.Wing = 1;
 				const double U = FMath::Clamp(B.FlyT / B.FlyDur, 0.0, 1.0), Us = U * U * (3 - 2 * U);
 				const bool bLandFeet = B.Next == BStand || B.Next == BPerch || B.Next == BDry || B.Next == BRoost;
 				const FVector To = bLandFeet ? B.To + FVector(0, K.Leg * B.Sz * (1 - FMath::Clamp((U - .9) * 10, 0.0, 1.0)), 0) : B.To;
@@ -600,7 +600,16 @@ namespace KeysMangroveEco
 					if (B.RoostIx >= 0 && T.RoostUsed.IsValidIndex(B.RoostIx)) T.RoostUsed[B.RoostIx] = false;
 					B.RoostIx = -1;
 					B.Neck = 0;
-					if (bWadesNow && B.Kind != NightHeron) StartFly(B, B.Home, BStand, 2.5);
+					if (bWadesNow && B.Kind == NightHeron)
+					{
+						// down off its root to the nearest shallows, to hunt them till first light
+						double BestD = FMath::Square(60.0);
+						FVector2D Q = FVector2D::ZeroVector;
+						for (const FVector2D& W : T.Wade) { const double D = FVector2D::DistSquared(W, P2); if (D < BestD && Wadeable(E, W.X, W.Y, .75)) { BestD = D; Q = W; } }
+						if (!Q.IsZero()) StartFly(B, FVector(Q.X, FeetY(E, B, Q.X, Q.Y), Q.Y), BStand, 2);
+						else { B.State = BPerch; B.Wing = 0; }
+					}
+					else if (bWadesNow) StartFly(B, B.Home, BStand, 2.5);
 					else B.State = Rest == BDry ? BDry : Rest, B.Wing = Rest == BDry ? .8 : 0;
 					E.bStillDirty = true;
 					continue;
@@ -621,7 +630,7 @@ namespace KeysMangroveEco
 				// --- the waders: to where the small fish are thick and the water is shallow enough to stand in
 				if (bWadesNow)
 				{
-					const double Wade = B.Kind == NightHeron ? .22 : K.Wade;
+					const double Wade = B.Kind == NightHeron ? .75 : K.Wade;
 					if (B.Leader >= 0 && T.Birds.IsValidIndex(B.Leader))
 					{
 						// one of a party: keep by the leader, flying when it flies
@@ -699,7 +708,7 @@ namespace KeysMangroveEco
 					continue;
 				}
 				// --- by day a night heron sits on its root; whoever sat down somewhere else goes home
-				if (B.Kind == NightHeron && B.Rook < 0 && FVector::Distance(B.P, B.Perch) > .5) { StartFly(B, B.Perch, BRoost, 2); E.bStillDirty = true; continue; }
+				if (B.Kind == NightHeron && B.Rook < 0 && E.Phase != 0 && FVector::Distance(B.P, B.Perch) > .5) { StartFly(B, B.Perch, BRoost, 2); E.bStillDirty = true; continue; }
 				// --- on a root or a limb over the water
 				if (B.Rook < 0 && B.Cool <= 0 && E.Phase != 0 && (B.Kind == Kingfisher || B.Kind == GreenHeron || B.Kind == Cormorant || B.Kind == Anhinga))
 				{

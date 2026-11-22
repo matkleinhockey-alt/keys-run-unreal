@@ -30,10 +30,14 @@
 #include "KeysDiver.h"
 #include "KeysWorld.h"
 #include "KeysMangroveLife.h"
+#include "KeysMesh.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "Async/Async.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/CommandLine.h"
@@ -129,7 +133,7 @@ namespace KeysMangroveEco
 		{
 			TArray<FRookery> Out;
 			if (!KeysGeoReal::Loaded()) return Out;
-			struct FCand { FRookery R; double Score, Frac; };
+			struct FCand { FRookery R; double Score, Frac, Area; };
 			TArray<FCand> Cands;
 			const TArray<KeysGeoReal::FIsl>& Isl = KeysGeoReal::Islands();
 			for (int32 i = 0; i < Isl.Num(); i++)
@@ -150,19 +154,22 @@ namespace KeysMangroveEco
 				FCand C;
 				C.R.C = FVector2D(I.X, I.Z); C.R.R = FMath::Clamp(Rad * 1.25, 28.0, 150.0); C.R.Region = RegionAt(I.X); C.R.Island = i;
 				C.Frac = double(M) / N;
-				C.Score = EHash(i * 1.7 + 11.0, I.Area * .001 + 5.3) + (I.Area > 4000 && I.Area < 60000 ? .5 : 0);
+				C.Area = I.Area;
+				C.Score = EHash(i * 1.7 + 11.0, I.Area * .001 + 5.3) + (I.Area > 2500 && I.Area < 9000 ? .5 : 0);
 				Cands.Add(C);
 			}
 			Cands.Sort([](const FCand& A, const FCand& B) { return A.Score > B.Score; });
 			for (int32 Reg = 0; Reg < 4; Reg++)
 			{
 				int32 Got = 0;
-				for (const double MinFrac : {.85, .5, .01})
+				// (a key some 40 to 130 m across first: small enough that its birds crowd it; a bigger one only if a part has none)
+				for (const FVector2D Rule : {FVector2D(.85, 14000), FVector2D(.5, 14000), FVector2D(.5, 160000), FVector2D(.01, 160000)})
 				{
+					const double MinFrac = Rule.X;
 					for (const FCand& C : Cands)
 					{
 						if (Got >= 3) break;
-						if (C.R.Region != Reg || C.Frac < MinFrac) continue;
+						if (C.R.Region != Reg || C.Frac < MinFrac || C.Area > Rule.Y || C.Area < 1300) continue;
 						bool bNear = false;
 						for (const FRookery& O : Out) bNear |= FVector2D::Distance(O.C, C.R.C) < 1500;
 						if (!bNear) { Out.Add(C.R); Got++; }
@@ -181,6 +188,28 @@ namespace KeysMangroveEco
 		for (int32 i = 0; i < Rk.Num(); i++)
 			if (FMath::Square(X - Rk[i].C.X) + FMath::Square(Z - Rk[i].C.Y) < Rk[i].R * Rk[i].R) return i;
 		return -1;
+	}
+
+	FVector2D RookSeaDir(int32 R)
+	{
+		static TMap<int32, FVector2D> Have;
+		if (const FVector2D* D = Have.Find(R)) return *D;
+		const FRookery& Rk = Rookeries()[R];
+		FVector2D Best(1, 0);
+		int32 BestN = -1;
+		for (int32 k = 0; k < 16; k++)
+		{
+			const double A = k * PI / 8 + 2 * PI * EHash(Rk.C.X * .01, Rk.C.Y * .01);
+			const FVector2D D(FMath::Cos(A), FMath::Sin(A));
+			int32 N = 0;
+			for (double L = Rk.R + 30; L < Rk.R + 420; L += 30)
+			{
+				const FVector2D Q = Rk.C + D * L;
+				if (KeysGeo::LandH(Q.X, Q.Y) < -.05 && !KeysGeoReal::MangroveAt(Q.X, Q.Y)) N += L < Rk.R + 150 ? 3 : 1;
+			}
+			if (N > BestN) { BestN = N; Best = D; }
+		}
+		return Have.Add(R, Best);
 	}
 
 	// ---------------------------------------------------------------- rules the mangrove builder shares
@@ -330,7 +359,7 @@ namespace KeysMangroveEco
 			if (bOpen && !S.bRoof && SHash(S, 12) < .012) Add(LemonShark, S, FVector(At(9).X, 0, At(9).Y), O, 1, 12);
 			if (bOpen && SHash(S, 13) < .012 && Deep(.45, 30, Dq)) Add(NurseShark, S, FVector(Dq.X, 0, Dq.Y), O, 1, 13);
 			if (bOpen && !S.Bank && SHash(S, 14) < .016) Add(Stingray, S, FVector(At(8).X, 0, At(8).Y), O, 1, 14);
-			if (SHash(S, 15) < .22 && D6 < 1.6 && bOpen && Enclosed(W6.X, W6.Y) >= 7) Add(Jelly, S, FVector(W6.X, 0, W6.Y), O, 5 + int32(SHash(S, 50) * 8), 15);
+			if (SHash(S, 15) < .22 && D6 > .5 && D6 < 1.6 && bOpen && Enclosed(W6.X, W6.Y) >= 7) Add(Jelly, S, FVector(W6.X, 0, W6.Y), O, 5 + int32(SHash(S, 50) * 8), 15);
 			// ---- what hunts the small fish
 			if (SHash(S, 16) < (S.Bank ? .12 : .045)) Add(Snook, S, FVector(At(S.Bank ? 3 : 3.2).X, 0, At(S.Bank ? 3 : 3.2).Y), O, 2 + int32(SHash(S, 51) * 3), 16);
 			if (bOpen && SHash(S, 17) < .02 && Deep(.7, 46, Dq)) Add(Jack, S, FVector(Dq.X, 0, Dq.Y), O, 3 + int32(SHash(S, 52) * 4), 17);
@@ -364,12 +393,18 @@ namespace KeysMangroveEco
 			if (!bRookNear) continue;
 			const int32 R = RookAt(Tp.X, Tp.Z);
 			// (a big key would hold a thousand: the birds thin out as the key grows)
-			if (R < 0 || EHash(Tp.X * 1.31, Tp.Z * .77 + 9.0) > FMath::Clamp(2600.0 / (Rk[R].R * Rk[R].R), .1, .5)) continue;
-			const double Hb = EHash(Tp.Z * 1.9, Tp.X * .43 + 4.0);
-			const uint8 Kind = Hb < .25 ? GreatEgret : Hb < .47 ? Ibis : Hb < .61 ? Cormorant : Hb < .73 ? Pelican : Hb < .81 ? GreatBlue : Hb < .89 ? Spoonbill : Hb < .93 ? Anhinga : Hb < .97 ? LittleBlue : NightHeron;
-			None.X = Tp.X; None.Z = Tp.Z;
-			FSpot& Sp = Add(Kind, None, Tp, (FVector2D(Tp.X, Tp.Z) - Rk[R].C).GetSafeNormal(), 1, 60);
-			Sp.Rook = int16(R);
+			if (R < 0 || EHash(Tp.X * 1.31, Tp.Z * .77 + 9.0) > FMath::Clamp(2600.0 / (Rk[R].R * Rk[R].R), .1, .85)) continue;
+			// (two or three to a crown as often as one: a rookery is crowded)
+			const int32 NHere = 1 + int32(EHash(Tp.X * .37 + 1.0, Tp.Z * .59) * 2.6);
+			for (int32 n = 0; n < NHere; n++)
+			{
+				const double Hb = EHash(Tp.Z * 1.9 + n * 7.7, Tp.X * .43 + 4.0), An = 2 * PI * EHash(Tp.X + n * 3.1, Tp.Z - n);
+				const uint8 Kind = Hb < .25 ? GreatEgret : Hb < .47 ? Ibis : Hb < .61 ? Cormorant : Hb < .73 ? Pelican : Hb < .81 ? GreatBlue : Hb < .89 ? Spoonbill : Hb < .93 ? Anhinga : Hb < .97 ? LittleBlue : NightHeron;
+				const FVector At = n == 0 ? Tp : Tp + FVector(FMath::Cos(An) * 1.5, -.32, FMath::Sin(An) * 1.5);
+				None.X = At.X; None.Z = At.Z;
+				FSpot& Sp = Add(Kind, None, At, (FVector2D(Tp.X, Tp.Z) - Rk[R].C).GetSafeNormal(), 1, 60 + n);
+				Sp.Rook = int16(R);
+			}
 		}
 		FVector Foot;
 		double Seed;
@@ -459,6 +494,26 @@ namespace KeysMangroveEco
 
 using namespace KeysMangroveEco;
 
+// the nearest animal of a kind (by a piece of its name) to a point: where it is now, and which way its open water lies
+static bool EcoNearest(FEco& S, const FString& Name, const FVector& Near, FVector& OutP, FVector2D& OutDir)
+{
+	double Best = 1e18;
+	auto Try = [&](int32 Kind, const FVector& P, const FVector2D& O)
+	{
+		if (!FString(KindName(Kind)).Contains(Name)) return;
+		const double D = FVector::DistSquared2D(FVector(P.X, P.Z, 0), FVector(Near.X, Near.Z, 0));
+		if (D < Best) { Best = D; OutP = P; OutDir = O; }
+	};
+	for (TPair<int64, FTileE*>& T : S.Tiles)
+	{
+		for (FBird& B : T.Value->Birds) if (B.State != BAway) Try(B.Kind, B.P + FVector(0, .4, 0), B.Out);
+		for (FSchoolE& Sc : T.Value->Schools) Try(Sc.Kind, FVector(Sc.C.X, Sc.bAwake ? Sc.Y : S.Sea - .2, Sc.C.Y), Sc.Out);
+		for (FGroup& G : T.Value->Groups) Try(G.Kind, G.M.Num() ? FVector(G.C.X, G.M[0].P.Y, G.C.Y) : FVector(G.C.X, S.Sea - .3, G.C.Y), G.Out);
+		for (FCrabs& Cr : T.Value->Crabs) Try(Cr.Kind, Cr.Kind == TreeCrab ? RootPoint(Cr.Site, 0, .3) : FVector(Cr.C.X, Cr.FloorY, Cr.C.Y), Cr.Out);
+	}
+	return Best < 1e17;
+}
+
 static FAutoConsoleCommand GEcoCmd(TEXT("kr.eco"), TEXT("Mangrove ecosystem test hooks: stats, census, fish, links, shower, find <kind>, rook"),
 	FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args) { if (GEco) GEco->DebugCmd(FString::Join(Args, TEXT(" "))); }));
 
@@ -530,9 +585,11 @@ static void EcoFlushSoup(UProceduralMeshComponent* M, FSoup& B)
 	}
 	if (B.V.Num() != B.LastV)
 	{
-		TArray<FVector2D> UV;
+		// (shaded as cloth: feathers are matte; as a painted surface a black cormorant shone grey under the sky)
+		TArray<FVector2D> UV, Kd;
 		UV.Init(FVector2D::ZeroVector, B.V.Num());
-		M->CreateMeshSection_LinearColor(0, B.V, B.T, B.N, UV, UV, TArray<FVector2D>(), TArray<FVector2D>(), B.C, TArray<FProcMeshTangent>(), false);
+		Kd.Init(FVector2D(SurfCloth, 0), B.V.Num());
+		M->CreateMeshSection_LinearColor(0, B.V, B.T, B.N, UV, Kd, TArray<FVector2D>(), TArray<FVector2D>(), B.C, TArray<FProcMeshTangent>(), false);
 		M->SetMaterial(0, AKeysWorld::VertexColorMaterial());
 		B.LastV = B.V.Num();
 	}
@@ -671,7 +728,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 			for (FBird& B : T.Value->Birds) if (B.Prey >= 0 && FVector2D::Distance(FVector2D(B.P.X, B.P.Z), Cam2) < 600) NBird++;
 		}
 		S.LinkN[LinkTide]++;
-		UE_LOG(LogTemp, Log, TEXT("KREco link tide: %s (level %.2f): %d of %d schools of small fish within 600 m %s; %d packs of predators and %d birds are working those schools and go with them"),
+		if (NSch) UE_LOG(LogTemp, Log, TEXT("KREco link tide: %s (level %.2f): %d of %d schools of small fish within 600 m %s; %d packs of predators and %d birds are working those schools and go with them"),
 			TideWord(S), S.Tide, NGo, NSch, Side < 0 ? TEXT("leaving the roots for the deeper edge and the creek mouths") : TEXT("going back in under the roots"), NPred, NBird);
 	}
 	if (S.Phase != S.LastPhase)
@@ -717,6 +774,19 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 				}
 			}
 	}
+	// ---- the test camera, held on what it was pointed at
+	if (S.bLook && S.LookCam.IsValid())
+	{
+		FVector P;
+		FVector2D O;
+		if (S.LookName == TEXT("shower")) { if (S.Showers.Num()) { S.LookAt = FVector(S.Showers.Last().P.X, S.Sea + .2, S.Showers.Last().P.Y); S.LookDir = Outward(S.LookAt.X, S.LookAt.Z); } }
+		else if (EcoNearest(S, S.LookName, S.LookAt, P, O) && FVector::Dist(P, S.LookAt) < 60) { S.LookAt = FMath::Lerp(S.LookAt, P, FMath::Min(1.0, S.Dt * 4)); }
+		const FVector2D Sdw(-S.LookDir.Y, S.LookDir.X);
+		FVector Eye = S.LookAt + FVector(S.LookDir.X * S.LookDist + Sdw.X * S.LookSide, S.LookH, S.LookDir.Y * S.LookDist + Sdw.Y * S.LookSide);
+		if (Wet(Eye.X, Eye.Z)) Eye.Y = FMath::Max(Eye.Y, FloorAt(Eye.X, Eye.Z) + .12);   // (never under the bottom)
+		if (S.LookH < 0 && S.LookAt.Y < S.Sea) Eye.Y = FMath::Min(Eye.Y, S.Sea - .06);   // (asked for from under the surface: it stays under)
+		S.LookCam->SetActorLocationAndRotation(KeysGeo::ToUE(Eye.X, Eye.Y, Eye.Z), (KeysGeo::ToUE(S.LookAt.X, S.LookAt.Y, S.LookAt.Z) - KeysGeo::ToUE(Eye.X, Eye.Y, Eye.Z)).Rotation());
+	}
 	S.CpuAcc += (FPlatformTime::Seconds() - T0) * 1000;
 	S.CpuN++;
 }
@@ -746,7 +816,7 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		for (int32 k = 0; k < NumKinds; k++) if (Near[k]) Who += FString::Printf(TEXT(" %s %d,"), KindName(k), Near[k]);
 		int32 PoolTris = 0, PoolInst = 0, PoolsOn = 0;
 		for (int32 i = 0; i < NumPools; i++) { PoolTris += S.Pools[i].Shown * S.Pools[i].Tris; PoolInst += S.Pools[i].Shown; PoolsOn += S.Pools[i].Shown ? 1 : 0; }
-		UE_LOG(LogTemp, Log, TEXT("KREco near (within 600 m of the camera at %.0f, %.0f; %s, tide %.2f, hour %.1f):%s"), S.Cam.X, S.Cam.Z, PhaseWord(S), S.Tide, S.Hour, *Who);
+		UE_LOG(LogTemp, Log, TEXT("KREco near (within 600 m of the camera at %.0f, %.0f, %s, by %s; %s, tide %.2f, hour %.1f):%s"), S.Cam.X, S.Cam.Z, RegionName(RegionAt(S.Cam.X)), *KeysGeo::NearestName(S.Cam.X, S.Cam.Z), PhaseWord(S), S.Tide, S.Hour, *Who);
 		UE_LOG(LogTemp, Log, TEXT("KREco drawn: %d birds (%d moving), %d + %d bird triangles in 2 meshes; %d instances in %d instanced meshes, %d triangles; %d of %d schools awake with %d fish; %d tiles planned; cpu %.2f ms a frame"),
 			S.StillN + S.BirdsMoved, S.BirdsMoved, S.Live.T.Num() / 3, S.Still.T.Num() / 3, PoolInst, PoolsOn, PoolTris, Awake, Sch, Fish, S.Tiles.Num(), S.CpuN ? S.CpuAcc / S.CpuN : 0);
 		S.CpuAcc = 0; S.CpuN = 0;
@@ -771,8 +841,8 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		for (int32 i = 0; i < Rk.Num(); i++) if (Cn.RookBirds[i] > Cn.RookBirds[Busiest]) Busiest = i;
 		for (int32 i = 0; i < Rk.Num(); i++)
 		{
-			FVector2D O = Outward(Rk[i].C.X, Rk[i].C.Y);
-			UE_LOG(LogTemp, Log, TEXT("KREco census rookery %d (%s) at %.0f, %.0f: %d birds%s; look at it from %s"), i, RegionName(Rk[i].Region), Rk[i].C.X, Rk[i].C.Y, Cn.RookBirds[i],
+			const FVector2D O = RookSeaDir(i);
+			UE_LOG(LogTemp, Log, TEXT("KREco census rookery %d (%s, by %s) at %.0f, %.0f: %d birds%s; look at it from %s"), i, RegionName(Rk[i].Region), *KeysGeo::NearestName(Rk[i].C.X, Rk[i].C.Y), Rk[i].C.X, Rk[i].C.Y, Cn.RookBirds[i],
 				i == Busiest ? TEXT(" (the busiest)") : TEXT(""), *TpFor(Rk[i].C, O, Rk[i].R + 45));
 		}
 		if (A.Num() > 1)
@@ -795,6 +865,59 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			}
 		UE_LOG(LogTemp, Log, TEXT("KREco fish at tide %.2f (%s): %d schools of small fish within 250 m of the boat: %d in under the roots, %d out at the deeper edge or the creek mouth, %d on the way; mean %.1f m from their roots"),
 			S.Tide, TideWord(S), N, In, OutN, Moving, N ? DSum / N : 0);
+	}
+	else if (C0 == TEXT("look"))
+	{
+		// look <kind> [dist] [height] [side] [fov]: a test camera held on the nearest of that kind to the boat, from
+		// its open-water side; look rook <n> looks at a rookery key; look off gives the view back to the boat
+		APlayerController* PC = GetWorld()->GetFirstPlayerController();
+		if (!PC) return;
+		TArray<double> Num;
+		while (A.Num() > 2 && A.Last().IsNumeric()) { Num.Insert(FCString::Atod(*A.Last()), 0); A.Pop(); }
+		FString Name;
+		for (int32 i = 1; i < A.Num(); i++) Name += (i > 1 ? TEXT(" ") : TEXT("")) + A[i];
+		if (Name == TEXT("off") || Name.IsEmpty()) { S.bLook = false; if (PC->GetPawn()) PC->SetViewTarget(PC->GetPawn()); return; }
+		FVector P;
+		FVector2D O;
+		if (Name == TEXT("rook"))
+		{
+			const int32 R = Num.Num() ? int32(Num[0]) : 0;
+			if (!Rookeries().IsValidIndex(R)) return;
+			if (Num.Num()) Num.RemoveAt(0);
+			P = FVector(Rookeries()[R].C.X, 5, Rookeries()[R].C.Y); O = RookSeaDir(R);
+			S.LookName = TEXT("-");
+			if (!Num.Num()) Num = {Rookeries()[R].R + 50, 9};
+		}
+		else if (Name == TEXT("shower")) { P = FVector(S.Boat.X, 0, S.Boat.Y); O = FVector2D(1, 0); S.LookName = Name; }   // (wherever the bait next goes up)
+		else
+		{
+			if (!EcoNearest(S, Name, FVector(S.Boat.X, 0, S.Boat.Y), P, O)) { UE_LOG(LogTemp, Log, TEXT("KREco look %s: none in the tiles planned round the boat"), *Name); return; }
+			S.LookName = Name;
+		}
+		S.LookAt = P; S.LookDir = O;
+		S.LookDist = Num.Num() > 0 ? Num[0] : 6; S.LookH = Num.Num() > 1 ? Num[1] : 1.2; S.LookSide = Num.Num() > 2 ? Num[2] : 0;
+		if (!S.LookCam.IsValid()) S.LookCam = GetWorld()->SpawnActor<ACameraActor>();
+		if (ACameraActor* LkCam = Cast<ACameraActor>(S.LookCam.Get()))
+		{
+			LkCam->GetCameraComponent()->SetFieldOfView(Num.Num() > 3 ? float(Num[3]) : 55.f);
+			LkCam->GetCameraComponent()->SetConstraintAspectRatio(false);
+			PC->SetViewTarget(LkCam);
+		}
+		S.bLook = true;
+		UE_LOG(LogTemp, Log, TEXT("KREco look %s: at %.0f, %.1f, %.0f (%.0f m from the boat), camera %.1f m off and %.1f m up"), *Name, P.X, P.Y, P.Z, FVector2D::Distance(FVector2D(P.X, P.Z), S.Boat), S.LookDist, S.LookH);
+	}
+	else if (C0 == TEXT("rook"))
+	{
+		const TArray<FRookery>& Rk = Rookeries();
+		for (int32 r = 0; r < Rk.Num(); r++)
+		{
+			int32 All = 0, Home = 0, Fly = 0, Wait = 0;
+			for (TPair<int64, FTileE*>& T : S.Tiles)
+				for (FBird& B : T.Value->Birds)
+					if (B.Rook == r) { All++; Home += B.State != BAway && B.State != BFly ? 1 : 0; Fly += B.State == BFly ? 1 : 0; Wait += B.Delay > 0 ? 1 : 0; }
+			if (All) UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: %d birds, %d at home, %d on the wing, %d about to go; next flight in %.1f s; %.0f m from the camera"),
+				r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(S), All, Home, Fly, Wait, S.RookCD[r], FVector2D::Distance(Rk[r].C, Cam2));
+		}
 	}
 	else if (C0 == TEXT("links"))
 	{

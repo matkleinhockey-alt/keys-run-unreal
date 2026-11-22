@@ -43,6 +43,8 @@ namespace KeysMangroveEco
 	void PlanTile(int64 Key, FPlan& Out);
 	FVector2D Outward(double X, double Z);
 	int32 RookAt(double X, double Z);
+	// the way a rookery's flights go and the side to look at it from: toward the most open water round it (game thread)
+	FVector2D RookSeaDir(int32 R);
 
 	enum EBirdState : uint8 { BStand, BWalk, BStrike, BFly, BPerch, BDry, BRoost, BHover, BDive, BSwim, BAway, BPatrol };
 	struct FBird
@@ -197,6 +199,13 @@ namespace KeysMangroveEco
 		double CpuAcc = 0;
 		int32 CpuN = 0, StillN = 0, BirdsDrawn = 0, BirdsMoved = 0, FishDrawn = 0, SchoolsAwake = 0;
 		bool bScript = false;
+		// the test camera (kr.eco look ...): what it is held on, from how far and how high
+		TWeakObjectPtr<AActor> LookCam;
+		FString LookName;
+		FVector LookAt = FVector::ZeroVector;
+		FVector2D LookDir = FVector2D(1, 0);
+		double LookDist = 6, LookH = 1.2, LookSide = 0;
+		bool bLook = false;
 		// what made a noise this frame, for the audio to take (PopSound); only what is within earshot is kept
 		TArray<FSoundEv> Sounds;
 		void Sound(const TCHAR* What, int32 Kind, const FVector& Where, float Power = 1)
