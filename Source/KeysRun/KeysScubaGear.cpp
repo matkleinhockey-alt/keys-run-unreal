@@ -413,10 +413,11 @@ namespace KeysScuba
 		// the screen: depth in metres on top; under it the dive's minutes and (with the computer) the minutes of gas left
 		const FVector O(0, -(ConW - .02) * .5 + .004, 0);
 		const FVector Face = Nrm * .0014;
-		SgText(M, FString::Printf(TEXT("d %.1f"), FMath::Clamp(Depth, 0.0, 99.9)), O + U * (LcdZ1 - .024) + Face, R, U, Nrm, .019, Ink);
-		SgText(M, FString::Printf(TEXT("t %d"), FMath::Clamp(Mins, 0, 999)), O + U * (LcdZ0 + .005) + Face, R, U, Nrm, .013, Ink);
+		// (three rows, so the widest of them still fits the window: "d 31.5", "t 120", "r 99")
+		SgText(M, FString::Printf(TEXT("d %.1f"), FMath::Clamp(Depth, 0.0, 99.9)), O + U * (LcdZ1 - .021) + Face, R, U, Nrm, .016, Ink);
+		SgText(M, FString::Printf(TEXT("t %d"), FMath::Clamp(Mins, 0, 999)), O + U * (LcdZ0 + .0185) + Face, R, U, Nrm, .0105, Ink);
 		if (bComputer && MinLeft >= 0)
-			SgText(M, FString::Printf(TEXT("r %d"), FMath::Clamp(MinLeft, 0, 99)), O + R * .032 + U * (LcdZ0 + .005) + Face, R, U, Nrm, .013, Ink);
+			SgText(M, FString::Printf(TEXT("r %d"), FMath::Clamp(MinLeft, 0, 99)), O + U * (LcdZ0 + .004) + Face, R, U, Nrm, .0105, Ink);
 	}
 
 	// ================================================================ on the boat

@@ -170,6 +170,9 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunGlove;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunHandL;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunWish;
+	UPROPERTY() TObjectPtr<class UPointLightComponent> GunFill;     // lights only the first-person gun (lighting channel 2)
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunLeader;  // the braided leader from the slide ring to the muzzle
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunWorn;    // the gun in her hand in the chase view (section 1: its shaft)
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> GunReel;   // the spool, flanges and crank: spins as the line pays out
 	double ReelAng = 0, ReelSpin = 0;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Lines;     // flying shaft, its tether, the float line and float
@@ -192,6 +195,8 @@ private:
 	int32 CylIx = 0, KitSig = -1, RackSig = -1, FaceSig = -1, KitTris = 0;
 	bool bGlanceKey = false, bDebugGlance = false, bBoatKitTried = false;
 	double GlanceW = 0, GlanceAutoT = 0;
+	double LeaderOut = -1;        // the shaft's travel the leader was last built for
+	bool bWornShaft = true, bDbgGunShow = false;
 	int32 TorchMode = 0;          // 0 auto, 1 on, 2 off
 	double TorchW = 0;
 	double DiveSecs = 0, DiveMaxDepth = 0, EnterT = 0, PsiUsedBefore = 0;
