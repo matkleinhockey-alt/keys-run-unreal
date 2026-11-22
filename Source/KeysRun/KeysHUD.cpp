@@ -848,16 +848,20 @@ void AKeysHUD::DrawRealChart(AKeysBoatPawn* P, float X, float Y, float Size, flo
 				Line(FMath::Lerp(Tr->X0, Tr->X1, double(i) / Tr->Spans), FMath::Lerp(Tr->Z0, Tr->Z1, double(i) / Tr->Spans), FMath::Lerp(Tr->X0, Tr->X1, double(i + 1) / Tr->Spans), FMath::Lerp(Tr->Z0, Tr->Z1, double(i + 1) / Tr->Spans), FLinearColor(.36f, .33f, .3f), (bBig ? 1.6f : 1.f) * U);
 	// the daybeacons: red triangles, green squares
 	const float Ms = (bBig ? 3.2f : 1.6f) * U;
+	// (all the greens, then all the reds: marks of one shape go to the GPU as one batch, and a channel's marks alternate)
 	for (const KeysGeoReal::FNavMark& K : KeysGeoReal::Marks())
 	{
+		if (K.bRed) continue;
 		const FVector2D A = ChartXY(K.X, K.Z, X, Y, Size);
-		if (K.bRed)
-		{
-			FCanvasTriangleItem Tr(FVector2D(A.X - Ms, A.Y + Ms * .8f), FVector2D(A.X + Ms, A.Y + Ms * .8f), FVector2D(A.X, A.Y - Ms), GWhiteTexture);
-			Tr.SetColor(FLinearColor(.85f, .1f, .08f));
-			Canvas->DrawItem(Tr);
-		}
-		else DrawRect(FLinearColor(.05f, .5f, .2f), A.X - Ms * .8f, A.Y - Ms * .8f, Ms * 1.6f, Ms * 1.6f);
+		DrawRect(FLinearColor(.05f, .5f, .2f), A.X - Ms * .8f, A.Y - Ms * .8f, Ms * 1.6f, Ms * 1.6f);
+	}
+	for (const KeysGeoReal::FNavMark& K : KeysGeoReal::Marks())
+	{
+		if (!K.bRed) continue;
+		const FVector2D A = ChartXY(K.X, K.Z, X, Y, Size);
+		FCanvasTriangleItem Tr(FVector2D(A.X - Ms, A.Y + Ms * .8f), FVector2D(A.X + Ms, A.Y + Ms * .8f), FVector2D(A.X, A.Y - Ms), GWhiteTexture);
+		Tr.SetColor(FLinearColor(.85f, .1f, .08f));
+		Canvas->DrawItem(Tr);
 	}
 	// north: the chart is turned so the keys run across it, so north lies a little right of straight up
 	{

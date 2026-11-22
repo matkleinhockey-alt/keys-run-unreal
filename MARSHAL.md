@@ -13,7 +13,7 @@ once).
 | `water` | Sea and seafloor polish | `lane/water` | `../KeysRun-water` | merged 2026-11-21 |
 | `mangroves` | Finish the mangrove brief | `lane/mangroves` | `../KeysRun-mangroves` | merged 2026-11-21 |
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | merged 2026-11-21 |
-| `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | running |
+| `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | merged 2026-11-21 |
 | `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | merged 2026-11-21 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
@@ -107,3 +107,11 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   reach, so the shores are not filled; the marshal proposed dredging a pocket under each dock (user chose the plain
   merge, pockets not done). No collision on docks; not tested on Phase 2 islands; house positions are a copy of
   `BuildScenery`'s dice. Packaged-build perf bookmarks still owed.
+- 2026-11-21: `upperkeys` merged (lane at 0465566): Phase 2 data (p2, p2_bay), a loader that serves several grids as
+  one map. Requests applied: R1 `LoadAll`, R2 mangroves seeded on p1's grid, R12 chart marks batched. Editor build and
+  smoke runs on both maps green; Phase 2 land, depth, picks and chart seen. Open and owed by the marshal: R10 start-up
+  9 s -> 54 s and +2.6 GB peak (all scenery built at start-up; build by tile near the boat, mangroves first) - do not
+  release before this. Follow-ups R4 Channel 5 high span and old rail bridges, R6 marinas (invented names: the data
+  carries real business names), R7 reef lights and sites, R8 `BUILT` list in `bake_mangrove.py`, R9 life density,
+  teleports, charters, R11 chart soundings grid and edge names. Docks re-rolled slightly on Phase 1 (Marathon 10 -> 9,
+  Grassy Key 15 -> 17) and now also stand on Plantation Key (4) and Walkers Island (1).

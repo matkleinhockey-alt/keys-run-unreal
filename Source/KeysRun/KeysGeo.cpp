@@ -381,7 +381,7 @@ namespace KeysGeo
 		// which map: the Settings menu's choice (kept in the user's settings file; the real Keys unless they pick the classic
 		// map), or forced from the command line with -KRRealMap / -KRClassicMap
 		const bool bWantReal = FParse::Param(FCommandLine::Get(), TEXT("KRRealMap")) || (!FParse::Param(FCommandLine::Get(), TEXT("KRClassicMap")) && RealMapWanted());
-		GReal = bWantReal && KeysGeoReal::Load(TEXT("p1"));
+		GReal = bWantReal && KeysGeoReal::LoadAll();
 		if (GReal)
 		{
 			WorldX0 = KeysGeoReal::X0(); WorldZ0 = KeysGeoReal::Z0(); WorldSizeX = KeysGeoReal::SizeX(); WorldSizeZ = KeysGeoReal::SizeZ();
