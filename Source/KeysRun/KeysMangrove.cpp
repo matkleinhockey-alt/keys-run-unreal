@@ -217,9 +217,10 @@ namespace
 				const double Bow = (.1 + .4 * MHash(Z, r)) * Sz, U = double(Seg - 1) / Seg;
 				const FVector Ctrl(From.X + (End.X - From.X) * .78, From.Y + Bow, From.Z + (End.Z - From.Z) * .78);
 				const FVector Pl = From * ((1 - U) * (1 - U)) + Ctrl * (2 * U * (1 - U)) + End * (U * U);
-				for (int32 n = 0; n < 2; n++)
+				// (a few to a tree: every lump is eight more triangles in a mesh that is already the heavy one)
+				for (int32 n = 0; n < 1; n++)
 				{
-					if (MHash(X + r * 2.3 + n, Z - n * 5.1) > .62) continue;
+					if (MHash(X + r * 2.3 + n, Z - n * 5.1) > (Detail == 2 ? .25 : .5)) continue;
 					const double YT = -.36 + .5 * MHash(Z + r, X + n * 3.7);
 					if (Pl.Y <= YT || End.Y >= YT) continue;
 					const FVector At = FMath::Lerp(Pl, End, (Pl.Y - YT) / (Pl.Y - End.Y));
