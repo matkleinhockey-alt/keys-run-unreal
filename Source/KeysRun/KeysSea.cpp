@@ -25,6 +25,17 @@ namespace
 		return double(H) / 4294967296.0;
 	}
 
+	// smooth value noise on a lattice of Cell metres, 0..1 (H32 at the corners): what breaks up the sine patterns below,
+	// which by themselves repeat every few hundred metres and show as stripes from high above
+	double ValueNoise(double X, double Z, double Cell, int32 Salt)
+	{
+		const double FX = X / Cell, FZ = Z / Cell;
+		const int32 IX = FMath::FloorToInt32(FX), IZ = FMath::FloorToInt32(FZ);
+		double U = FX - IX, V = FZ - IZ;
+		U = U * U * (3 - 2 * U); V = V * V * (3 - 2 * V);
+		return SLerp(SLerp(H32(IX, IZ, Salt), H32(IX + 1, IZ, Salt), U), SLerp(H32(IX, IZ + 1, Salt), H32(IX + 1, IZ + 1, Salt), U), V);
+	}
+
 	struct FZoneW { double Hawk, Reef, Patch; };
 
 	FZoneW ZoneWeights(double X, double DZ)
@@ -281,7 +292,9 @@ namespace KeysSea
 		B.Hard = HardBottomN(X, Z, .017, 7.9) * SSmooth(.7, 1.6, D) * (1 - SSmooth(14, 20, D)) * SLerp(.45, 1, SSmooth(-80, 80, DZ)) * (1 - B.Reef);
 		// seagrass: meadows from knee deep to as far down as the light gets, thick in the bay and thinner off the ocean
 		// side, between the hard bottom's beds; the crowns of the banks are bare
-		const double N = FMath::Sin(X * .05) * FMath::Cos(Z * .043) + FMath::Sin(X * .013 + Z * .021);
+		// (the web game's two sines, as they were, with two octaves of plain noise over them: by themselves they repeat
+		// every 250 m, which shows as stripes across a bay seen from high above)
+		const double N = FMath::Sin(X * .05) * FMath::Cos(Z * .043) + FMath::Sin(X * .013 + Z * .021) + .8 * (ValueNoise(X, Z, 190, 31) - .5) + 1.7 * (ValueNoise(X, Z, 760, 32) - .5);
 		B.Grass = SClamp(N * .6 + .4 - .6 * (1 - SSmooth(.8, 1.3, D)), 0, 1) * SLerp(.9, .55, SSmooth(-60, 60, DZ)) * (1 - SSmooth(9, 14, D)) * (1 - .5 * B.Hard);
 		// mud: the bay's basins, deeper than its banks and out of the tide that scours the channels
 		B.Mud = SSmooth(40, -220, DZ) * SSmooth(1.0, 1.8, D) * (1 - SSmooth(3.4, 4.6, D)) * (.7 + .3 * FMath::Sin(X * .0031 + 1.3) * FMath::Cos(Z * .0027));
