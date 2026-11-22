@@ -1,0 +1,52 @@
+diff --git a/Source/KeysRun/KeysReef.cpp b/Source/KeysRun/KeysReef.cpp
+index 1a81192..ef22f17 100644
+--- a/Source/KeysRun/KeysReef.cpp
++++ b/Source/KeysRun/KeysReef.cpp
+@@ -21,7 +21,11 @@ namespace
+ 	// ---- world/reef/constants.ts
+ 	constexpr uint32 ReefSeed = 20240817;
+ 	constexpr double ChunkSize = 50;
+-	constexpr int32 ResidentR = 2;
++	// What is drawn is everything within Reach of the camera's own chunk: a square with corners so round it is all but a
++	// disc. It used to be the 5 x 5 chunks themselves, and from above the reef ended on a straight line each side - a
++	// 250 m square of dots on the bottom. The last RimFade of it grows in from nothing.
++	constexpr int32 ResidentR = 3;
++	constexpr double Reach = 110, RimFade = 24;
+ 	constexpr double LodNearMax = 14, LodMidMax = 26;
+ 	constexpr int32 SlotsPerAttr = 4096;
+ 	enum EAttr { PRESENCE = 0, OFFSET_X, OFFSET_Z, ROT_Y, SCALE, COLOR, TILT_X, TILT_Z, SCALE_X, SCALE_Y, SCALE_Z };
+@@ -136,6 +140,7 @@ namespace
+ 		const double D = DepthFast(X, Z);
+ 		const double DepthM = Trapezoid(D, Sp[S].D);
+ 		if (DepthM <= 0) return 0;
++		if (KeysSea::DredgedAt(X, Z) > .2) return 0;   // the bare marl of a canal, or of the way cut out of one
+ 		const double DZ = DZAt(X, Z);
+ 		const EZ Zone = ReefZone(D, DZ);
+ 		const double Patch = PatchFactor(X, DZ);
+@@ -530,6 +535,7 @@ namespace
+ 		const double D = DepthFast(X, Z);
+ 		const double DepthM = Trapezoid(D, S.D);
+ 		if (DepthM <= 0) return 0;
++		if (KeysSea::DredgedAt(X, Z) > .2) return 0;   // the bare marl of a canal, or of the way cut out of one
+ 		const double DZ = DZAt(X, Z);
+ 		const EZ Zone = ReefZone(D, DZ);
+ 		const double Patch = PatchFactor(X, DZ);
+@@ -786,6 +792,9 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
+ 		for (int32 dx = -ResidentR; dx <= ResidentR; dx++)
+ 			for (const FInst& I : ChunkInstances(CCX + dx, CCZ + dz))
+ 			{
++				const double Rim = FVector2D(I.X - FMath::Clamp(I.X, CCX * ChunkSize, (CCX + 1) * ChunkSize), I.Z - FMath::Clamp(I.Z, CCZ * ChunkSize, (CCZ + 1) * ChunkSize)).Size();
++				if (Rim >= Reach) continue;
++				const double Grow = RSmooth(Reach - Rim, 0, RimFade);
+ 				const double Dist = FVector2D(I.X - CamX, I.Z - CamZ).Size();
+ 				const bool bModel = I.Species >= NumSp;
+ 				const int32 Lod = bModel ? (Dist < 22 ? 0 : 1) : Dist < LodNearMax ? 0 : Dist < LodMidMax ? 1 : 2;
+@@ -808,7 +817,7 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
+ 				double SY = I.SY;
+ 				const double Room = -I.Y - .2;
+ 				if (GeoH.IsValidIndex(P) && GeoH[P] * SY > Room) SY = FMath::Max(.05, Room / GeoH[P]);
+-				FTransform T(Q, ToUE(I.X, I.Y, I.Z), FVector(I.SX, I.SZ, SY));
++				FTransform T(Q, ToUE(I.X, I.Y, I.Z), FVector(I.SX, I.SZ, SY) * Grow);
+ 				Xf[P].Add(T);
+ 				if (bModel) continue;
+ 				const FLinearColor C = FMath::Lerp(Lo[I.Species], Hi[I.Species], float(I.ColorT));
