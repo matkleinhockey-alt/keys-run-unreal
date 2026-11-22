@@ -9,6 +9,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
 #include "Async/ParallelFor.h"
+#include "Async/Async.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 
@@ -40,6 +42,89 @@ namespace
 	bool NoSkirt() { static const bool b = FParse::Param(FCommandLine::Get(), TEXT("KRSeaNoSkirt")); return b; }
 
 	int64 Key(int32 CX, int32 CZ) { return (int64(CX) << 32) ^ int64(uint32(CZ)); }
+
+	constexpr int32 SkirtMeanRows = 6;          // stretched rows past the lattice that still carry the mean floor (to about 1.1 km)
+
+	// the far skirt's vertices round a camera cell, made off the game thread (GenSkirt) and handed over in Tick
+	struct FSkirtOut
+	{
+		int32 CX = 0, CZ = 0;
+		TArray<double> X, Z;
+		TArray<FVector> V, N;
+		TArray<FVector2D> UV;
+		TArray<FLinearColor> Col;
+		double Ms = 0;
+	};
+	TFuture<FSkirtOut*> GSkirtJob;
+	bool bSkirtJob = false;
+	double GSkirtMs = 0;                        // the longest GenSkirt since the last log line
+
+	FSkirtOut* GenSkirt(double CamX, double CamZ)
+	{
+		const double T0 = FPlatformTime::Seconds();
+		FSkirtOut* O = new FSkirtOut;
+		O->CX = FMath::FloorToInt32(CamX / ChunkSize);
+		O->CZ = FMath::FloorToInt32(CamZ / ChunkSize);
+		// grid lines along one axis: the chunk lattice round the camera's cell, then rows that widen toward the horizon
+		auto Lines = [](int32 Cc, TArray<double>& Out)
+		{
+			const int32 Lo = Cc - SkirtInner, Hi = Cc + SkirtInner + 1, NIn = (Hi - Lo) * SkirtSub;
+			Out.SetNum(2 * SkirtOuter + NIn + 1);
+			double P = Lo * ChunkSize, St = ChunkSize;
+			for (int32 k = 0; k < SkirtOuter; k++) { St *= SkirtGrow; P -= St; Out[SkirtOuter - 1 - k] = P; }
+			for (int32 L = 0; L <= NIn; L++) Out[SkirtOuter + L] = Lo * ChunkSize + L * ChunkSize / SkirtSub;
+			P = Hi * ChunkSize; St = ChunkSize;
+			for (int32 k = 0; k < SkirtOuter; k++) { St *= SkirtGrow; P += St; Out[SkirtOuter + NIn + 1 + k] = P; }
+		};
+		Lines(O->CX, O->X);
+		Lines(O->CZ, O->Z);
+		const int32 Rows = O->X.Num(), Nn = Rows - 1;
+		const int32 M0 = SkirtOuter - SkirtMeanRows, M1 = Rows - 1 - M0;
+		O->V.SetNum(Rows * Rows); O->N.SetNum(Rows * Rows); O->UV.SetNum(Rows * Rows); O->Col.SetNum(Rows * Rows);
+		ParallelFor(Rows, [&](int32 j)
+		{
+			for (int32 i = 0; i < Rows; i++)
+			{
+				const double X = O->X[i], Z = O->Z[j];
+				// Near the camera each vertex stands for the mean of the floor round it (KeysSea::SeafloorMean), so the
+				// skirt has the tint of the chunks it meets; far out it is the smooth depth, with no relief at all (a
+				// single point of it on vertices this far apart would stand up as a pyramid a chunk wide)
+				const bool bMean = i >= M0 && i <= M1 && j >= M0 && j <= M1;
+				const double SX = (O->X[FMath::Min(Nn, i + 1)] - O->X[FMath::Max(0, i - 1)]) * .5, SZ = (O->Z[FMath::Min(Nn, j + 1)] - O->Z[FMath::Max(0, j - 1)]) * .5;
+				double Y0;
+				FLinearColor C;
+				KeysSea::SeafloorMean(X, Z, SX, SZ, bMean ? (FMath::Max(SX, SZ) < 40 ? 3 : 2) : 0, Y0, C);
+				// under the island mesh where the beach runs into the water, as the chunks are
+				double Y = Y0;
+				const double Lh = LandH(X, Z);
+				if (Lh > -.3 && Lh - .3 < Y) Y = Lh - .3;
+				O->V[j * Rows + i] = ToUE(X, Y, Z);
+				O->UV[j * Rows + i] = FVector2D(X, Z);
+				O->Col[j * Rows + i] = DebugColors() ? FLinearColor::Green : C;
+			}
+		});
+		ParallelFor(Rows, [&](int32 j)
+		{
+			for (int32 i = 0; i < Rows; i++)
+			{
+				const int32 iL = FMath::Max(0, i - 1), iR = FMath::Min(Nn, i + 1), jD = FMath::Max(0, j - 1), jU = FMath::Min(Nn, j + 1);
+				const FVector DX = O->V[j * Rows + iR] - O->V[j * Rows + iL], DZ = O->V[jU * Rows + i] - O->V[jD * Rows + i];
+				FVector Nm = FVector::CrossProduct(DX, DZ).GetSafeNormal();
+				if (Nm.Z < 0) Nm = -Nm;
+				O->N[j * Rows + i] = Nm;
+				// steep faces a little darker, as on the chunks (the mean colours have theirs in them already)
+				if (!DebugColors() && !(i >= M0 && i <= M1 && j >= M0 && j <= M1))
+				{
+					const double Slope = (FMath::Abs(DX.Z / FMath::Max(1.0, FMath::Abs(DX.X))) + FMath::Abs(DZ.Z / FMath::Max(1.0, FMath::Abs(DZ.Y)))) * .5;
+					const float Shade = float(1 - FMath::Min(.35, Slope * 1.4));
+					FLinearColor& C = O->Col[j * Rows + i];
+					C.R *= Shade; C.G *= Shade; C.B *= Shade;
+				}
+			}
+		});
+		O->Ms = (FPlatformTime::Seconds() - T0) * 1000;
+		return O;
+	}
 }
 
 UMaterialInterface* AKeysSeafloor::FloorMaterial()
@@ -254,59 +339,20 @@ void AKeysSeafloor::BuildChunk(int32 CX, int32 CZ, int32 Segs, int32 Section)
 	Chunks->SetMaterial(Section, FloorMaterial());
 }
 
-void AKeysSeafloor::BuildSkirt(double CamX, double CamZ)
+void AKeysSeafloor::EndPlay(const EEndPlayReason::Type Reason)
 {
-	SkirtCX = FMath::FloorToInt32(CamX / ChunkSize);
-	SkirtCZ = FMath::FloorToInt32(CamZ / ChunkSize);
-	// grid lines along one axis: the chunk lattice round the camera's cell, then rows that widen toward the horizon
-	auto Lines = [](int32 Cc, TArray<double>& Out)
-	{
-		const int32 Lo = Cc - SkirtInner, Hi = Cc + SkirtInner + 1, NIn = (Hi - Lo) * SkirtSub;
-		Out.SetNum(2 * SkirtOuter + NIn + 1);
-		double P = Lo * ChunkSize, St = ChunkSize;
-		for (int32 k = 0; k < SkirtOuter; k++) { St *= SkirtGrow; P -= St; Out[SkirtOuter - 1 - k] = P; }
-		for (int32 L = 0; L <= NIn; L++) Out[SkirtOuter + L] = Lo * ChunkSize + L * ChunkSize / SkirtSub;
-		P = Hi * ChunkSize; St = ChunkSize;
-		for (int32 k = 0; k < SkirtOuter; k++) { St *= SkirtGrow; P += St; Out[SkirtOuter + NIn + 1 + k] = P; }
-	};
-	Lines(SkirtCX, SkirtX);
-	Lines(SkirtCZ, SkirtZ);
-	const int32 Rows = SkirtX.Num();
-	SkirtV.SetNum(Rows * Rows); SkirtN.SetNum(Rows * Rows); SkirtUV.SetNum(Rows * Rows); SkirtCol.SetNum(Rows * Rows);
-	ParallelFor(Rows, [&](int32 j)
-	{
-		for (int32 i = 0; i < Rows; i++)
-		{
-			const double X = SkirtX[i], Z = SkirtZ[j];
-			const double Y0 = KeysSea::SeafloorHeightAt(X, Z);
-			// under the island mesh where the beach runs into the water, as the chunks are
-			double Y = Y0;
-			const double Lh = LandH(X, Z);
-			if (Lh > -.3 && Lh - .3 < Y) Y = Lh - .3;
-			SkirtV[j * Rows + i] = ToUE(X, Y, Z);
-			SkirtUV[j * Rows + i] = FVector2D(X, Z);
-			// (no per-vertex grain out here: on vertices this far apart it would show as blotches a chunk wide)
-			SkirtCol[j * Rows + i] = DebugColors() ? FLinearColor::Green : KeysSea::SeafloorColorAt(X, Z, -Y0, 1, 0, false);
-		}
-	});
-	const int32 Nn = Rows - 1;
-	for (int32 j = 0; j < Rows; j++)
-		for (int32 i = 0; i < Rows; i++)
-		{
-			const int32 iL = FMath::Max(0, i - 1), iR = FMath::Min(Nn, i + 1), jD = FMath::Max(0, j - 1), jU = FMath::Min(Nn, j + 1);
-			const FVector DX = SkirtV[j * Rows + iR] - SkirtV[j * Rows + iL], DZ = SkirtV[jU * Rows + i] - SkirtV[jD * Rows + i];
-			FVector Nm = FVector::CrossProduct(DX, DZ).GetSafeNormal();
-			if (Nm.Z < 0) Nm = -Nm;
-			SkirtN[j * Rows + i] = Nm;
-			// steep faces a little darker, as on the chunks
-			if (!DebugColors())
-			{
-				const double Slope = (FMath::Abs(DX.Z / FMath::Max(1.0, FMath::Abs(DX.X))) + FMath::Abs(DZ.Z / FMath::Max(1.0, FMath::Abs(DZ.Y)))) * .5;
-				const float Shade = float(1 - FMath::Min(.35, Slope * 1.4));
-				FLinearColor& C = SkirtCol[j * Rows + i];
-				C.R *= Shade; C.G *= Shade; C.B *= Shade;
-			}
-		}
+	if (bSkirtJob) { delete GSkirtJob.Get(); bSkirtJob = false; }
+	Super::EndPlay(Reason);
+}
+
+void AKeysSeafloor::TakeSkirt(void* OutPtr)
+{
+	FSkirtOut* O = static_cast<FSkirtOut*>(OutPtr);
+	SkirtCX = O->CX; SkirtCZ = O->CZ;
+	SkirtX = MoveTemp(O->X); SkirtZ = MoveTemp(O->Z);
+	SkirtV = MoveTemp(O->V); SkirtN = MoveTemp(O->N); SkirtUV = MoveTemp(O->UV); SkirtCol = MoveTemp(O->Col);
+	GSkirtMs = FMath::Max(GSkirtMs, O->Ms);
+	delete O;
 	BuildSkirtTris();
 }
 
@@ -386,15 +432,28 @@ void AKeysSeafloor::Tick(float DeltaSeconds)
 	LogT += DeltaSeconds; FrameSum += DeltaSeconds; Frames++;
 	if (LogT > 3)
 	{
-		UE_LOG(LogTemp, Log, TEXT("KRSeafloor cam %.0f,%.0f,%.1f resident %d queue %d sub %d frame %.1f ms"), CamX, CamZ, CamY, Resident.Num(), Queue.Num(), bProfileSub ? 1 : 0, Frames ? FrameSum / Frames * 1000 : 0.0);
-		LogT = 0; FrameSum = 0; Frames = 0;
+		UE_LOG(LogTemp, Log, TEXT("KRSeafloor cam %.0f,%.0f,%.1f resident %d queue %d sub %d frame %.1f ms; skirt %.1f ms"), CamX, CamZ, CamY, Resident.Num(), Queue.Num(), bProfileSub ? 1 : 0, Frames ? FrameSum / Frames * 1000 : 0.0, GSkirtMs);
+		LogT = 0; FrameSum = 0; Frames = 0; GSkirtMs = 0;
 	}
 	Skirt->SetMeshSectionVisible(0, !bSubmerged && !NoSkirt());
 	if (!bSubmerged)
 	{
-		// re-centre once the camera is two cells off (the lattice part must cover every resident chunk)
+		// re-centre once the camera is two cells off (the lattice part must cover every resident chunk). The new
+		// vertices are made off the game thread and the old skirt serves meanwhile; only the first one, and one after a
+		// jump (a teleport) that leaves the old skirt nowhere near, is made on the spot.
+		if (bSkirtJob && GSkirtJob.IsReady()) { bSkirtJob = false; TakeSkirt(GSkirtJob.Get()); }
 		const int32 CCX = FMath::FloorToInt32(CamX / ChunkSize), CCZ = FMath::FloorToInt32(CamZ / ChunkSize);
-		if (!SkirtX.Num() || FMath::Abs(CCX - SkirtCX) >= 2 || FMath::Abs(CCZ - SkirtCZ) >= 2) BuildSkirt(CamX, CamZ);
-		else if (bSkirtDirty) BuildSkirtTris();
+		const int32 Off = FMath::Max(FMath::Abs(CCX - SkirtCX), FMath::Abs(CCZ - SkirtCZ));
+		if (!SkirtX.Num() || Off >= 4)
+		{
+			if (bSkirtJob) { delete GSkirtJob.Get(); bSkirtJob = false; }
+			TakeSkirt(GenSkirt(CamX, CamZ));
+		}
+		else if (Off >= 2 && !bSkirtJob)
+		{
+			bSkirtJob = true;
+			GSkirtJob = Async(EAsyncExecution::ThreadPool, [CamX, CamZ] { return GenSkirt(CamX, CamZ); });
+		}
+		if (bSkirtDirty) BuildSkirtTris();
 	}
 }

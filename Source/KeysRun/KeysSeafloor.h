@@ -20,6 +20,7 @@ public:
 	AKeysSeafloor();
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 	static UMaterialInterface* FloorMaterial();
 	// true if the chunk under (X, Z) is built
@@ -33,7 +34,7 @@ private:
 	void Scan(double CamX, double CamZ);
 	void ProcessQueue();
 	void BuildChunk(int32 CX, int32 CZ, int32 Segs, int32 Section);
-	void BuildSkirt(double CamX, double CamZ);
+	void TakeSkirt(void* OutPtr);   // adopt a finished FSkirtOut (KeysSeafloor.cpp) and cut its triangles
 	void BuildSkirtTris();
 	const TArray<FRing>& Rings() const;
 

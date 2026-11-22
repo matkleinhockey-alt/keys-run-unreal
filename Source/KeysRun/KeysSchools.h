@@ -40,7 +40,7 @@ public:
 	// a shot, a spear hissing past, a splash: fish near (X, Z) bolt (game meters)
 	void Startle(double X, double Z, double Radius);
 	// test hooks (-KRScript fish:...): bait, herring, snapper, grunt, grouper, cuda, flats, pred, shark, scare, look,
-	// put=<species>, clear, clearall, off, on, stats, body
+	// put=<species>, clear, clearall, off, on, stats, body, sound (KRSound: the water under the boat, afloat or aground), canals (KRCanal: canals with no way out)
 	void DebugCmd(const FString& Cmd);
 
 	enum class ERole : uint8 { Bait, Reef, Hole, Hanger, Flats, Hunter, Patrol };
@@ -71,6 +71,7 @@ public:
 		int64 Cell = 0;
 		int32 PreyId = -1;
 		bool bPinned = false, bStepped = false;
+		int32 Reef = -1;                        // the named reef it belongs to (KeysSchools.cpp ReefSites), or -1
 		TArray<FFish> Fish;
 		FRandomStream Rng;
 	};
@@ -88,7 +89,7 @@ private:
 
 	void ReadWorld(double Dt);
 	void Populate();
-	FSchool* Spawn(int32 Sp, const FVector& Home, double HomeTop, int64 Cell, uint32 Seed, double NScale = 1);
+	FSchool* Spawn(int32 Sp, const FVector& Home, double HomeTop, int64 Cell, uint32 Seed, double NScale = 1, bool bMakeRoom = false);
 	int32 WrapCount = 0;   // schools that swam out of the bubble and came back in on the far side
 	void Despawn(int32 Index);
 	void StepSchool(FSchool& S, double Dt);
@@ -132,6 +133,8 @@ private:
 	double SurfY = 0;                    // the water level now (KeysOcean::SeaLevel)
 	FVector BoatP = FVector::ZeroVector, BoatV = FVector::ZeroVector;
 	bool bHaveBoat = false, bDiving = false, bScriptLog = false, bOff = false;
+	bool bSoundLog = false;              // fish:sound - a KRSound line a second
+	double SoundT = 0;
 	TArray<FVector4> LifePreds;
 	// rough timing and behaviour for the log
 	double CpuAcc = 0, FrameAcc = 0, NbrAcc = 0;
