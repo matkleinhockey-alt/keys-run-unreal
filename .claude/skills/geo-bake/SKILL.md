@@ -15,7 +15,7 @@ Python: `"/Users/mat/Documents/Unreal Projects/KeysRun-devkit/pyenv/bin/python"`
 | OSM, raw | `KeysRun-devkit/geo/fetch_osm.sh <out.json> <overpass query>` (tries the Overpass mirrors in turn) | JSON |
 | Marks | `Tools/geo/bake_marks.py <phase> <enc dir> <geo dir>` | `<phase>_marks.txt` |
 | Estate lots | `Tools/geo/plat.py <phase> <geo dir> [--preview png]` | `<phase>_plat.txt` |
-| Mangroves | `Tools/geo/bake_mangrove.py <phase> <osm json> <geo dir> [--preview png]` | `<phase>_mangrove.bin` |
+| Mangroves | `Tools/geo/bake_mangrove.py <phase> <osm json> <geo dir> [--built <osm streets json>] [--preview png]` (p2 is baked with `--built osm_p2_built.json`; p1 without) | `<phase>_mangrove.bin` |
 
 `<phase>.kgeo` (the 10 m height and shore grid with island rings) must exist before the other three run; `kgeo.py`
 reads it.

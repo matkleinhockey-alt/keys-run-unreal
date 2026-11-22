@@ -125,3 +125,9 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   depth; the depth grid is re-read there). 79 docks now (32 with water of their own, 47 dredged); 253 thin-shore
   houses are still refused for mangrove in front of them (fix with R8, the `BUILT` list) and 272 for no wet ground
   in reach. Mangrove streaming: a tile's roots are only set up within 1.15 km (they caused 130-300 ms frames).
+- 2026-11-21: mangrove list fixed (upperkeys R8). `bake_mangrove.py --built <osm streets json>`: a low shore within
+  40 m of a residential street or residential/commercial land is not mangrove unless OSM maps it as wetland or wood.
+  New raw file `osm_p2_built.json` (OSM, ODbL; `fetch_p2.sh` fetches it). Only `p2_mangrove.bin` changed (mangrove
+  land 2.22 -> 1.83 km2); p1 and p2_bay are byte-identical. Docks 79 -> 126 (Tavernier 18, Upper Matecumbe 12,
+  Plantation 11, Lower Matecumbe 6 are new or grew), houses 1847 -> 1928, audit clean, tpcheck 0 bad on both maps.
+  Still open: 303 thin-shore houses with no wet ground in reach, 242 with mangrove in front (mostly real mangrove).

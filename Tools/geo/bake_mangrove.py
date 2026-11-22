@@ -1,4 +1,5 @@
-"""bake_mangrove.py <phase> <osm wetland json> <geo dir> [--preview png]: where the mangroves stand on a baked phase.
+"""bake_mangrove.py <phase> <osm wetland json> <geo dir> [--built <osm streets json>] [--preview png]: where the
+mangroves stand on a baked phase.
 
 OpenStreetMap has no wetland=mangrove here, but its coastal natural=wetland and shore-side natural=wood areas in the
 Keys are mangrove, and so are the small unnamed keys and the low, unbuilt shores. Writes <geo dir>/<phase>_mangrove.bin:
@@ -6,7 +7,11 @@ Keys are mangrove, and so are the small unnamed keys and the low, unbuilt shores
 fringe standing in the water (prop roots, no ground under them).
 
 The mangrove creeks (the CREEKS table in Source/KeysRun/KeysMangroveLife.cpp, which the game cuts through the ground)
-get mangrove down both banks: land within CORRIDOR metres of a creek's edge, estate lots (<phase>_plat.txt) left out."""
+get mangrove down both banks: land within CORRIDOR metres of a creek's edge, estate lots (<phase>_plat.txt) left out.
+
+--built names an OpenStreetMap extract of residential streets and residential/commercial land use (fetch_p2.sh writes
+osm_p2_built.json). A low shore within BUILT_REACH metres of one is a seawall or a lawn, not mangrove, unless OSM maps
+it as wetland or wood. Without it only the islands named in BUILT count as built-up (Phase 1 was baked that way)."""
 import json, os, re, struct, sys
 
 import numpy as np
@@ -22,6 +27,7 @@ BUILT = {'Marathon (Vaca Key)', 'Key Colony Beach', 'Duck Key', 'Walkers Island'
 
 
 CORRIDOR = 34
+BUILT_REACH = 40       # game metres (the map is compressed 1:3, so about a real block)
 CREEK_SRC = os.path.join(os.path.dirname(__file__), '..', '..', 'Source', 'KeysRun', 'KeysMangroveLife.cpp')
 
 
@@ -71,8 +77,34 @@ def lot_mask(g, path):
     return ndimage.maximum_filter(np.asarray(im), size=3) > 0
 
 
+def built_mask(g, path):
+    """cells within BUILT_REACH of a residential street or of residential/commercial land"""
+    im = Image.new('L', (g.nx, g.nz), 0)
+    d = ImageDraw.Draw(im)
+    n = [0, 0]
+    for e in json.load(open(path))['elements']:
+        rings = []
+        if e['type'] == 'way' and 'geometry' in e:
+            rings = [e['geometry']]
+        elif e['type'] == 'relation':
+            rings = [m['geometry'] for m in e.get('members', []) if m.get('role') == 'outer' and 'geometry' in m]
+        area = 'landuse' in e.get('tags', {}) or e['type'] == 'relation'
+        for r in rings:
+            px = []
+            for p in r:
+                x, z = to_game(p['lon'], p['lat'])
+                px.append(((x - g.x0) / g.cell, (z - g.z0) / g.cell))
+            if (area or ('tags' not in e and px[0] == px[-1])) and len(px) >= 3:     # (a download without tags: a closed way is an area)
+                d.polygon(px, fill=255); n[1] += 1
+            elif len(px) >= 2:
+                d.line(px, fill=255, width=1); n[0] += 1
+    near = ndimage.distance_transform_edt(np.asarray(im) == 0) * g.cell < BUILT_REACH
+    return near, n
+
+
 def main():
     phase, osm, geodir = sys.argv[1:4]
+    streets = sys.argv[sys.argv.index('--built') + 1] if '--built' in sys.argv else None
     preview = sys.argv[sys.argv.index('--preview') + 1] if '--preview' in sys.argv else None
     g = KGeo(os.path.join(geodir, phase + '.kgeo'))
     nx, nz = g.nx, g.nz
@@ -113,6 +145,11 @@ def main():
     m[land & wood & (S > -60)] = np.maximum(m[land & wood & (S > -60)], 210)
     m[land & small[idx]] = 255
     low = land & (S > -28) & (H < .75) & ~built[idx]            # low unbuilt shore
+    nbuilt = [0, 0, 0]
+    if streets:
+        bm, nb = built_mask(g, streets)
+        nbuilt = [nb[0], nb[1], int((low & bm & (m < 200)).sum())]
+        low &= ~bm
     m[low] = np.maximum(m[low], 230)
     # the creeks: mangrove down both banks (and over the line itself, which is ground until the game cuts it)
     creeks = read_creeks()
@@ -129,8 +166,8 @@ def main():
     path = os.path.join(geodir, phase + '_mangrove.bin')
     with open(path, 'wb') as f:
         f.write(b'KMGV' + struct.pack('<ii', nx, nz) + m.tobytes())
-    print('OSM wetlands %d, woods %d; mangrove land %.2f km2 (of %.2f km2 land), fringe cells %d, %d creeks with %d new bank cells -> %s' % (
-        n[0], n[1], (m >= 200).sum() * g.cell ** 2 / 1e6, land.sum() * g.cell ** 2 / 1e6, int(fringe.sum()), len(creeks), ncorr, path))
+    print('OSM wetlands %d, woods %d; mangrove land %.2f km2 (of %.2f km2 land), fringe cells %d, %d creeks with %d new bank cells, %d streets and %d built areas keep %d low shore cells clear -> %s' % (
+        n[0], n[1], (m >= 200).sum() * g.cell ** 2 / 1e6, land.sum() * g.cell ** 2 / 1e6, int(fringe.sum()), len(creeks), ncorr, nbuilt[0], nbuilt[1], nbuilt[2], path))
     if preview:
         rgb = np.zeros((nz, nx, 3), np.uint8)
         rgb[...] = (150, 200, 225)

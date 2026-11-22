@@ -5,6 +5,7 @@
 #   coast_p2.json         OpenStreetMap natural=coastline (c) OpenStreetMap contributors, ODbL 1.0
 #   osm_p2_extra.json     OpenStreetMap US-1, bridges, place names, marinas, reefs, lights, runways
 #   osm_p2_mangrove.json  OpenStreetMap natural=wetland and natural=wood areas
+#   osm_p2_built.json     OpenStreetMap residential streets and residential/commercial land use (for bake_mangrove.py --built)
 #   enc_p2/*.geojson      NOAA ENC Direct aids to navigation (public domain), through fetch_enc.sh
 RAW="$1"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -21,5 +22,6 @@ fi
 [ -s "$RAW/coast_p2.json" ] || "$HERE/fetch_osm.sh" "$RAW/coast_p2.json" "[out:json][timeout:200];way[\"natural\"=\"coastline\"]($BB);out geom;"
 [ -s "$RAW/osm_p2_extra.json" ] || "$HERE/fetch_osm.sh" "$RAW/osm_p2_extra.json" "[out:json][timeout:200];(way[\"highway\"~\"^trunk\"]($BB);way[\"bridge\"]($BB);way[\"man_made\"=\"bridge\"]($BB);nwr[\"place\"~\"^(island|islet)$\"]($BB);node[\"place\"~\"^(city|town|village|hamlet|locality|suburb)$\"]($BB);nwr[\"leisure\"=\"marina\"]($BB);nwr[\"natural\"=\"reef\"]($BB);nwr[\"man_made\"=\"lighthouse\"]($BB);node[\"seamark:type\"~\"^light\"]($BB);way[\"aeroway\"=\"runway\"]($BB););out geom;"
 [ -s "$RAW/osm_p2_mangrove.json" ] || "$HERE/fetch_osm.sh" "$RAW/osm_p2_mangrove.json" "[out:json][timeout:200];(way[\"natural\"=\"wetland\"]($BB);way[\"natural\"=\"wood\"]($BB);relation[\"natural\"=\"wetland\"]($BB);relation[\"natural\"=\"wood\"]($BB););out geom;"
+[ -s "$RAW/osm_p2_built.json" ] || "$HERE/fetch_osm.sh" "$RAW/osm_p2_built.json" "[out:json][timeout:200];(way[\"highway\"~\"^(residential|living_street|unclassified)\$\"]($BB);way[\"landuse\"~\"^(residential|commercial|retail)\$\"]($BB);relation[\"landuse\"=\"residential\"]($BB););out geom;"
 [ -s "$RAW/enc_p2/harbour_light.geojson" ] || "$HERE/fetch_enc.sh" "$RAW/enc_p2" "$W,$S,$E,$N"
 ls -l "$RAW" "$RAW/enc_p2"
