@@ -15,7 +15,8 @@ once).
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | merged 2026-11-21 |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | merged 2026-11-21 |
 | `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | merged 2026-11-21 |
-| `lowerkeys` | Map Phase 3 (Lower Keys, then Key Largo; brief written by the marshal) | `lane/lowerkeys` | `../KeysRun-lowerkeys` | READY FOR MERGE at ac4a4fe (2026-11-22 02:40); diff inside owned paths; needs R1+R2+R3 applied with the merge; waiting for the user to say merge |
+| `lowerkeys` | Map Phase 3 (Lower Keys, then Key Largo; brief written by the marshal) | `lane/lowerkeys` | removed (branch kept) | merged 2026-11-22 |
+| `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | running since 2026-11-22, in the user's "ecosystem" Terminal window |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -32,6 +33,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `docks` | new `Source/KeysRun/KeysDocks.*`, `KeysLifts.*` |
 | `upperkeys` | `Source/KeysRun/KeysGeoReal.*`, `Tools/geo/bake.py`, new `Tools/geo/*p2*`, `Content/KeysRun/Geo/p2_*` and `p2.kgeo` |
 | `lowerkeys` | `Source/KeysRun/KeysGeoReal.*`, `Tools/geo/bake.py`, new `Tools/geo/*p3*` and `*p4*`, `Content/KeysRun/Geo/p3*` and `p4*` |
+| `mangrovelife` | `Source/KeysRun/KeysMangroveLife.*`, `Source/KeysRun/KeysMangrove.cpp`, new `Source/KeysRun/KeysMangroveEco*` |
 
 ## Marshal-only files
 
@@ -153,3 +155,16 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   and a boat tied up there (`KeysDocks::InFootprint` at bow, middle and stern, half a beam of margin), with a toast;
   a hull already inside one is let out. Tested by driving at an open-water dock (stops 4.8 m off the head, backs
   away) and a canal dock. Not covered: traffic boats, the yards' floats and fuel dock, marina and estate docks.
+- 2026-11-22: `lowerkeys` merged (lane at ac4a4fe) with its requests R1-R6 applied: US-1 extent, terrain / scenery /
+  docks made by tile near the boat, rectangular chart, reef lights, teleport spots, Jewfish Creek and Card Sound
+  bridges. The map is x -30060..35500, z -13720..6200 (six files: p1, p2, p2_bay, p3, p4, p4_bay). Marshal's runs
+  on the merged build: world start to first frame about 6 s; dock audit 545 docks, zero overlaps; `tpcheck` 48
+  destinations, 0 bad; classic map loads no real-map data, `tpcheck` 19, 0 bad; Hawk Channel on the final bake,
+  Key West to Marathon (31 picks) and Tavernier to north Key Largo (18 picks), no stop, shoalest 2.9 m; peak
+  memory 4.8 GB on the 10 minute run; frame 33.3 ms at the old spots, off Key West and off Key Largo. After a
+  teleport the frame runs 40-48 ms for about 10 s while tiles arrive. Open from the lane: R7 marinas, R8 fish
+  zones and reef names (every reef is "Sombrero Reef" on the HUD; Largo Sound's middle plays as a 0.4 m flat),
+  R9 docks re-dealt by index, R10 bridges and landmarks still whole at launch, R11 houses on wild keys and the air
+  station. Not checked: night, underwater, packaged build in the new areas.
+- 2026-11-22: `lane/mangrovelife` created from `main` after the `lowerkeys` merge; run in a Terminal window the
+  user watches. The `lowerkeys` worktree removed (branch kept).
