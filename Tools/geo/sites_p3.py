@@ -14,6 +14,7 @@ KeysGeoReal loads (KeysGeoReal::Sites, RoadX0, RoadX1). One place a line:
           project does not use. They are dealt out west to east, so they do not change unless the list does.
   bridge  a road bridge that is not on the chain line, from x, z to x2, z2
   town    a town or village by name (place names are not brands)
+  water   a sound or basin by name; value = the depth at that point
   spot    somewhere worth a teleport: open water, value = a heading in radians
 
 Nothing here is random."""
@@ -28,13 +29,12 @@ from kgeo import KGeo
 # invented: no real marina, shop or brand carries these (checked against the names in the OSM extras when run)
 MARINA_NAMES = {
     # west to east as the bake finds them: Key West, four on Stock Island, Cudjoe, Summerland, Big Pine
-    'p3': ['Wreckers Wharf Marina', 'Salt Pond Basin', 'Shrimp Road Docks', 'Cow Key Fuel Dock', 'Boca Chica Basin', 'Cudjoe Cut Docks',
+    'p3': ['Wreckers Wharf Marina', 'Salt Pond Basin', 'Shrimp Road Docks', 'Cow Channel Fuel Dock', 'Rockland Basin', 'Cudjoe Cut Docks',
            'Summerland Fuel and Bait', 'Spanish Harbor Docks', 'Saddlebunch Landing', 'Bow Channel Boatworks', 'Niles Channel Landing', 'Torch Key Landing'],
-    'p4': ['Rock Harbor Marina', 'Mandalay Flats Dock', 'Largo Sound Landing', 'Garden Cove Basin', 'Jewfish Creek Fuel Dock', 'Blackwater Sound Marina',
-           'Point Lowe Docks', 'Molasses Run Marina', 'Newport Cut Basin', 'Lake Largo Landing', 'Pirate Lagoon Docks', 'Adams Cut Marina',
-           'Steamboat Creek Dock', 'Card Sound Landing', 'Dispatch Creek Basin', 'Angelfish Creek Docks', 'Rattlesnake Key Landing', 'Sunset Cove Marina',
-           'Tarpon Basin Docks', 'Dusenbury Creek Landing', 'Elbow Light Marina', 'Carysfort Yacht Basin', 'Garden Cove Fuel and Bait', 'Sexton Cove Dock'],
-    'p4_bay': ['Flamingo Basin', 'Buttonwood Landing'],
+    # Rock Harbor, Key Largo town, Largo Sound, then three at the top of the island
+    'p4': ['Mosquito Bank Marina', 'Hammock Point Docks', 'Sound Side Landing', 'Angelfish Cut Docks', 'Dispatch Slough Basin', 'North Sound Landing',
+           'Broad Creek Docks', 'Old Rhodes Landing', 'Steamboat Creek Dock', 'Lake Surprise Landing', 'Sexton Cove Dock', 'Point Lowe Docks'],
+    'p4_bay': ['Snake Bight Landing', 'Buttonwood Landing', 'Whipray Basin Dock', 'Rabbit Key Landing'],
 }
 # teleport spots asked for by name: (name, lon, lat, heading). Each is moved to the nearest open water.
 SPOTS = {
@@ -100,6 +100,8 @@ def main():
         out.append(('marina', names[k], x, z, wx, wz, d))
     for b in pl.get('side_bridges', []):
         out.append(('bridge', b['name'], b['a'][0], b['a'][1], b['b'][0], b['b'][1], 0))
+    for w in pl.get('waters', []):
+        out.append(('water', w['name'], w['pts'][0], w['pts'][1], 0, 0, w['depth']))
     for t in pl.get('localities', []):
         if t['kind'] in ('city', 'town', 'village') and inside(*t['pts'], m=0):
             out.append(('town', t['name'], t['pts'][0], t['pts'][1], 0, 0, 0))

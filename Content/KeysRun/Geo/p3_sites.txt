@@ -13,8 +13,8 @@ reef|Sand Key|-28350.0|450.0|0.0|0.0|1.00
 marina|Wreckers Wharf Marina|-24654.2|-2501.5|-24650.0|-2520.0|4.06
 marina|Salt Pond Basin|-22793.9|-2535.7|-22840.0|-2610.0|4.69
 marina|Shrimp Road Docks|-22784.8|-2231.2|-22890.0|-2360.0|1.83
-marina|Cow Key Fuel Dock|-22369.1|-2218.6|-22220.0|-2170.0|2.54
-marina|Boca Chica Basin|-22329.2|-1756.8|-22340.0|-1760.0|2.67
+marina|Cow Channel Fuel Dock|-22369.1|-2218.6|-22220.0|-2170.0|2.54
+marina|Rockland Basin|-22329.2|-1756.8|-22340.0|-1760.0|2.67
 marina|Cudjoe Cut Docks|-14031.0|-2632.5|-14190.0|-2680.0|2.20
 marina|Summerland Fuel and Bait|-12603.8|-2296.4|-12670.0|-2290.0|1.98
 marina|Spanish Harbor Docks|-8536.0|-2276.6|-8470.0|-2280.0|1.97

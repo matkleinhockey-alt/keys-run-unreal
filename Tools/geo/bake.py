@@ -63,6 +63,17 @@ PHASES = {
     # the map's corner (palms 16 m, houses 34 m, terrain 8 m, depth 10 m) keeps its spots. North and south as Phase 2.
     'p3': dict(rect=(-30060, -8300, -6920, 6200), box=(-82.05, 24.26, -81.22, 24.86), src='p3', pad=60, clip=True, gen=3,
                join=[('p1', 'east'), ('p2_bay', 'east')], chain_end='east', cut_marks=True, canals='osm_p3_built.json', road=True),
+    # Key Largo: east and north of Phase 2, to the top of the island (Ocean Reef is at x 33470, Carysfort Reef at 34025,
+    # the Card Sound bridge at z -12300). North edge -13720 is five more steps of 1360 m. US-1 runs along the island as
+    # far as x 27000 and then leaves it for Jewfish Creek and the mainland, nearly straight up the map: from there the
+    # chain line (the keys' axis, which the game measures bay side and ocean side from) follows the middle of Key Largo
+    # itself ('chain': the island that point is on), and 'road' says the road is only on it as far as 27000.
+    'p4': dict(rect=(23500, 35500, -13720, 6200), box=(-80.62, 24.72, -79.98, 25.42), src='p4', pad=60, clip=True, gen=4,
+               join=[('p2', 'west')], cut_marks=True, canals='osm_p4_built.json', chain=dict(xmax=27000.0, on=(-80.4470, 25.0860)), road=(23500.0, 27000.0)),
+    # Florida Bay and the Gulf north of all the rest, which squares the map off: up to the mainland at Flamingo. Its
+    # downloads are the other phases' put together (fetch_p3.sh p4_bay); the DEM is 1 arc-second.
+    'p4_bay': dict(rect=(-30060, 23500, -13720, -6920), box=(-82.10, 24.60, -80.45, 25.30), src='p4_bay', pad=60, clip=True, gen=4,
+                   join=[('p3', 'south'), ('p2_bay', 'south'), ('p2', 'south'), ('p4', 'east')], chain_from=['p3', 'p1', 'p2'], cut_marks=True),
 }
 JOIN_FADE = 30    # cells over which a joined edge's correction fades out
 CUT_MAX, CUT_HALF_W = 20.0, 8.0   # marked channel legs: how much land a leg may clip and still be cut, and how wide
@@ -84,6 +95,8 @@ KNOWN = [
     ('Sugarloaf Key', -81.5400, 24.6750), ('Lower Sugarloaf Key', -81.5511, 24.6214), ('Summerland Key', -81.4450, 24.6620),
     ('Ramrod Key', -81.4150, 24.6600), ('Middle Torch Key', -81.4050, 24.6850), ('Fleming Key', -81.7950, 24.5850),
     ('Geiger Key', -81.6550, 24.5780), ('Knockemdown Key', -81.4800, 24.7000), ('Wisteria Island', -81.8110, 24.5690),
+    # Key Largo
+    ('Key Largo', -80.4470, 25.0860), ('Rodriguez Key', -80.4530, 25.0530), ('El Radabob Key', -80.3700, 25.1250),
 ]
 # OpenStreetMap's spelling put right
 RENAME = {'Nile Channel Bridge': 'Niles Channel Bridge'}
@@ -102,8 +115,18 @@ KNOWN_REEFS = [('Tennessee Reef', -80.7817, 24.7450), ('Alligator Reef', -80.618
                # Phase 3
                ('Looe Key', -81.4030, 24.5460), ('American Shoal', -81.5190, 24.5250), ('Maryland Shoal', -81.5800, 24.5100),
                ('Pelican Shoal', -81.6300, 24.5000), ('Eastern Sambo', -81.6650, 24.4900), ('Middle Sambo', -81.6800, 24.4880),
-               ('Western Sambo', -81.7150, 24.4800), ('Sand Key', -81.8775, 24.4539)]
-KNOWN_LIGHTS = [('Alligator Reef Light', -80.6185, 24.8517), ('Tennessee Reef Light', -80.7817, 24.7450), ('Looe Key Light', -81.4030, 24.5460)]
+               ('Western Sambo', -81.7150, 24.4800), ('Sand Key', -81.8775, 24.4539),
+               # Key Largo
+               ('Molasses Reef', -80.3760, 25.0120), ('French Reef', -80.3500, 25.0340), ('Grecian Rocks', -80.3050, 25.1080),
+               ('Key Largo Dry Rocks', -80.2970, 25.1230), ('Elbow Reef', -80.2580, 25.1450), ('Carysfort Reef', -80.2115, 25.2217),
+               ('Pickles Reef', -80.4150, 24.9850)]
+KNOWN_LIGHTS = [('Alligator Reef Light', -80.6185, 24.8517), ('Tennessee Reef Light', -80.7817, 24.7450), ('Looe Key Light', -81.4030, 24.5460),
+                ('Molasses Reef Light', -80.3760, 25.0120), ('Carysfort Reef Light', -80.2115, 25.2217), ('Elbow Reef Light', -80.2580, 25.1450)]
+# waters known by name (lon, lat): they go in the places file with the depth the grid has there
+KNOWN_WATERS = [('Largo Sound', -80.3900, 25.1330), ('Blackwater Sound', -80.4300, 25.1700), ('Barnes Sound', -80.3800, 25.2500), ('Card Sound', -80.3300, 25.3200),
+                ('Tarpon Basin', -80.4350, 25.1200), ('Buttonwood Sound', -80.4600, 25.1000)]
+# road bridges that are not on the chain line, by their name in OpenStreetMap (they go in the places file with their two ends)
+SIDE_BRIDGES = ('Jewfish Creek Bridge', 'Card Sound Bridge')
 # charted shoals the elevation data has lost (lon, lat, radius in game metres, depth on the crest). Sand Key: NOAA's
 # mosaic is the coarse Coastal Relief Model out here and has 21 m where the chart has a reef awash with a light on it.
 SHOALS = {'p3': [('Sand Key', -81.8775, 24.4539, 150.0, 1.0)]}
@@ -170,10 +193,12 @@ def main():
         ring = LineString([F.to_game(lo, la) for lo, la in ((w + .002, s + .002), (e - .002, s + .002), (e - .002, n - .002), (w + .002, n - .002), (w + .002, s + .002))])
         rs = np.random.RandomState(7)
         polys = []
+        boxed_src = set()      # outlines closed along the data box: the mainland, cut off by it
         for p in polygonize(unary_union(lines + [ring])):
             if p.area <= 60:
                 continue
             if p.exterior.distance(ring) < .5:
+                boxed_src.add(id(p))
                 mnx, mnz, mxx, mxz = p.bounds
                 pts = [(p.representative_point().x, p.representative_point().y)]
                 for _ in range(4000):
@@ -189,11 +214,14 @@ def main():
         box_poly = Polygon([(x0, z0), (x1, z0), (x1, z1), (x0, z1)])
         rect_poly = Polygon([(rx0, rz0), (rx1, rz0), (rx1, rz1), (rx0, rz1)])
         cut = []
+        boxed = set()
         for p in polys:
             q = p.intersection(box_poly)
             for part in (q.geoms if hasattr(q, 'geoms') else [q]):
                 if part.geom_type == 'Polygon' and part.area > 60:
                     cut.append(part)
+                    if id(p) in boxed_src:
+                        boxed.add(id(part))
         polys = cut
         # an island belongs to one phase only: not this one if a neighbour already baked lists it, else whichever of
         # the phases baked this way holds most of it
@@ -340,6 +368,26 @@ def main():
         t = el.get('tags', {})
         if el['type'] == 'way' and t.get('highway') == 'trunk' and 'geometry' in el:
             us1 += [F.to_game(p['lon'], p['lat']) for p in el['geometry']]
+    chain_note = ''
+    if P.get('chain'):
+        xmax = P['chain']['xmax']
+        us1 = [q for q in us1 if q[0] <= xmax]
+        # past the road: the middle of the island named (the one that point is on), every 50 m of x (the widest stretch
+        # of land on that line)
+        on = Point(*F.to_game(*P['chain']['on']))
+        big = [q for q in polys if q.contains(on)][0]
+        mnx, mnz, mxx, mxz = big.bounds
+        last, n_axis = None, 0
+        for ax_x in np.arange(xmax + 50, x1 + 50, 50.0):
+            cut = big.intersection(LineString([(ax_x, mnz - 10), (ax_x, mxz + 10)])) if ax_x <= mxx else None
+            parts = [g for g in (cut.geoms if hasattr(cut, 'geoms') else [cut]) if g.geom_type == 'LineString'] if cut is not None and not cut.is_empty else []
+            if parts:
+                seg = max(parts, key=lambda g: g.length)
+                last = (seg.coords[0][1] + seg.coords[-1][1]) / 2
+                n_axis += 1
+            if last is not None:
+                us1.append((float(ax_x), float(last)))
+        chain_note = f'chain line: US-1 to x {xmax:.0f}, then the middle of the island it is on ({big.area / 1e4:.0f} ha) for {n_axis} samples to x {min(mxx, x1):.0f}, held from there'
     us1 = np.array(sorted(us1))
     step = 50.0
     cx = np.arange(rx0, rx1 + step, step)
@@ -386,6 +434,9 @@ def main():
                     d = (px - p.centroid.x) ** 2 + (pz - p.centroid.y) ** 2
                     if d < best:
                         best, nm = d, name
+        if P.get('gen', 2) >= 4 and id(p) in boxed:
+            nm = ''     # (the mainland: an island's name tag that happens to sit on it is not its name, and it stays unnamed
+                        # so the game, which builds houses on named keys, leaves the Everglades alone)
         sp = p.simplify(1.5)
         if sp.is_empty or sp.geom_type != 'Polygon':
             sp = p
@@ -452,8 +503,18 @@ def main():
         landg = shore < 0
         height = np.where(landg, np.maximum(height, .2), np.minimum(height, -.3))
         # and US-1's line meets the line next door
-        g = KGeo(f'{out}/{P.get("chain_from", P["join"][0][0])}.kgeo')
-        if P.get('chain_from'):
+        if isinstance(P.get('chain_from'), list):
+            # the line of every phase south of this strip, each over its own stretch of x
+            cz = np.zeros(len(cx))
+            for other in reversed(P['chain_from']):
+                g = KGeo(f'{out}/{other}.kgeo')
+                m = (cx >= g.x0 - 1) & (cx <= g.x0 + (g.nx - 1) * g.cell + 1)
+                cz[m] = np.asarray(g.chain_z(cx[m]), np.float64)
+        else:
+            g = KGeo(f'{out}/{P.get("chain_from", P["join"][0][0])}.kgeo')
+        if isinstance(P.get('chain_from'), list):
+            pass
+        elif P.get('chain_from'):
             cz = np.asarray(g.chain_z(cx), np.float64)
         elif P.get('chain_end') == 'east':
             # the line next door is past this phase's east end
@@ -495,7 +556,12 @@ def main():
             t = el.get('tags', {})
             if el['type'] == 'way' and 'geometry' in el and t.get('highway') == 'trunk' and t.get('bridge'):
                 g = sorted(F.to_game(q['lon'], q['lat']) for q in el['geometry'])
+                if P.get('gen', 2) >= 4 and not any(in_rect(*q) for q in g):
+                    continue
                 for sp in spans:
+                    # (from Key Largo on the road also runs up the map: spans one above the other are not one bridge)
+                    if P.get('gen', 2) >= 4 and min(abs(g[0][1] - sp[0][1]), abs(g[0][1] - sp[1][1]), abs(g[-1][1] - sp[0][1]), abs(g[-1][1] - sp[1][1])) > 300:
+                        continue
                     if g[0][0] <= sp[1][0] + 40 and g[-1][0] >= sp[0][0] - 40:
                         if g[0][0] < sp[0][0]: sp[0] = g[0]
                         if g[-1][0] > sp[1][0]: sp[1] = g[-1]
@@ -555,6 +621,33 @@ def main():
                 lights.append(dict(name=name, pts=[round(c[0], 1), round(c[1], 1)], depth=round(-cell_h(*c), 1)))
         more['reef_sites'] = reefs
         more['lights'] = lights
+        if P.get('gen', 2) >= 4:
+            waters = []
+            for name, lon, lat in KNOWN_WATERS:
+                c = F.to_game(lon, lat)
+                if in_rect(*c):
+                    # (the point is from memory of the chart: moved to the nearest water a metre deep within 800 m)
+                    j, i = int(round((c[1] - z0) / CELL)), int(round((c[0] - x0) / CELL))
+                    ja, ia = max(0, j - 80), max(0, i - 80)
+                    win = height[ja:j + 81, ia:i + 81]
+                    jj, ii = np.nonzero(win <= -1.0)
+                    if len(jj):
+                        k = int(np.argmin((jj + ja - j) ** 2 + (ii + ia - i) ** 2))
+                        c = (x0 + (ii[k] + ia) * CELL, z0 + (jj[k] + ja) * CELL)
+                    waters.append(dict(name=name, pts=[round(c[0], 1), round(c[1], 1)], depth=round(-cell_h(*c), 1)))
+            if waters:
+                more['waters'] = waters
+            side = []
+            for el in extra:
+                t = el.get('tags', {})
+                if t.get('man_made') == 'bridge' and t.get('name') in SIDE_BRIDGES and el.get('geometry'):
+                    q = [F.to_game(v['lon'], v['lat']) for v in el['geometry']]
+                    a, b = max(((u, v) for u in q for v in q), key=lambda uv: (uv[0][0] - uv[1][0]) ** 2 + (uv[0][1] - uv[1][1]) ** 2)
+                    if in_rect(*a) or in_rect(*b):
+                        a, b = sorted((a, b))
+                        side.append(dict(name=t['name'], a=[round(a[0], 1), round(a[1], 1)], b=[round(b[0], 1), round(b[1], 1)], length=round(math.hypot(b[0] - a[0], b[1] - a[1]), 1)))
+            if side:
+                more['side_bridges'] = side
         if P.get('road'):
             # where US-1 itself runs on this phase's stretch of the chain line (sites_p3.py passes it to the game)
             rw, re_ = P['road'] if isinstance(P['road'], tuple) else (float(ux.min()), float(ux.max()))
@@ -613,6 +706,12 @@ def main():
         print('  biggest islands: ' + '; '.join(f'{i["name"] or "?"} {i["area"] / 1e4:.0f} ha' for i in islands[:14]))
     if P.get('clip'):
         print('  islands cut by the phase edge: ' + ('; '.join(f'{i["name"] or "?"} at {i["x"]:.0f}, {i["z"]:.0f}' for i in islands if i['bounds'][0] < x0 or i['bounds'][2] > x1 or i['bounds'][1] < z0 or i['bounds'][3] > z1) or 'none'))
+    if chain_note:
+        print('  ' + chain_note)
+    if places.get('side_bridges'):
+        print('  bridges off the chain line: ' + '; '.join(f'{b["name"]} {b["a"][0]:.0f}, {b["a"][1]:.0f} to {b["b"][0]:.0f}, {b["b"][1]:.0f}' for b in places['side_bridges']))
+    if places.get('waters'):
+        print('  waters: ' + '; '.join(f'{w["name"]} {w["depth"]:.1f} m' for w in places['waters']))
     if shoal_note:
         print('  shoals: ' + shoal_note)
     if cut_note:
