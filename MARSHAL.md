@@ -18,6 +18,7 @@ once).
 | `lowerkeys` | Map Phase 3 (Lower Keys, then Key Largo; brief written by the marshal) | `lane/lowerkeys` | removed (branch kept) | merged 2026-11-22 |
 | `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | running since 2026-11-22, in the user's "ecosystem" Terminal window |
 | `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | running since 2026-11-22 (background agent) |
+| `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | running since 2026-11-22 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -36,6 +37,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `lowerkeys` | `Source/KeysRun/KeysGeoReal.*`, `Tools/geo/bake.py`, new `Tools/geo/*p3*` and `*p4*`, `Content/KeysRun/Geo/p3*` and `p4*` |
 | `mangrovelife` | `Source/KeysRun/KeysMangroveLife.*`, `Source/KeysRun/KeysMangrove.cpp`, new `Source/KeysRun/KeysMangroveEco*` |
 | `water2` | `Source/KeysRun/KeysSeafloor.*`, `KeysSea.*`, `KeysOcean.*`, `KeysSchools.*` |
+| `diving` | `Source/KeysRun/KeysDive.*`, `KeysDiver.*`, new `Source/KeysRun/KeysScuba*` |
 
 ## Marshal-only files
 
@@ -179,3 +181,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   222 ms hitch in the sample at `tp=-1150,452`); classic map `tpcheck` 19, 0 bad, reef looks right (its perf
   sample was taken while the lane was building, not comparable). Not yet fixed by this part: seagrass in canals,
   Largo Sound, creek stain. Merge the rest when the lane reports.
+- 2026-11-22: `lane/diving` created from `main` (this entry), run as a background agent.
