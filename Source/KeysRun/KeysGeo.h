@@ -112,6 +112,7 @@ namespace KeysGeo
 	double LandH(double X, double Z);
 	double DepthAt(double X, double Z);
 	double DepthFast(double X, double Z);
+	void RebakeDepth(double X0, double Z0, double X1, double Z1);   // re-read the depth grid there from DepthAt
 	double OffshoreF(double X, double Z);
 	bool NearBridge(double X, double Z);
 	const FHump* NearHump(double X, double Z);

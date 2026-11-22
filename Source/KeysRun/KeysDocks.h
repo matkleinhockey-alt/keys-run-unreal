@@ -32,6 +32,7 @@ namespace KeysDocks
 		int32 Side = 1;               // the side the lift (and an L's arm) is on: 1 right, -1 left
 		KeysLifts::FLift Lift;
 		bool bUnder = false;          // lights under the water off the head
+		bool bPocket = false;         // the shore was too thin: a berth is dredged under the head, the lift and the boat
 		bool bAlong = false;          // a boat afloat alongside
 		KeysYardProps::FBoat AlongBoat;
 		double AlongA = 0, AlongC = 0, AlongYaw = 0;
@@ -50,6 +51,9 @@ namespace KeysDocks
 	const TArray<FDock>& Sites();
 	// on (or within Margin metres of) a dock, its lift or the boat alongside it
 	bool InFootprint(double X, double Z, double Margin = 0);
+	// a berth dredged under a dock on a thin shore: how deep the bottom is cut there (m at the datum, feathered out
+	// to nothing round its edge). Read by KeysGeo for the ground and the depth; false until the docks are planned.
+	bool Pocket(double X, double Z, double& OutDepth);
 }
 
 // The private docks and boat lifts along the built-up shores of the real map (KeysDocks.cpp, KeysLifts.cpp).

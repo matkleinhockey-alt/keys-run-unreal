@@ -401,7 +401,7 @@ namespace
 	}
 
 	// what stands now, what could stand, and the one tile being grown in the background
-	struct FMgLive { TWeakObjectPtr<UProceduralMeshComponent> PM[2]; };
+	struct FMgLive { TWeakObjectPtr<UProceduralMeshComponent> PM[2]; bool bRoots = false; };   // [0] roots and trunks, [1] canopy
 	TMap<int64, FMgLive> GMgLive;
 	TMap<int64, FVector2D> GMgHave;   // every tile with mangrove in it -> its centre
 	TFuture<FMgTile*> GMgJob;
@@ -409,6 +409,8 @@ namespace
 	bool bMgJob = false;
 	int32 GMgSync = 0, GMgMade = 0;
 	double GMgScanT = 0;
+	double GMgLastMs = 0;
+	int32 GMgLastTris = 0, GMgWatch = 0;
 
 	FMgTile* GenOneMangroveTile(int64 Key)
 	{
@@ -457,12 +459,22 @@ void AKeysWorld::BuildMangroves()
 void AKeysWorld::StreamMangroves()
 {
 	if (!GMgHave.Num()) return;
-	auto Commit = [this](int64 Key, FMgTile* T)
+	// the roots and trunks are only drawn within 700 m, and they are nearly half the triangles: a tile gets its
+	// canopy when it comes within sight and its roots only when the boat is close, and loses them again behind it
+	constexpr double RootsIn = 1150, RootsOut = 1600, CanopyIn = 5000, CanopyOut = 6200;
+	const FVector2D Focus(FocusX, FocusZ);
+	auto Commit = [this, &Focus](int64 Key, FMgTile* T)
 	{
-		FMgLive L;
+		const double T0 = FPlatformTime::Seconds();
+		FMgLive& L = GMgLive.FindOrAdd(Key);
+		const FVector2D* C = GMgHave.Find(Key);
+		const bool bNear = C && FVector2D::DistSquared(*C, Focus) < FMath::Square(RootsIn + 150);
+		int32 Tris = 0;
 		for (int32 k = 0; k < 2; k++)
 		{
 			FTownBatch& B = k == 0 ? T->Roots : T->Canopy;
+			if (L.PM[k].IsValid() || (k == 0 && !bNear)) continue;
+			if (k == 0) L.bRoots = true;
 			if (!B.Tris()) continue;
 			UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
 			PM->SetupAttachment(Root);
@@ -471,23 +483,34 @@ void AKeysWorld::StreamMangroves()
 			B.M.Commit(PM, 0, VertexColorMaterial());
 			PM->SetCachedMaxDrawDistance(k == 0 ? 70000.f : 450000.f);
 			L.PM[k] = PM;
+			Tris += B.Tris();
 		}
-		GMgLive.Add(Key, L);
 		GMgMade++;
 		delete T;
+		GMgLastMs = (FPlatformTime::Seconds() - T0) * 1000;
+		GMgLastTris = Tris;
+		GMgWatch = 2;
 	};
+	// (how long the frames round a tile's arrival took, for the log: a long one is a hitch the player feels)
+	if (GMgWatch > 0 && --GMgWatch == 0)
+	{
+		const double Fr = GetWorld()->GetDeltaSeconds() * 1000;
+		if (Fr > 60) UE_LOG(LogTemp, Log, TEXT("KRMangrove tile of %d triangles: set up in %.0f ms, the frame after took %.0f ms"), GMgLastTris, GMgLastMs, Fr);
+	}
 	if (bMgJob && GMgJob.IsReady()) { Commit(GMgJobKey, GMgJob.Get()); bMgJob = false; }
-	const FVector2D Focus(FocusX, FocusZ);
 	if (!bMgJob)
 	{
-		// the nearest tile within sight that does not stand yet (the canopy is drawn to 4.5 km)
+		// the nearest tile that lacks something it should have by now
 		int64 Best = 0;
-		double BestD = FMath::Square(5000.0);
+		double BestD = 1e18;
 		bool bAny = false;
 		for (const TPair<int64, FVector2D>& H : GMgHave)
 		{
 			const double D = FVector2D::DistSquared(H.Value, Focus);
-			if (D < BestD && !GMgLive.Contains(H.Key)) { BestD = D; Best = H.Key; bAny = true; }
+			if (D >= BestD || D >= FMath::Square(CanopyIn)) continue;
+			const FMgLive* L = GMgLive.Find(H.Key);
+			if (L && (L->bRoots || D >= FMath::Square(RootsIn))) continue;
+			BestD = D; Best = H.Key; bAny = true;
 		}
 		if (bAny && GMgSync > 0) Commit(Best, GenOneMangroveTile(Best));
 		else if (bAny)
@@ -497,15 +520,23 @@ void AKeysWorld::StreamMangroves()
 			GMgJob = Async(EAsyncExecution::ThreadPool, [Best] { return GenOneMangroveTile(Best); });
 		}
 	}
-	// and those left well behind are taken down again
+	// and what is left well behind is taken down again
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (Now - GMgScanT > 1 || Now < GMgScanT)
 	{
 		GMgScanT = Now;
 		for (auto It = GMgLive.CreateIterator(); It; ++It)
 		{
+			if (bMgJob && It.Key() == GMgJobKey) continue;
 			const FVector2D* C = GMgHave.Find(It.Key());
-			if (C && FVector2D::DistSquared(*C, Focus) < FMath::Square(6200.0)) continue;
+			const double D = C ? FVector2D::DistSquared(*C, Focus) : 1e18;
+			if (D > FMath::Square(RootsOut) && It.Value().bRoots)
+			{
+				if (It.Value().PM[0].IsValid()) It.Value().PM[0]->DestroyComponent();
+				It.Value().PM[0] = nullptr;
+				It.Value().bRoots = false;
+			}
+			if (D < FMath::Square(CanopyOut)) continue;
 			for (TWeakObjectPtr<UProceduralMeshComponent>& PM : It.Value().PM) if (PM.IsValid()) PM->DestroyComponent();
 			It.RemoveCurrent();
 		}

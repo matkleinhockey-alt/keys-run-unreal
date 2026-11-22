@@ -40,6 +40,8 @@ namespace
 	constexpr double BerthDepth = .75;                // and under every corner of a lift's berth or a boat alongside
 	constexpr double MinLen = 7, MaxLen = 80;         // the walkway, from the water's edge to the head
 	constexpr double HouseMax = 55;                   // how far back from the water a house can stand and still own a dock
+	constexpr double PocketDepth = 1.6;               // a berth dredged where the shore is too thin: this much water at the datum
+	constexpr double PocketShare = .86;               // of the houses on a thin shore, how many had one dug
 	constexpr double DockGap = 2.5;                   // the least clear water between two docks
 
 	enum EWhy { WhyOk, WhyFar, WhyNoShore, WhyAskew, WhyShallow, WhyNarrow, WhyLand, WhyChannel, WhyCreek, WhyMarina, WhyPier, WhyEstate, WhyPlat, WhyCove, WhyMangrove, WhyTown, WhyBridge, WhyEdge, WhyDock, WhyCount };
@@ -101,6 +103,21 @@ namespace
 
 	// the water at a point at low tide; nothing where the ground stands out of it
 	double LowWater(double X, double Z) { return KeysGeo::LandH(X, Z) > -.25 ? -1 : KeysGeo::DepthAt(X, Z) - LowTide; }
+
+	// every part past the walkway stands over water, however thin (enough for a berth to be dredged there)
+	bool Afloat(const FDock& D)
+	{
+		for (int32 i = 1; i < D.Parts.Num(); i++)
+		{
+			const FRectL& R = D.Parts[i];
+			for (int32 k = 0; k < 5; k++)
+			{
+				const FVector2D P = k == 4 ? D.At((R.A0 + R.A1) / 2, (R.C0 + R.C1) / 2) : D.At(k & 1 ? R.A1 : R.A0, k & 2 ? R.C1 : R.C0);
+				if (KeysGeo::LandH(P.X, P.Y) > -.1) return false;
+			}
+		}
+		return true;
+	}
 
 	// ---------------------------------------------------------------- what a dock must keep clear of
 	int32 PointHazard(double X, double Z)
@@ -234,7 +251,7 @@ namespace
 		return true;
 	}
 
-	int32 Plan(const FHouse& Hs, const TArray<FDock>& Have, FDock& D)
+	int32 Plan(const FHouse& Hs, const TArray<FDock>& Have, FDock& D, bool bDredge = false)
 	{
 		using namespace KeysGeo;
 		if (Hs.ShoreD < -HouseMax) return WhyFar;
@@ -325,13 +342,18 @@ namespace
 		{
 			// the shortest walkway that puts everything in a metre of water, and a little more if the owner felt like it
 			bool bFound = false;
-			for (D.Len = MinLen; D.Len <= MaxLen && !bFound; D.Len += bFound ? 0 : 1) { Layout(D); bFound = DeepEnough(D); if (bFound) break; }
+			if (!bDredge) for (D.Len = MinLen; D.Len <= MaxLen && !bFound; D.Len += bFound ? 0 : 1) { Layout(D); bFound = DeepEnough(D); if (bFound) break; }
+			// on a shore with no metre of water within reach, most owners had a berth dug at the end of a short dock
+			// (KeysDocks::Pocket, which KeysGeo reads): the head, the lift and the boat alongside only need to be over water
+			else if (Rnd(15) < PocketShare)
+				for (D.Len = 9 + FMath::FloorToDouble(Rnd(14) * 10); D.Len <= 46 && !bFound; D.Len += bFound ? 0 : 1) { Layout(D); bFound = Afloat(D); if (bFound) break; }
 			if (!bFound) { Why = WhyShallow; continue; }
+			D.bPocket = bDredge;
 			if (Extra > 0 && D.Len + Extra <= MaxLen)
 			{
 				D.Len += Extra;
 				Layout(D);
-				if (!DeepEnough(D)) { D.Len -= Extra; Layout(D); }
+				if (!(bDredge ? Afloat(D) : DeepEnough(D))) { D.Len -= Extra; Layout(D); }
 			}
 			Why = WhyOk;
 			// nothing dry under the walkway once it has left the shore, and room to get past beyond the head
@@ -367,12 +389,18 @@ namespace
 			if (Why == WhyOk) break;
 		}
 		if (Why != WhyOk) return Why;
-		DeepEnough(D, &D.HeadDepth);
+		if (D.bPocket) D.HeadDepth = PocketDepth - LowTide;
+		else DeepEnough(D, &D.HeadDepth);
 		return WhyOk;
 	}
 
 	TArray<FDock> GDocks;
 	bool GPlanned = false;
+	// the dredged berths (see PlanAll): dock numbers by 64 m square; nothing is dredged until the plan is whole
+	constexpr double PocketFeather = 7;
+	TMap<int64, TArray<int32>> GPocketAt;
+	TArray<FBox2D> GPocketBox;
+	bool bPocketsReady = false;
 
 	void PlanAll()
 	{
@@ -392,13 +420,28 @@ namespace
 		GHouses = Hs.Num();
 		// the houses nearest the water first, so the front row gets the shore
 		Hs.Sort([](const FHouse& A, const FHouse& B) { return A.ShoreD != B.ShoreD ? A.ShoreD > B.ShoreD : A.X != B.X ? A.X < B.X : A.Z < B.Z; });
+		TArray<int32> Whys;
 		for (const FHouse& H : Hs)
 		{
 			FDock D;
 			const int32 Why = Plan(H, GDocks, D);
-			GWhy[Why]++;
+			Whys.Add(Why);
 			if (Why == WhyOk) GDocks.Add(MoveTemp(D));
 		}
+		// then the thin shores: the docks with water of their own keep their places, the rest fit in round them
+		const int32 Natural = GDocks.Num();
+		TMap<int32, int32> Second;
+		for (int32 i = 0; i < Hs.Num(); i++)
+		{
+			if (Whys[i] != WhyShallow) continue;
+			FDock D;
+			Whys[i] = Plan(Hs[i], GDocks, D, true);
+			if (Whys[i] == WhyOk) GDocks.Add(MoveTemp(D));
+			Second.FindOrAdd(Whys[i])++;
+		}
+		for (const TPair<int32, int32>& P : Second) UE_LOG(LogTemp, Log, TEXT("KRDocks pockets: thin-shore houses ending as reason %d: %d"), P.Key, P.Value);
+		for (const int32 W : Whys) GWhy[W]++;
+		UE_LOG(LogTemp, Log, TEXT("KRDocks pockets: %d docks with water of their own, %d with a dredged berth"), Natural, GDocks.Num() - Natural);
 		// a fixed order (west to east), and somebody on a dock or two
 		GDocks.Sort([](const FDock& A, const FDock& B) { return A.X0 != B.X0 ? A.X0 < B.X0 : A.Z0 < B.Z0; });
 		int32 NFish = 0, NHose = 0;
@@ -412,6 +455,25 @@ namespace
 			const int32 Rec[8] = {FMath::RoundToInt32(D.X0 * 100), FMath::RoundToInt32(D.Z0 * 100), FMath::RoundToInt32(D.Len * 100), D.Shape, D.Finish, D.Lift.Kind, D.Lift.State + (D.bUnder ? 16 : 0), D.Person};
 			GChecksum = FCrc::MemCrc32(Rec, sizeof(Rec), GChecksum);
 		}
+		// the dredged berths: where each lies (64 m squares), and the depth grids told about them
+		GPocketAt.Reset();
+		for (int32 i = 0; i < GDocks.Num(); i++)
+		{
+			const FDock& D = GDocks[i];
+			if (!D.bPocket) continue;
+			double X0 = 1e18, X1 = -1e18, Z0 = 1e18, Z1 = -1e18;
+			for (int32 p = 1; p < D.Parts.Num(); p++)
+				for (int32 k = 0; k < 4; k++)
+				{
+					const FVector2D P = D.At(k & 1 ? D.Parts[p].A1 : D.Parts[p].A0, k & 2 ? D.Parts[p].C1 : D.Parts[p].C0);
+					X0 = FMath::Min(X0, P.X - PocketFeather); X1 = FMath::Max(X1, P.X + PocketFeather); Z0 = FMath::Min(Z0, P.Y - PocketFeather); Z1 = FMath::Max(Z1, P.Y + PocketFeather);
+				}
+			for (int32 cz = FMath::FloorToInt(Z0 / 64); cz <= FMath::FloorToInt(Z1 / 64); cz++)
+				for (int32 cx = FMath::FloorToInt(X0 / 64); cx <= FMath::FloorToInt(X1 / 64); cx++) GPocketAt.FindOrAdd((int64(cx) << 32) ^ int64(uint32(cz))).Add(i);
+			GPocketBox.Add(FBox2D(FVector2D(X0, Z0), FVector2D(X1, Z1)));
+		}
+		bPocketsReady = true;
+		for (const FBox2D& B : GPocketBox) KeysGeo::RebakeDepth(B.Min.X, B.Min.Y, B.Max.X, B.Max.Y);
 	}
 
 	// ---------------------------------------------------------------- building one
@@ -850,6 +912,31 @@ namespace KeysDocks
 	{
 		if (!GPlanned) PlanAll();
 		return GDocks;
+	}
+
+	bool Pocket(double X, double Z, double& OutDepth)
+	{
+		if (!bPocketsReady) return false;
+		const TArray<int32>* At = GPocketAt.Find((int64(FMath::FloorToInt(X / 64)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 64))));
+		if (!At) return false;
+		double K = 0;
+		for (const int32 i : *At)
+		{
+			const FDock& D = GDocks[i];
+			double A, C;
+			D.Local(X, Z, A, C);
+			if (A < 1) continue;   // (the water's edge itself is left as it is)
+			for (int32 p = 1; p < D.Parts.Num(); p++)
+			{
+				const FRectL& R = D.Parts[p];
+				const double DA = FMath::Max3(R.A0 - A, A - R.A1, 0.0), DC = FMath::Max3(R.C0 - C, C - R.C1, 0.0), Dd = FMath::Sqrt(DA * DA + DC * DC);
+				if (Dd >= PocketFeather) continue;
+				const double T = FMath::Clamp((PocketFeather - Dd) / (PocketFeather - 2), 0.0, 1.0);
+				K = FMath::Max(K, T * T * (3 - 2 * T) * FMath::Min(1.0, (A - 1) / 4));
+			}
+		}
+		OutDepth = PocketDepth * K;
+		return K > 0;
 	}
 
 	bool InFootprint(double X, double Z, double Margin)

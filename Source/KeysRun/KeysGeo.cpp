@@ -5,6 +5,7 @@
 #include "Async/ParallelFor.h"
 #include "KeysCoastData.h"
 #include "KeysYards.h"
+#include "KeysDocks.h"
 #include "KeysGeoReal.h"
 #include "KeysMangroveLife.h"
 #include "Misc/CommandLine.h"
@@ -797,6 +798,8 @@ namespace KeysGeo
 		}
 		// the dry stack and the boatyard (KeysYards.cpp): made ground under their pads, their basin and slip dredged
 		{ double YH; if (GReal && KeysYards::Ground(X, Z, YH)) H = YH; }
+		// a berth dredged under a private dock where the shore is thin (KeysDocks.cpp)
+		{ double PD; if (GReal && H < .05 && KeysDocks::Pocket(X, Z, PD)) H = FMath::Min(H, -PD); }
 		return H;
 	}
 
@@ -913,6 +916,7 @@ namespace KeysGeo
 		}
 		// the yards' basin and slip are dredged; their pads are dry land (KeysYards.cpp)
 		{ double YH; if (KeysYards::Ground(X, Z, YH)) D = YH < 0 ? FMath::Max(D, -YH) : .3; }
+		{ double PD; if (KeysDocks::Pocket(X, Z, PD)) D = FMath::Max(D, PD); }
 		return FMath::Max(.3, D);
 	}
 
@@ -965,6 +969,18 @@ namespace KeysGeo
 	}
 
 	double DepthFast(double X, double Z) { return GridAt(DepthG, X, Z); }
+
+	// the depth grid over a rectangle read again from DepthAt (the docks' berths are dredged after the grids are made)
+	void RebakeDepth(double X0, double Z0, double X1, double Z1)
+	{
+		if (!DepthG.Num()) return;
+		for (int32 j = FMath::Max(0, FMath::FloorToInt((Z0 - WorldZ0) / DG)); j <= FMath::Min(DGNZ - 1, FMath::CeilToInt((Z1 - WorldZ0) / DG)); j++)
+			for (int32 i = FMath::Max(0, FMath::FloorToInt((X0 - WorldX0) / DG)); i <= FMath::Min(DGNX - 1, FMath::CeilToInt((X1 - WorldX0) / DG)); i++)
+			{
+				const double D = DepthAt(WorldX0 + i * DG, WorldZ0 + j * DG);
+				if (D > DepthG[j * DGNX + i] + .05) { DepthG[j * DGNX + i] = float(D); ColorG[j * DGNX + i] = DepthRGB(D); }
+			}
+	}
 	FLinearColor DepthColorFast(double X, double Z) { return GridAt(ColorG, X, Z); }
 
 	bool NearBridge(double X, double Z)

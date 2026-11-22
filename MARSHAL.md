@@ -120,3 +120,8 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   the editor build: about 12 s (54 s with everything built at launch, 9 s before Phase 2). Peak memory not
   re-measured. Terrain, landmarks, bridges, palms and houses are still built whole at start-up. All lanes merged;
   no lane is running.
+- 2026-11-21: dock pockets (marshal, on the user's "add the dock pockets"): a house on a thin shore gets a short dock
+  with a 1.6 m berth dredged under its head, lift and boat (`KeysDocks::Pocket`, read by `KeysGeo::LandH` and the
+  depth; the depth grid is re-read there). 79 docks now (32 with water of their own, 47 dredged); 253 thin-shore
+  houses are still refused for mangrove in front of them (fix with R8, the `BUILT` list) and 272 for no wet ground
+  in reach. Mangrove streaming: a tile's roots are only set up within 1.15 km (they caused 130-300 ms frames).

@@ -158,6 +158,7 @@ void AKeysWorld::BeginPlay()
 {
 	Super::BeginPlay();
 	KeysGeo::Init();
+	KeysDocks::Sites();   // (plans the private docks now: the berths dredged under some of them are part of the ground built below)
 	KeysOcean::DrawTide(true);   // the water mesh (UpdateWater) and KeysGeo::WaveH sit at KeysOcean::SeaLevel()
 
 	Sun->SetAtmosphereSunLight(true);
