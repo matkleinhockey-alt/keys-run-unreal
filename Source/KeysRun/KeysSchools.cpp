@@ -308,6 +308,7 @@ int32 AKeysSchools::PoolFor(int32 Sp, int32 Lod)
 	const int32 Have = PoolKey.IndexOfByKey(Key);
 	if (Have != INDEX_NONE) return Pools[Have] ? Have : -1;
 	if (!MID) return -1;
+	const double BuildT0 = FPlatformTime::Seconds();
 	FKeysMesh M;
 	if (!AKeysLife::BuildSchoolMesh(Specs[Sp].Key, M, Lod)) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: no model for %s"), Specs[Sp].Key); PoolKey.Add(Key); PoolDirty.Add(false); Pools.Add(nullptr); return -1; }
 	M.SyncKinds();
@@ -370,7 +371,7 @@ int32 AKeysSchools::PoolFor(int32 Sp, int32 Lod)
 	Pools.Add(C);
 	PoolKey.Add(Key);
 	PoolDirty.Add(false);
-	UE_LOG(LogTemp, Log, TEXT("KRSchools: %s lod %d, %d triangles"), Specs[Sp].Key, Lod, M.T.Num() / 3);
+	UE_LOG(LogTemp, Log, TEXT("KRSchools: %s lod %d, %d triangles, built in %.1f ms"), Specs[Sp].Key, Lod, M.T.Num() / 3, (FPlatformTime::Seconds() - BuildT0) * 1000);
 	return Pools.Num() - 1;
 }
 

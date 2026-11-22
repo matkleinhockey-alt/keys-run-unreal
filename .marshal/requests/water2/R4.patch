@@ -1,5 +1,5 @@
 diff --git a/Source/KeysRun/KeysGeo.cpp b/Source/KeysRun/KeysGeo.cpp
-index 4a56045..a82d811 100644
+index 4a56045..cc439fb 100644
 --- a/Source/KeysRun/KeysGeo.cpp
 +++ b/Source/KeysRun/KeysGeo.cpp
 @@ -33,6 +33,7 @@ namespace KeysGeo
@@ -28,7 +28,7 @@ index 4a56045..a82d811 100644
  
  	// ground height: beaches slope into the water, creeks carve through, golf courses and the runway are graded flat
  	// the town is built on fill (web depth.ts TOWN_FILL, in the frame of MARINAS[0]): the ground under the pad is raised to
-@@ -913,6 +916,88 @@ namespace KeysGeo
+@@ -913,6 +916,104 @@ namespace KeysGeo
  	}
  	bool InMarkedChannel(double X, double Z) { return GReal && GNavSegs.Num() && NavChannelK(X, Z) > .3; }
  
@@ -73,33 +73,49 @@ index 4a56045..a82d811 100644
 +				GCreekW[J * NX + I] = 255;
 +			}
 +		});
++		// which 16 x 16 blocks have any (and the blocks round them, which the feather and a lookup's corners reach into):
++		// the feather is only worked there, and CreekWater looks here first
++		GCreekNX = NX; GCreekNZ = NZ; GCreekX0 = GX0; GCreekZ0 = GZ0; GCreekInv = 1 / C;
++		GCreekAnyNX = (NX >> 4) + 1;
++		const int32 AnyNZ = (NZ >> 4) + 1;
++		TArray<uint8> Own;
++		Own.SetNumZeroed(GCreekAnyNX * AnyNZ);
++		ParallelFor(AnyNZ, [&](int32 b)
++		{
++			for (int32 J = b << 4; J < FMath::Min(NZ, (b + 1) << 4); J++)
++				for (int32 I = 0; I < NX; I++) if (GCreekW[J * NX + I]) Own[b * GCreekAnyNX + (I >> 4)] = 1;
++		});
++		GCreekAny.Reset();
++		GCreekAny.SetNumZeroed(GCreekAnyNX * AnyNZ);
++		int64 N = 0;
++		for (int32 b = 0; b < AnyNZ; b++)
++			for (int32 a = 0; a < GCreekAnyNX; a++)
++			{
++				if (!Own[b * GCreekAnyNX + a]) continue;
++				for (int32 q = FMath::Max(0, b - 1); q <= FMath::Min(AnyNZ - 1, b + 1); q++)
++					for (int32 r = FMath::Max(0, a - 1); r <= FMath::Min(GCreekAnyNX - 1, a + 1); r++) GCreekAny[q * GCreekAnyNX + r] = 1;
++				for (int32 J = b << 4; J < FMath::Min(NZ, (b + 1) << 4); J++)
++					for (int32 I = a << 4; I < FMath::Min(NX, (a + 1) << 4); I++) N += GCreekW[J * NX + I] == 255;
++			}
 +		TArray<uint8> Tmp;
 +		for (int32 Pass = 0; Pass < 3; Pass++)
 +		{
 +			Tmp = GCreekW;
-+			ParallelFor(NZ - 2, [&](int32 Jm)
++			ParallelFor(AnyNZ, [&](int32 b)
 +			{
-+				const int32 J = Jm + 1;
-+				for (int32 I = 1; I < NX - 1; I++)
++				for (int32 a = 0; a < GCreekAnyNX; a++)
 +				{
-+					int32 M = 0;
-+					for (int32 b = -1; b <= 1; b++) for (int32 a = -1; a <= 1; a++) M = FMath::Max(M, int32(Tmp[(J + b) * NX + I + a]) - (a && b ? 90 : 64));
-+					if (M > Tmp[J * NX + I]) GCreekW[J * NX + I] = uint8(M);
++					if (!GCreekAny[b * GCreekAnyNX + a]) continue;
++					for (int32 J = FMath::Max(1, b << 4); J < FMath::Min(NZ - 1, (b + 1) << 4); J++)
++						for (int32 I = FMath::Max(1, a << 4); I < FMath::Min(NX - 1, (a + 1) << 4); I++)
++						{
++							int32 M = 0;
++							for (int32 v = -1; v <= 1; v++) for (int32 u = -1; u <= 1; u++) M = FMath::Max(M, int32(Tmp[(J + v) * NX + I + u]) - (u && v ? 90 : 64));
++							if (M > Tmp[J * NX + I]) GCreekW[J * NX + I] = uint8(M);
++						}
 +				}
 +			});
 +		}
-+		GCreekNX = NX; GCreekNZ = NZ; GCreekX0 = GX0; GCreekZ0 = GZ0; GCreekInv = 1 / C;
-+		GCreekAnyNX = (NX >> 4) + 1;
-+		GCreekAny.Reset();
-+		GCreekAny.SetNumZeroed(GCreekAnyNX * ((NZ >> 4) + 1));
-+		for (int32 J = 0; J < NZ; J++)
-+			for (int32 I = 0; I < NX; I++)
-+				if (GCreekW[J * NX + I])
-+					// (and the coarse cells a cell either side, which a lookup's four corners can reach into)
-+					for (int32 b = FMath::Max(0, J - 1) >> 4; b <= FMath::Min(NZ - 1, J + 1) >> 4; b++)
-+						for (int32 a = FMath::Max(0, I - 1) >> 4; a <= FMath::Min(NX - 1, I + 1) >> 4; a++) GCreekAny[b * GCreekAnyNX + a] = 1;
-+		int64 N = 0;
-+		for (const uint8 V : GCreekW) N += V == 255;
 +		UE_LOG(LogTemp, Log, TEXT("Keys Run: %.2f km2 of creek water between mangrove banks, found on the map"), N * C * C * 1e-6);
 +	}
 +	double CreekWater(double X, double Z)
