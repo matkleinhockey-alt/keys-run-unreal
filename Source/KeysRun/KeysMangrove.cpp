@@ -137,6 +137,7 @@ namespace
 	auto Blocked = [&](double X, double Z)
 	{
 		if (KeysYards::InFootprint(X, Z, 6)) return true;   // the dry stack and the boatyard
+		if (CanalDist(X, Z) < 12) return true;              // the canals and their seawalls
 		if (InFill(X, Z) || InTownPad(X, Z) || KeysTown::InFootprint(X, Z, 20) || SurfaceKind(X, Z) == 2 || InMarkedChannel(X, Z)) return true;
 		for (const FMarina& M : Marinas()) if (FMath::Square(X - M.SX) + FMath::Square(Z - M.SZ) < 70.0 * 70.0) return true;
 		return false;

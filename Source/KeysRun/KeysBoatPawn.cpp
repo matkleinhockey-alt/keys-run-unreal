@@ -284,6 +284,7 @@ FString AKeysBoatPawn::ZoneNameAt(double PX, double PZ) const
 	const FString Zn = ZoneAt(PX, PZ);
 	if (Zn == TEXT("Offshore") && OffshoreF(PX, PZ) > .5) return TEXT("Deep blue water");
 	if (InMiami(PX, PZ) && Zn != TEXT("Creek")) return TEXT("Biscayne Bay");
+	if (Zn == TEXT("Creek") && CanalDist(PX, PZ) < 0) return TEXT("Residential canal");
 	return ZoneDesc(Zn);
 }
 

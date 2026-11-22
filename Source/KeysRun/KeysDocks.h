@@ -33,6 +33,7 @@ namespace KeysDocks
 		KeysLifts::FLift Lift;
 		bool bUnder = false;          // lights under the water off the head
 		bool bPocket = false;         // the shore was too thin: a berth is dredged under the head, the lift and the boat
+		bool bCanal = false;          // on a canal's seawall: a platform along the wall, the boat lying along it too
 		bool bAlong = false;          // a boat afloat alongside
 		KeysYardProps::FBoat AlongBoat;
 		double AlongA = 0, AlongC = 0, AlongYaw = 0;

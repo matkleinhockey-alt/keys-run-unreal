@@ -131,3 +131,17 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   land 2.22 -> 1.83 km2); p1 and p2_bay are byte-identical. Docks 79 -> 126 (Tavernier 18, Upper Matecumbe 12,
   Plantation 11, Lower Matecumbe 6 are new or grew), houses 1847 -> 1928, audit clean, tpcheck 0 bad on both maps.
   Still open: 303 thin-shore houses with no wet ground in reach, 242 with mangrove in front (mostly real mangrove).
+- 2026-11-22: canals cut (Upper Keys). `Tools/geo/canals.py` (called by `bake.py` for p2, needs scikit-image in the
+  devkit pyenv): narrow water near residential streets is a canal; centre lines are followed longest first, every
+  second one of a tight comb is kept, widened to 24 m and 2 m deep, the dropped ones filled; from each mouth a 16 m
+  way is dredged along the water to charted 2.2 m. New `p2_canals.txt` (48 lines + 4 joins, 9.1 km; 45 ways out);
+  `p2.kgeo`, `p2_mangrove.bin` re-baked, p1 and p2_bay byte-identical. Game: `KeysGeoReal::Canals/CanalDist/
+  CanalBank/WayOutDist`, `KeysGeo::LandH` cuts the banks square with made ground at 0.85 m, `RealDepthAt` holds
+  2.1 m in a canal and 1.9 m in a way out, canals are sheltered water (no surf, foam or chop), grey marl bottom,
+  zone Creek (HUD "Residential canal"), terrain not drawn under the walls, houses and mangroves kept off them.
+  New `KeysCanals.*` (spawned in `KeysGameMode`): 24 km of seawall and a lawn strip in 600 m tiles, 151k tris,
+  `-KRNoCanals` leaves the walls out. `KeysDocks`: a canal dock is a platform on the wall with the boat along it
+  (`FDock::bCanal`). Docks 126 -> 160, houses 1928 -> 1910. Checks: audit clean, tpcheck 0 bad on both maps, five
+  scripted drives out of canal mouths with 1.9-2.6 m all the way, classic map builds none of it.
+  Not done: seagrass tufts still grow in canals; no collision with walls beyond the ground's own; Phase 1 canals
+  (Marathon, Key Colony) are not cut; one mouth has no deep water in reach; packaged perf not run.

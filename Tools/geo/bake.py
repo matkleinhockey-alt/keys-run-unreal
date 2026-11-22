@@ -49,7 +49,7 @@ PHASES = {
     # north edge -6920 (the chain climbs to z = -5300 by the east edge, and 1360 m steps keep Phase 1's scenery on
     # the same spots: see the status file); south edge 6200, the same as Phase 1.
     'p2': dict(rect=(7500, 23500, -6920, 6200), box=(-81.41, 24.60, -80.35, 25.12), src='p2', pad=60, clip=True,
-               join=[('p1', 'west')], cut_marks=True),
+               join=[('p1', 'west')], cut_marks=True, canals='osm_p2_built.json'),
     # the strip of Florida Bay north of Phase 1 that squares the map off
     'p2_bay': dict(rect=(-8300, 7500, -6920, -4200), box=(-81.41, 24.60, -80.35, 25.12), src='p2', pad=60, clip=True,
                    join=[('p1', 'south'), ('p2', 'east')], chain_from='p1'),
@@ -199,6 +199,46 @@ def main():
         dem_land = keep[lab]
     land = osm_land | dem_land
     land = ndimage.binary_opening(land, iterations=1) | osm_land
+
+    # ---- the residential canals, too narrow for the grid: every second one widened, the rest filled (canals.py)
+    canal_note = ''
+    canal_depth = None
+    if P.get('canals') and os.path.exists(f"{raw}/{P['canals']}"):
+        import canals
+        if '--canal-debug' in sys.argv:
+            canals.DEBUG = {}
+        canal_w, canal_fill, canal_depth, rpt = canals.cut(polys, f"{raw}/{P['canals']}", F.to_game, x0, z0, fnx, fnz, fc, fine)
+        land = (land | canal_fill) & ~canal_w
+        land &= ~(canal_depth > 0)
+        fine = np.where(canal_depth > 0, np.minimum(fine, -canal_depth), fine)
+        # what is left of the canals that were not kept: puddles of a few cells among the streets become land
+        wl, wc = ndimage.label(~land)
+        if wc:
+            ix = np.arange(1, wc + 1)
+            small = (ndimage.sum(np.ones_like(wl), wl, index=ix) * fc * fc < 900) & (ndimage.minimum(rpt['near'], wl, index=ix) > 0)
+            puddle = np.concatenate([[False], small])[wl]
+            land |= puddle
+            rpt['puddles'] = int(small.sum())
+        if canals.DEBUG:
+            D = canals.DEBUG
+            rgb = np.zeros(D['land'].shape + (3,), np.uint8)
+            rgb[...] = (150, 200, 225)
+            rgb[D['land']] = (222, 208, 160)
+            rgb[D['narrow']] = (120, 150, 235)
+            rgb[D['fill']] = (235, 150, 120)
+            rgb[D['skel']] = (255, 255, 255)
+            rgb[D['canal']] = (200, 0, 0)
+            np.save(sys.argv[sys.argv.index('--canal-debug') + 1], rgb)
+        # for the game: "width n x z x z ..." a line (KeysGeoReal reads it; KeysGeo cuts the banks square, KeysCanals walls them)
+        with open(f'{out}/{phase}_canals.txt', 'w') as cf:
+            cf.write('# canal centre lines, game metres: width, then x z pairs (Tools/geo/canals.py)\n')
+            for pts in rpt['out_lines']:
+                cf.write('%g %s\n' % (canals.WIDTH, ' '.join('%.1f %.1f' % q for q in pts)))
+            cf.write('# the ways out to deep water: w, width, then x z pairs\n')
+            for pts in rpt['ways']:
+                cf.write('w %g %s\n' % (canals.DREDGE_W, ' '.join('%.1f %.1f' % q for q in pts)))
+        canal_note = ('canals: %(lines)d centre lines kept, %(metres).0f m; dropped %(short)d short and %(crowded)d crowded; %(cut_cells)d fine cells of land cut, '
+                      '%(fill_cells)d filled; %(dredged)d mouths dredged to deep water, %(no_way_out)d with none in reach; %(bridged)d breaks joined, %(puddles)d puddles filled' % rpt)
 
     # ---- marked channels the grid has pinched shut: where the line between two consecutive daybeacons of a channel
     # (the legs the game dredges, KeysGeo BuildNavSegs) only just clips land - under CUT_MAX metres of it - the land is
@@ -518,6 +558,8 @@ def main():
         print('  islands cut by the phase edge: ' + ('; '.join(f'{i["name"] or "?"} at {i["x"]:.0f}, {i["z"]:.0f}' for i in islands if i['bounds'][0] < x0 or i['bounds'][2] > x1 or i['bounds'][1] < z0 or i['bounds'][3] > z1) or 'none'))
     if cut_note:
         print('  ' + cut_note)
+    if canal_note:
+        print('  ' + canal_note)
     for note in join_notes:
         print('  join: ' + note)
 

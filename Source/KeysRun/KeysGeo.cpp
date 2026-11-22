@@ -716,6 +716,9 @@ namespace KeysGeo
 		return Best;
 	}
 
+	double CanalDist(double X, double Z) { return GReal ? KeysGeoReal::CanalDist(X, Z) : 1e9; }
+	double ShelterDist(double X, double Z) { return FMath::Min(CreekDist(X, Z), CanalDist(X, Z)); }
+
 	// ground height: beaches slope into the water, creeks carve through, golf courses and the runway are graded flat
 	// the town is built on fill (web depth.ts TOWN_FILL, in the frame of MARINAS[0]): the ground under the pad is raised to
 	// at least 1.6 m and kept under the pad's 2.35 m top so it never pokes through the streets
@@ -786,6 +789,25 @@ namespace KeysGeo
 		if (bRealRun) H = FMath::Min(H, 1.85);
 		const double CD = CreekDist(X, Z);
 		if (CD < 10) H = FMath::Min(H, Lerp(-1.6, H, SS(-2, 10, CD)));
+		if (GReal)
+		{
+			// a residential canal: cut square, with made ground behind its seawall (KeysCanals.cpp builds the wall on the
+			// edge and the lawn over this ramp). Past the free end of a line (the mouth) the water is left as it is.
+			double CN;
+			const bool bBank = KeysGeoReal::CanalBank(X, Z, CN);
+			if (CN < 26)
+			{
+				if (CN < -1) H = FMath::Min(H, -CanalDepth);
+				else if (bBank)
+				{
+					if (CN < 4) H = Lerp(-CanalDepth, FMath::Max(H, CanalBank), SS(-1, 4, CN));
+					else if (H > .05) H = FMath::Max(H, Lerp(CanalBank, H, SS(16, 26, CN)));
+				}
+				else if (CN < 0) H = FMath::Min(H, -CanalDepth);
+			}
+			// the way dredged from a canal's mouth out to deep water
+			if (const double WD = KeysGeoReal::WayOutDist(X, Z); WD < 6) H = FMath::Min(H, Lerp(-1.9, H, SS(-2, 6, WD)));
+		}
 		const double MC = GReal ? -1e9 : MarinaCutDepth(X, Z);   // on the real map the basins are already water
 		if (MC > -CutFeather) H = FMath::Min(H, Lerp(H, -1.6, Clamp((MC + CutFeather) / CutFeather, 0, 1)));
 		if (bFill) H = FMath::Max(H, 1.6);
@@ -901,6 +923,9 @@ namespace KeysGeo
 		if (SD < 25) { const double T = FMath::Max(0.0, SD) / 25; D = FMath::Min(D, .35 + T * (2 - T) * (D - .35)); }
 		// the mangrove creeks are kept open from bank to bank: seven feet of dark water, shoaling under the roots
 		if (GCreeks.Num()) { const double CD = CreekDist(X, Z); if (CD < 8) D = FMath::Max(D, Lerp(.35, 2.3, SS(8, 1, CD))); }
+		// the canals are dredged from wall to wall
+		{ const double CN = KeysGeoReal::CanalDist(X, Z); if (CN < 0) D = FMath::Max(D, Lerp(1.7, CanalDepth, SS(0, -3, CN))); }
+		{ const double WD = KeysGeoReal::WayOutDist(X, Z); if (WD < 6) D = FMath::Max(D, Lerp(1.9, D, SS(-2, 6, WD))); }
 		const double DZ = Z - ChainZ(X);
 		for (const FHump& H : GHumps)
 			if (!H.bPatch) D = FMath::Min(D, 40 + FMath::Sqrt(FMath::Square(X - H.X) + FMath::Square(DZ - H.DZ)) * .32);
@@ -1000,7 +1025,7 @@ namespace KeysGeo
 	FString ZoneAt(double X, double Z)
 	{
 		const double D = DepthAt(X, Z), DZ = DZAt(X, Z);
-		if (CreekDist(X, Z) < 0) return TEXT("Creek");
+		if (CreekDist(X, Z) < 0 || CanalDist(X, Z) < 0) return TEXT("Creek");   // (a canal fishes like a creek: snook under the docks)
 		if (GReal && D < 3.2 && MangroveNear(X, Z) > .6) return TEXT("Creek");   // under and along the mangroves
 		if (NearBridge(X, Z) && D >= 2 && ShoreInfo(X, Z).D > 6) return TEXT("Bridge");
 		if (D < (GReal ? 1.5 : 2.6)) return TEXT("Flats");   // the real bay is 2-3 m all over; its flats are the banks
@@ -1030,7 +1055,7 @@ namespace KeysGeo
 		double LX, LZ;
 		IslandLocal(*S.Isl, X, Z, LX, LZ);
 		if (GReal && OnRealRunway(X, Z, 0)) return 2;
-		if (OnMangrove(X, Z) && !InFill(X, Z)) return 4;
+		if (OnMangrove(X, Z) && !InFill(X, Z) && CanalDist(X, Z) > 14) return 4;
 		if (!GReal && S.Isl == GVaca && LX > RunLX0 - 30 && LX < RunLX1 + 30 && FMath::Abs(LZ - RunLZ) < RunW) return 2;
 		return OnCourse(S.Isl, LX, LZ) ? 1 : 0;
 	}
@@ -1228,7 +1253,7 @@ namespace KeysGeo
 	double AmpAt(double X, double Z)
 	{
 		const double A = AmpFor(DepthFast(X, Z)) * (1 + .9 * GridAt(InletG, X, Z));
-		return GReal && GCreeks.Num() ? A * Lerp(.1, 1.0, SS(0, 14, CreekDist(X, Z))) : A;
+		return GReal ? A * Lerp(.1, 1.0, SS(0, 14, ShelterDist(X, Z))) : A;
 	}
 
 	// The swell scales with Amp (depth and inlets); the wind sea much less, so a blow still chops up the flats.
@@ -1243,7 +1268,7 @@ namespace KeysGeo
 		const double Slope = FMath::Sqrt(GX * GX + GZ * GZ);
 		// a beach face or a reef edge, not the endless flat flats (and nothing out past 5 m)
 		// (and no surf on the banks of a mangrove creek: nothing breaks in there)
-		const double Gate = SS(.006, .03, Slope) * (1 - SS(3.5, 5.0, D)) * (GReal && GCreeks.Num() ? SS(0, 14, CreekDist(X, Z)) : 1.0);
+		const double Gate = SS(.006, .03, Slope) * (1 - SS(3.5, 5.0, D)) * (GReal ? SS(0, 14, ShelterDist(X, Z)) : 1.0);
 		if (Gate <= 0) return FVector2D::ZeroVector;
 		// the swell that reaches the shore (the reef and the keys take most of it), shoaling up (Green's law) until it breaks
 		const double H0 = .14 + .22 * SW;

@@ -17,6 +17,7 @@
 #include "KeysYards.h"
 #include "KeysYardProps.h"
 #include "KeysMangroveLife.h"
+#include "KeysGeoReal.h"
 #include "KeysBoatPawn.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/PointLightComponent.h"
@@ -202,7 +203,14 @@ namespace
 		{
 			double X0, X1, Y0, Y1;
 			KeysLifts::Extent(L, X0, X1, Y0, Y1);
-			if (L.Kind == KeysLifts::LiftDavits)
+			if (D.bCanal && L.Kind != KeysLifts::LiftDavits)
+			{
+				// on a canal the boat lies along the seawall beside the platform; an elevator's rails stand at the wall
+				L.Yaw = -PI / 2;
+				L.X = L.Kind == KeysLifts::LiftElevator ? KeysLifts::EdgeOff(L.Boat) + .15 : .5 - Y0;
+				L.Y = D.Side > 0 ? Hd.C1 + .5 + X1 : Hd.C0 - .5 + X0;
+			}
+			else if (L.Kind == KeysLifts::LiftDavits)
 			{
 				// on the head's outer edge, the skiff lying along it
 				L.Yaw = -PI / 2;
@@ -272,7 +280,21 @@ namespace
 		if (N.IsZero() || FVector2D::DotProduct(ToShore, N) < .55) return WhyAskew;
 		P -= N * 4;
 		for (int32 k = 0; k < 40 && LandH(P.X, P.Y) > 0; k++) P += N * .25;
+		// a canal: the dock starts at the seawall and stands square to it
+		const bool bCanal = CanalDist(P.X, P.Y) < 5;
+		if (bCanal)
+		{
+			const FVector2D G(CanalDist(P.X - 1, P.Y) - CanalDist(P.X + 1, P.Y), CanalDist(P.X, P.Y - 1) - CanalDist(P.X, P.Y + 1));
+			if (G.IsNearlyZero()) return WhyNoShore;
+			N = G.GetSafeNormal();
+			if (FVector2D::DotProduct(ToShore, N) < .55) return WhyAskew;
+			P -= N * 6;
+			for (int32 k = 0; k < 80 && CanalDist(P.X, P.Y) > 0; k++) P += N * .25;
+			double CN;
+			if (CanalDist(P.X, P.Y) > .3 || !KeysGeoReal::CanalBank(P.X, P.Y, CN)) return WhyNoShore;
+		}
 		D = FDock();
+		D.bCanal = bCanal;
 		D.X0 = P.X; D.Z0 = P.Y; D.NX = N.X; D.NZ = N.Y; D.HX = Hs.X; D.HZ = Hs.Z;
 		D.Island = Hs.Island;
 		D.Seed = int32(Hash(Hs.X * .11, Hs.Z * .13) * 1e6);
@@ -311,6 +333,15 @@ namespace
 		D.Back = BackMax;
 		for (double B = 1; B <= BackMax; B += .5) if (LandH(P.X - N.X * B, P.Y - N.Y * B) >= D.DeckZ - .12) { D.Back = B; break; }
 		D.BackZ = LandH(P.X - N.X * D.Back, P.Y - N.Y * D.Back);
+		if (bCanal)
+		{
+			// a platform on the wall: low, a step up from the lawn, as long as the owner liked
+			D.Shape = KeysDocks::ShapePlatform;
+			D.HeadW = 4.6 + 3.4 * Rnd(11); D.HeadD = 1.7 + .7 * Rnd(12);
+			D.DeckZ = 1.12 + .08 * Rnd(3);
+			D.Back = 1.4; D.BackZ = KeysGeo::CanalBank + .07;
+			if (L.Kind == KeysLifts::LiftCradle && Nth % 3) L.Kind = KeysLifts::LiftElevator;   // most canal lifts hang off the wall
+		}
 		// the lift and what is on it
 		L.Boat = KeysLifts::PickBoat(D.Seed, L.Kind == KeysLifts::LiftElevator ? 7.8 : 9.2, L.Kind == KeysLifts::LiftDavits ? int32(BoatSkiff) : -1);
 		L.Yaw = Rnd(8) < .7 ? PI : 0;
@@ -319,6 +350,7 @@ namespace
 		L.bSleeves = Fin[D.Finish].bSleeve;
 		L.Seed = D.Seed;
 		D.bAlong = L.Kind != KeysLifts::LiftDavits && Rnd(9) < (L.Kind == KeysLifts::LiftNone ? .75 : .2);
+		if (bCanal && L.Kind != KeysLifts::LiftNone) D.bAlong = false;   // (no room in a canal for both)
 		D.AlongBoat = KeysLifts::PickBoat(D.Seed + 7777, 8.6);
 		D.AlongYaw = Rnd(10) < .5 ? PI / 2 : -PI / 2;
 		const double Extra = FMath::FloorToDouble(Rnd(13) * 3);
@@ -342,14 +374,15 @@ namespace
 		{
 			// the shortest walkway that puts everything in a metre of water, and a little more if the owner felt like it
 			bool bFound = false;
-			if (!bDredge) for (D.Len = MinLen; D.Len <= MaxLen && !bFound; D.Len += bFound ? 0 : 1) { Layout(D); bFound = DeepEnough(D); if (bFound) break; }
+			if (bCanal) { D.Len = .6; Layout(D); bFound = DeepEnough(D) && D.Box.A1 < 9; }
+			else if (!bDredge) for (D.Len = MinLen; D.Len <= MaxLen && !bFound; D.Len += bFound ? 0 : 1) { Layout(D); bFound = DeepEnough(D); if (bFound) break; }
 			// on a shore with no metre of water within reach, most owners had a berth dug at the end of a short dock
 			// (KeysDocks::Pocket, which KeysGeo reads): the head, the lift and the boat alongside only need to be over water
 			else if (Rnd(15) < PocketShare)
 				for (D.Len = 9 + FMath::FloorToDouble(Rnd(14) * 10); D.Len <= 46 && !bFound; D.Len += bFound ? 0 : 1) { Layout(D); bFound = Afloat(D); if (bFound) break; }
 			if (!bFound) { Why = WhyShallow; continue; }
-			D.bPocket = bDredge;
-			if (Extra > 0 && D.Len + Extra <= MaxLen)
+			D.bPocket = bDredge && !bCanal;
+			if (!bCanal && Extra > 0 && D.Len + Extra <= MaxLen)
 			{
 				D.Len += Extra;
 				Layout(D);
@@ -359,7 +392,7 @@ namespace
 			// nothing dry under the walkway once it has left the shore, and room to get past beyond the head
 			for (double A = 3; A <= D.Len && Why == WhyOk; A += 1) { const FVector2D Q = D.At(A, 0); if (LandH(Q.X, Q.Y) > .1) Why = WhyLand; }
 			// (and never more than five eighths of the way across a basin or a cut)
-			for (double G = 2; G <= FMath::Max(16.0, D.Box.A1 * .6) && Why == WhyOk; G += 2)
+			for (double G = 2; G <= (bCanal ? 10.0 : FMath::Max(16.0, D.Box.A1 * .6)) && Why == WhyOk; G += 2)
 				for (int32 k = -1; k <= 1 && Why == WhyOk; k++)
 				{
 					// (mangroves wading out in front of the head shut it in as surely as a bank does)

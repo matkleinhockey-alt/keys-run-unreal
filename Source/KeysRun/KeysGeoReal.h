@@ -35,6 +35,22 @@ namespace KeysGeoReal
 	};
 	const TArray<FPlatLot>& Plat();
 
+	// the residential canals (Tools/geo/canals.py, <phase>_canals.txt): centre lines the bake widened to Width
+	struct FCanal
+	{
+		double Width = 24;
+		TArray<FVector2D> Pts;
+	};
+	const TArray<FCanal>& Canals();
+	// metres outside the nearest canal's edge (negative in the canal), 1e9 when none is within 28 m of it. bCap: the
+	// nearest point is past the free end of a line (a canal's mouth, or its dead end)
+	double CanalDist(double X, double Z, bool* bCap = nullptr);
+	// the same distance, and whether the canal has a bank here: always along its sides and round a dead end, not across
+	// a mouth (past a free end with water beyond)
+	bool CanalBank(double X, double Z, double& OutDist);
+	// metres outside the edge of the nearest way dredged from a canal's mouth to deep water (negative in it), 1e9 if none near
+	double WayOutDist(double X, double Z);
+
 	// mangrove cover on the height grid's cells (Tools/geo/bake_mangrove.py): 0 none, 1..127 the fringe wading in the
 	// shallows, 200..255 mangrove on (low) ground
 	uint8 MangroveCell(int32 I, int32 J);

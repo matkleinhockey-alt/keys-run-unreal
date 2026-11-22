@@ -234,9 +234,10 @@ void AKeysWorld::BuildTerrain()
 	const int32 NCX = FMath::CeilToInt(WorldSizeX / Cell / CH), NCZ = FMath::CeilToInt(WorldSizeZ / Cell / CH);
 	const int32 GN = NCX * CH + 1, GNZ = NCZ * CH + 1;   // GN across (the row length), GNZ rows
 	TArray<float> HG;
-	TArray<uint8> Kind;
+	TArray<uint8> Kind, Canal;
 	HG.SetNumUninitialized(GN * GNZ);
 	Kind.SetNumZeroed(GN * GNZ);
+	Canal.SetNumZeroed(GN * GNZ);   // in a canal or on its wall: KeysCanals draws the wall and the lawn there, the sea floor the bottom
 	ParallelFor(GNZ, [&](int32 j)
 	{
 		for (int32 i = 0; i < GN; i++)
@@ -244,6 +245,7 @@ void AKeysWorld::BuildTerrain()
 			const double X = WorldX0 + i * Cell, Z = WorldZ0 + j * Cell, H = LandH(X, Z);
 			HG[j * GN + i] = float(H);
 			if (H > -1) Kind[j * GN + i] = uint8(SurfaceKind(X, Z));
+			if (RealMap()) { double CN; if (KeysGeoReal::CanalBank(X, Z, CN) && CN < 3) Canal[j * GN + i] = 1; }
 		}
 	});
 
@@ -310,6 +312,7 @@ void AKeysWorld::BuildTerrain()
 					const float H2 = HG[(CY * CH + b + 1) * GN + CX * CH + a], H3 = HG[(CY * CH + b + 1) * GN + CX * CH + a + 1];
 					// under the water the sea floor (KeysSeafloor) takes over, so only the beach is drawn here
 					if (FMath::Max(FMath::Max(H0, H1), FMath::Max(H2, H3)) < -.3f) continue;
+					{ const uint8* Cn = Canal.GetData() + (CY * CH + b) * GN + CX * CH + a; if (Cn[0] | Cn[1] | Cn[GN] | Cn[GN + 1]) continue; }
 					T.Append({K, K + S, K + 1, K + 1, K + S, K + S + 1});
 				}
 			// the ground shader (sand ripples and grain; grass where it's green)
@@ -393,7 +396,7 @@ void AKeysWorld::BuildScenery()
 			const double H = LandH(JX, JZ);
 			if (H < 1.15) continue;
 			const FShore S = ShoreInfo(JX, JZ);
-			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || KeysTown::InFootprint(JX, JZ, 14) || FMath::Abs(JZ - ChainZ(JX)) < 16) continue;
+			if (S.Isl->bNoHouses || S.Isl->bSmall || InCity(JX, JZ) || SurfaceKind(JX, JZ) != 0 || CreekDist(JX, JZ) < 15 || CanalDist(JX, JZ) < 9 || KeysTown::InFootprint(JX, JZ, 14) || FMath::Abs(JZ - ChainZ(JX)) < 16) continue;
 			bool bNearMarina = false;
 			for (const FMarina& Mr : Marinas()) bNearMarina |= FMath::Abs(JX - Mr.SX) < 30 && FMath::Abs(JZ - Mr.SZ) < 30;
 			if (bNearMarina || KeysTown::NearEstate(JX, JZ, 54) || KeysYards::InFootprint(JX, JZ, 12)) continue;   // web waterfront.ts sites clear the conch houses
@@ -754,7 +757,8 @@ void AKeysWorld::UpdateWater()
 				? FMath::Max(KeysOcean::Foam(X, Z) * (.3 + .7 * Caps) * (1 - SStep(8, 40, MinLen)), SStep(.75, 1.3, Crest) * .12 * Caps)
 				: SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
 			// (a creek through the mangroves is in the lee of everything: no whitecaps, no wash on its banks)
-			const double Lee = RealMap() ? SStep(0, 14, CreekDist(X, Z)) : 1.0;
+			const double LeeCreek = RealMap() ? SStep(0, 14, CreekDist(X, Z)) : 1.0, LeeCanal = RealMap() ? SStep(-1, 10, CanalDist(X, Z)) : 1.0;
+			const double Lee = FMath::Min(LeeCreek, LeeCanal);
 			F *= Lee;
 			// white lines along the arms of a fresh wake, where the crests are tallest
 			F = FMath::Max(F, SStep(.025, .16, Wk) * .92);
@@ -768,7 +772,7 @@ void AKeysWorld::UpdateWater()
 			WUV[K] = FVector2D(FMath::Clamp(Crest * .8 + Wk * .8, 0.0, 1.0), FMath::Clamp(Tr.Y, 0.0, 1.0));
 			// UV1: x = rain on the water here, y = whitecap cover (wind-streaked foam); UV2: x = how deep (0 flats .. 1 blue water)
 			WUV1[K] = FVector2D(KeysWx::RainAt(X, Z), Caps * Lee);
-			WUV2[K] = FVector2D(SStep(4, 60, D), 1 - Lee);   // y: a sheltered, tea-stained mangrove creek
+			WUV2[K] = FVector2D(SStep(4, 60, D), 1 - LeeCreek);   // y: a sheltered, tea-stained mangrove creek
 			FLinearColor C = DepthColorFast(X, Z);
 			C.A = float(FMath::Clamp(F, 0.0, 1.0));
 			WC[K] = C;

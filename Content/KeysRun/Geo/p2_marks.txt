@@ -274,6 +274,7 @@
 14176.2 -1630.5 r 8 0 Wheel Ditch Channel Buoy 8A
 14054.3 -1589.4 g 9 0 Wheel Ditch Channel Buoy 9A
 14039.3 -1596.7 r 10 0 Wheel Ditch Channel Buoy 10A
+14498.4 -1670.1 g 5 0 Wheel Ditch Channel Buoy 5A
 15792.8 -1817.7 g 15 0 Yellow Shark Channel Buoy 15
 15071.6 -1661.1 r 6 0 Plant Channel Buoy 6
 14959.3 -1654.0 g 7 0 Plant Channel Buoy 7

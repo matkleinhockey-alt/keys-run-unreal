@@ -236,6 +236,8 @@ namespace KeysSea
 		else if (Rel < -.25) C = L3(C, Sand, SSmooth(.25, .9, -Rel) * .6);
 		// under and beside the mangroves the bottom is dark peat and leaf litter, and the water over it is stained like tea
 		if (const double Tan = KeysGeo::MangroveNear(X, Z); Tan > 0) C = L3(C, FLinearColor(.15f, .10f, .045f), Tan * .85 * SClamp((6 - D) / 4, 0, 1));
+		// a dredged canal has a bare bottom of grey marl
+		if (const double CN = KeysGeo::CanalDist(X, Z); CN < 3) C = L3(C, FLinearColor(.2f, .22f, .17f), .88 * SClamp((3 - CN) / 3, 0, 1));
 		C = L3(C, Deep, SClamp((D - 13) / 22, 0, 1));
 		const double J = (bGrain ? .94 + Hash2(X * .7, Z * .3) * .12 : 1.0) * Shade;
 		return FLinearColor(float(C.R * J), float(C.G * J), float(C.B * J), 1.f);

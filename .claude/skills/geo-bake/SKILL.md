@@ -17,6 +17,9 @@ Python: `"/Users/mat/Documents/Unreal Projects/KeysRun-devkit/pyenv/bin/python"`
 | Estate lots | `Tools/geo/plat.py <phase> <geo dir> [--preview png]` | `<phase>_plat.txt` |
 | Mangroves | `Tools/geo/bake_mangrove.py <phase> <osm json> <geo dir> [--built <osm streets json>] [--preview png]` (p2 is baked with `--built osm_p2_built.json`; p1 without) | `<phase>_mangrove.bin` |
 
+`Tools/geo/bake.py p2` also cuts the residential canals (`Tools/geo/canals.py`, needs `osm_p2_built.json` and
+scikit-image) and writes `p2_canals.txt`; run `bake_marks.py` and `bake_mangrove.py` again after it.
+
 `<phase>.kgeo` (the 10 m height and shore grid with island rings) must exist before the other three run; `kgeo.py`
 reads it.
 

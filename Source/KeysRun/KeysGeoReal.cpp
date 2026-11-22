@@ -27,6 +27,30 @@ namespace KeysGeoReal
 	static TArray<float> GChain;
 	static TArray<FIsl> GIslands;
 	static TArray<FNavMark> GMarks;
+	static TArray<FCanal> GCanals, GWays;
+	struct FCanalSeg { double AX, AZ, BX, BZ, HalfW; bool bFirst, bLast; };
+	static TArray<FCanalSeg> GCanalSegs;
+	static TMap<int64, TArray<int32>> GCanalHash;     // 64 m cells -> the segments within reach
+	static TArray<FCanalSeg> GWaySegs;
+	static TMap<int64, TArray<int32>> GWayHash;
+	static const double CanalReach = 28;
+	static int64 CanalKey(double X, double Z) { return (int64(FMath::FloorToInt(X / 64.0)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 64.0))); }
+	static void HashLines(const TArray<FCanal>& Lines, TArray<FCanalSeg>& Segs, TMap<int64, TArray<int32>>& Hash)
+	{
+		Segs.Reset();
+		Hash.Reset();
+		for (const FCanal& C : Lines)
+			for (int32 i = 0; i + 1 < C.Pts.Num(); i++)
+			{
+				const FCanalSeg S{C.Pts[i].X, C.Pts[i].Y, C.Pts[i + 1].X, C.Pts[i + 1].Y, C.Width / 2, i == 0, i + 2 == C.Pts.Num()};
+				const int32 K = Segs.Add(S);
+				const double Pad = S.HalfW + CanalReach;
+				for (int32 CX = FMath::FloorToInt((FMath::Min(S.AX, S.BX) - Pad) / 64.0); CX <= FMath::FloorToInt((FMath::Max(S.AX, S.BX) + Pad) / 64.0); CX++)
+					for (int32 CZ = FMath::FloorToInt((FMath::Min(S.AZ, S.BZ) - Pad) / 64.0); CZ <= FMath::FloorToInt((FMath::Max(S.AZ, S.BZ) + Pad) / 64.0); CZ++)
+						Hash.FindOrAdd(CanalKey(CX * 64.0 + 1, CZ * 64.0 + 1)).Add(K);
+			}
+	}
+	static void HashCanals() { HashLines(GCanals, GCanalSegs, GCanalHash); HashLines(GWays, GWaySegs, GWayHash); }
 	static TArray<FPlatLot> GPlat;
 	static int64 GBytes = 0;
 
@@ -192,6 +216,22 @@ namespace KeysGeoReal
 			for (int32 k = 0; k + 1 < Q.Num(); k += 2) Lot.Poly.Add(FVector2D(FCString::Atod(*Q[k]), FCString::Atod(*Q[k + 1])));
 			if (Lot.Poly.Num() >= 3) GPlat.Add(MoveTemp(Lot));
 		}
+		// the canals: "width x z x z ..." a line
+		Lines.Reset();
+		FFileHelper::LoadFileToStringArray(Lines, *(Dir / (FString(Phase) + TEXT("_canals.txt"))));
+		for (const FString& L : Lines)
+		{
+			if (L.StartsWith(TEXT("#"))) continue;
+			TArray<FString> P;
+			L.ParseIntoArray(P, TEXT(" "));
+			const int32 W0 = P.Num() && P[0] == TEXT("w") ? 1 : 0;     // a way out, not a canal
+			if (P.Num() < 5 + W0) continue;
+			FCanal C;
+			C.Width = FCString::Atod(*P[W0]);
+			for (int32 k = W0 + 1; k + 1 < P.Num(); k += 2) C.Pts.Add(FVector2D(FCString::Atod(*P[k]), FCString::Atod(*P[k + 1])));
+			(W0 ? GWays : GCanals).Add(MoveTemp(C));
+		}
+		HashCanals();
 		// mangrove cover: 'KMGV', nx, nz, bytes
 		TArray<uint8> MB;
 		if (FFileHelper::LoadFileToArray(MB, *(Dir / (FString(Phase) + TEXT("_mangrove.bin"))), FILEREAD_Silent) && MB.Num() == 12 + N)
@@ -202,6 +242,69 @@ namespace KeysGeoReal
 		GGrids.Add(MoveTemp(G));
 		Rebuild();
 		return true;
+	}
+
+	const TArray<FCanal>& Canals() { return GCanals; }
+
+	static double CanalNear(double X, double Z, bool& bCap, double& EX, double& EZ, double& HalfW)
+	{
+		bCap = false;
+		if (!GCanalSegs.Num()) return 1e9;
+		const TArray<int32>* Cell = GCanalHash.Find(CanalKey(X, Z));
+		if (!Cell) return 1e9;
+		double Best = 1e9;
+		for (int32 K : *Cell)
+		{
+			const FCanalSeg& S = GCanalSegs[K];
+			const double VX = S.BX - S.AX, VZ = S.BZ - S.AZ, L2 = VX * VX + VZ * VZ;
+			const double T = L2 > 1e-9 ? ((X - S.AX) * VX + (Z - S.AZ) * VZ) / L2 : 0, TC = FMath::Clamp(T, 0.0, 1.0);
+			const double PX = S.AX + VX * TC, PZ = S.AZ + VZ * TC;
+			const double D = FMath::Sqrt(FMath::Square(X - PX) + FMath::Square(Z - PZ)) - S.HalfW;
+			if (D < Best)
+			{
+				Best = D;
+				bCap = (T < 0 && S.bFirst) || (T > 1 && S.bLast);
+				EX = PX; EZ = PZ; HalfW = S.HalfW;
+			}
+		}
+		return Best;
+	}
+
+	double CanalDist(double X, double Z, bool* bCap)
+	{
+		bool b;
+		double EX, EZ, HW;
+		const double D = CanalNear(X, Z, b, EX, EZ, HW);
+		if (bCap) *bCap = b;
+		return D;
+	}
+
+	double WayOutDist(double X, double Z)
+	{
+		const TArray<int32>* Cell = GWaySegs.Num() ? GWayHash.Find(CanalKey(X, Z)) : nullptr;
+		if (!Cell) return 1e9;
+		double Best = 1e9;
+		for (int32 K : *Cell)
+		{
+			const FCanalSeg& S = GWaySegs[K];
+			const double VX = S.BX - S.AX, VZ = S.BZ - S.AZ, L2 = VX * VX + VZ * VZ;
+			const double T = L2 > 1e-9 ? FMath::Clamp(((X - S.AX) * VX + (Z - S.AZ) * VZ) / L2, 0.0, 1.0) : 0;
+			Best = FMath::Min(Best, FMath::Sqrt(FMath::Square(X - S.AX - VX * T) + FMath::Square(Z - S.AZ - VZ * T)) - S.HalfW);
+		}
+		return Best;
+	}
+
+	bool CanalBank(double X, double Z, double& OutDist)
+	{
+		bool b;
+		double EX = 0, EZ = 0, HW = 12;
+		OutDist = CanalNear(X, Z, b, EX, EZ, HW);
+		if (OutDist > 1e8) return false;
+		if (!b) return true;
+		// past the end of a line: a dead end if the grid has land a little way on, a mouth if it has water
+		const double DX = X - EX, DZ = Z - EZ, L = FMath::Sqrt(DX * DX + DZ * DZ);
+		if (L < .01) return false;
+		return Shore(EX + DX / L * (HW + 10), EZ + DZ / L * (HW + 10)) < 0;
 	}
 
 	bool Load(const TCHAR* Phase)

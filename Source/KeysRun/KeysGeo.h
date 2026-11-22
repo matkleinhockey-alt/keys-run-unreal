@@ -108,6 +108,11 @@ namespace KeysGeo
 	// how far inside the dredged cut of a marina basin (web depth.ts marinaCutDepth): > 0 inside
 	double MarinaCutDepth(double X, double Z);
 	double CreekDist(double X, double Z);
+	// real map: metres outside the nearest residential canal's edge (negative in it), 1e9 when none is near
+	double CanalDist(double X, double Z);
+	// the nearer of a creek's bank and a canal's wall: water inside is out of the wind and the swell
+	double ShelterDist(double X, double Z);
+	constexpr double CanalBank = .85, CanalDepth = 2.1;   // the made ground behind a canal's seawall; the water in it
 	bool OnCourse(const FIsland* I, double LX, double LZ);
 	double LandH(double X, double Z);
 	double DepthAt(double X, double Z);
