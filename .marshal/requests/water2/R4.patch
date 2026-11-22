@@ -1,0 +1,146 @@
+diff --git a/Source/KeysRun/KeysGeo.cpp b/Source/KeysRun/KeysGeo.cpp
+index 4a56045..a82d811 100644
+--- a/Source/KeysRun/KeysGeo.cpp
++++ b/Source/KeysRun/KeysGeo.cpp
+@@ -33,6 +33,7 @@ namespace KeysGeo
+ 
+ 	static void BuildNavSegs();
+ 	static void BuildMangNear();
++	static void BuildCreekWater();
+ 	static FLinearColor DepthRGBSrgb(double D);
+ 	bool RealMap() { return GReal; }
+ 	static double GTideForce = 9;
+@@ -583,6 +584,7 @@ namespace KeysGeo
+ 		}
+ 		if (GReal) BuildNavSegs();
+ 		if (GReal) BuildMangNear();
++		if (GReal) BuildCreekWater();
+ 
+ 		GSea = {{TEXT("Calm"), .8, .5, TEXT("glassy, a long, lazy ground swell."), 1.5},
+ 				{TEXT("Choppy"), 1.3, 1.2, TEXT("a steady trade wind, swells with afternoon chop on top."), 7},
+@@ -725,7 +727,8 @@ namespace KeysGeo
+ 	}
+ 
+ 	double CanalDist(double X, double Z) { return GReal ? KeysGeoReal::CanalDist(X, Z) : 1e9; }
+-	double ShelterDist(double X, double Z) { return FMath::Min(CreekDist(X, Z), CanalDist(X, Z)); }
++	// (water the map itself shows to be a creek counts as one: 14 m is where the shelter of a named creek's bank ends)
++	double ShelterDist(double X, double Z) { return FMath::Min3(CreekDist(X, Z), CanalDist(X, Z), 14 * (1 - CreekWater(X, Z))); }
+ 
+ 	// ground height: beaches slope into the water, creeks carve through, golf courses and the runway are graded flat
+ 	// the town is built on fill (web depth.ts TOWN_FILL, in the frame of MARINAS[0]): the ground under the pad is raised to
+@@ -913,6 +916,88 @@ namespace KeysGeo
+ 	}
+ 	bool InMarkedChannel(double X, double Z) { return GReal && GNavSegs.Num() && NavChannelK(X, Z) > .3; }
+ 
++	// Creeks by rule. The named creeks (KeysMangroveLife) are the Middle Keys' only; everywhere else a creek is whatever
++	// narrow water the map has between two mangrove banks: a water cell with mangrove ground within reach on both sides of
++	// it, along the grid or its diagonals, no more than 80 m apart. Per cell of the real map's grid, 255 in such water,
++	// feathered three cells into the open; a residential canal is never one (its water stays clear). Built once.
++	static TArray<uint8> GCreekW;
++	// The water mesh asks about every vertex every frame, and nearly all of the sea is nowhere near a creek: a coarse
++	// grid (16 x 16 cells to one) says so at once, without touching the big one.
++	static TArray<uint8> GCreekAny;
++	static int32 GCreekNX = 0, GCreekNZ = 0, GCreekAnyNX = 0;
++	static double GCreekX0 = 0, GCreekZ0 = 0, GCreekInv = 0;
++	static void BuildCreekWater()
++	{
++		const int32 NX = KeysGeoReal::NX(), NZ = KeysGeoReal::NZ();
++		GCreekW.Reset();
++		GCreekW.SetNumZeroed(NX * NZ);
++		if (!GMangNear.Num()) return;
++		const double C = KeysGeoReal::Cell(), GX0 = KeysGeoReal::X0(), GZ0 = KeysGeoReal::Z0();
++		constexpr int32 Reach = 6, MaxGap = 8;   // cells: how far a bank may be on one side, and from bank to bank
++		ParallelFor(NZ, [&](int32 J)
++		{
++			if (J < Reach || J >= NZ - Reach) return;
++			for (int32 I = Reach; I < NX - Reach; I++)
++			{
++				// (255 - 5 x 34: mangrove within five cells, or there is nothing to find)
++				if (GMangNear[J * NX + I] < 85 || KeysGeoReal::MangroveCell(I, J) >= 200) continue;
++				static const int32 AX[4] = {1, 0, 1, 1}, AZ[4] = {0, 1, 1, -1};
++				bool bCreek = false;
++				for (int32 a = 0; a < 4 && !bCreek; a++)
++				{
++					int32 Fwd = 0, Back = 0;
++					for (int32 k = 1; k <= Reach && !Fwd; k++) if (KeysGeoReal::MangroveCell(I + AX[a] * k, J + AZ[a] * k) >= 200) Fwd = k;
++					if (!Fwd) continue;
++					for (int32 k = 1; k <= Reach && !Back; k++) if (KeysGeoReal::MangroveCell(I - AX[a] * k, J - AZ[a] * k) >= 200) Back = k;
++					bCreek = Back && Fwd + Back - 1 <= MaxGap;
++				}
++				if (!bCreek) continue;
++				const double X = GX0 + I * C, Z = GZ0 + J * C;
++				if (KeysGeoReal::Shore(X, Z) <= 0 || KeysGeoReal::CanalDist(X, Z) < 14) continue;   // dry ground between two stands; a canal
++				GCreekW[J * NX + I] = 255;
++			}
++		});
++		TArray<uint8> Tmp;
++		for (int32 Pass = 0; Pass < 3; Pass++)
++		{
++			Tmp = GCreekW;
++			ParallelFor(NZ - 2, [&](int32 Jm)
++			{
++				const int32 J = Jm + 1;
++				for (int32 I = 1; I < NX - 1; I++)
++				{
++					int32 M = 0;
++					for (int32 b = -1; b <= 1; b++) for (int32 a = -1; a <= 1; a++) M = FMath::Max(M, int32(Tmp[(J + b) * NX + I + a]) - (a && b ? 90 : 64));
++					if (M > Tmp[J * NX + I]) GCreekW[J * NX + I] = uint8(M);
++				}
++			});
++		}
++		GCreekNX = NX; GCreekNZ = NZ; GCreekX0 = GX0; GCreekZ0 = GZ0; GCreekInv = 1 / C;
++		GCreekAnyNX = (NX >> 4) + 1;
++		GCreekAny.Reset();
++		GCreekAny.SetNumZeroed(GCreekAnyNX * ((NZ >> 4) + 1));
++		for (int32 J = 0; J < NZ; J++)
++			for (int32 I = 0; I < NX; I++)
++				if (GCreekW[J * NX + I])
++					// (and the coarse cells a cell either side, which a lookup's four corners can reach into)
++					for (int32 b = FMath::Max(0, J - 1) >> 4; b <= FMath::Min(NZ - 1, J + 1) >> 4; b++)
++						for (int32 a = FMath::Max(0, I - 1) >> 4; a <= FMath::Min(NX - 1, I + 1) >> 4; a++) GCreekAny[b * GCreekAnyNX + a] = 1;
++		int64 N = 0;
++		for (const uint8 V : GCreekW) N += V == 255;
++		UE_LOG(LogTemp, Log, TEXT("Keys Run: %.2f km2 of creek water between mangrove banks, found on the map"), N * C * C * 1e-6);
++	}
++	double CreekWater(double X, double Z)
++	{
++		if (!GReal || !GCreekAny.Num()) return 0;
++		const int32 NX = GCreekNX;
++		const double FX = Clamp((X - GCreekX0) * GCreekInv, 0, NX - 1.001), FZ = Clamp((Z - GCreekZ0) * GCreekInv, 0, GCreekNZ - 1.001);
++		const int32 I = int32(FX), J = int32(FZ);
++		if (!GCreekAny[(J >> 4) * GCreekAnyNX + (I >> 4)]) return 0;
++		const double U = FX - I, V = FZ - J;
++		const uint8* P = GCreekW.GetData() + J * NX + I;
++		return ((P[0] * (1 - U) + P[1] * U) * (1 - V) + (P[NX] * (1 - U) + P[NX + 1] * U) * V) / 255.0;
++	}
++
+ 	// the real bottom: NOAA's soundings, easing up to the shoreline, with the marinas dredged
+ 	static double RealDepthAt(double X, double Z)
+ 	{
+diff --git a/Source/KeysRun/KeysGeo.h b/Source/KeysRun/KeysGeo.h
+index 7ea2381..d30f0e0 100644
+--- a/Source/KeysRun/KeysGeo.h
++++ b/Source/KeysRun/KeysGeo.h
+@@ -108,6 +108,9 @@ namespace KeysGeo
+ 	// how far inside the dredged cut of a marina basin (web depth.ts marinaCutDepth): > 0 inside
+ 	double MarinaCutDepth(double X, double Z);
+ 	double CreekDist(double X, double Z);
++	// real map: 0..1, how much this water is a creek by the map's own showing - narrow water between two mangrove banks,
++	// anywhere (the named creeks of CreekDist are the Middle Keys' alone). Calm and tea-stained; never a canal.
++	double CreekWater(double X, double Z);
+ 	// real map: metres outside the nearest residential canal's edge (negative in it), 1e9 when none is near
+ 	double CanalDist(double X, double Z);
+ 	// the nearer of a creek's bank and a canal's wall: water inside is out of the wind and the swell
+diff --git a/Source/KeysRun/KeysWorld.cpp b/Source/KeysRun/KeysWorld.cpp
+index 97b0460..339c795 100644
+--- a/Source/KeysRun/KeysWorld.cpp
++++ b/Source/KeysRun/KeysWorld.cpp
+@@ -1020,7 +1020,7 @@ void AKeysWorld::UpdateWater()
+ 				? FMath::Max(KeysOcean::Foam(X, Z) * (.3 + .7 * Caps) * (1 - SStep(8, 40, MinLen)), SStep(.75, 1.3, Crest) * .12 * Caps)
+ 				: SStep(.5, 1.0, Crest) * (.12 + .7 * Caps);
+ 			// (a creek through the mangroves is in the lee of everything: no whitecaps, no wash on its banks)
+-			const double LeeCreek = RealMap() ? SStep(0, 14, CreekDist(X, Z)) : 1.0, LeeCanal = RealMap() ? SStep(-1, 10, CanalDist(X, Z)) : 1.0;
++			const double LeeCreek = RealMap() ? SStep(0, 14, FMath::Min(CreekDist(X, Z), 14 * (1 - CreekWater(X, Z)))) : 1.0, LeeCanal = RealMap() ? SStep(-1, 10, CanalDist(X, Z)) : 1.0;
+ 			const double Lee = FMath::Min(LeeCreek, LeeCanal);
+ 			F *= Lee;
+ 			// white lines along the arms of a fresh wake, where the crests are tallest

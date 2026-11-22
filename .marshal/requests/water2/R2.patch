@@ -1,0 +1,17 @@
+diff --git a/Source/KeysRun/KeysGeo.cpp b/Source/KeysRun/KeysGeo.cpp
+index 4a56045..a82d811 100644
+--- a/Source/KeysRun/KeysGeo.cpp
++++ b/Source/KeysRun/KeysGeo.cpp
+@@ -921,7 +1006,11 @@ namespace KeysGeo
+ 		// the banks: the survey grid averages a bank's crown away (hardly anything reads under a metre), so what it has
+ 		// under 2.4 m is drawn down toward a low-tide flat - a bank charted at 1.3 m plays as 0.7 m, one at 1 m as 0.45 m.
+ 		// Deeper water is as surveyed.
+-		if (D < 2.4) D = .25 + 2.15 * FMath::Pow((D - .3) / 2.1, 2.2);
++		// That holds for a bank's crown, which the survey reads under a metre or so. Water it reads deeper is a floor, not
++		// a crown: the bottom of a sound or of one of Florida Bay's basins, flat for hundreds of metres, and drawing those
++		// down shut them to boats. So the rule fades out between 0.75 and 1.1 m: under 0.75 as before, 1.1 m and more as
++		// surveyed (charted 1 m plays as 0.9 m, not 0.45, and floats a 43-footer at low water).
++		if (D < 2.4) D = Lerp(.25 + 2.15 * FMath::Pow((D - .3) / 2.1, 2.2), D, SS(.75, 1.1, D));
+ 		// the marked channels are kept open between their daybeacons
+ 		if (SD > 1 && D < NavDepth && GNavSegs.Num())
+ 		{
