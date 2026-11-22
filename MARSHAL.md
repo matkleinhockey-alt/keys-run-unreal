@@ -15,6 +15,7 @@ once).
 | `yards` | Dry stack and boatyard | `lane/yards` | `../KeysRun-yards` | merged 2026-11-21 |
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | merged 2026-11-21 |
 | `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | merged 2026-11-21 |
+| `lowerkeys` | Map Phase 3 (Lower Keys, then Key Largo; brief written by the marshal) | `lane/lowerkeys` | `../KeysRun-lowerkeys` | running since 2026-11-22 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -30,6 +31,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `yards` | new `Source/KeysRun/KeysYards.*`, `KeysForklift.*`, `KeysYardProps.*` |
 | `docks` | new `Source/KeysRun/KeysDocks.*`, `KeysLifts.*` |
 | `upperkeys` | `Source/KeysRun/KeysGeoReal.*`, `Tools/geo/bake.py`, new `Tools/geo/*p2*`, `Content/KeysRun/Geo/p2_*` and `p2.kgeo` |
+| `lowerkeys` | `Source/KeysRun/KeysGeoReal.*`, `Tools/geo/bake.py`, new `Tools/geo/*p3*` and `*p4*`, `Content/KeysRun/Geo/p3*` and `p4*` |
 
 ## Marshal-only files
 
@@ -145,3 +147,5 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   scripted drives out of canal mouths with 1.9-2.6 m all the way, classic map builds none of it.
   Not done: seagrass tufts still grow in canals; no collision with walls beyond the ground's own; Phase 1 canals
   (Marathon, Key Colony) are not cut; one mouth has no deep water in reach; packaged perf not run.
+- 2026-11-22: `lane/lowerkeys` created from `main` (c5d3ab2 + this entry) for map Phase 3, run as a background agent.
+  The marshal fixes dock collision on `main` meanwhile (`KeysBoatPawn`, `KeysDocks`).
