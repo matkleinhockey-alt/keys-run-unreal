@@ -11,7 +11,12 @@ Inputs (public data in the raw dir; Phase 2's are fetched by Tools/geo/fetch_p2.
 
 Phases after the first share an edge with one already baked (PHASES 'join'). Along that edge the new grid takes the
 old one's heights and shore distances exactly, and the difference is faded out over JOIN_FADE cells, so the two
-files meet with no step. Bake order: p1, p2, p2_bay.
+files meet with no step. Bake order: p1, p2, p2_bay, p3, p4, p4_bay.
+
+Phase 3 of the map is p3 (the Lower Keys, west of p1: Big Pine Key to Key West), p4 (Key Largo, east and north of
+p2) and p4_bay (Florida Bay and the Gulf north of everything else, which squares the map off). Their downloads are
+fetched by Tools/geo/fetch_p3.sh. Each is baked twice like p2 (see below), and writes <phase>_road.txt: where US-1
+really runs on the phase's stretch of the chain line, and its bridges that are not on that line.
 
 p2 is baked twice: once, then bake_marks.py, then again - the second time it reads p2_marks.txt and cuts the marked
 channel legs the 10 m grid has pinched shut (PHASES 'cut_marks'). Then bake_marks.py and bake_mangrove.py once more.
@@ -53,6 +58,11 @@ PHASES = {
     # the strip of Florida Bay north of Phase 1 that squares the map off
     'p2_bay': dict(rect=(-8300, 7500, -6920, -4200), box=(-81.41, 24.60, -80.35, 25.12), src='p2', pad=60, clip=True,
                    join=[('p1', 'south'), ('p2', 'east')], chain_from='p1'),
+    # Phase 3, the Lower Keys: Big Pine Key to Key West. West edge -30060: Key West harbor is at -24830, Sand Key Light
+    # at -28330, and the 21760 m from Phase 1's edge is 16 steps of 1360 m, so the scenery laid out on grids counted from
+    # the map's corner (palms 16 m, houses 34 m, terrain 8 m, depth 10 m) keeps its spots. North and south as Phase 2.
+    'p3': dict(rect=(-30060, -8300, -6920, 6200), box=(-82.05, 24.26, -81.22, 24.86), src='p3', pad=60, clip=True, gen=3,
+               join=[('p1', 'east'), ('p2_bay', 'east')], chain_end='east', cut_marks=True, canals='osm_p3_built.json', road=True),
 }
 JOIN_FADE = 30    # cells over which a joined edge's correction fades out
 CUT_MAX, CUT_HALF_W = 20.0, 8.0   # marked channel legs: how much land a leg may clip and still be cut, and how wide
@@ -69,18 +79,34 @@ KNOWN = [
     ('Long Key', -80.8230, 24.8170), ('Lower Matecumbe Key', -80.7050, 24.8600), ('Upper Matecumbe Key', -80.6350, 24.9150),
     ('Windley Key', -80.5950, 24.9500), ('Plantation Key', -80.5530, 24.9850), ('Tavernier (Key Largo)', -80.5150, 25.0100),
     ('Fiesta Key', -80.7900, 24.8420), ('Lignumvitae Key', -80.6970, 24.9020), ('Indian Key', -80.6770, 24.8780),
+    # Phase 3, the Lower Keys (US-1's causeways join some keys into one outline: it takes the best known name on it)
+    ('Key West', -81.7800, 24.5550), ('Stock Island', -81.7400, 24.5700), ('Boca Chica Key', -81.6900, 24.5750),
+    ('Sugarloaf Key', -81.5400, 24.6750), ('Lower Sugarloaf Key', -81.5511, 24.6214), ('Summerland Key', -81.4450, 24.6620),
+    ('Ramrod Key', -81.4150, 24.6600), ('Middle Torch Key', -81.4050, 24.6850), ('Fleming Key', -81.7950, 24.5850),
+    ('Geiger Key', -81.6550, 24.5780), ('Knockemdown Key', -81.4800, 24.7000), ('Wisteria Island', -81.8110, 24.5690),
 ]
+# OpenStreetMap's spelling put right
+RENAME = {'Nile Channel Bridge': 'Niles Channel Bridge'}
 # US-1 bridges OpenStreetMap leaves unnamed, by a point on them (lon, lat)
 BRIDGE_NAMES = [('Tavernier Creek Bridge', -80.5285, 25.0035), ('Long Key Viaduct', -80.8600, 24.7950), ('Channel 5 Bridge', -80.7750, 24.8380),
                 ('Channel 2 Bridge', -80.7520, 24.8420), ('Lignumvitae Channel Bridge', -80.6920, 24.8700), ('Indian Key Channel Bridge', -80.6780, 24.8800),
                 ('Tea Table Key Bridge', -80.6600, 24.8900), ('Tea Table Relief Bridge', -80.6520, 24.8950), ('Whale Harbor Bridge', -80.6090, 24.9390),
-                ('Snake Creek Bridge', -80.5870, 24.9520)]
+                ('Snake Creek Bridge', -80.5870, 24.9520),
+                # Phase 3 (points on the chain line, from the first bake's list of unnamed spans)
+                ('Boca Chica Channel Bridge', -81.7163, 24.5747), ('Cow Key Channel Bridge', -81.7507, 24.5687)]
 # reefs and reef lights everyone knows by name that OpenStreetMap has no outline for (lon, lat); each is checked against
 # the DEM when baked (the summary prints the depth found there)
 KNOWN_REEFS = [('Tennessee Reef', -80.7817, 24.7450), ('Alligator Reef', -80.6185, 24.8517), ('Crocker Reef', -80.5270, 24.9080),
                ('Davis Reef', -80.5050, 24.9230), ('Conch Reef', -80.4560, 24.9570), ('Hen and Chickens', -80.5500, 24.9350),
-               ('Cheeca Rocks', -80.6160, 24.9040)]
-KNOWN_LIGHTS = [('Alligator Reef Light', -80.6185, 24.8517), ('Tennessee Reef Light', -80.7817, 24.7450)]
+               ('Cheeca Rocks', -80.6160, 24.9040),
+               # Phase 3
+               ('Looe Key', -81.4030, 24.5460), ('American Shoal', -81.5190, 24.5250), ('Maryland Shoal', -81.5800, 24.5100),
+               ('Pelican Shoal', -81.6300, 24.5000), ('Eastern Sambo', -81.6650, 24.4900), ('Middle Sambo', -81.6800, 24.4880),
+               ('Western Sambo', -81.7150, 24.4800), ('Sand Key', -81.8775, 24.4539)]
+KNOWN_LIGHTS = [('Alligator Reef Light', -80.6185, 24.8517), ('Tennessee Reef Light', -80.7817, 24.7450), ('Looe Key Light', -81.4030, 24.5460)]
+# charted shoals the elevation data has lost (lon, lat, radius in game metres, depth on the crest). Sand Key: NOAA's
+# mosaic is the coarse Coastal Relief Model out here and has 21 m where the chart has a reef awash with a light on it.
+SHOALS = {'p3': [('Sand Key', -81.8775, 24.4539, 150.0, 1.0)]}
 FINE = 2          # the land mask is rasterised FINE x finer than the grid
 
 
@@ -124,6 +150,14 @@ def main():
     GX, GZ = np.meshgrid(gx, gz)
     fine = sample(GX, GZ)
 
+    shoal_note = ''
+    for name, lon, lat, rad, dep in SHOALS.get(phase, []):
+        sx, sz = F.to_game(lon, lat)
+        rr = np.hypot(GX - sx, GZ - sz) / rad
+        was = float(-fine[rr < .1].max()) if (rr < .1).any() else float('nan')
+        fine = np.where(rr < 1, np.maximum(fine, -(dep + (np.maximum(-fine, dep) - dep) * rr ** 2)), fine)
+        shoal_note += f'{name} raised to {dep:.1f} m at {sx:.0f}, {sz:.0f} (the data had {was:.1f} m); '
+
     coast = json.load(open(f'{raw}/coast_{src}.json'))['elements']
     lines = []
     for wy in coast:
@@ -163,12 +197,15 @@ def main():
         polys = cut
         # an island belongs to one phase only: not this one if a neighbour already baked lists it, else whichever of
         # the phases baked this way holds most of it
+        # (phases of the same 'gen' are baked together and share islands out by area; one of an earlier gen is finished,
+        # and what it lists is its own)
+        gen = P.get('gen', 2)
         theirs = []
         for other, _ in P.get('join', []):
-            if not PHASES[other].get('clip'):
+            if not PHASES[other].get('clip') or PHASES[other].get('gen', 2) < gen:
                 theirs += [Polygon(i['ring']) for i in KGeo(f'{out}/{other}.kgeo').islands if len(i['ring']) >= 4]
         theirs = [t if t.is_valid else t.buffer(0) for t in theirs]
-        sib = [Polygon([(a, c), (b, c), (b, d), (a, d)]) for k, v in PHASES.items() if k != phase and v.get('clip') for a, b, c, d in [v['rect']]]
+        sib = [Polygon([(a, c), (b, c), (b, d), (a, d)]) for k, v in PHASES.items() if k != phase and v.get('clip') and v.get('gen', 2) == gen for a, b, c, d in [v['rect']]]
         mine = set()
         for p in polys:
             a_in = p.intersection(rect_poly).area
@@ -418,6 +455,11 @@ def main():
         g = KGeo(f'{out}/{P.get("chain_from", P["join"][0][0])}.kgeo')
         if P.get('chain_from'):
             cz = np.asarray(g.chain_z(cx), np.float64)
+        elif P.get('chain_end') == 'east':
+            # the line next door is past this phase's east end
+            dz0 = float(g.chain_z(cx[-1])) - cz[-1]
+            cz = cz + dz0 * np.clip(1 - np.arange(len(cz))[::-1] / 16.0, 0, 1)
+            join_notes.append(f'US-1 line off by {dz0:.1f} m before the join')
         else:
             dz0 = float(g.chain_z(cx[0])) - cz[0]
             cz = cz + dz0 * np.clip(1 - np.arange(len(cz)) / 16.0, 0, 1)
@@ -460,7 +502,7 @@ def main():
                         break
                 else:
                     spans.append([g[0], g[-1]])
-        outlines = [(el['tags']['name'], centre(el)) for el in extra if el.get('tags', {}).get('man_made') == 'bridge' and el['tags'].get('name') and centre(el)]
+        outlines = [(RENAME.get(el['tags']['name'], el['tags']['name']), centre(el)) for el in extra if el.get('tags', {}).get('man_made') == 'bridge' and el['tags'].get('name') and centre(el)]
         bridges, used = [], set()
         for a, b in sorted(spans):
             mx, mz = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
@@ -504,9 +546,19 @@ def main():
         for name, lon, lat in KNOWN_LIGHTS:
             c = F.to_game(lon, lat)
             if in_rect(*c) and not any(l['name'] == name for l in lights):
+                if P.get('gen', 2) >= 3:
+                    # on the shoalest water within 250 m, as the reef of the same name is
+                    j, i = int(round((c[1] - z0) / CELL)), int(round((c[0] - x0) / CELL))
+                    win = height[max(0, j - 25):j + 26, max(0, i - 25):i + 26]
+                    jj, ii = np.unravel_index(np.argmax(np.where(win < 0, win, -1e9)), win.shape)
+                    c = (x0 + (max(0, i - 25) + ii) * CELL, z0 + (max(0, j - 25) + jj) * CELL)
                 lights.append(dict(name=name, pts=[round(c[0], 1), round(c[1], 1)], depth=round(-cell_h(*c), 1)))
         more['reef_sites'] = reefs
         more['lights'] = lights
+        if P.get('road'):
+            # where US-1 itself runs on this phase's stretch of the chain line (sites_p3.py passes it to the game)
+            rw, re_ = P['road'] if isinstance(P['road'], tuple) else (float(ux.min()), float(ux.max()))
+            more['road'] = [round(max(rx0, rw), 1), round(min(rx1, re_), 1)]
 
     places = dict(
         phase=phase, rect=[x0, x1, z0, z1], scale=F.SCALE, theta_deg=math.degrees(F.THETA),
@@ -556,6 +608,8 @@ def main():
         print('  biggest islands: ' + '; '.join(f'{i["name"] or "?"} {i["area"] / 1e4:.0f} ha' for i in islands[:14]))
     if P.get('clip'):
         print('  islands cut by the phase edge: ' + ('; '.join(f'{i["name"] or "?"} at {i["x"]:.0f}, {i["z"]:.0f}' for i in islands if i['bounds'][0] < x0 or i['bounds'][2] > x1 or i['bounds'][1] < z0 or i['bounds'][3] > z1) or 'none'))
+    if shoal_note:
+        print('  shoals: ' + shoal_note)
     if cut_note:
         print('  ' + cut_note)
     if canal_note:

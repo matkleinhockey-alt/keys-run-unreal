@@ -1,0 +1,309 @@
+# aids to navigation: NOAA ENC Direct to GIS (public domain). x z kind number lit name
+-28126.5 -611.7 G 3 0 Middle Ground Daybeacon 3
+-28338.2 167.2 R 2 0 Sand Key Channel Daybeacon 2
+-23035.3 132.5 R 2 0 Stock Island Approach Channel Daybeacon 2
+-23783.7 1203.6 R 32 1 Stock Island Approach Channel Light 32
+-29317.7 -3975.9 R 10 0 Lake Passage Channel Daybeacon 10
+-27624.2 -3246.2 R 8 0 Lake Passage Channel Daybeacon 8
+-25597.1 -3957.5 G 15 0 Key West Northwest Channel Daybeacon 15
+-25813.8 -3235.7 G 1 0 Lake Passage Channel Daybeacon 1
+-25812.4 -3250.3 R 2 0 Lake Passage Channel Daybeacon 2
+-25794.7 -3405.8 R 16 0 Key West Northwest Channel Daybeacon 16
+-26494.0 -3020.6 R 6 0 Lake Passage Channel Daybeacon 6
+-26511.1 -2995.1 G 7 0 Lake Passage Channel Daybeacon 7
+-25431.2 -2996.1 G 17 1 Key West Northwest Channel Light 17
+-25615.6 -3635.5 G 15 1 Key West Northwest Channel Light 15A
+-25933.7 -4083.1 R 14 1 Key West Northwest Channel Light 14
+-25533.1 -2661.3 R 18 1 Key West Northwest Channel Light 18
+-26221.5 -3099.3 G 5 0 Lake Passage Channel Daybeacon 5
+-23968.1 -2399.4 G 21 1 Garrison Bight Channel Light 21
+-24401.2 -2940.8 R 4 0 Fleming Key Daybeacon 4
+-24149.0 -2355.2 R 30 0 Garrison Bight Channel Turning Basin Daybeacon 30
+-24408.2 -2963.8 G 3 0 Fleming Key Daybeacon 3
+-24063.6 -2304.4 R 28 0 Garrison Bight Channel Turning Basin Daybeacon 28
+-23990.3 -2382.4 R 22 0 Garrison Bight Channel Daybeacon 22
+-24385.0 -3504.5 G 3 1 Garrison Bight Channel Light 3
+-23988.8 -3485.4 G 17 1 Garrison Bight Channel Light 17
+-23222.3 -2905.9 G 35 0 Cow Key Channel Daybeacon 35
+-24060.4 -2292.9 G 27 0 Garrison Bight Channel Turning Basin Daybeacon 27
+-23624.8 -1001.3 G 57 1 Hawk Channel Light 57
+-22956.3 -2545.0 G 25 0 Cow Key Channel Daybeacon 25
+-23997.1 -2400.3 R 20 0 Garrison Bight Channel Daybeacon 20
+-24523.6 -1701.7 G 3 0 Casa Marina Daybeacon 3
+-24529.4 -1627.2 G 1 0 Casa Marina Daybeacon 1
+-24946.8 -2591.4 G 21 0 Key West Main Channel Daybeacon 21
+-24499.0 -1730.1 R 4 0 Casa Marina Daybeacon 4
+-23157.9 -2812.0 R 32 0 Cow Key Channel Daybeacon 32
+-24027.5 -2273.7 G 25 0 Garrison Bight Channel Turning Basin Daybeacon 25
+-24147.9 -2341.1 G 29 0 Garrison Bight Channel Turning Basin Daybeacon 29
+-24049.3 -3661.9 R 14 0 Garrison Bight Channel Daybeacon 14
+-24047.7 -2304.6 R 26 0 Garrison Bight Channel Turning Basin Daybeacon 26
+-24027.8 -3632.8 R 16 1 Garrison Bight Channel Light 16
+-24608.2 -2556.8 R 4 1 Key West Bight Channel Light 4
+-24026.9 -2309.9 R 24 0 Garrison Bight Channel Turning Basin Daybeacon 24
+-25238.3 -2694.5 G 19 1 Key West Northwest Channel Light 19
+-24481.5 -3798.8 R 24 0 Calda Channel Daybeacon 24
+-24143.3 -2500.6 G 19 0 Garrison Bight Channel Daybeacon 19
+-22960.7 -2685.7 G 29 0 Cow Key Channel Daybeacon 29
+-24450.2 -3332.6 R 2 1 Garrison Bight Channel Approach Light 2
+-23209.6 -2931.5 R 36 0 Cow Key Channel Daybeacon 36
+-22930.6 -2426.6 G 23 0 Cow Key Channel Daybeacon 23
+-24219.3 -3612.9 R 6 0 Garrison Bight Channel Daybeacon 6
+-24745.1 -2582.8 R 2 1 Key West Bight Channel Light 2
+-22867.2 -2301.9 R 22 0 Cow Key Channel Daybeacon 22
+-24543.3 -2765.4 G 31 0 Key West Harbor Main Channel Turning Basin Daybeacon 31
+-24070.3 -3698.0 G 13 1 Garrison Bight Channel Light 13
+-24144.2 -3669.0 R 10 0 Garrison Bight Channel Daybeacon 10
+-24331.8 -3505.1 R 4 0 Garrison Bight Channel Daybeacon 4
+-22950.1 -2676.7 R 28 0 Cow Key Channel Daybeacon 28
+-24101.8 -3674.9 R 12 0 Garrison Bight Channel Daybeacon 12
+-24175.8 -2505.7 R 18 1 Garrison Bight Channel Light 18
+-24496.2 -1637.2 R 2 0 Casa Marina Daybeacon 2
+-23217.9 -2850.7 R 34 0 Cow Key Channel Daybeacon 34
+-22960.2 -2046.4 G 3 0 Cow Key West Channel Daybeacon 3A
+-24195.4 -3636.6 R 8 1 Garrison Bight Channel Light 8
+-24758.8 -2763.6 G 27 1 Key West Harbor Main Channel Turning Basin Light 27
+-23013.8 -2743.6 R 30 0 Cow Key Channel Daybeacon 30
+-24473.0 -3772.1 G 25 0 Calda Channel Daybeacon 25
+-22903.9 -2063.9 G 13 0 Cow Key Channel Daybeacon 13
+-21540.5 -2008.8 G 17 0 Boca Chica Channel Daybeacon 17
+-21946.0 -1610.4 R 8 1 Boca Chica Channel Light 8
+-21940.3 -1653.2 R 2 0 Stock Island East Channel B Daybeacon 2B
+-21960.2 -1825.3 G 3 0 Stock Island East Channel B Daybeacon 3B
+-22109.9 -1563.9 R 4 0 Stock Island East Channel A Daybeacon 4A
+-22456.0 -1546.0 R 2 0 Key West Oceanside Marina Daybeacon 2
+-22879.3 -1677.4 R 4 0 Cow Key Channel Daybeacon 4
+-22866.0 -1746.0 R 6 0 Cow Key Channel Daybeacon 6
+-22897.6 -2094.9 R 16 0 Cow Key Channel Daybeacon 16
+-22865.0 -2204.9 R 20 0 Cow Key Channel Daybeacon 20
+-21610.9 -1946.4 G 15 0 Boca Chica Channel Daybeacon 15
+-22085.4 -1476.8 G 7 0 Boca Chica Channel Daybeacon 7
+-22220.7 -1310.6 R 4 0 Boca Chica Channel Daybeacon 4
+-22398.8 -1659.5 G 5 0 Key West Oceanside Marina Daybeacon 5
+-22891.7 -1656.7 G 3 0 Cow Key Channel Daybeacon 3
+-21812.8 -1753.1 G 11 0 Boca Chica Channel Daybeacon 11
+-21851.0 -1699.7 R 10 0 Boca Chica Channel Daybeacon 10
+-21926.6 -1829.6 R 4 0 Stock Island East Channel B Daybeacon 4B
+-22428.5 -1580.9 G 3 0 Key West Oceanside Marina Daybeacon 3
+-22577.6 -1550.9 G 5 0 Safe Harbor Channel Daybeacon 5
+-22883.2 -1741.2 G 5 0 Cow Key Channel Daybeacon 5
+-22875.5 -2159.0 R 18 0 Cow Key Channel Daybeacon 18
+-21752.9 -1790.6 R 12 0 Boca Chica Channel Daybeacon 12
+-22075.8 -1466.9 R 6 0 Boca Chica Channel Daybeacon 6
+-22165.0 -1534.0 G 3 0 Stock Island East Channel A Daybeacon 3A
+-22851.0 -1871.7 R 8 0 Cow Key Channel Daybeacon 8
+-22905.9 -2098.3 G 15 0 Cow Key Channel Daybeacon 15
+-22892.5 -2156.1 G 19 0 Cow Key Channel Daybeacon 19
+-22183.2 -1599.2 G 5 0 Stock Island East Channel A Daybeacon 5A
+-22413.3 -1571.1 R 4 0 Key West Oceanside Marina Daybeacon 4
+-22629.1 -1061.1 R 2 1 Safe Harbor Channel Light 2
+-22567.5 -1398.7 R 4 1 Safe Harbor Channel Light 4
+-22897.3 -2133.3 G 17 0 Cow Key Channel Daybeacon 17
+-21660.3 -1880.2 R 14 0 Boca Chica Channel Daybeacon 14
+-21702.6 -1856.9 G 13 0 Boca Chica Channel Daybeacon 13
+-22181.4 -1436.0 G 1 0 Stock Island East Channel A Daybeacon 1A
+-22226.6 -1327.8 G 5 0 Boca Chica Channel Daybeacon 5
+-22017.2 -1965.0 G 5 0 Stock Island East Channel B Daybeacon 5B
+-22901.8 -2042.7 G 11 0 Cow Key Channel Daybeacon 11
+-22934.7 -2045.9 G 1 0 Cow Key West Channel Daybeacon 1A
+-21902.9 -1669.9 G 9 0 Boca Chica Channel Daybeacon 9
+-21966.6 -2059.7 R 6 0 Stock Island East Channel B Daybeacon 6B
+-22053.5 -2066.2 G 7 0 Stock Island East Channel B Daybeacon 7B
+-22413.5 -1134.4 G 1 1 Boca Chica Channel Light 1
+-22391.3 -1636.2 R 6 0 Key West Oceanside Marina Daybeacon 6
+-22365.9 -1726.8 R 8 0 Key West Oceanside Marina Daybeacon 8
+-22377.3 -1729.4 G 9 0 Key West Oceanside Marina Daybeacon 9
+-22450.7 -1561.7 G 1 0 Key West Oceanside Marina Daybeacon 1
+-22915.2 -1657.3 G 1 0 Cow Key Channel Daybeacon 1
+-22890.2 -1875.6 G 7 0 Cow Key Channel Daybeacon 7
+-21084.0 -907.2 R 56 1 Boca Chica Light 56
+-21616.8 -1921.0 R 16 1 Boca Chica Channel Light 16
+-21975.8 -1625.3 G 1 0 Stock Island East Channel B Daybeacon 1B
+-22293.5 -1258.9 G 3 0 Boca Chica Channel Daybeacon 3
+-22348.1 -1172.4 R 2 0 Boca Chica Channel Daybeacon 2
+-22628.8 -1221.6 G 3 1 Safe Harbor Channel Light 3
+-22849.8 -1953.1 G 9 0 Cow Key Channel Daybeacon 9
+-22905.0 -1632.0 R 2 0 Cow Key Channel Daybeacon 2
+-19130.5 -1690.6 G 15 0 Saddlebunch Harbor Daybeacon 15
+-19116.3 -1752.4 R 18 0 Saddlebunch Harbor Daybeacon 18
+-19859.6 -1355.1 R 4 0 Tamarac Park Channel Daybeacon 4
+-18960.1 -237.2 G 55 0 Pelican Key Daybeacon 55
+-18918.6 -1045.9 G 1 0 Saddlebunch Harbor Daybeacon 1
+-18985.0 -1566.9 G 13 0 Saddlebunch Harbor Daybeacon 13
+-18881.0 -1160.3 G 3 0 Saddlebunch Harbor Daybeacon 3
+-18865.2 -1434.8 R 10 0 Saddlebunch Harbor Daybeacon 10
+-18798.0 -1273.1 R 8 0 Saddlebunch Harbor Daybeacon 8
+-18885.0 -1026.7 R 2 0 Saddlebunch Harbor Daybeacon 2
+-19849.2 -1298.9 G 1 0 Tamarac Park Channel Daybeacon 1
+-19880.8 -1347.1 G 3 0 Tamarac Park Channel Daybeacon 3
+-19869.7 -1380.4 R 6 0 Tamarac Park Channel Daybeacon 6
+-18958.0 -1472.7 G 11 0 Saddlebunch Harbor Daybeacon 11
+-19831.0 -1299.3 R 2 0 Tamarac Park Channel Daybeacon 2
+-17844.1 235.2 G 53 0 West Washerwoman Daybeacon 53
+-17125.8 317.1 G 51 0 West Washerwoman Daybeacon 51
+-24584.3 -5167.0 G 1 1 Calda Channel Light 1
+-26090.5 -4624.7 R 12 1 Key West Northwest Channel Light 12
+-26186.6 -5316.6 G 11 0 Key West Northwest Channel Daybeacon 11
+-26358.9 -5195.1 R 10 1 Key West Northwest Channel Light 10
+-26816.7 -6023.0 R 6 1 Key West Northwest Channel Light 6
+-26710.5 -5815.8 R 8 0 Key West Northwest Channel Daybeacon 8
+-24437.8 -5074.6 G 3 0 Calda Channel Daybeacon 3
+-24264.9 -4777.9 R 8 0 Calda Channel Daybeacon 8
+-24403.7 -4008.9 G 21 0 Calda Channel Daybeacon 21
+-24112.1 -4328.3 G 15 0 Calda Channel Daybeacon 15
+-24276.0 -4833.3 R 6 0 Calda Channel Daybeacon 6A
+-24144.7 -4375.6 R 14 0 Calda Channel Daybeacon 14
+-24247.3 -4087.5 R 20 0 Calda Channel Daybeacon 20A
+-24350.3 -4982.6 G 5 0 Calda Channel Daybeacon 5
+-24129.2 -4399.3 G 13 0 Calda Channel Daybeacon 13
+-15628.6 -2703.3 G 19 0 Upper Sugarloaf Sound Daybeacon 19
+-15521.1 -2391.1 G 15 0 Upper Sugarloaf Sound Daybeacon 15
+-15724.5 -2435.6 R 2 0 Sugarloaf Key Shores Daybeacon 2A
+-15555.0 -2528.9 R 18 0 Upper Sugarloaf Sound Daybeacon 18
+-15618.9 -2703.7 R 20 0 Upper Sugarloaf Sound Daybeacon 20
+-15102.1 -2231.9 G 9 0 Upper Sugarloaf Sound Daybeacon 9
+-15097.7 -2239.3 R 10 0 Upper Sugarloaf Sound Daybeacon 10
+-15137.7 -2287.3 G 11 0 Upper Sugarloaf Sound Daybeacon 11
+-14946.4 -2168.3 R 8 0 Upper Sugarloaf Sound Daybeacon 8
+-15129.6 -2294.1 R 12 0 Upper Sugarloaf Sound Daybeacon 12
+-15562.2 -2526.8 G 17 0 Upper Sugarloaf Sound Daybeacon 17
+-15812.8 -2826.4 R 22 0 Upper Sugarloaf Sound Daybeacon 22
+-14951.9 -2162.9 G 7 0 Upper Sugarloaf Sound Daybeacon 7
+-15807.3 -2471.3 R 6 0 Sugarloaf Key Shores Daybeacon 6A
+-15826.1 -2490.9 R 8 0 Sugarloaf Key Shores Daybeacon 8A
+-15812.6 -2819.4 G 21 0 Upper Sugarloaf Sound Daybeacon 21
+-15178.7 -2345.6 G 13 0 Upper Sugarloaf Sound Daybeacon 13
+-15177.7 -2354.3 R 14 0 Upper Sugarloaf Sound Daybeacon 14
+-15773.0 -2458.8 R 4 0 Sugarloaf Key Shores Daybeacon 4A
+-15514.9 -2400.8 R 16 0 Upper Sugarloaf Sound Daybeacon 16
+-14260.5 -2643.2 R 2 0 Cudjoe Key Daybeacon 2B
+-12787.9 -834.9 R 4 0 Kemp Channel Daybeacon 4
+-12780.3 -1433.7 G 15 0 Kemp Channel Daybeacon 15
+-14493.7 -1492.1 R 8 0 Pirates Cove Daybeacon 8
+-14638.1 -1139.0 R 4 0 Pirates Cove Daybeacon 4
+-14694.3 -1088.5 G 3 0 Pirates Cove Daybeacon 3
+-12781.2 -1142.5 R 12 0 Kemp Channel Daybeacon 12
+-12748.7 -1868.9 R 20 0 Kemp Channel Daybeacon 20
+-12847.2 -1950.7 R 22 0 Kemp Channel Daybeacon 22
+-12873.6 -1951.9 G 21 0 Kemp Channel Daybeacon 21
+-14209.1 -2572.3 R 7 0 Cudjoe Key Daybeacon 7A
+-14771.3 -1824.0 G 3 0 Upper Sugarloaf Sound Daybeacon 3
+-12741.1 -997.9 R 6 0 Kemp Channel Daybeacon 6
+-12818.7 -798.7 R 2 0 Kemp Channel Daybeacon 2
+-12767.0 -960.2 G 5 0 Kemp Channel Daybeacon 5
+-12819.5 -837.9 G 3 0 Kemp Channel Daybeacon 3
+-12743.9 -2239.2 G 25 0 Kemp Channel Daybeacon 25
+-14179.7 -2029.9 R 14 0 Cudjoe Key Daybeacon 14
+-14166.5 -2157.2 R 16 0 Cudjoe Key Daybeacon 16
+-14358.0 -1734.3 R 10 0 Pirates Cove Daybeacon 10
+-14429.6 -1724.0 R 2 0 Upper Sugarloaf Sound Daybeacon 2
+-14210.9 -2490.6 R 2 0 Cudjoe Key Daybeacon 2A
+-14823.5 -1935.8 R 6 0 Upper Sugarloaf Sound Daybeacon 6
+-12761.3 -1056.4 G 9 0 Kemp Channel Daybeacon 9
+-12661.7 -2309.6 R 2 0 Tropical Marina Daybeacon 2
+-12706.0 -2237.7 R 24 0 Kemp Channel Daybeacon 24
+-14180.8 -2128.4 G 15 0 Cudjoe Key Daybeacon 15
+-14291.4 -2619.8 R 24 0 Cudjoe Key Daybeacon 24
+-12673.7 -1745.6 R 18 0 Kemp Channel Daybeacon 18
+-12699.6 -1763.2 G 19 0 Kemp Channel Daybeacon 19
+-13020.6 -2084.7 R 2 0 Venture out Daybeacon 2
+-13022.4 -2081.4 G 1 0 Venture out Daybeacon 1
+-14432.2 -1721.1 G 1 0 Upper Sugarloaf Sound Daybeacon 1
+-14619.4 -1286.4 G 5 0 Pirates Cove Daybeacon 5
+-14223.1 -2526.0 G 3 0 Cudjoe Key Daybeacon 3A
+-14259.4 -2427.2 R 20 0 Cudjoe Key Daybeacon 20
+-14807.4 -960.0 G 1 0 Pirates Cove Daybeacon 1
+-14289.1 -2562.4 R 22 0 Cudjoe Key Daybeacon 22
+-12390.0 -1690.5 G 1 0 Summerland Key Daybeacon 1
+-12764.7 -1004.2 G 7 0 Kemp Channel Daybeacon 7
+-12853.6 -816.7 G 1 0 Kemp Channel Daybeacon 1
+-12781.2 -1119.1 G 11 0 Kemp Channel Daybeacon 11
+-12720.8 -1556.1 G 17 0 Kemp Channel Daybeacon 17
+-12812.1 -2187.2 G 23 0 Kemp Channel Daybeacon 23
+-14200.8 -1879.7 G 11 0 Cudjoe Key Daybeacon 11
+-14471.3 -1551.5 G 9 0 Pirates Cove Daybeacon 9
+-14602.4 -1348.2 R 6 0 Pirates Cove Daybeacon 6
+-14236.6 -2553.2 G 5 0 Cudjoe Key Daybeacon 5A
+-14813.3 -929.5 R 2 0 Pirates Cove Daybeacon 2
+-14755.6 -1837.4 R 4 0 Upper Sugarloaf Sound Daybeacon 4
+-14828.7 -1932.9 G 5 0 Upper Sugarloaf Sound Daybeacon 5
+-12760.4 -1265.7 R 14 0 Kemp Channel Daybeacon 14
+-12630.9 -2299.0 R 8 0 Tropical Marina Daybeacon 8
+-14223.5 -2480.5 G 1 0 Cudjoe Key Daybeacon 1A
+-14213.3 -2550.4 R 6 0 Cudjoe Key Daybeacon 6A
+-14275.3 -2750.4 R 4 0 Cudjoe Key Daybeacon 4B
+-14250.7 -2225.4 G 17 0 Cudjoe Key Daybeacon 17
+-14616.8 -1382.3 G 7 0 Pirates Cove Daybeacon 7
+-10540.8 -973.6 R 2 0 Ramrod Key Approach Daybeacon 2
+-10929.9 -1138.5 R 6 0 Ramrod Key Channel Daybeacon 6
+-11562.8 -417.4 R 4 0 Niles Channel Daybeacon 4
+-10299.9 -815.4 G 5 0 Newfound Harbor Channel Daybeacon 5
+-10904.6 -1119.0 R 4 0 Ramrod Key Channel Daybeacon 4
+-11777.9 -916.9 R 6 0 Niles Channel Daybeacon 6
+-10127.8 -787.0 R 6 0 Newfound Harbor Channel Daybeacon 6
+-10963.8 -1164.6 R 8 0 Ramrod Key Channel Daybeacon 8
+-10131.9 -1483.2 R 4 0 Dolphin Marina Channel Daybeacon 4
+-10540.9 -472.3 R 4 0 Newfound Harbor Channel Daybeacon 4
+-10826.4 -426.2 G 3 0 Newfound Harbor Channel Daybeacon 3
+-10882.7 -1083.8 G 1 0 Ramrod Key Channel Daybeacon 1
+-10987.4 -1190.1 G 11 0 Ramrod Key Channel Daybeacon 11
+-11362.3 -180.4 R 2 1 Newfound Harbor Channel Entrance Light 2
+-12214.1 -1755.1 R 6 0 Summerland Key Daybeacon 6
+-12293.6 -1731.3 G 3 0 Summerland Key Daybeacon 3
+-11015.9 166.4 R 50 1 Newfound Harbor Keys Light 50
+-11814.6 -567.2 G 5 0 Niles Channel Daybeacon 5
+-12255.3 -1728.1 R 4 0 Summerland Key Daybeacon 4
+-12316.6 -1710.8 R 2 0 Summerland Key Daybeacon 2A
+-9951.7 -1189.2 R 8 0 Newfound Harbor Channel Daybeacon 8
+-10864.4 -1094.2 R 2 0 Ramrod Key Channel Daybeacon 2
+-12368.6 -1678.8 R 2 0 Summerland Key Daybeacon 2
+-13924.6 -6183.6 R 4 0 Cudjoe Channel Daybeacon 4
+-12699.9 -4966.1 R 6 0 Cudjoe Channel Daybeacon 6
+-12654.5 -4983.1 G 5 0 Cudjoe Channel Daybeacon 5
+-11562.6 -3811.4 G 9 0 Cudjoe Channel Daybeacon 9
+-8856.7 -2165.7 G 1 0 Tropical Bay Channel Daybeacon 1
+-8854.9 -2173.8 R 2 0 Tropical Bay Channel Daybeacon 2
+-13851.4 -6223.7 G 3 0 Cudjoe Channel Daybeacon 3
+-9560.3 -6347.6 R 52 0 Big Spanish Channel Daybeacon 52
+-9186.2 -5526.3 R 42 0 Big Spanish Channel Daybeacon 42
+-9557.8 -6240.0 G 49 0 Big Spanish Channel Daybeacon 49
+-9494.4 -5943.5 G 43 0 Big Spanish Channel Daybeacon 43
+-9545.4 -6075.4 R 46 0 Big Spanish Channel Daybeacon 46
+-9548.1 -6126.0 R 48 0 Big Spanish Channel Daybeacon 48
+-8609.9 -4627.4 R 40 0 Big Spanish Channel Daybeacon 40
+-9377.8 2488.3 R 22 1 Big Pine Shoal Light 22
+-13142.2 53.3 R 50 1 Loggerhead Key Light 50A
+-12091.1 2399.8 R 24 1 Looe Key Light 24
+-26789.7 -6186.1 g 3 1 Key West Northwest Channel Lighted Buoy 3
+-26436.9 -5626.1 g 9 0 Key West Northwest Channel Buoy 9
+-25229.1 -2196.9 g 15 1 Key West Main Channel Lighted Buoy 15
+-25092.5 -2541.2 g 17 1 Key West Main Channel Lighted Buoy 17
+-25486.2 -282.9 g 3 1 Key West Main Channel Lighted Buoy 3A
+-24203.3 -4531.8 r 12 0 Calda Channel Buoy 12
+-24810.8 -2648.6 g 25 1 Key West Main Channel Lighted Buoy 25
+-24633.3 -2838.0 g 29 1 Key West Harbor Main Channel Turning Basin Lighted Buoy 29
+-25626.3 -2109.2 g 5 1 Key West Southwest Channel Wreck Lighted Buoy WR5
+-25260.9 -944.2 r 8 1 Key West Main Channel Lighted Buoy 8
+-24228.3 -4108.6 r 20 0 Calda Channel Buoy 20
+-24126.1 -4324.2 r 16 0 Calda Channel Buoy 16
+-26867.5 -6299.1 r 2 0 Key West Northwest Channel Buoy 2
+-25510.0 -1504.1 g 9 1 Key West Main Channel Lighted Buoy 9
+-25749.2 709.4 g 3 1 Key West Main Channel Lighted Buoy 3
+-26701.9 -6598.4 g 1 1 Key West Northwest Channel Entrance Lighted Bell Buoy 1
+-26854.7 -6153.7 r 4 0 Key West Northwest Channel Buoy 4
+-24783.9 -2619.8 r 24 1 Key West Main Channel Lighted Buoy 24
+-24246.6 -4690.2 g 9 0 Calda Channel Buoy 9
+-26730.7 -6021.7 g 5 1 Key West Northwest Channel Lighted Buoy 5
+-25191.7 -2176.1 r 14 1 Key West Main Channel Lighted Buoy 14
+-25018.8 -2514.7 g 19 1 Key West Main Channel Lighted Buoy 19
+-25347.6 -839.3 g 7 1 Key West Main Channel Lighted Buoy 7
+-25319.5 -683.3 r 6 1 Key West Main Channel Lighted Buoy 6
+-24433.4 -3904.9 r 22 0 Calda Channel Buoy 22
+-24214.1 -4154.2 g 17 0 Calda Channel Buoy 17
+-25403.2 -1638.7 r 12 1 Key West Main Channel Lighted Buoy 12
+-24298.0 -4869.7 r 6 0 Calda Channel Buoy 6
+-24227.1 -4147.9 r 18 0 Calda Channel Buoy 18
+-25320.3 -2000.3 g 13 1 Key West Main Channel Lighted Buoy 13
+-24904.2 -2541.4 g 23 1 Key West Main Channel Lighted Buoy 23
+-25378.1 -680.5 g 5 1 Western Triangle Lighted Buoy 5
+-25700.0 789.3 r 2 1 Key West Main Channel Lighted Bell Buoy 2
