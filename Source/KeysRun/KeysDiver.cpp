@@ -1095,7 +1095,7 @@ void AKeysDiver::Tick(float DeltaSeconds)
 				// fish bolt from speed: a diver on scuba, breathing easy and not sprinting, reads as slower than she is,
 				// so they let her come closer than a freediver finning down on them
 				const double Rel = FVector2D(S.VX - W.X, S.VZ - W.Y).Size();
-				const double Seen = Sc.OnGas() && S.Exertion < .8 ? Rel * KeysScuba::FishCalmK : Rel;
+				const double Seen = Sc.OnGas() && S.Exertion < .8 && !(DbgOff & 16) ? Rel * KeysScuba::FishCalmK : Rel;
 				L->SetDiver(true, S.X, S.Z, Seen, S.Y);
 				if (FishLogT >= 0 && T >= FishLogT)
 				{
@@ -1897,7 +1897,7 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 	if (Cmd == TEXT("off"))
 	{
 		// test hook: parts of the scuba side switched off, to find what a frame costs (1 the regulator's sound, 2 its
-		// bubbles, 4 the rack and flag on the boat, 8 the worn set)
+		// bubbles, 4 the rack and flag on the boat, 8 the worn set, 16 the fish's calm round a scuba diver)
 		DbgOff = FCString::Atoi(*Arg);
 		BoatRack->SetVisibility(!(DbgOff & 4)); BoatFlag->SetVisibility(!(DbgOff & 4));
 		UE_LOG(LogTemp, Log, TEXT("KRScuba off %d"), DbgOff);
