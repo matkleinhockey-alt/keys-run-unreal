@@ -110,6 +110,19 @@ have the hub call them. Two other lanes are running (`water2` in `KeysSea*`, `Ke
    the pool that is there or stay under 400 at once.
 10. **Nothing else moves.** `tpcheck` reports 0 bad; the boat looks the same when no scuba gear is owned.
 
+11. **The harpoon, rebuilt on the user's picture** (added 2026-11-22; the user: "use this to build the harpoon
+    better"). Reference: `/Users/mat/Documents/Unreal Projects/KeysRun-devkit/refs/harpoon_ref.png`; open it and
+    look. Rebuild the speargun's model (the first-person gun, the one in the diver's hand in the chase view, the
+    flying shaft and its tip) to match: a slim matt-black barrel with a rail; two pairs of olive-green rubber
+    bands running from a roller head at the muzzle (two black rollers) back along both sides to the wishbones; a
+    black shaft with a broad multi-barbed head (a wide swept main blade, two smaller barbs behind it, and a
+    hinged flopper); a slide ring on the shaft with a braided steel leader looping back to the muzzle; a pistol
+    grip with a textured olive panel, trigger and guard, a safety, and a butt pad for loading against the chest.
+    Keep the band-stretch, recoil, reload and reel animation working on the new parts. No name, logo or lettering
+    on it (the picture's "Harpoon Pro" branding is not copied).
+    - Pass: first-person shots loaded, mid-draw and just fired; a chase-view shot; a close shot of the tip in a
+      speared fish; the picture and your best shot side by side in one image; the spear test still lands a fish.
+
 ## Agents and skills
 
 - Check each criterion as `verifier` before you tick it. If the agent types are not available in your session,
