@@ -1,0 +1,73 @@
+diff --git a/Source/KeysRun/KeysHUD.cpp b/Source/KeysRun/KeysHUD.cpp
+--- a/Source/KeysRun/KeysHUD.cpp	2026-11-22 01:50:28
++++ b/Source/KeysRun/KeysHUD.cpp	2026-11-22 02:25:48
+@@ -857,6 +857,7 @@
+ 		}
+ 	};
+ 	Runs(US1X0, US1X1, 0, 0, 0, Ink, (bBig ? 2.5f : 1.5f) * U);
++	for (const KeysGeoReal::FSite& Sb : KeysGeoReal::Sites()) if (Sb.Kind == TEXT("bridge")) Line(Sb.X, Sb.Z, Sb.X2, Sb.Z2, Ink, (bBig ? 2.5f : 1.5f) * U);   // the bridges off US-1's line
+ 	if (OldBridgeX1 > OldBridgeX0) Runs(OldBridgeX0, OldBridgeX1, OldBridgeDZ, OldBridgeGap0, OldBridgeGap1, FLinearColor(.36f, .33f, .3f), (bBig ? 1.6f : 1.f) * U);
+ 	if (const FTruss* Tr = BahiaHonda())
+ 		for (int32 i = 0; i < Tr->Spans; i++)
+diff --git a/Source/KeysRun/KeysLandmarks.cpp b/Source/KeysRun/KeysLandmarks.cpp
+--- a/Source/KeysRun/KeysLandmarks.cpp	2026-11-22 01:50:28
++++ b/Source/KeysRun/KeysLandmarks.cpp	2026-11-22 02:25:48
+@@ -61,6 +61,7 @@
+ 	FTownBatch B, G;
+ 	BuildMarinas(B);
+ 	BuildBridges(B);
++	BuildSideBridges();
+ 	BuildLighthouse(B, G);
+ 	BuildPiers(B);
+ 	BuildEstates(B);
+@@ -270,6 +271,39 @@
+ 		B.Cyl(TX, 13.8, TZ, 2.4, 2.4, .25, 0x22262b, 12);
+ 		G.Ball(TX, 15.1, TZ, .9, 0xfff1c8, 1, 10);
+ 		B.Box(TX, 2, TZ + M.Dir * 2.1, 1, 2, .1, 0x5a4a38);
++	}
++}
++
++// ---------------------------------------------------------------- the road bridges that are not on US-1's line
++// KeysGeoReal::Sites "bridge" (Jewfish Creek, where US-1 leaves Key Largo for the mainland; Card Sound): a plain
++// concrete deck on pile bents from one end to the other, humped 18 m over the middle as the real ones are, so a boat
++// passes under. They go in the landmark tiles; the piles are not yet solid to the boat.
++void AKeysLandmarks::BuildSideBridges()
++{
++	if (!KeysGeo::RealMap()) return;
++	for (const KeysGeoReal::FSite& S : KeysGeoReal::Sites())
++	{
++		if (S.Kind != TEXT("bridge")) continue;
++		const double DX = S.X2 - S.X, DZ = S.Z2 - S.Z, L = FMath::Sqrt(DX * DX + DZ * DZ);
++		if (L < 20) continue;
++		const double Ang = FMath::Atan2(DZ, DX), PX = -FMath::Sin(Ang), PZ = FMath::Cos(Ang);
++		const int32 N = FMath::Max(2, FMath::RoundToInt32(L / 12));
++		auto DeckH = [](double T) { return 5.6 + 12.4 * FMath::Square(FMath::Sin(T * PI)); };
++		for (int32 i = 0; i < N; i++)
++		{
++			const double T0 = double(i) / N, T1 = double(i + 1) / N, TM = (T0 + T1) / 2, Len = L / N;
++			const double MX = S.X + DX * TM, MZ = S.Z + DZ * TM, H0 = DeckH(T0), H1 = DeckH(T1), H = (H0 + H1) / 2, Pt = FMath::Atan2(H1 - H0, Len);
++			FTownBatch& B = LmAt(MX, MZ);
++			B.Box(MX, H - .6, MZ, Len + .3, 1.2, 10.4, 0xd8d1c0, 0, -Ang, Pt);
++			B.Box(MX, H + .03, MZ, Len + .3, .06, 8.6, 0x3e4146, 0, -Ang, Pt);
++			for (int32 sg = -1; sg <= 1; sg += 2) B.Box(MX + PX * 4.95 * sg, H + .55, MZ + PZ * 4.95 * sg, Len + .3, 1.1, .3, 0xd8d1c0, 0, -Ang, Pt);
++			if (i % 3 != 1) continue;
++			// a bent: two piles and a cap, down to the bottom (or the ground)
++			const double G = KeysGeo::LandH(MX, MZ), Floor = G > -.3 ? G - .3 : -FMath::Clamp(KeysGeo::DepthAt(MX, MZ) + .5, 1.5, 12.0);
++			B.Box(MX, H - 1.6, MZ, 1.1, .8, 9.6, 0xcfc8b6, 0, -Ang);
++			for (int32 sg = -1; sg <= 1; sg += 2) B.Box(MX + PX * 3.6 * sg, (H - 2 + Floor) / 2, MZ + PZ * 3.6 * sg, .9, H - 2 - Floor, .9, 0xc9c2b1, 0, -Ang);
++		}
++		UE_LOG(LogTemp, Log, TEXT("Keys Run: %s built off the chain line, %.0f m from %.0f, %.0f"), *S.Name, L, S.X, S.Z);
+ 	}
+ }
+ 
+diff --git a/Source/KeysRun/KeysLandmarks.h b/Source/KeysRun/KeysLandmarks.h
+--- a/Source/KeysRun/KeysLandmarks.h	2026-11-22 01:50:28
++++ b/Source/KeysRun/KeysLandmarks.h	2026-11-22 02:25:48
+@@ -40,6 +40,7 @@
+ 	void BuildBuoys();
+ 	void BuildDaymarks(FTownBatch& B, FTownBatch& G);   // the real map's red and green daybeacons
+ 	void BuildBridges(struct FTownBatch& Road);   // KeysBridges.cpp
++	void BuildSideBridges();                      // the road bridges off US-1's line (Jewfish Creek, Card Sound)
+ 	// the bridges in chunks, each a detailed and a plain version, swapped by distance (UpdateBridgeLod)
+ 	struct FBridgeChunk { double X0 = 0, X1 = 0, ZOff = 0; UProceduralMeshComponent* Near = nullptr; UProceduralMeshComponent* Far = nullptr; bool bNear = false; };
+ 	TArray<FBridgeChunk> BridgeChunks;
