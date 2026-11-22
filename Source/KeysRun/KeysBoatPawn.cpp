@@ -1090,6 +1090,22 @@ void AKeysBoatPawn::RunTestScript(double T)
 			ApplyOutfit();
 		}
 		else if (Cmd == TEXT("gear")) bGearOpen = !bGearOpen;
+		else if (Cmd.StartsWith(TEXT("own="))) { Owned.Add(Cmd.Mid(4)); UE_LOG(LogTemp, Log, TEXT("KRScript own %s (in memory: a scripted run writes no save)"), *Cmd.Mid(4)); }   // own=dive.scuba.set: grant a piece of gear for a test
+		else if (Cmd.StartsWith(TEXT("disown="))) Owned.Remove(Cmd.Mid(7));
+		else if (Cmd.StartsWith(TEXT("scubashop=")))
+		{
+			// scubashop=<effect>: what the dive shop's counter would do with that row, without the money (KeysScuba.h)
+			const FString Eff = Cmd.Mid(10);
+			FString Why, Msg;
+			if (KeysScuba::ShopRefuse(this, Eff, Why)) UE_LOG(LogTemp, Log, TEXT("KRScuba shop %s refused: %s"), *Eff, *Why)
+			else
+			{
+				if (Eff.StartsWith(TEXT("dive."))) Owned.Add(Eff);
+				KeysScuba::ShopResolve(this, Eff, Msg);
+				UE_LOG(LogTemp, Log, TEXT("KRScuba shop %s bought:%s"), *Eff, *Msg);
+			}
+		}
+		else if (Cmd == TEXT("scubamode")) { const FString R = KeysScuba::ToggleMode(this); ShowToast(R, 4); UE_LOG(LogTemp, Log, TEXT("KRScuba mode: %s"), *R); }   // the 2 key, as pressed
 		else if (Cmd.StartsWith(TEXT("runto="))) RunTo(FCString::Atoi(*Cmd.Mid(6)));
 		else if (Cmd == TEXT("slots")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(!Sl->bOpen); }
 		else if (Cmd == TEXT("spin")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Spin(); }
@@ -1227,9 +1243,12 @@ void AKeysBoatPawn::ToggleDive()
 		D->SetDefaultChase(bDiveChase);
 		D->UnderwaterHaze = UnderwaterHaze;
 		// sim/dive-gear.ts: the pony bottle is live only with an air fill in hand, and one fill is spent per dive at 2 m
-		bTankLive = HasGear(TEXT("dive.tank")) && CountOf(TEXT("dive.fill")) > 0;
+		// on scuba (KeysScuba.h) the pony bottle is the bail-out: it adds nothing to the breath hold and its fill is only
+		// spent if she ever has to switch to it (the diver does that)
+		const bool bScuba = KeysScuba::WillDive(this);
+		bTankLive = !bScuba && HasGear(TEXT("dive.tank")) && CountOf(TEXT("dive.fill")) > 0;
 		bFillCharged = false;
-		if (HasGear(TEXT("dive.tank")) && !bTankLive) ShowToast(TEXT("The pony bottle is empty - an air fill at Scuba Steve's makes it live again."), 4);
+		if (!bScuba && HasGear(TEXT("dive.tank")) && !bTankLive) ShowToast(TEXT("The pony bottle is empty - an air fill at Scuba Steve's makes it live again."), 4);
 		D->AirMul = (bTankLive ? 2.2 : 1) * (HasGear(TEXT("dive.wetsuit")) ? 1.15 : 1) * (HasGear(TEXT("dive.fins")) ? 1.1 : 1) * (BuffOn(TEXT("diner.mahi")) ? 1.05 : 1);
 		// the rest of the kit (web sim/shop.ts): fins swim faster, the wide mask sees further, the band gun reaches and
 		// draws quicker, the reel conversion shortens a speared fish's run; every shot spends a shaft
@@ -1249,7 +1268,9 @@ void AKeysBoatPawn::ToggleDive()
 			return Left;
 		};
 		D->EnterWater(X, Z, H);
-		ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
+		if (D->OnScuba()) ShowToast(TEXT("Overboard on scuba - WASD and the mouse to swim and look, Space / C up / down (you hover when you let go), Shift to sprint. Hold G for the gauge, T the dive light, X swaps cylinders at the boat. Click to fire, R to reload. J to get back aboard."), 6);
+		else if (KeysScuba::HasSet(this) && KeysScuba::WantScuba()) ShowToast(TEXT("The cylinder is empty, so you are over on a breath (Scuba Steve's fills it). WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
+		else ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
 	}
 	else if (D->RequestReboard()) { SyncChaseCam(); bCamInit = false; }
 	else if (ReboardT < 0 && !D->IsBlackedOut())
@@ -1283,6 +1304,10 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 	B.LookYaw = MX * .004;
 	B.LookPitch = -MY * .004;
 	D->SetButtons(B);
+	// scuba (KeysScuba.h): the gauge console held up, the dive light, the cylinder swap at the boat
+	D->SetGlance(Down(EKeys::G));
+	if (Hit(EKeys::T)) ShowToast(D->ToggleLight());
+	if (Hit(EKeys::X)) { const FString Sw = D->SwapCylinder(); if (!Sw.IsEmpty()) ShowToast(Sw, 4); }
 	if (Hit(EKeys::J)) ToggleDive();
 	if (Hit(EKeys::F)) if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen();   // prise open a wreck's box (sim/treasure.ts)
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) ShowToast(D->CycleView() + TEXT(" - press 1 to switch"));
@@ -1505,6 +1530,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	if (bGear && Owned.Contains(Eff)) { ShowToast(FString::Printf(TEXT("You already own the %s."), It.Name)); return; }
 	if (Eff.StartsWith(TEXT("tackle.")) && Eff == TEXT("tackle.braid80") && Owned.Contains(TEXT("tackle.braid130"))) { ShowToast(TEXT("You already fish 130 lb. The 80 lb rig would be a step down.")); return; }
 	{ FString Why; if (ServiceRefuse(Eff, Why)) { ShowToast(Why, 7); return; } }   // refused before charging (sim/services.ts canBuy)
+	{ FString Why; if (KeysScuba::ShopRefuse(this, Eff, Why)) { ShowToast(Why, 7); return; } }   // the scuba rows' own refusals (KeysScuba.h)
 	if (Cash < It.Price) { ShowToast(FString::Printf(TEXT("%s is $%s and you have $%s. Sell fillets at a weigh-in (E at a marina dock)."), It.Name, *Commas(It.Price), *Commas(Cash)), 4); return; }
 	Cash -= It.Price;
 	const double T = GetWorld()->GetTimeSeconds();
@@ -1526,6 +1552,7 @@ void AKeysBoatPawn::ShopBuy(int32 Index)
 	else if (Eff == TEXT("dive.tank")) { AddCount(TEXT("dive.fill"), 1); Msg += TEXT(" Steve throws in the first fill. Each dive past 2 m spends one."); }
 	else if (Eff == TEXT("bait.shrimp")) { BaitCasts += 12; Msg += TEXT(" Quicker bites on your next 12 casts."); }
 	else if (Eff == TEXT("bait.ballyhoo")) { BaitCasts += 6; Msg += TEXT(" Quicker bites on your next 6 casts."); }
+	else if (KeysScuba::ShopResolve(this, Eff, Msg)) {}   // the scuba set, its cylinders and their fills (KeysScuba.h)
 	else if (ServiceResolve(Eff, Msg)) {}   // the motel, the cabaret, the scratch-off, the wash, the socks (KeysTags.cpp)
 	else if (Eff == TEXT("casino.slot"))
 	{
@@ -1998,6 +2025,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (IsDiving()) { HandleDiveInput(PC, Dt); return; }
 	if (IsAshore()) { HandleWalkInput(PC, Dt); return; }
 	if (Hit(EKeys::J)) { ToggleDive(); return; }
+	if (Hit(EKeys::Two) && KeysScuba::Cylinders(this) > 0) ShowToast(KeysScuba::ToggleMode(this), 4);   // scuba or a breath, chosen before going over
 	if (Hit(EKeys::Q)) { ToggleAshore(); return; }
 
 	bFwd = Down(EKeys::W) || (!bTrimMode && Down(EKeys::Up));

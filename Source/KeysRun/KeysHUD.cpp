@@ -1132,16 +1132,33 @@ void AKeysHUD::DrawDiving(AKeysBoatPawn* P, AKeysDiver* D)
 	}
 
 	// air and depth
-	const float PX = 30 * U, PW = 330 * U, PH = 150 * U, PY = SH - PH - 30 * U;
+	const KeysScuba::FHud Sh = D->ScubaHud();
+	const bool bComputerLine = Sh.bOn && Sh.bGas && Sh.MinLeft >= 0;
+	const float PX = 30 * U, PW = 330 * U, PH = (bComputerLine ? 180 : 150) * U, PY = SH - PH - 30 * U;
 	Panel(PX, PY, PW, PH, .55f);
 	const float Af = float(D->AirFrac());
+	if (Sh.bOn && Sh.bGas)
+	{
+		// on scuba the cylinder's gauge stands in place of the air bar (the numbers are the diver's, KeysScuba.h)
+		const FLinearColor GC = Sh.bCritical ? Red : Sh.bLow ? FLinearColor(1.f, .6f, .2f) : Teal;
+		Text(Sh.Source, PX + 18 * U, PY + 12 * U, 1.0f, Dim);
+		Text(FString::Printf(TEXT("%d psi"), Sh.Psi), PX + PW - 128 * U, PY + 12 * U, 1.1f, GC);
+		Bar(PX + 18 * U, PY + 46 * U, PW - 36 * U, 14 * U, float(Sh.Frac), GC);
+		// with the wrist computer: minutes of gas left here, the dive's clock and deepest point, the stop's countdown
+		FString Line = Sh.MinLeft >= 0 ? FString::Printf(TEXT("%d min left   %s"), Sh.MinLeft, *Sh.Dive) : FString();
+		if (!Sh.Stop.IsEmpty()) Line += TEXT("   ") + Sh.Stop;
+		if (bComputerLine) Text(Line, PX + 18 * U, PY + 104 * U, .82f, FLinearColor::White);
+	}
+	else
+	{
 	const FLinearColor AC = Af < .15f ? Red : Af < .3f ? FLinearColor(1.f, .6f, .2f) : Teal;
 	Text(TEXT("Air"), PX + 18 * U, PY + 12 * U, 1.0f, Dim);
 	Text(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Af * 100)), PX + PW - 90 * U, PY + 12 * U, 1.1f, AC);
 	Bar(PX + 18 * U, PY + 46 * U, PW - 36 * U, 14 * U, Af, AC);
+	}
 	Text(TEXT("Depth"), PX + 18 * U, PY + 70 * U, 1.0f, Dim);
 	Text(FString::Printf(TEXT("%.1f m"), S.Depth()), PX + PW - 110 * U, PY + 70 * U, 1.1f, FLinearColor::White);
-	float Yw = PY + 104 * U;
+	float Yw = PY + (bComputerLine ? 134 : 104) * U;
 	const FString Warn = D->AscentWarning();
 	if (!Warn.IsEmpty())
 	{
