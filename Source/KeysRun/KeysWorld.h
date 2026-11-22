@@ -64,6 +64,7 @@ private:
 	void BuildTerrain();
 	void BuildScenery();
 	void BuildMangroves();   // KeysMangrove.cpp: the real map's red mangroves
+	void StreamMangroves();  // grows the mangrove tiles within sight of the boat, takes down those left behind
 	void UpdateWater();
 	void ApplySun(double K);
 	void ApplyWeather();

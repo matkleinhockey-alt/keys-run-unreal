@@ -860,6 +860,7 @@ void AKeysWorld::Tick(float DeltaSeconds)
 	ApplyWeather();
 	KeysGeo::TickSea(DeltaSeconds);
 	UpdateWater();
+	StreamMangroves();
 }
 
 // ---------------------------------------------------------------- the simulated sea's textures for the water material

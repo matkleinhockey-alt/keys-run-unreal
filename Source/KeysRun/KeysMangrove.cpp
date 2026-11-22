@@ -18,6 +18,7 @@
 #include "KeysMangroveLife.h"
 #include "KeysYards.h"
 #include "ProceduralMeshComponent.h"
+#include "Async/Async.h"
 
 namespace
 {
@@ -99,15 +100,29 @@ namespace
 	}
 }
 
-void AKeysWorld::BuildMangroves()
+namespace
 {
+	// One 600 m square of mangrove: its roots and trunks (drawn close) and its canopy (drawn far).
+	struct FMgTile { FTownBatch Roots, Canopy; };
+	int64 MgKey(double X, double Z) { return (int64(FMath::FloorToInt(X / 600)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 600))); }
+	// the creeks are scenery only once the ground is cut for them (KeysGeo reads the same lines)
+	bool MgCreeksCut()
+	{
+		const TArray<KeysMangroveLife::FCreek>& Creeks = KeysMangroveLife::Creeks();
+		return Creeks.Num() && Creeks[0].Pts.Num() > 2 && KeysGeo::CreekDist(Creeks[0].Pts[Creeks[0].Pts.Num() / 2].X, Creeks[0].Pts[Creeks[0].Pts.Num() / 2].Y) < 0;
+	}
+
+	// Grows the mangroves of the tiles in Want, and nothing else. Geometry only (no engine objects), and every tree is
+	// seeded by where it stands, so a tile comes out the same whenever and in whatever order it is made: the tiles are
+	// made as the boat comes within sight of them (AKeysWorld::StreamMangroves), off the game thread.
+	void GenMangroves(const TSet<int64>& Want, TMap<int64, FMgTile*>& Tiles)
+	{
 	using namespace KeysGeo;
-	if (!RealMap()) return;
-	struct FTile { FTownBatch Roots, Canopy; };
-	TMap<int64, FTile*> Tiles;
+	typedef FMgTile FTile;
+	auto Wanted = [&](double X, double Z) { return Want.Contains(MgKey(X, Z)); };
 	auto TileAt = [&](double X, double Z) -> FTile&
 	{
-		FTile*& T = Tiles.FindOrAdd((int64(FMath::FloorToInt(X / 600)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 600))));
+		FTile*& T = Tiles.FindOrAdd(MgKey(X, Z));
 		if (!T) { T = new FTile(); T->Canopy.M.Surf = SurfCanopy; }
 		return *T;
 	};
@@ -116,9 +131,8 @@ void AKeysWorld::BuildMangroves()
 	const FLinearColor RootC = KeysTownPaint::Hex(0x6e4a30), RootDark = KeysTownPaint::Hex(0x4a3524), Trunk = KeysTownPaint::Hex(0x5c4836);
 	const double Cell = KeysGeoReal::Cell();
 	int32 Rooted = 0, Crowns = 0, Birds = 0, Pelicans = 0, BankTrees = 0, RoofSpans = 0;
-	// the creeks are scenery only once the ground is cut for them (KeysGeo reads the same lines; request R1)
 	const TArray<KeysMangroveLife::FCreek>& Creeks = KeysMangroveLife::Creeks();
-	const bool bCreeks = Creeks.Num() && Creeks[0].Pts.Num() > 2 && CreekDist(Creeks[0].Pts[Creeks[0].Pts.Num() / 2].X, Creeks[0].Pts[Creeks[0].Pts.Num() / 2].Y) < 0;
+	const bool bCreeks = MgCreeksCut();
 	auto CreekD = [&](double X, double Z) { return bCreeks ? KeysMangroveLife::Near(X, Z).D : 1e9; };
 	auto Blocked = [&](double X, double Z)
 	{
@@ -207,8 +221,14 @@ void AKeysWorld::BuildMangroves()
 	// every tree is seeded by its cell's number on the first phase's own grid (I, J), not by where the cell sits in the
 	// whole map (GI, GJ): the map can grow north or west and the trees already standing stay as they are
 	const int32 SeedI0 = KeysGeoReal::CellI0(), SeedJ0 = KeysGeoReal::CellJ0();
-	for (int32 GJ = 0; GJ < KeysGeoReal::NZ(); GJ++)
-		for (int32 GI = 0; GI < KeysGeoReal::NX(); GI++)
+	for (const int64 WK : Want)
+	{
+	// the cells whose centres lie in this tile
+	const double TX0 = int32(WK >> 32) * 600.0, TZ0 = int32(uint32(WK)) * 600.0;
+	const int32 GI0 = FMath::Max(0, FMath::CeilToInt((TX0 - KeysGeoReal::X0()) / Cell)), GI1 = FMath::Min(KeysGeoReal::NX(), FMath::CeilToInt((TX0 + 600 - KeysGeoReal::X0()) / Cell));
+	const int32 GJ0 = FMath::Max(0, FMath::CeilToInt((TZ0 - KeysGeoReal::Z0()) / Cell)), GJ1 = FMath::Min(KeysGeoReal::NZ(), FMath::CeilToInt((TZ0 + 600 - KeysGeoReal::Z0()) / Cell));
+	for (int32 GJ = GJ0; GJ < GJ1; GJ++)
+		for (int32 GI = GI0; GI < GI1; GI++)
 		{
 			const uint8 Mv = KeysGeoReal::MangroveCell(GI, GJ);
 			if (!Mv) continue;
@@ -270,7 +290,18 @@ void AKeysWorld::BuildMangroves()
 			}
 		}
 
+	}
+
+	// (the creek scenery only for tiles a creek comes near)
+	bool bNearCreek = false;
 	if (bCreeks)
+		for (const int64 WK : Want)
+			for (const KeysMangroveLife::FCreek& C : Creeks)
+			{
+				const double TXc = int32(WK >> 32) * 600.0 + 300, TZc = int32(uint32(WK)) * 600.0 + 300;
+				bNearCreek |= TXc > C.X0 - 400 && TXc < C.X1 + 400 && TZc > C.Z0 - 400 && TZc < C.Z1 + 400;
+			}
+	if (bNearCreek)
 	{
 		// estate lots keep their waterfront: nothing of the creek's is planted on one
 		auto OnLot = [](double X, double Z)
@@ -292,6 +323,7 @@ void AKeysWorld::BuildMangroves()
 				for (double X = C.X0; X < C.X1; X += Step)
 				{
 					const double PX = X + (MHash(X, Z + 1.7) - .5) * Step * .8, PZ = Z + (MHash(Z, X + 2.9) - .5) * Step * .8;
+					if (!Wanted(PX, PZ)) continue;
 					const KeysMangroveLife::FNear N = KeysMangroveLife::Near(PX, PZ);
 					// (a tunnel's banks are planted three deep, so no daylight comes in under the roof from the sides)
 					if (N.D < .5 || N.D > (N.bRoof ? 10.5 : 4.4) || &Creeks[N.Creek] != &C || Blocked(PX, PZ) || OnLot(PX, PZ)) continue;
@@ -324,6 +356,7 @@ void AKeysWorld::BuildMangroves()
 				for (; Next <= S + L && Next <= FMath::Min(C.Roof1, C.Len - 4); Next += 5.5, Station++)
 				{
 					const FVector2D P = A + V * ((Next - S) / L), Tn = V / L, Nn(-Tn.Y, Tn.X);
+					if (!Wanted(P.X, P.Y)) continue;
 					// not where another creek's water lies under the span (the turning out of Sister Creek, the pond)
 					const KeysMangroveLife::FNear Here = KeysMangroveLife::Near(P.X, P.Y);
 					if (Here.Creek < 0 || &Creeks[Here.Creek] != &C) continue;
@@ -360,19 +393,76 @@ void AKeysWorld::BuildMangroves()
 		{
 			const double Ground = LandH(R.X, R.Y);
 			if (Ground > .4 || OnLot(R.X, R.Y)) continue;
-			Pelicans += KeysMangroveLife::Snag(TileAt(R.X, R.Y).Roots, R.X, FMath::Min(Ground, -.3), R.Y, 7.0 + RoostN, 3);
+			if (Wanted(R.X, R.Y)) Pelicans += KeysMangroveLife::Snag(TileAt(R.X, R.Y).Roots, R.X, FMath::Min(Ground, -.3), R.Y, 7.0 + RoostN, 3);
 			RoostN++;
 		}
+	}
+
+	}
+
+	// what stands now, what could stand, and the one tile being grown in the background
+	struct FMgLive { TWeakObjectPtr<UProceduralMeshComponent> PM[2]; };
+	TMap<int64, FMgLive> GMgLive;
+	TMap<int64, FVector2D> GMgHave;   // every tile with mangrove in it -> its centre
+	TFuture<FMgTile*> GMgJob;
+	int64 GMgJobKey = 0;
+	bool bMgJob = false;
+	int32 GMgSync = 0, GMgMade = 0;
+	double GMgScanT = 0;
+
+	FMgTile* GenOneMangroveTile(int64 Key)
+	{
+		TSet<int64> W;
+		W.Add(Key);
+		TMap<int64, FMgTile*> Out;
+		GenMangroves(W, Out);
+		FMgTile* R = nullptr;
+		for (TPair<int64, FMgTile*>& P : Out) { if (P.Key == Key) R = P.Value; else delete P.Value; }
+		return R ? R : new FMgTile();
+	}
+}
+
+// The real map's mangroves are far too many to stand everywhere at once (53,000 rooted trees over Phases 1 and 2,
+// 17 million triangles: 20 s of start-up and 0.8 GB when they were all built at launch). Here only the list of tiles
+// that have any is made; StreamMangroves grows them as they come within sight.
+void AKeysWorld::BuildMangroves()
+{
+	if (bMgJob) { delete GMgJob.Get(); bMgJob = false; }
+	GMgLive.Reset();
+	GMgHave.Reset();
+	GMgMade = 0;
+	GMgScanT = 0;
+	if (!KeysGeo::RealMap()) return;
+	const double Cell = KeysGeoReal::Cell();
+	auto Have = [](double X, double Z) { GMgHave.Add(MgKey(X, Z), FVector2D(FMath::FloorToDouble(X / 600) * 600 + 300, FMath::FloorToDouble(Z / 600) * 600 + 300)); };
+	for (int32 GJ = 0; GJ < KeysGeoReal::NZ(); GJ++)
+		for (int32 GI = 0; GI < KeysGeoReal::NX(); GI++)
+			if (KeysGeoReal::MangroveCell(GI, GJ)) Have(KeysGeoReal::X0() + GI * Cell, KeysGeoReal::Z0() + GJ * Cell);
+	if (MgCreeksCut())
+	{
+		for (const KeysMangroveLife::FCreek& C : KeysMangroveLife::Creeks())
+			for (double Z = C.Z0; Z < C.Z1 + 600; Z += 600)
+				for (double X = C.X0; X < C.X1 + 600; X += 600) Have(FMath::Min(X, C.X1), FMath::Min(Z, C.Z1));
+		for (const FVector2D& R : KeysMangroveLife::Roosts()) Have(R.X, R.Y);
 		// and someone to keep the manatees in the calm bends
 		GetWorld()->SpawnActor<AKeysMangroveLife>();
 	}
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: mangroves - %d tiles have some; grown within 5 km of the boat"), GMgHave.Num());
+	// the nearest few at once (which also wakes every table the builder reads, before any is read off the game thread)
+	GMgSync = 4;
+	for (int32 i = 0; i < 4; i++) StreamMangroves();
+	GMgSync = 0;
+}
 
-	int32 RootTris = 0, CanopyTris = 0;
-	for (TPair<int64, FTile*>& T : Tiles)
+void AKeysWorld::StreamMangroves()
+{
+	if (!GMgHave.Num()) return;
+	auto Commit = [this](int64 Key, FMgTile* T)
 	{
+		FMgLive L;
 		for (int32 k = 0; k < 2; k++)
 		{
-			FTownBatch& B = k == 0 ? T.Value->Roots : T.Value->Canopy;
+			FTownBatch& B = k == 0 ? T->Roots : T->Canopy;
 			if (!B.Tris()) continue;
 			UProceduralMeshComponent* PM = NewObject<UProceduralMeshComponent>(this);
 			PM->SetupAttachment(Root);
@@ -380,10 +470,44 @@ void AKeysWorld::BuildMangroves()
 			PM->RegisterComponent();
 			B.M.Commit(PM, 0, VertexColorMaterial());
 			PM->SetCachedMaxDrawDistance(k == 0 ? 70000.f : 450000.f);
-			(k == 0 ? RootTris : CanopyTris) += B.Tris();
+			L.PM[k] = PM;
 		}
-		delete T.Value;
+		GMgLive.Add(Key, L);
+		GMgMade++;
+		delete T;
+	};
+	if (bMgJob && GMgJob.IsReady()) { Commit(GMgJobKey, GMgJob.Get()); bMgJob = false; }
+	const FVector2D Focus(FocusX, FocusZ);
+	if (!bMgJob)
+	{
+		// the nearest tile within sight that does not stand yet (the canopy is drawn to 4.5 km)
+		int64 Best = 0;
+		double BestD = FMath::Square(5000.0);
+		bool bAny = false;
+		for (const TPair<int64, FVector2D>& H : GMgHave)
+		{
+			const double D = FVector2D::DistSquared(H.Value, Focus);
+			if (D < BestD && !GMgLive.Contains(H.Key)) { BestD = D; Best = H.Key; bAny = true; }
+		}
+		if (bAny && GMgSync > 0) Commit(Best, GenOneMangroveTile(Best));
+		else if (bAny)
+		{
+			GMgJobKey = Best;
+			bMgJob = true;
+			GMgJob = Async(EAsyncExecution::ThreadPool, [Best] { return GenOneMangroveTile(Best); });
+		}
 	}
-	UE_LOG(LogTemp, Log, TEXT("Keys Run: mangroves - %d trees on prop roots (%d on creek banks), %d inland crowns, %d roof spans, %d wading birds, %d pelicans, %d tiles, %d root tris, %d canopy tris"),
-		Rooted, BankTrees, Crowns, RoofSpans, Birds, Pelicans, Tiles.Num(), RootTris, CanopyTris);
+	// and those left well behind are taken down again
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - GMgScanT > 1 || Now < GMgScanT)
+	{
+		GMgScanT = Now;
+		for (auto It = GMgLive.CreateIterator(); It; ++It)
+		{
+			const FVector2D* C = GMgHave.Find(It.Key());
+			if (C && FVector2D::DistSquared(*C, Focus) < FMath::Square(6200.0)) continue;
+			for (TWeakObjectPtr<UProceduralMeshComponent>& PM : It.Value().PM) if (PM.IsValid()) PM->DestroyComponent();
+			It.RemoveCurrent();
+		}
+	}
 }

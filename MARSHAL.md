@@ -115,3 +115,8 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   carries real business names), R7 reef lights and sites, R8 `BUILT` list in `bake_mangrove.py`, R9 life density,
   teleports, charters, R11 chart soundings grid and edge names. Docks re-rolled slightly on Phase 1 (Marathon 10 -> 9,
   Grassy Key 15 -> 17) and now also stand on Plantation Key (4) and Walkers Island (1).
+- 2026-11-21: upperkeys R10, first part (marshal): mangrove tiles are grown within 5 km of the boat, one at a time
+  off the game thread, and taken down past 6.2 km (`AKeysWorld::StreamMangroves`). World start to a running game in
+  the editor build: about 12 s (54 s with everything built at launch, 9 s before Phase 2). Peak memory not
+  re-measured. Terrain, landmarks, bridges, palms and houses are still built whole at start-up. All lanes merged;
+  no lane is running.
