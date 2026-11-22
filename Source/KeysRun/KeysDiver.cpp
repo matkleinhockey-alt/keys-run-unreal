@@ -1121,6 +1121,20 @@ void AKeysDiver::Tick(float DeltaSeconds)
 		}
 	}
 	UpdateBoatKit(T);
+	if (DbgBoatView > 0)
+	{
+		// test hook: a camera standing off the cockpit, on the rack (1), on the flag (2) or on the whole boat (3); it
+		// rides the boat's own mesh, in the water or out of it
+		if (AKeysBoatPawn* P = Pawn(); P && BoatRack->GetAttachParent() && BoatRack->GetAttachParent() != Root)
+		{
+			const FTransform Bt = BoatRack->GetAttachParent()->GetComponentTransform();
+			const FVector Base = KeysScuba::RackBase(P->Spec());
+			const FVector Eye = Base + (DbgBoatView == 1 ? FVector(1.5, 1.7, 1.7) : DbgBoatView == 2 ? FVector(-2.6, 3.4, 2.4) : FVector(-6.5, 5.5, 4.2));
+			const FVector Aim = Base + (DbgBoatView == 1 ? FVector(0, 0, .5) : DbgBoatView == 2 ? FVector(-.4, 0, 1.75) : FVector(1.5, .8, .8));
+			const FVector EyeW = Bt.TransformPosition(Eye * 100), AimW = Bt.TransformPosition(Aim * 100);
+			P->ApplyDiveCamera(EyeW, (AimW - EyeW).Rotation(), 70);
+		}
+	}
 	UpdateShaftAndLine(T);
 	UpdateSpearedFish(Dt, T);
 	UpdateFishFill();
@@ -1260,7 +1274,7 @@ void AKeysDiver::UpdateGun(double Dt)
 		// the eye, the top of the gun showing), for the side-by-side
 		const FVector Ax = FVector(-.42, -.86, -.3).GetSafeNormal(), Up = FVector(-.62, .12, .78);
 		Q = CamQ * FRotationMatrix::MakeFromXZ(Ax, Up).ToQuat();
-		PosUE = CamPosUE + CamQ.RotateVector(FVector(1.02, .02, -.02) * 100) - Q.RotateVector(FVector(.45, 0, 0) * 100);
+		PosUE = CamPosUE + CamQ.RotateVector(FVector(1.5, .0, -.02) * 100) - Q.RotateVector(FVector(.52, 0, 0) * 100);
 	}
 	GunBase->SetWorldLocationAndRotation(PosUE, Q);
 	// the gun is put away while a speared catch is held up for its photo
@@ -1271,7 +1285,7 @@ void AKeysDiver::UpdateGun(double Dt)
 	if (bShow)
 	{
 		GunFill->SetWorldLocation(CamPosUE + CamQ.RotateVector(FVector(-10, -45, 55)));
-		GunFill->SetIntensity(bDbgGunShow ? 520.f : 300.f);
+		GunFill->SetIntensity(bDbgGunShow ? 900.f : 230.f);
 	}
 	GunBandL->SetVisibility(bShow);
 	GunBandR->SetVisibility(bShow);
@@ -1843,6 +1857,7 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 		for (const TPair<FString, bool>& R : Rows) UE_LOG(LogTemp, Log, TEXT("KRScuba loadout: %s%s"), *R.Key, R.Value ? TEXT("") : TEXT(" (dim)"));
 		return;
 	}
+	if (Cmd == TEXT("boatview")) { DbgBoatView = FCString::Atoi(*Arg); return; }
 	if (Cmd == TEXT("light")) { const int32 V = FCString::Atoi(*Arg); TorchMode = V == 1 ? 1 : V == 0 ? 2 : 0; return; }
 	if (!bDiving) return;
 	if (Cmd == TEXT("psi")) { Sc.Psi = DvClamp(FCString::Atod(*Arg), 0, KeysScuba::FullPsi); }
@@ -1927,7 +1942,9 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 	else if (Cmd == TEXT("hold")) DebugHoldDepth = FCString::Atod(*Arg);
 	else if (Cmd == TEXT("spear")) bFireQueued = true;
 	else if (Cmd == TEXT("reload")) Gun = FGun();
+	else if (Cmd == TEXT("fwd")) { if (AKeysBoatPawn* Pw = Pawn()) { CamYaw = PrevYaw = Pw->BoatH(); CamPitch = FCString::Atod(*Arg); } }   // look along the boat's heading, pitch = Arg
 	else if (Cmd == TEXT("gunshow")) bDbgGunShow = FCString::Atoi(*Arg) != 0;
+	else if (Cmd == TEXT("drawpose")) { Gun.ReloadT = 0; Gun.Draw = DvClamp(FCString::Atod(*Arg), 0, .95); bDrawLatched = bDrawing = true; }   // part-way through hauling the bands back
 	else if (Cmd == TEXT("draw")) bDrawQueued = true;   // R, as pressed: haul the bands back once the new shaft is in
 	else if (Cmd == TEXT("air")) S.Air = S.AirMaxV * DvClamp(FCString::Atod(*Arg), 0, 1);
 	else if (Cmd == TEXT("swim")) bDebugSwim = FCString::Atoi(*Arg) != 0;

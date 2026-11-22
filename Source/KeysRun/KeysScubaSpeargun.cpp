@@ -8,7 +8,7 @@ namespace
 {
 	FLinearColor HpHex(uint32 H) { return FLinearColor::FromSRGBColor(FColor(uint8(H >> 16), uint8(H >> 8), uint8(H))); }
 
-	const uint32 HpBlack = 0x131518, HpOlive = 0x6f8246, HpOliveDark = 0x4a5a33, HpSteel = 0xa7adb3, HpShaft = 0x17191c, HpGrey = 0x55595e, HpMono = 0xd9dde0;
+	const uint32 HpBlack = 0x131518, HpOlive = 0x56663a, HpOliveDark = 0x3f4c2d, HpSteel = 0xa7adb3, HpShaft = 0x17191c, HpGrey = 0x55595e, HpMono = 0xd9dde0;
 
 	// smooth-shaded triangle with the winding Unreal wants (front face: Dot(Cross(B-A, C-A), N) < 0)
 	void HpTri(FKeysMesh& M, const FVector& A, const FVector& B, const FVector& C, const FVector& NA, const FVector& NB, const FVector& NC, const FLinearColor& Col)

@@ -197,6 +197,7 @@ private:
 	double GlanceW = 0, GlanceAutoT = 0;
 	double LeaderOut = -1;        // the shaft's travel the leader was last built for
 	bool bWornShaft = true, bDbgGunShow = false;
+	int32 DbgBoatView = 0;
 	int32 TorchMode = 0;          // 0 auto, 1 on, 2 off
 	double TorchW = 0;
 	double DiveSecs = 0, DiveMaxDepth = 0, EnterT = 0, PsiUsedBefore = 0;

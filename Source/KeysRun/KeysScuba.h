@@ -161,6 +161,8 @@ namespace KeysScuba
 	// the cockpit rack in the boat's own frame: bFirst a cylinder stands in the first slot (bRigged: with the jacket
 	// and regulators on it, the whole set), bSpare the second cylinder beside it
 	void BuildBoatRack(FKeysMesh& M, const KeysData::FBoatSpec& S, bool bFirst, bool bRigged, bool bSpare);
+	// where the rack stands: the middle of its foot on the cockpit sole, in the boat's own frame
+	FVector RackBase(const KeysData::FBoatSpec& S);
 	// the diver-down flag on the rack's staff (T for the flutter)
 	void BuildFlag(FKeysMesh& M, const KeysData::FBoatSpec& S, double T);
 }

@@ -421,6 +421,13 @@ namespace KeysScuba
 	}
 
 	// ================================================================ on the boat
+	FVector RackBase(const KeysData::FBoatSpec& S)
+	{
+		FVector B; double Side;
+		SgRackAt(S, B, Side);
+		return B;
+	}
+
 	void BuildBoatRack(FKeysMesh& M, const KeysData::FBoatSpec& S, bool bFirst, bool bRigged, bool bSpare)
 	{
 		const FLinearColor White = SgHex(0xeceae4), Steel = SgHex(0xcfd4d8), Alu = SgHex(0xb7bcc1), Black = SgHex(0x14171a), Teal = SgHex(0x148a86), Yellow = SgHex(0xf0c419), Bungee = SgHex(0x1b3a5c);
