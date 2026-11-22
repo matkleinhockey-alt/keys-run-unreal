@@ -172,3 +172,10 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   user watches. The `lowerkeys` worktree removed (branch kept).
 - 2026-11-22: `lane/water2` created from `main` (this entry), run as a background agent. Schools among the
   mangrove roots belong to `mangrovelife`; open-water schools to `water2`.
+- 2026-11-22: `water2` merged early at the user's word ("merge", lane at 52cb338, not READY FOR MERGE, no status
+  file yet; the lane keeps running): only its own six files (one rule for the bottom over the whole map, far skirt
+  carries the mean floor, named reefs' own schools). Builds without its local hub patches. Marshal's runs: real map
+  `tpcheck` 48, 0 bad, dock audit zero overlaps, frame 33.3 ms at the reef, off Key West and off Carysfort (one
+  222 ms hitch in the sample at `tp=-1150,452`); classic map `tpcheck` 19, 0 bad, reef looks right (its perf
+  sample was taken while the lane was building, not comparable). Not yet fixed by this part: seagrass in canals,
+  Largo Sound, creek stain. Merge the rest when the lane reports.
