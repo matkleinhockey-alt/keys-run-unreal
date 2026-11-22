@@ -1,5 +1,7 @@
 #include "KeysSchools.h"
 #include "KeysGeo.h"
+#include "KeysGeoReal.h"
+#include "KeysTrim.h"
 #include "KeysSea.h"
 #include "KeysOcean.h"
 #include "KeysMesh.h"
@@ -112,6 +114,36 @@ namespace
 		};
 		return M;
 	}
+
+	// ---- the named reefs. The schools above belong to whatever water is within SpawnR of the camera, cell by cell, the
+	// same anywhere on the map. A reef with a name gets a crowd of its own on top: when the boat comes within reach these
+	// are put round its crest first, and the furthest ordinary schools are let go to make room - so the total alive near
+	// the boat never passes MaxSchools / MaxFish, at Looe Key as at Sombrero.
+	struct FReefSite { FString Name; double X, Z; };
+	const TArray<FReefSite>& ReefSites()
+	{
+		static TArray<FReefSite> R;
+		static bool bBuilt = false;
+		if (bBuilt) return R;
+		bBuilt = true;
+		if (!RealMap()) return R;   // (the classic map keeps the schools it had)
+		auto Add = [](const FString& Name, double X, double Z)
+		{
+			for (const FReefSite& O : R) if (FMath::Square(O.X - X) + FMath::Square(O.Z - Z) < 200.0 * 200.0) return;
+			R.Add({Name, X, Z});
+		};
+		Add(TEXT("Sombrero Reef"), -1800, 2760);   // (KeysReef.cpp's dive site)
+		for (const KeysGeoReal::FSite& S : KeysGeoReal::Sites()) if (S.Kind == TEXT("reef")) Add(S.Name, S.X, S.Z);
+		for (const FHump& H : Humps()) if (H.bPatch) Add(H.Name, H.X, ChainZ(H.X) + H.DZ);
+		return R;
+	}
+	// a named reef's own: what, how many times the usual size, and how far up from its spot
+	struct FReefRow { int32 Sp; double NScale, Lift; };
+	const FReefRow ReefRows[] = {
+		{Grunt, 1.6, 0}, {Grunt, 1.4, 0}, {Grunt, 1.2, 0}, {Schoolmaster, 1.6, 0}, {Schoolmaster, 1.3, 0}, {Yellowtail, 1.6, 1}, {Yellowtail, 1.4, 1.5},
+		{Lane, 1.3, 0}, {Grouper, 1, 0}, {RedGrouper, 1, 0}, {Barracuda, 1, 1.5}, {Barracuda, 1, 2.5}, {Silverside, 1, 0}, {Bluerunner, 1.2, 0}};
+	constexpr int32 NumReefRows = UE_ARRAY_COUNT(ReefRows);
+	constexpr double ReefReach = 95;            // a reef's own schools live within this of its charted point
 
 	// the reef's species, in KeysReef's order: how tall and how wide each grows at scale 1 (m)
 	const double CoralH[] = {1.0, 1.1, .56, .72, 1.7, 1.3, 1.0, 1.1, .24, 0};
@@ -508,7 +540,7 @@ void AKeysSchools::Startle(double X, double Z, double Radius)
 	Startles.Add({FVector(X, Y, Z), Radius * 1.4, .7});
 }
 
-AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double HomeTop, int64 Cell, uint32 Seed, double NScale)
+AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double HomeTop, int64 Cell, uint32 Seed, double NScale, bool bMakeRoom)
 {
 	const FSpec& Sc = Specs[Sp];
 	FSchool S;
@@ -542,6 +574,32 @@ AKeysSchools::FSchool* AKeysSchools::Spawn(int32 Sp, const FVector& Home, double
 			Despawn(Far);
 			if (FarCell) Cells.Add(FarCell, -1);
 		}
+	}
+	if (bMakeRoom)
+	{
+		// a named reef's own school: the furthest ordinary ones make way for it (bait for bait, if it is the bait's share
+		// that is full), and their cells stay empty while the boat is about
+		auto NBaitNow = [&]() { int32 Nb = 0; for (const FSchool& O : Schools) if (Specs[O.Sp].Role == ERole::Bait) Nb += O.Fish.Num(); return Nb; };
+		for (int32 Guard = 0; Guard < MaxSchools; Guard++)
+		{
+			const bool bBaitFull = Sc.Role == ERole::Bait && NBaitNow() + N > MaxBaitFish;
+			if (Schools.Num() < MaxSchools && NFishAll + N <= MaxFish && !bBaitFull) break;
+			int32 Far = -1;
+			double FD = -1;
+			for (int32 i = 0; i < Schools.Num(); i++)
+			{
+				const FSchool& O = Schools[i];
+				if (O.bPinned || O.Reef >= 0 || (bBaitFull && Specs[O.Sp].Role != ERole::Bait)) continue;
+				const double D = (O.Center - Home).Size();
+				if (D > FD) { FD = D; Far = i; }
+			}
+			if (Far < 0) break;
+			NFishAll -= Schools[Far].Fish.Num();
+			const int64 FarCell = Schools[Far].Cell;
+			Despawn(Far);
+			if (FarCell) Cells.Add(FarCell, -1);
+		}
+		if (Schools.Num() >= MaxSchools) return nullptr;
 	}
 	const int32 Want = N;
 	if (Sc.Role == ERole::Bait)
@@ -644,6 +702,7 @@ void AKeysSchools::Populate()
 				for (FFish& F : S.Fish) { F.P += Dl; F.P.Y = FMath::Clamp(F.P.Y, FMath::Min(Floor, SurfY - .8), SurfY - .8); }
 				S.Center += Dl; S.Home += Dl; S.Goal += Dl;
 				if (S.Cell) { Cells.Remove(S.Cell); S.Cell = 0; }   // the water it left can fill again
+				S.Reef = -1;   // (and a reef's own school that has wandered off is anybody's)
 				UE_LOG(LogTemp, Verbose, TEXT("KRSchools wrap %s to %.0f %.0f"), Specs[S.Sp].Key, NX, NZ);
 				WrapCount++;
 				continue;
@@ -654,10 +713,56 @@ void AKeysSchools::Populate()
 	for (auto It = Cells.CreateIterator(); It; ++It)
 	{
 		const int32 CX = int32(It.Key() >> 32), CZ = int32(uint32(It.Key() & 0xffffffff));
-		if (It.Value() < 0 && Hyp((CX + .5) * CellSize - Cam.X, (CZ + .5) * CellSize - Cam.Z) > KeepR) It.RemoveCurrent();
+		if (It.Value() >= 0) continue;
+		if (CX == 0x7fffe)
+		{
+			// a named reef's school that could not be put (no room, no water): tried again once the boat has been away
+			const int32 r = CZ / 32;
+			if (!ReefSites().IsValidIndex(r) || Hyp(ReefSites()[r].X - Cam.X, ReefSites()[r].Z - Cam.Z) > KeepR + ReefReach) It.RemoveCurrent();
+			continue;
+		}
+		if (Hyp((CX + .5) * CellSize - Cam.X, (CZ + .5) * CellSize - Cam.Z) > KeepR) It.RemoveCurrent();
 	}
 	// the camera high above land or far out in the blue: nothing to do
 	if (Cam.Y > 120) return;
+	// a named reef within reach: its own schools, each at a spot of its own round the crest (the charted point is often
+	// the crest itself, too shoal for most of them: they take the water round it)
+	const TArray<FReefSite>& Reefs = ReefSites();
+	for (int32 r = 0; r < Reefs.Num(); r++)
+	{
+		const FReefSite& Rf = Reefs[r];
+		if (Hyp(Rf.X - Cam.X, Rf.Z - Cam.Z) > SpawnR + ReefReach) continue;
+		for (int32 q = 0; q < NumReefRows; q++)
+		{
+			const int64 K = (int64(0x7fffe) << 32) | int64(r * 32 + q);
+			if (Cells.Contains(K)) continue;
+			const FReefRow& Rw = ReefRows[q];
+			const ERole Role = Specs[Rw.Sp].Role;
+			double BX = 0, BZ = 0, BTop = -1e9;
+			for (int32 k = 0; k < 14; k++)
+			{
+				const double Ang = KeysSea::HashCell(0x4ee7, r, q, 60 + k) * 2 * PI, Rr = 12 + (ReefReach - 12) * FMath::Sqrt(KeysSea::HashCell(0x4ee7, r, q, 80 + k));
+				const double SX = Rf.X + FMath::Cos(Ang) * Rr, SZ = Rf.Z + FMath::Sin(Ang) * Rr;
+				if (!ValidWater(Rw.Sp, SX, SZ) || DepthFast(SX, SZ) < 2.2) continue;
+				const double Tp = (Role == ERole::Reef || Role == ERole::Hole) ? TopAt(SX, SZ) : k * 1e-3;
+				if (Tp > BTop) { BTop = Tp; BX = SX; BZ = SZ; }
+				if (Role != ERole::Reef && Role != ERole::Hole) break;
+			}
+			if (BTop < -1e8 || Hyp(BX - Cam.X, BZ - Cam.Z) > SpawnR) continue;   // (not rolled: it is tried again as the boat comes nearer)
+			Cells.Add(K, -1);
+			if (Role == ERole::Hole) { BX += 1.6; BZ += .8; }
+			const double Top = TopAt(BX, BZ);
+			const FSpec& Sc = Specs[Rw.Sp];
+			double Y = Role == ERole::Bait ? FMath::Lerp(Top + Sc.AltMin, -1.0, .45) : Top + FMath::Lerp(Sc.AltMin, Sc.AltMax, .5) + Rw.Lift;
+			Y = FMath::Min(Y, -.9);
+			if (FSchool* S = Spawn(Rw.Sp, FVector(BX, Y, BZ), Top, K, uint32(r * 7919 + q * 131 + 17), Rw.NScale, true))
+			{
+				Cells[K] = S->Id;
+				S->Reef = r;
+				if (bScriptLog) UE_LOG(LogTemp, Log, TEXT("KRSchools reef %s: %s, %d fish, at %.0f %.1f %.0f"), *Rf.Name, Sc.Key, S->Fish.Num(), BX, Y, BZ);
+			}
+		}
+	}
 	const int32 R = FMath::CeilToInt32(SpawnR / CellSize);
 	const int32 IX = FMath::FloorToInt32(Cam.X / CellSize), IZ = FMath::FloorToInt32(Cam.Z / CellSize);
 	int32 Rolled = 0;
@@ -1141,6 +1246,16 @@ void AKeysSchools::Tick(float DeltaSeconds)
 	CpuN++;
 	StatT += Dt;
 	if (bScriptLog && StatT > 5) { StatT = 0; DebugCmd(TEXT("stats")); }
+	if (bSoundLog && (SoundT -= Dt) <= 0)
+	{
+		SoundT = 1;
+		if (const AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0)))
+		{
+			// as the hull judges it (KeysBoatPawn: the depth grid plus the tide against her hull's draft)
+			const double D = DepthFast(P->BoatX(), P->BoatZ()) + TideRise(), Hull = P->TrimProfile().HullDraftM;
+			UE_LOG(LogTemp, Log, TEXT("KRSound %.0f,%.0f %s: %.2f m under her (tide %+.2f), she draws %.2f: %s, %.1f m/s"), P->BoatX(), P->BoatZ(), *ZoneAt(P->BoatX(), P->BoatZ()), D, TideRise(), Hull, D < Hull ? TEXT("aground") : TEXT("afloat"), BoatV.Size());
+		}
+	}
 }
 
 // ================================================================ tests
@@ -1224,6 +1339,14 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 				Put(k, bLow ? -100 : Eye.Y, 1.2);
 				break;
 			}
+	}
+	else if (C == TEXT("canals")) KeysSea::LogCanalWays(A.IsNumeric() ? FCString::Atod(*A) : 1.0);   // canals[=m]: which canals a hull needing m of water cannot leave
+	else if (C == TEXT("sound"))
+	{
+		// sound[=0]: a line a second with the water under the boat (KRSound ... afloat / aground), for runs that must
+		// show where she floats: the game itself only tells the player
+		bSoundLog = A != TEXT("0");
+		SoundT = 0;
 	}
 	else if (C == TEXT("clearall")) { for (int32 i = Schools.Num() - 1; i >= 0; i--) Despawn(i); }
 	else if (C == TEXT("bait")) Put(Silverside, Eye.Y, 1.1);
@@ -1328,8 +1451,16 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 	{
 		int32 NF = 0;
 		for (const FSchool& S : Schools) NF += S.Fish.Num();
-		UE_LOG(LogTemp, Log, TEXT("KRSchools stats: %d schools, %d fish (boids), %d fish steps/frame, %.1f neighbours each, %d flashes, %d tiles; CPU %.3f ms/frame avg, frame %.2f ms avg (%.0f fps); %d pool rebuilds"),
-			Schools.Num(), NF, CpuN ? FishSteps / CpuN : 0, FishSteps ? NbrAcc / FishSteps : 0.0, Flashes, Tiles.Num(), CpuN ? CpuAcc / CpuN * 1000 : 0, CpuN ? FrameAcc / CpuN * 1000 : 0, FrameAcc > 0 ? CpuN / FrameAcc : 0, Rebuilds);
+		// how many of them are within 100 m of the boat (the water a player looks at), and how many are a named reef's own
+		int32 NearS = 0, NearF = 0, ReefS = 0, ReefF = 0, ReefIx = -1;
+		for (const FSchool& S : Schools)
+		{
+			if (Hyp(S.Center.X - BoatP.X, S.Center.Z - BoatP.Z) < 100) { NearS++; NearF += S.Fish.Num(); }
+			if (S.Reef >= 0) { ReefS++; ReefF += S.Fish.Num(); ReefIx = S.Reef; }
+		}
+		UE_LOG(LogTemp, Log, TEXT("KRSchools stats: %d schools, %d fish (boids), %d fish steps/frame, %.1f neighbours each, %d flashes, %d tiles; CPU %.3f ms/frame avg, frame %.2f ms avg (%.0f fps); %d pool rebuilds; boat %.0f,%.0f zone %s: %d schools, %d fish within 100 m; reef's own %d schools, %d fish%s%s"),
+			Schools.Num(), NF, CpuN ? FishSteps / CpuN : 0, FishSteps ? NbrAcc / FishSteps : 0.0, Flashes, Tiles.Num(), CpuN ? CpuAcc / CpuN * 1000 : 0, CpuN ? FrameAcc / CpuN * 1000 : 0, FrameAcc > 0 ? CpuN / FrameAcc : 0, Rebuilds,
+			BoatP.X, BoatP.Z, *ZoneAt(BoatP.X, BoatP.Z), NearS, NearF, ReefS, ReefF, ReefSites().IsValidIndex(ReefIx) ? TEXT(" at ") : TEXT(""), ReefSites().IsValidIndex(ReefIx) ? *ReefSites()[ReefIx].Name : TEXT(""));
 		CpuAcc = FrameAcc = NbrAcc = 0; CpuN = Rebuilds = FishSteps = Flashes = 0;
 	}
 }

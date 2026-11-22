@@ -1,5 +1,7 @@
 #include "KeysSea.h"
 #include "KeysGeo.h"
+#include "KeysGeoReal.h"
+#include "Algo/Reverse.h"
 
 using namespace KeysGeo;
 
@@ -118,13 +120,29 @@ namespace
 	const FLinearColor CoralWarm[4] = {FLinearColor(.85f, .55f, .30f), FLinearColor(.90f, .62f, .25f), FLinearColor(.80f, .45f, .35f), FLinearColor(.70f, .55f, .30f)};
 	const FLinearColor CoralMuted[4] = {FLinearColor(.50f, .42f, .50f), FLinearColor(.42f, .46f, .44f), FLinearColor(.46f, .40f, .46f), FLinearColor(.38f, .46f, .44f)};
 
-	bool IsReefy(double X, double DZ, double D)
+	// the soft bottoms the bigger map brought: Florida Bay's pale marl mud in its basins, low limestone hard bottom with
+	// its turf of algae, and the grey marl of a dredged canal
+	const FLinearColor Mud(.40f, .42f, .33f), HardRock(.47f, .43f, .33f), Marl(.15f, .175f, .19f);
+
+	// KeysReef.cpp's own two noises, so the bottom is coloured as what grows on it: its hard bottom (the algae beds,
+	// with the turtle grass between them) and the sand channels it keeps coral out of
+	double HardBottomN(double X, double Z, double Freq, double Seed)
 	{
-		if (D >= 20) return false;
-		if (DZ > 1150 && DZ < 1750) return true;
-		for (const FHump& H : Humps())
-			if (H.bPatch && FMath::Sqrt(FMath::Square(X - H.X) + FMath::Square(DZ - H.DZ)) < 130) return true;
-		return false;
+		const double N = FMath::Sin(X * Freq + Seed) * FMath::Cos(Z * Freq * 1.3 - Seed * .7) * .5
+			+ FMath::Sin(X * Freq * 2.7 - Z * Freq * 1.9 + Seed * 3.1) * .35 + FMath::Sin(Z * Freq * 4.3 + X * Freq * .6) * .15;
+		return SSmooth(-.15, .3, N);
+	}
+	double CoralGroundN(double X, double DZ)
+	{
+		const double N = FMath::Sin(X * .013 + DZ * .021) * .5 + FMath::Sin(X * .027 - DZ * .011) * .5;
+		return SSmooth(-.35, .05, N);
+	}
+	// the Sombrero dive site (KeysReef.cpp SombX, SombDZ, SombR): coral all over it, in grooves of its own
+	double SombreroK(double X, double DZ)
+	{
+		const double SX = KeysGeo::RealMap() ? -1800.0 : 250.0;
+		static const double SDZ = KeysGeo::RealMap() ? KeysGeo::DZAt(-1800, 2760) : 1380.0;   // (the map is chosen before anything asks)
+		return 1 - SSmooth(300, 380, FMath::Sqrt(FMath::Square(X - SX) + FMath::Square(DZ - SDZ)));
 	}
 
 	// ---- tidal cuts between the islands (current.ts buildCuts)
@@ -198,31 +216,96 @@ namespace KeysSea
 		return G > 1e-6 ? -G * FMath::Tanh(-R / G) : 0;
 	}
 
-	double SeafloorHeightAt(double X, double Z)
+	// The depth the floor is drawn at. The depth grid is 10 m and a canal 24 m, so between its walls the grid alone gives a
+	// trough that climbs toward each wall; a dredged canal is flat from wall to wall (and on under the wall's foot,
+	// where the made ground hides the way back up to the grid).
+	static double FloorDepth(double X, double Z)
 	{
 		const double D = DepthFast(X, Z);
+		if (!KeysGeo::RealMap()) return D;
+		const double CN = KeysGeo::CanalDist(X, Z);
+		if (CN > 4) return D;
+		return SLerp(FMath::Max(D, KeysGeo::CanalDepth), D, SSmooth(1.5, 4, CN));
+	}
+
+	double SeafloorHeightAt(double X, double Z)
+	{
+		const double D = FloorDepth(X, Z);
 		return -(D - ReliefAt(X, Z, D));
 	}
 
 	void SeafloorSample(double X, double Z, double& OutH, double& OutRel)
 	{
-		const double D = DepthFast(X, Z);
+		const double D = FloorDepth(X, Z);
 		OutRel = ReliefAt(X, Z, D);
 		OutH = -(D - OutRel);
 	}
 
+	double DredgedAt(double X, double Z)
+	{
+		if (!KeysGeo::RealMap()) return 0;
+		double M = 0;
+		const double CN = KeysGeo::CanalDist(X, Z);
+		if (CN < 4) M = 1 - SSmooth(1, 4, CN);
+		const double WD = KeysGeoReal::WayOutDist(X, Z);
+		if (WD < 8) M = FMath::Max(M, 1 - SSmooth(0, 8, WD));
+		return M;
+	}
+
+	FBottom BottomAt(double X, double Z, double D)
+	{
+		FBottom B;
+		const double DZ = KeysGeo::DZAt(X, Z);
+		if (!KeysGeo::RealMap())
+		{
+			// the classic map keeps the web game's two hard-edged rules (heightfield.ts) as they were
+			const double Nc = FMath::Sin(X * .05) * FMath::Cos(Z * .043) + FMath::Sin(X * .013 + Z * .021);
+			B.Grass = SClamp(Nc * .6 + .4 - (D < 1 ? .6 : 0), 0, 1) * (DZ < 0 ? .9 : .55);
+			if (D < 20)
+			{
+				if (DZ > 1150 && DZ < 1750) B.Reef = 1;
+				else for (const FHump& H : Humps())
+					if (H.bPatch && FMath::Sqrt(FMath::Square(X - H.X) + FMath::Square(DZ - H.DZ)) < 130) { B.Reef = 1; break; }
+			}
+			return B;
+		}
+		// reef: the band inside the drop-off and the patch reefs, where KeysReef grows coral - less of it in the sand
+		// channels between
+		double Patch = 0;
+		for (const FHump& H : Humps())
+			if (H.bPatch) Patch = FMath::Max(Patch, 1 - SSmooth(100, 160, FMath::Sqrt(FMath::Square(X - H.X) + FMath::Square(DZ - H.DZ))));
+		const double Band = SSmooth(1100, 1200, DZ) * (1 - SSmooth(1700, 1800, DZ));
+		const double Coral = Band > 0 ? FMath::Max(CoralGroundN(X, DZ), SombreroK(X, DZ)) : 0;
+		B.Reef = FMath::Max(Band * SLerp(.3, 1, Coral), Patch) * (1 - SSmooth(16, 22, D));
+		// hard bottom: low rock in beds, on the ocean side from the shore out to the reef and thinner on the bay side
+		B.Hard = HardBottomN(X, Z, .017, 7.9) * SSmooth(.7, 1.6, D) * (1 - SSmooth(14, 20, D)) * SLerp(.45, 1, SSmooth(-80, 80, DZ)) * (1 - B.Reef);
+		// seagrass: meadows from knee deep to as far down as the light gets, thick in the bay and thinner off the ocean
+		// side, between the hard bottom's beds; the crowns of the banks are bare
+		const double N = FMath::Sin(X * .05) * FMath::Cos(Z * .043) + FMath::Sin(X * .013 + Z * .021);
+		B.Grass = SClamp(N * .6 + .4 - .6 * (1 - SSmooth(.8, 1.3, D)), 0, 1) * SLerp(.9, .55, SSmooth(-60, 60, DZ)) * (1 - SSmooth(9, 14, D)) * (1 - .5 * B.Hard);
+		// mud: the bay's basins, deeper than its banks and out of the tide that scours the channels
+		B.Mud = SSmooth(40, -220, DZ) * SSmooth(1.0, 1.8, D) * (1 - SSmooth(3.4, 4.6, D)) * (.7 + .3 * FMath::Sin(X * .0031 + 1.3) * FMath::Cos(Z * .0027));
+		// a dredged canal and the way cut from its mouth: bare grey marl
+		B.Marl = DredgedAt(X, Z);
+		// (nothing grows on it)
+		B.Grass *= 1 - B.Marl; B.Hard *= 1 - B.Marl; B.Reef *= 1 - B.Marl;
+		return B;
+	}
+
 	FLinearColor SeafloorColorAt(double X, double Z, double D, double Shade, double Rel, bool bGrain)
 	{
-		const double DZ = KeysGeo::DZAt(X, Z);
-		const double N = FMath::Sin(X * .05) * FMath::Cos(Z * .043) + FMath::Sin(X * .013 + Z * .021);
-		FLinearColor C = L3(Sand, Grass, SClamp(N * .6 + .4 - (D < 1 ? .6 : 0), 0, 1) * (DZ < 0 ? .9 : .55));
-		if (IsReefy(X, DZ, D))
+		const FBottom B = BottomAt(X, Z, D);
+		FLinearColor C = L3(Sand, Mud, B.Mud * .75);
+		C = L3(C, Grass, B.Grass);
+		C = L3(C, HardRock, B.Hard * .5);
+		if (B.Reef > 0)
 		{
-			const double Hh = Hash2(X, Z);
+			// (the speckle of swatches is per vertex: a mesh too coarse to carry it gets their mean instead)
+			const double Hh = bGrain ? Hash2(X, Z) : .5;
 			const FLinearColor* Sw = D < 10 ? CoralMuted : CoralWarm;
-			const FLinearColor& Swatch = Sw[FMath::FloorToInt32(Hash2(Z, X) * 4) % 4];
+			const FLinearColor Swatch = bGrain ? Sw[FMath::FloorToInt32(Hash2(Z, X) * 4) % 4] : L3(L3(Sw[0], Sw[1], .5), L3(Sw[2], Sw[3], .5), .5);
 			const FLinearColor& Base = D >= 15 ? LedgeRock : Rubble;
-			C = L3(C, L3(Base, Swatch, SSmooth(.45, .85, Hh)), .75);
+			C = L3(C, L3(Base, Swatch, bGrain ? SSmooth(.45, .85, Hh) : .35), .75 * B.Reef);
 		}
 		if (Rel > .12)
 		{
@@ -237,10 +320,42 @@ namespace KeysSea
 		// under and beside the mangroves the bottom is dark peat and leaf litter, and the water over it is stained like tea
 		if (const double Tan = KeysGeo::MangroveNear(X, Z); Tan > 0) C = L3(C, FLinearColor(.15f, .10f, .045f), Tan * .85 * SClamp((6 - D) / 4, 0, 1));
 		// a dredged canal has a bare bottom of grey marl
-		if (const double CN = KeysGeo::CanalDist(X, Z); CN < 3) C = L3(C, FLinearColor(.2f, .22f, .17f), .88 * SClamp((3 - CN) / 3, 0, 1));
+		if (B.Marl > 0) C = L3(C, Marl, .94 * B.Marl);
 		C = L3(C, Deep, SClamp((D - 13) / 22, 0, 1));
 		const double J = (bGrain ? .94 + Hash2(X * .7, Z * .3) * .12 : 1.0) * Shade;
 		return FLinearColor(float(C.R * J), float(C.G * J), float(C.B * J), 1.f);
+	}
+
+	void SeafloorMean(double X, double Z, double SizeX, double SizeZ, int32 N, double& OutH, FLinearColor& OutC)
+	{
+		if (N <= 0)
+		{
+			const double D = FloorDepth(X, Z);
+			OutH = -D;
+			OutC = SeafloorColorAt(X, Z, D, 1, 0, false);
+			return;
+		}
+		constexpr double E = 4;   // slopes are judged over about the fine chunks' own spacing
+		double SumH = 0, SumR = 0, SumG = 0, SumB = 0;
+		for (int32 j = 0; j < N; j++)
+			for (int32 i = 0; i < N; i++)
+			{
+				const double PX = X + ((i + .5) / N - .5) * SizeX, PZ = Z + ((j + .5) / N - .5) * SizeZ;
+				double H, Rel;
+				SeafloorSample(PX, PZ, H, Rel);
+				double K = 1;
+				if (Rel != 0)
+				{
+					// the chunks darken their steep faces, and a lumpy bottom catches less sun than a flat one
+					const double SX = (SeafloorHeightAt(PX + E, PZ) - H) / E, SZ = (SeafloorHeightAt(PX, PZ + E) - H) / E;
+					K = (1 - FMath::Min(.35, (FMath::Abs(SX) + FMath::Abs(SZ)) * .7)) * SLerp(1, 1 / FMath::Sqrt(1 + SX * SX + SZ * SZ), .7);
+				}
+				const FLinearColor C = SeafloorColorAt(PX, PZ, -H, K, Rel, false);
+				SumH += H; SumR += C.R; SumG += C.G; SumB += C.B;
+			}
+		const double Inv = 1.0 / (N * N);
+		OutH = SumH * Inv;
+		OutC = FLinearColor(float(SumR * Inv), float(SumG * Inv), float(SumB * Inv), 1.f);
 	}
 
 	FVector2D ChainTangent(double X)
@@ -278,6 +393,114 @@ namespace KeysSea
 	}
 
 	FVector2D CurrentAt(double X, double Z, double T, double Depth) { return SteadyCurrentAt(X, Z, T) + SurgeAt(X, Z, T, Depth); }
+
+	// ---- a test: which residential canals can a boat leave?
+	// From the middle of every canal the water the hull floats in (the depth grid the boat itself reads, MinD or more)
+	// is flooded on a 5 m grid, up to Reach from the canal. A canal is open if the flood gets to open water: 1.5 m of
+	// it, 60 m from any shore and from any canal. For one that is shut, the cheapest way through whatever water there
+	// is (keeping off the banks) to open water is traced and logged as the "w" line <phase>_canals.txt wants.
+	void LogCanalWays(double MinD)
+	{
+		if (!KeysGeo::RealMap()) { UE_LOG(LogTemp, Log, TEXT("KRCanal: the classic map has no canals")); return; }
+		constexpr double G = 5, Reach = 1400;
+		auto CK = [](int32 I, int32 J) { return (int64(I) << 32) ^ int64(uint32(J)); };
+		auto Open = [](double X, double Z) { return DepthFast(X, Z) >= 1.5 && KeysGeoReal::Shore(X, Z) >= 60 && KeysGeo::CanalDist(X, Z) > 60; };
+		const TArray<KeysGeoReal::FCanal>& Cs = KeysGeoReal::Canals();
+		TMap<int64, int32> Seen;        // cell -> the flood (canal index) that reached it
+		TArray<int8> Result;            // per canal: 1 open, 0 shut
+		Result.Init(-1, Cs.Num());
+		int32 NShut = 0;
+		for (int32 c = 0; c < Cs.Num(); c++)
+		{
+			const TArray<FVector2D>& P = Cs[c].Pts;
+			if (P.Num() < 2) continue;
+			const FVector2D S0 = P[P.Num() / 2];
+			const int32 I0 = FMath::RoundToInt32(S0.X / G), J0 = FMath::RoundToInt32(S0.Y / G);
+			if (const int32* Had = Seen.Find(CK(I0, J0))) { Result[c] = Result[*Had]; if (!Result[c]) NShut++; continue; }   // one network, flooded already
+			TArray<FIntPoint> Q;
+			Q.Add(FIntPoint(I0, J0));
+			Seen.Add(CK(I0, J0), c);
+			bool bOpen = false;
+			for (int32 h = 0; h < Q.Num() && !bOpen; h++)
+			{
+				const FIntPoint A = Q[h];
+				static const int32 DI[4] = {1, -1, 0, 0}, DJ[4] = {0, 0, 1, -1};
+				for (int32 k = 0; k < 4; k++)
+				{
+					const int32 I = A.X + DI[k], J = A.Y + DJ[k];
+					const double X = I * G, Z = J * G;
+					if (FMath::Square(X - S0.X) + FMath::Square(Z - S0.Y) > Reach * Reach) continue;
+					if (const int32* Had = Seen.Find(CK(I, J)))
+					{
+						if (*Had != c && Result[*Had] == 1) { bOpen = true; break; }   // joined a network that is open
+						continue;
+					}
+					if (DepthFast(X, Z) < MinD) continue;
+					Seen.Add(CK(I, J), c);
+					if (Open(X, Z)) { bOpen = true; break; }
+					Q.Add(FIntPoint(I, J));
+				}
+			}
+			Result[c] = bOpen ? 1 : 0;
+			if (bOpen) continue;
+			NShut++;
+			// the way out: Dijkstra over any water at all from the cells this flood reached, dear near a bank and in the shoals
+			TMap<int64, float> Cost;
+			TMap<int64, FIntPoint> From;
+			TArray<TPair<float, FIntPoint>> Heap;
+			auto Less = [](const TPair<float, FIntPoint>& A, const TPair<float, FIntPoint>& B) { return A.Key < B.Key; };
+			for (const FIntPoint& A : Q) { Cost.Add(CK(A.X, A.Y), 0.f); Heap.HeapPush(TPair<float, FIntPoint>(0.f, A), Less); }
+			FIntPoint End(0, 0);
+			bool bFound = false;
+			while (Heap.Num() && !bFound)
+			{
+				TPair<float, FIntPoint> T;
+				Heap.HeapPop(T, Less);
+				const FIntPoint A = T.Value;
+				if (T.Key > Cost.FindRef(CK(A.X, A.Y)) + 1e-3f) continue;
+				static const int32 DI[8] = {1, -1, 0, 0, 1, 1, -1, -1}, DJ[8] = {0, 0, 1, -1, 1, -1, 1, -1};
+				for (int32 k = 0; k < 8; k++)
+				{
+					const int32 I = A.X + DI[k], J = A.Y + DJ[k];
+					const double X = I * G, Z = J * G;
+					if (FMath::Square(X - S0.X) + FMath::Square(Z - S0.Y) > Reach * Reach) continue;
+					const double Sh = KeysGeoReal::Shore(X, Z);
+					if (Sh < 6 && KeysGeo::CanalDist(X, Z) > 0) continue;   // land, or water's very edge
+					const float Step = float((k < 4 ? 1.0 : 1.414) * (Sh < 14 ? 4.0 : 1.0) * (DepthFast(X, Z) < MinD ? 1.5 : 1.0));
+					const float Nc = T.Key + Step;
+					float* Have = Cost.Find(CK(I, J));
+					if (Have && *Have <= Nc) continue;
+					Cost.Add(CK(I, J), Nc);
+					From.Add(CK(I, J), A);
+					if (Open(X, Z)) { End = FIntPoint(I, J); bFound = true; break; }
+					Heap.HeapPush(TPair<float, FIntPoint>(Nc, FIntPoint(I, J)), Less);
+				}
+			}
+			if (!bFound) { UE_LOG(LogTemp, Log, TEXT("KRCanal shut: canal %d (middle %.0f, %.0f, phase %d) has no %.1f m water to the open sea, and no water at all leads there within %.0f m"), c, S0.X, S0.Y, KeysGeoReal::PhaseAt(S0.X, S0.Y), MinD, Reach); continue; }
+			TArray<FVector2D> Path;
+			double Shoalest = 1e9, Len = 0;
+			for (FIntPoint A = End;;)
+			{
+				Path.Add(FVector2D(A.X * G, A.Y * G));
+				Shoalest = FMath::Min(Shoalest, DepthFast(A.X * G, A.Y * G));
+				const FIntPoint* Pv = From.Find(CK(A.X, A.Y));
+				if (!Pv) break;
+				A = *Pv;
+			}
+			Algo::Reverse(Path);
+			// thin it: a point every 25 m or so, and both ends
+			FString Line = TEXT("w 16");
+			FVector2D Last = Path[0];
+			for (int32 k = 0; k < Path.Num(); k++)
+			{
+				if (k) Len += (Path[k] - Path[k - 1]).Size();
+				if (k == 0 || k == Path.Num() - 1 || (Path[k] - Last).Size() >= 25) { Line += FString::Printf(TEXT(" %.1f %.1f"), Path[k].X, Path[k].Y); Last = Path[k]; }
+			}
+			UE_LOG(LogTemp, Log, TEXT("KRCanal shut: canal %d (middle %.0f, %.0f, phase %d): no %.1f m water to the open sea. A way of %.0f m from %.0f, %.0f to %.0f, %.0f (shoalest now %.2f m) would open it: %s"),
+				c, S0.X, S0.Y, KeysGeoReal::PhaseAt(S0.X, S0.Y), MinD, Len, Path[0].X, Path[0].Y, Path.Last().X, Path.Last().Y, Shoalest, *Line);
+		}
+		UE_LOG(LogTemp, Log, TEXT("KRCanal %d canals, %d with no %.1f m water out to the open sea"), Cs.Num(), NShut, MinD);
+	}
 
 	double HashCell(uint32 Seed, int32 CX, int32 CZ, int32 Salt)
 	{
