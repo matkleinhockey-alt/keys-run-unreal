@@ -1,0 +1,186 @@
+diff --git a/Source/KeysRun/KeysReefLife.cpp b/Source/KeysRun/KeysReefLife.cpp
+index 8d8edf5..7bbc200 100644
+--- a/Source/KeysRun/KeysReefLife.cpp
++++ b/Source/KeysRun/KeysReefLife.cpp
+@@ -59,6 +59,7 @@ namespace KeysReefLife
+ 	{
+ 		FVector P = FVector::ZeroVector, V = FVector::ZeroVector, Fwd = FVector(1, 0, 0);
+ 		FVector Aim = FVector::ZeroVector, Off = FVector::ZeroVector, PoseDir = FVector(1, 0, 0), FleeDir = FVector(1, 0, 0);
++		FVector Own = FVector::ZeroVector;   // where it was put down: a Sitter's hops stay within Roam of this
+ 		double Len = .3, Pace = 1, Seed = 0, Shade = 1, AltWant = .6;
+ 		double StateT = 0, Hold = 0, BiteT = 5, PuffT = 30, PoseT = 0;
+ 		double TailPh = 0, TailFreq = 3, TailAmp = .03, PecPh = 0, PecAmp = .6, Roll = 0, YawRate = 0, Cocoon = 0;
+@@ -251,7 +252,7 @@ namespace KeysReefLife
+ 			if (OutKind) *OutKind = T->Kind[J * 32 + I];
+ 			return T->Top[J * 32 + I];
+ 		}
+-		bool NearestHead(const FVector& At, double MaxR, FHead& Out)
++		bool NearestHead(const FVector& At, double MaxR, FHead& Out, bool bStonyOnly = false)
+ 		{
+ 			double Best = MaxR;
+ 			bool bFound = false;
+@@ -260,6 +261,7 @@ namespace KeysReefLife
+ 					for (const FHead& H : HeadsOf(cx, cz))
+ 					{
+ 						const double D = RlHyp(H.X - At.X, H.Z - At.Z) - H.R;
++						if (bStonyOnly && !H.bStony) continue;
+ 						if (D < Best && H.TopY - H.FloorY > .3 && H.TopY < SurfY - .4) { Best = D; Out = H; bFound = true; }
+ 					}
+ 			return bFound;
+@@ -291,7 +293,8 @@ namespace KeysReefLife
+ 					const FHabitat& H = Hab[k];
+ 					if (!(S.Zones & H.Zone)) continue;
+ 					const bool bReefZone = (H.Zone & (ZCrest | ZTop | ZSpur | ZPatch | ZFore | ZWall)) != 0;
+-					const double Suit = RlTrap(H.Depth, S.Depth) * (bReefZone ? FMath::Clamp(H.Reef * 1.3, 0.0, 1.0) : 1.0);
++					double Suit = RlTrap(H.Depth, S.Depth) * (bReefZone ? FMath::Clamp(H.Reef * 1.3, 0.0, 1.0) : 1.0);
++					if (S.Where && Suit > 0) Suit *= S.Where(Pt[k].X, Pt[k].Y, H);
+ 					const double Prob = Suit * S.GroupsPerHa * (ChunkSize * ChunkSize / 10000.0) / ChunkPoints * BudgetScale;
+ 					if (KeysSea::HashCell(KeyHash, CX, CZ, k * 8 + 1) >= Prob) continue;
+ 					double Pick = KeysSea::HashCell(KeyHash, CX, CZ, k * 8 + 2) * MixTot;
+@@ -413,6 +416,29 @@ namespace KeysReefLife
+ 				const double X = G.Home.X + A.Off.X, Z = G.Home.Z + A.Off.Z;
+ 				const double Clear = B.HalfH * A.Len + .06;
+ 				A.P = FVector(X, FMath::Min(TopAt(X, Z) + FMath::Max(Clear, A.AltWant), SurfY - Clear - .25), Z);
++				if (S.bOnFloor || S.HeadWithin > 0)
++				{
++					// a bottom animal: on the floor itself; one that lives against coral, at the foot of the nearest stony head
++					FHead Hd;
++					uint8 Kd = 0;
++					double Fl0;
++					TopAt(X, Z, &Fl0, &Kd);
++					const bool bFoot = NearestHead(A.P, S.HeadWithin > 0 ? S.HeadWithin : 1.5, Hd, S.HeadWithin > 0);
++					if (S.HeadWithin > 0 && !bFoot) return false;   // (nothing has been counted yet: the group is simply not there)
++					if (bFoot && (S.HeadWithin > 0 || Kd != 0))
++					{
++						FVector Dir = RlFlat(A.P - FVector(Hd.X, 0, Hd.Z));
++						if (!Dir.Normalize()) Dir = FVector(FMath::Cos(A.Seed * 6.28), 0, FMath::Sin(A.Seed * 6.28));
++						const double Off = S.HeadWithin > 0 ? Hd.R * .97 + B.HalfW * A.Len : Hd.R + B.HalfW * A.Len + .05;
++						A.P.X = Hd.X + Dir.X * Off; A.P.Z = Hd.Z + Dir.Z * Off;
++						A.Fwd = Dir;
++					}
++					double Fl1;
++					TopAt(A.P.X, A.P.Z, &Fl1);
++					A.P.Y = Fl1 + B.HalfH * A.Len + .01;
++					A.bFloorOnly = true;
++				}
++				A.Own = A.P;
+ 				if (bAsleep)
+ 				{
+ 					// dealt at night: already tucked in
+@@ -497,7 +523,8 @@ namespace KeysReefLife
+ 			const FBody& B = S.Phases[Phase].Body;
+ 			FKeysMesh M;
+ 			const TFunction<FLinearColor(const FPaint&)> Paint = [&S, Phase](const FPaint& At) { return S.Paint(Phase, At); };
+-			if (Kind == 3) BuildPectoral(M, B, Paint);
++			if (S.Mesh && S.Mesh(Phase, Kind, M)) {}
++			else if (Kind == 3) BuildPectoral(M, B, Paint);
+ 			else BuildBody(M, B, Kind, !(S.bRows && Kind == 0), Paint);
+ 			M.SyncKinds();
+ 			FMeshDescription MD;
+@@ -571,7 +598,22 @@ namespace KeysReefLife
+ 			A.Xf = FTransform(R, RlG2U(A.P), FVector(A.Len));
+ 			A.Data[0] = float(FMath::Fmod(A.TailPh, 2 * PI)); A.Data[1] = float(A.TailFreq); A.Data[2] = float(NowT); A.Data[3] = float(A.TailAmp);
+ 			A.Data[4] = float(FMath::Clamp(A.YawRate * .45, -.9, .9)); A.Data[5] = 0; A.Data[6] = float(A.Shade); A.Data[7] = float(A.Seed);
+-			if (!S.bRows) return;
++			if (S.bRows) PoseFins(A, S);
++			if (!S.Pose) return;
++			FPoseIn In;
++			In.Phase = A.Phase; In.Len = A.Len; In.Seed = A.Seed; In.Now = NowT; In.Hour = Hour; In.Speed = A.V.Size(); In.StateT = A.StateT; In.bHop = A.State == SHop;
++			In.DiverDist = bDiving ? (A.P - DiverP).Size() : 1e9;
++			In.P = A.P; In.Fwd = A.Fwd;
++			FPoseOut Out;
++			Out.Xf = A.Xf; Out.Part[0] = A.FinXf[0]; Out.Part[1] = A.FinXf[1];
++			FMemory::Memcpy(Out.Data, A.Data, sizeof(A.Data));
++			S.Pose(In, Out);
++			A.Xf = Out.Xf; A.FinXf[0] = Out.Part[0]; A.FinXf[1] = Out.Part[1];
++			FMemory::Memcpy(A.Data, Out.Data, sizeof(A.Data));
++		}
++
++		void PoseFins(FAnimal& A, const FSpecies& S)
++		{
+ 			// the rowing beat: the fin swings forward feathered (flat to the water), then sweeps back broadside
+ 			const FBody& B = S.Phases[A.Phase].Body;
+ 			const double Cyc = FMath::Frac(A.PecPh);
+@@ -676,6 +718,7 @@ namespace KeysReefLife
+ 		void Scare(FGroup& G, int32 I, const FVector& From, const FString& Cause)
+ 		{
+ 			const FSpecies& S = Sp(G.Sp);
++			if (S.bNoBolt) return;
+ 			FAnimal& A = G.M[I];
+ 			const double Secs = G.Rng.FRandRange(1.1f, 1.8f);
+ 			StartFlee(G, A, From, Secs);
+@@ -994,7 +1037,7 @@ namespace KeysReefLife
+ 					double Fl;
+ 					const double Tp = TopAt(A.P.X, A.P.Z, &Fl);
+ 					Clear = B.HalfH * A.Len + .01;
+-					Want = FVector(0, (Tp + Clear - A.P.Y) * 3, 0);
++					Want = FVector(0, ((S.bOnFloor ? Fl : Tp) + Clear - A.P.Y) * 3, 0);
+ 					PecA = 0;
+ 					A.BiteT -= Dt * Act01 * (bAvoid ? 6 : 1);
+ 					if (A.BiteT <= 0)
+@@ -1002,8 +1045,12 @@ namespace KeysReefLife
+ 						A.BiteT = RandExp(G, FMath::Max(4.0, S.BiteEvery));
+ 						const double An = bAvoid ? FMath::Atan2(AwayDv.Z, AwayDv.X) + G.Rng.FRandRange(-.6f, .6f) : G.Rng.FRand() * 2 * PI, Rr = FMath::Min(S.Roam, 2.5) * (.4 + .6 * G.Rng.FRand());
+ 						FVector Q = A.P + FVector(FMath::Cos(An) * Rr, 0, FMath::Sin(An) * Rr);
+-						if (RlHyp(Q.X - G.Home.X, Q.Z - G.Home.Z) > S.Roam) Q = G.Home;
+-						A.Aim = FVector(Q.X, TopAt(Q.X, Q.Z) + Clear, Q.Z);
++						// (each within Roam of where it was put down: measured from the group's home, every member of a
++						// scatter wider than Roam hopped to the same point)
++						if (RlHyp(Q.X - A.Own.X, Q.Z - A.Own.Z) > S.Roam) Q = A.Own;
++						double QFl;
++						const double QTp = TopAt(Q.X, Q.Z, &QFl);
++						A.Aim = FVector(Q.X, (S.bOnFloor ? QFl : QTp) + Clear, Q.Z);
+ 						A.State = SHop; A.StateT = 0;
+ 					}
+ 					break;
+diff --git a/Source/KeysRun/KeysReefLife.h b/Source/KeysRun/KeysReefLife.h
+index 21e662e..e72643c 100644
+--- a/Source/KeysRun/KeysReefLife.h
++++ b/Source/KeysRun/KeysReefLife.h
+@@ -85,6 +85,17 @@ namespace KeysReefLife
+ 	// a kind of group: Weight is how often it is dealt; NA of phase A and NB of phase B (B < 0: none)
+ 	struct FMix { double Weight = 1; int32 A = 0, AMin = 1, AMax = 1, B = -1, BMin = 0, BMax = 0; };
+ 
++	// what the bottom is at a point (game metres): Zones is one EZone bit, or 0 where reef life never goes (land,
++	// canals, mangrove creeks, dredged ground)
++	struct FHabitat { double Depth = 0, FloorY = 0, Reef = 0, Hard = 0, Grass = 0, Relief = 0; uint32 Zone = 0; };
++
++	// ---- bottom animals and others that are not fish-shaped (a species file may test this macro)
++	#define KEYS_REEFLIFE_BOTTOM_HOOKS 1
++	// what a species' own Pose is told about one animal, and what it may change: the body's transform, the two part
++	// transforms (the Kind 3 mesh, drawn twice near: rowing fins, eye stalks) and the eight M_KR_Boid floats
++	struct FPoseIn { int32 Phase = 0; double Len = .3, Seed = 0, Now = 0, Hour = 12, DiverDist = 1e9, Speed = 0, StateT = 0; bool bHop = false; FVector P = FVector::ZeroVector, Fwd = FVector(1, 0, 0); };
++	struct FPoseOut { FTransform Xf, Part[2]; float Data[8] = {0, 0, 0, 0, 0, 0, 1, 0}; };
++
+ 	struct FSpecies
+ 	{
+ 		FString Key, Common, Scientific;
+@@ -112,6 +123,18 @@ namespace KeysReefLife
+ 		// the bite's sound: fill Out with one-shots for AKeysAudio::Burst and say in What exactly what they are
+ 		TFunction<void(int32 Phase, TArray<FKeysBurst>& Out, FString& What)> BiteSound;
+ 		FString FirstSight;          // the toast the first time the diver sees one
++		// ---- not fish-shaped (all unset by default)
++		// its own mesh in place of the fish builder: Kind 0..2 a level of detail, 3 the part drawn twice near (needs
++		// bRows). Unreal local frame, +X ahead, +Y right, +Z up, in body lengths (FKeysMesh::AddVert). False: the fish.
++		TFunction<bool(int32 Phase, int32 Kind, FKeysMesh& M)> Mesh;
++		// called after the framework has posed the animal, each time it is stepped
++		TFunction<void(const FPoseIn& In, FPoseOut& Out)> Pose;
++		// its own say in where it lives: multiplies the suitability of a dealt point (0 never .. 1)
++		TFunction<double(double X, double Z, const FHabitat& Hab)> Where;
++		bool bNoBolt = false;        // never bolts: not from the diver, the boat or a spear
++		bool bOnFloor = false;       // lies on the floor itself, never on top of a coral head
++		double HeadWithin = 0;       // > 0: lives at the foot of a stony coral head: each is put against the nearest
++		                             // within this many metres of where it was dealt; with none, the group is not spawned
+ 	};
+ 
+ 	using FMake = FSpecies (*)();
+@@ -120,9 +143,6 @@ namespace KeysReefLife
+ 	const TArray<FSpecies>& Registry();      // built on first use, sorted by Key
+ 	int32 FindSpecies(const FString& Key);
+ 
+-	// what the bottom is at a point (game metres): Zones is one EZone bit, or 0 where reef life never goes (land,
+-	// canals, mangrove creeks, dredged ground)
+-	struct FHabitat { double Depth = 0, FloorY = 0, Reef = 0, Hard = 0, Grass = 0, Relief = 0; uint32 Zone = 0; };
+ 	FHabitat HabitatAt(double X, double Z);
+ 	const TCHAR* ZoneName(uint32 Zone);
+ 
