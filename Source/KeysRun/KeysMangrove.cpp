@@ -16,6 +16,7 @@
 #include "KeysTown.h"
 #include "KeysTownData.h"
 #include "KeysMangroveLife.h"
+#include "KeysMangroveEco.h"
 #include "KeysYards.h"
 #include "ProceduralMeshComponent.h"
 #include "Async/Async.h"
@@ -102,6 +103,39 @@ namespace
 
 namespace
 {
+	// where no mangrove is planted: yards, canals, fill, the town, runways, marked channels, marinas
+	bool MgBlocked(double X, double Z)
+	{
+		using namespace KeysGeo;
+		if (KeysYards::InFootprint(X, Z, 6)) return true;   // the dry stack and the boatyard
+		if (CanalDist(X, Z) < 12) return true;              // the canals and their seawalls
+		if (InFill(X, Z) || InTownPad(X, Z) || KeysTown::InFootprint(X, Z, 20) || SurfaceKind(X, Z) == 2 || InMarkedChannel(X, Z)) return true;
+		for (const FMarina& M : Marinas()) if (FMath::Square(X - M.SX) + FMath::Square(Z - M.SZ) < 70.0 * 70.0) return true;
+		return false;
+	}
+	// estate lots keep their waterfront: nothing of the creek's is planted on one
+	bool MgOnLot(double X, double Z)
+	{
+		for (const KeysGeoReal::FPlatLot& L : KeysGeoReal::Plat())
+		{
+			if (FMath::Abs(X - L.CX) > 90 || FMath::Abs(Z - L.CZ) > 90) continue;
+			bool bIn = false;
+			for (int32 a = 0, b = L.Poly.Num() - 1; a < L.Poly.Num(); b = a++)
+				if ((L.Poly[a].Y > Z) != (L.Poly[b].Y > Z) && X < (L.Poly[b].X - L.Poly[a].X) * (Z - L.Poly[a].Y) / (L.Poly[b].Y - L.Poly[a].Y) + L.Poly[a].X) bIn = !bIn;
+			if (bIn) return true;
+		}
+		return false;
+	}
+	// a lump on a root: an oyster, a barnacle, a sponge (a squashed eight-sided stone)
+	void MgLump(FTownBatch& B, const FVector& C, double R, const FLinearColor& Col)
+	{
+		const FVector Px[6] = {C + FVector(R, 0, 0), C - FVector(R, 0, 0), C + FVector(0, R * .7, 0), C - FVector(0, R * .7, 0), C + FVector(0, 0, R), C - FVector(0, 0, R)};
+		for (int32 a = 0; a < 2; a++)
+			for (int32 b = 2; b < 4; b++)
+				for (int32 c = 4; c < 6; c++)
+					B.Tri3(Px[a], Px[b], Px[c], (Px[a] + Px[b] + Px[c]) / 3 - C, Col * float(.85 + .1 * a + .1 * (c - 4)));
+	}
+
 	// One 600 m square of mangrove: its roots and trunks (drawn close) and its canopy (drawn far).
 	struct FMgTile { FTownBatch Roots, Canopy; };
 	int64 MgKey(double X, double Z) { return (int64(FMath::FloorToInt(X / 600)) << 32) ^ int64(uint32(FMath::FloorToInt(Z / 600))); }
@@ -134,14 +168,11 @@ namespace
 	const TArray<KeysMangroveLife::FCreek>& Creeks = KeysMangroveLife::Creeks();
 	const bool bCreeks = MgCreeksCut();
 	auto CreekD = [&](double X, double Z) { return bCreeks ? KeysMangroveLife::Near(X, Z).D : 1e9; };
-	auto Blocked = [&](double X, double Z)
-	{
-		if (KeysYards::InFootprint(X, Z, 6)) return true;   // the dry stack and the boatyard
-		if (CanalDist(X, Z) < 12) return true;              // the canals and their seawalls
-		if (InFill(X, Z) || InTownPad(X, Z) || KeysTown::InFootprint(X, Z, 20) || SurfaceKind(X, Z) == 2 || InMarkedChannel(X, Z)) return true;
-		for (const FMarina& M : Marinas()) if (FMath::Square(X - M.SX) + FMath::Square(Z - M.SZ) < 70.0 * 70.0) return true;
-		return false;
-	};
+	auto Blocked = [&](double X, double Z) { return MgBlocked(X, Z); };
+	// with the ecosystem on (KeysMangroveEco) the birds and crabs are alive and not part of the mesh; the roots carry
+	// oysters, barnacles and sponges below the tide line instead
+	const bool bEco = KeysMangroveEco::Enabled();
+	static const uint32 ShellC[] = {0xb9b5a6, 0xa39f92, 0xd6d2c4, 0xc9c4b2}, SpongeC[] = {0xc8572a, 0x7a3f8a, 0xb89a2a, 0xa83a30};
 
 	// A red mangrove standing at (X, Z), shaped on a photograph of a mangrove creek: a cage of thin prop roots that
 	// spring from the trunk, bow out and over and plunge into the mud; a slender crooked trunk standing on top of it;
@@ -180,6 +211,24 @@ namespace
 			const FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
 			const FLinearColor C = FMath::Lerp(RootC, RootDark, float(MHash(r * 3.0, X + Z)) * .7f);
 			Arc(From, End, (.1 + .4 * MHash(Z, r)) * Sz, .052 * Sz, C);
+			if (bEco && Detail > 0)
+			{
+				// what grows on it between the tides: oysters and barnacles high, sponges lower, on the root's last piece
+				const double Bow = (.1 + .4 * MHash(Z, r)) * Sz, U = double(Seg - 1) / Seg;
+				const FVector Ctrl(From.X + (End.X - From.X) * .78, From.Y + Bow, From.Z + (End.Z - From.Z) * .78);
+				const FVector Pl = From * ((1 - U) * (1 - U)) + Ctrl * (2 * U * (1 - U)) + End * (U * U);
+				// (a few to a tree: every lump is eight more triangles in a mesh that is already the heavy one)
+				for (int32 n = 0; n < 1; n++)
+				{
+					if (MHash(X + r * 2.3 + n, Z - n * 5.1) > (Detail == 2 ? .25 : .5)) continue;
+					const double YT = -.36 + .5 * MHash(Z + r, X + n * 3.7);
+					if (Pl.Y <= YT || End.Y >= YT) continue;
+					const FVector At = FMath::Lerp(Pl, End, (Pl.Y - YT) / (Pl.Y - End.Y));
+					const bool bSponge = YT < -.14 && MHash(r + n, X - Z) < .45;
+					const int32 Ci = int32(MHash(X + n, Z + r * 1.9) * 4) % 4;
+					MgLump(T.Roots, At + FVector((MHash(r, n + X) - .5) * .05, 0, (MHash(n + Z, r) - .5) * .05), (bSponge ? .07 : .045) + .045 * MHash(X - r, Z + n), KeysTownPaint::Hex(bSponge ? SpongeC[Ci] : ShellC[Ci]));
+				}
+			}
 			// and near the water many of them divide
 			if (Detail == 2 && MHash(X + r * 1.7, Z - r) < .55)
 			{
@@ -211,7 +260,7 @@ namespace
 		}
 		Rooted++;
 		// fiddler and mangrove tree crabs on the roots: specks of red-orange and dark shell, a few to a tree
-		for (int32 c = 0; c < 3 && MHash(X + 2.0, Z + c) < .6; c++)
+		for (int32 c = 0; !bEco && c < 3 && MHash(X + 2.0, Z + c) < .6; c++)
 		{
 			const double A = 2 * PI * MHash(X + c * 4.0, Z - 1.0), Rr = (.5 + 1.2 * MHash(Z + c, X + 6.0)) * Sz;
 			T.Roots.Ball(X + FMath::Cos(A) * Rr, Base + .25 + .9 * MHash(X - c, Z + 8.0), Z + FMath::Sin(A) * Rr, .045, c == 0 ? 0xc8482a : 0x4a2c22, .6, 4);
@@ -224,6 +273,21 @@ namespace
 	const int32 SeedI0 = KeysGeoReal::CellI0(), SeedJ0 = KeysGeoReal::CellJ0();
 	for (const int64 WK : Want)
 	{
+	// (with the ecosystem on: a cormorant's limb on the trees it picks, and a roost snag on the tile's most open point)
+	if (bEco)
+	{
+		TArray<KeysMangroveEco::FSite> EcoSites;
+		TArray<FVector> EcoTops;
+		KeysMangroveEco::SitesOfTile(WK, EcoSites, EcoTops);
+		for (const KeysMangroveEco::FSite& S : EcoSites)
+		{
+			FVector A, Bq;
+			if (KeysMangroveEco::PerchLimb(S, A, Bq)) Limb(TileAt(S.X, S.Z).Roots, A, Bq, .06, KeysTownPaint::Hex(0x8a8276));
+		}
+		FVector Rp;
+		double RSeed = 0;
+		if (KeysMangroveEco::RoostSnag(WK, EcoSites, Rp, RSeed)) Pelicans += KeysMangroveLife::Snag(TileAt(Rp.X, Rp.Z).Roots, Rp.X, Rp.Y, Rp.Z, RSeed, 3);
+	}
 	// the cells whose centres lie in this tile
 	const double TX0 = int32(WK >> 32) * 600.0, TZ0 = int32(uint32(WK)) * 600.0;
 	const int32 GI0 = FMath::Max(0, FMath::CeilToInt((TX0 - KeysGeoReal::X0()) / Cell)), GI1 = FMath::Min(KeysGeoReal::NX(), FMath::CeilToInt((TX0 + 600 - KeysGeoReal::X0()) / Cell));
@@ -264,7 +328,7 @@ namespace
 				if (!bFringe && Ground < -.6) continue;
 				const FVector Apex = Tree(T, X, Z, Ground, FVector2D::ZeroVector, 0, bFringe ? 1 : 0);
 				// a heron or an egret now and then, stalking the shallows just off the roots
-				if (bFringe && k == 0 && MHash(I * 3.7, J * 1.9) < .07)
+				if (!bEco && bFringe && k == 0 && MHash(I * 3.7, J * 1.9) < .07)
 				{
 					const double A = 2 * PI * MHash(I, J + 11.0), WX = X + FMath::Cos(A) * 4.5, WZ = Z + FMath::Sin(A) * 4.5;
 					const double Wd = DepthAt(WX, WZ);
@@ -304,19 +368,7 @@ namespace
 			}
 	if (bNearCreek)
 	{
-		// estate lots keep their waterfront: nothing of the creek's is planted on one
-		auto OnLot = [](double X, double Z)
-		{
-			for (const KeysGeoReal::FPlatLot& L : KeysGeoReal::Plat())
-			{
-				if (FMath::Abs(X - L.CX) > 90 || FMath::Abs(Z - L.CZ) > 90) continue;
-				bool bIn = false;
-				for (int32 a = 0, b = L.Poly.Num() - 1; a < L.Poly.Num(); b = a++)
-					if ((L.Poly[a].Y > Z) != (L.Poly[b].Y > Z) && X < (L.Poly[b].X - L.Poly[a].X) * (Z - L.Poly[a].Y) / (L.Poly[b].Y - L.Poly[a].Y) + L.Poly[a].X) bIn = !bIn;
-				if (bIn) return true;
-			}
-			return false;
-		};
+		auto OnLot = [](double X, double Z) { return MgOnLot(X, Z); };
 		// the banks: a row of trees down each side with their feet in the water, heads leaning in over the channel
 		const double Step = 3.3;
 		for (const KeysMangroveLife::FCreek& C : Creeks)
@@ -451,6 +503,8 @@ void AKeysWorld::BuildMangroves()
 		GetWorld()->SpawnActor<AKeysMangroveLife>();
 	}
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: mangroves - %d tiles have some; grown within 5 km of the boat"), GMgHave.Num());
+	// and what lives in them (KeysMangroveEco; -KRNoMangroveEco leaves it out and stands the old still waders)
+	if (KeysMangroveEco::Enabled()) GetWorld()->SpawnActor<AKeysMangroveEco>();
 	// the nearest few at once (which also wakes every table the builder reads, before any is read off the game thread)
 	GMgSync = 4;
 	for (int32 i = 0; i < 4; i++) StreamMangroves();
@@ -541,5 +595,123 @@ void AKeysWorld::StreamMangroves()
 			for (TWeakObjectPtr<UProceduralMeshComponent>& PM : It.Value().PM) if (PM.IsValid()) PM->DestroyComponent();
 			It.RemoveCurrent();
 		}
+	}
+}
+
+// ================================================================ what the ecosystem asks of the trees (KeysMangroveEco)
+namespace KeysMangroveEco
+{
+	void MangroveTiles(TArray<TPair<int64, FVector2D>>& Out)
+	{
+		Out.Reset();
+		for (const TPair<int64, FVector2D>& H : GMgHave) Out.Add(TPair<int64, FVector2D>(H.Key, H.Value));
+	}
+
+	// Every tree with its feet in the water in that tile, exactly where GenMangroves stands it (the same cells, hashes
+	// and tests, none of the geometry), and the tops of the crowns a bird can stand on. Plain map reads: any thread.
+	void SitesOfTile(int64 Key, TArray<FSite>& Sites, TArray<FVector>& Tops)
+	{
+		using namespace KeysGeo;
+		const double Cell = KeysGeoReal::Cell();
+		const bool bCreeks = MgCreeksCut();
+		auto CreekD = [&](double X, double Z) { return bCreeks ? KeysMangroveLife::Near(X, Z).D : 1e9; };
+		const int32 SeedI0 = KeysGeoReal::CellI0(), SeedJ0 = KeysGeoReal::CellJ0();
+		const double TX0 = int32(Key >> 32) * 600.0, TZ0 = int32(uint32(Key)) * 600.0;
+		// the top of the tallest clump of a rooted tree (Tree()'s boughs, without Lean or Tall)
+		auto Apex = [](double X, double Z, double Ground) -> FVector
+		{
+			const double Base = FMath::Max(Ground, -.05), Sz = .8 + .5 * MHash(Z, X);
+			const double Hh = (1.3 + .9 * MHash(X, Z)) * Sz, TrunkH = (2.3 + 1.5 * MHash(X + 4.0, Z)) * Sz;
+			const FVector Mid(X + (MHash(X, 3.0) - .5) * 1.0, Base + Hh + TrunkH * .55, Z + (MHash(Z, 5.0) - .5) * 1.0);
+			const double R = (2.5 + 1.0 * MHash(X * 1.3, Z)) * Sz, A0 = 2 * PI * MHash(X * 2.1, Z * 1.7);
+			FVector Best(X, -1e9, Z);
+			for (int32 b = 0; b < 3; b++)
+			{
+				const double H1 = MHash(X + b * 2.0, Z + 3.0), H2 = MHash(Z + b * 5.0, X + 1.0);
+				const double A = A0 + 2 * PI * (b + .6 * H1) / 2, Out = b == 0 ? .25 * R : (.8 + .35 * H2) * R;
+				const FVector End(Mid.X + FMath::Cos(A) * Out, Mid.Y + TrunkH * .45 + (b == 0 ? .75 : .1 + .55 * H1) * R, Mid.Z + FMath::Sin(A) * Out);
+				const double Rc = R * (b == 0 ? 1.0 : .68 + .26 * H2), SY = .6 + .16 * H1, Seed = 6.28 * MHash(X + b * 3.0, Z * 1.9);
+				const double Top = End.Y + Rc * .12 + Rc * SY * (.97 + .08 * MHash(Seed, 3.3));
+				if (Top > Best.Y) Best = FVector(End.X, Top, End.Z);
+			}
+			return Best;
+		};
+		const int32 GI0 = FMath::Max(0, FMath::CeilToInt((TX0 - KeysGeoReal::X0()) / Cell)), GI1 = FMath::Min(KeysGeoReal::NX(), FMath::CeilToInt((TX0 + 600 - KeysGeoReal::X0()) / Cell));
+		const int32 GJ0 = FMath::Max(0, FMath::CeilToInt((TZ0 - KeysGeoReal::Z0()) / Cell)), GJ1 = FMath::Min(KeysGeoReal::NZ(), FMath::CeilToInt((TZ0 + 600 - KeysGeoReal::Z0()) / Cell));
+		for (int32 GJ = GJ0; GJ < GJ1; GJ++)
+			for (int32 GI = GI0; GI < GI1; GI++)
+			{
+				const uint8 Mv = KeysGeoReal::MangroveCell(GI, GJ);
+				if (!Mv) continue;
+				const int32 I = GI + SeedI0, J = GJ + SeedJ0;
+				const double CX = KeysGeoReal::X0() + GI * Cell, CZ = KeysGeoReal::Z0() + GJ * Cell;
+				if (MgBlocked(CX, CZ)) continue;
+				const double CellCD = CreekD(CX, CZ);
+				if (CellCD < -2) continue;
+				const bool bFringe = Mv < 200;
+				const bool bEdge = bFringe || KeysGeoReal::Shore(CX, CZ) > -13 || CellCD < 15;
+				if (!bEdge)
+				{
+					for (int32 k = 0; k < 2; k++)
+					{
+						const double X = CX + (MHash(I + k * 7.3, J) - .5) * Cell, Z = CZ + (MHash(J, I + k * 3.1) - .5) * Cell;
+						const double R = 5.2 + 2.2 * MHash(I * 1.7, J + k), Y = FMath::Max(.3, LandH(X, Z)) + 3.8 + 3.0 * MHash(I + k, J * 2.3);
+						Tops.Add(FVector(X, Y - R * .12 + R * .56 * (.97 + .08 * MHash(6.28 * MHash(I + k, J), 3.3)), Z));
+					}
+					continue;
+				}
+				if (!bFringe) continue;
+				const int32 NTrees = 1 + int32(MHash(I, J * 1.3) * 1.6);
+				for (int32 k = 0; k < NTrees; k++)
+				{
+					const double X = CX + (MHash(I + k * 5.1, J + 2.0) - .5) * Cell * .9, Z = CZ + (MHash(J + 4.0, I + k * 2.7) - .5) * Cell * .9;
+					if (CreekD(X, Z) < 4.6) continue;
+					FSite S;
+					S.X = X; S.Z = Z; S.Ground = LandH(X, Z); S.Sz = .8 + .5 * MHash(Z, X); S.Hh = (1.3 + .9 * MHash(X, Z)) * S.Sz; S.Detail = 1;
+					S.Top = Apex(X, Z, S.Ground);
+					Sites.Add(S);
+					Tops.Add(S.Top);
+				}
+			}
+		// the creek banks: the front row (GenMangroves' lattice), one tree in three
+		if (!bCreeks) return;
+		const double Step = 3.3;
+		const TArray<KeysMangroveLife::FCreek>& Creeks = KeysMangroveLife::Creeks();
+		for (const KeysMangroveLife::FCreek& C : Creeks)
+		{
+			if (TX0 > C.X1 || TX0 + 600 < C.X0 || TZ0 > C.Z1 || TZ0 + 600 < C.Z0) continue;
+			for (double Z = C.Z0; Z < C.Z1; Z += Step)
+				for (double X = C.X0; X < C.X1; X += Step)
+				{
+					const double PX = X + (MHash(X, Z + 1.7) - .5) * Step * .8, PZ = Z + (MHash(Z, X + 2.9) - .5) * Step * .8;
+					if (PX < TX0 || PX >= TX0 + 600 || PZ < TZ0 || PZ >= TZ0 + 600 || MHash(PX * 3.1, PZ * 1.3) > .34) continue;
+					const KeysMangroveLife::FNear N = KeysMangroveLife::Near(PX, PZ);
+					if (N.D < .5 || N.D > 4.4 || &Creeks[N.Creek] != &C || MgBlocked(PX, PZ) || MgOnLot(PX, PZ)) continue;
+					FSite S;
+					S.X = PX; S.Z = PZ; S.Ground = LandH(PX, PZ); S.Sz = .8 + .5 * MHash(PZ, PX); S.Detail = 2; S.Bank = 1; S.bRoof = N.bRoof;
+					S.Hh = (1.3 + .9 * MHash(PX, PZ)) * S.Sz + (N.bRoof ? 1.4 : .3) * .5;
+					S.In = (N.C - FVector2D(PX, PZ)).GetSafeNormal();
+					S.MouthX = C.Pts[0].X; S.MouthZ = C.Pts[0].Y; S.Along = N.S; S.CX = N.C.X; S.CZ = N.C.Y;
+					if (C.Roof1 <= C.Roof0 && N.S > C.Len * .5) { S.MouthX = C.Pts.Last().X; S.MouthZ = C.Pts.Last().Y; }
+					Sites.Add(S);
+				}
+		}
+	}
+
+	// A point on prop root number Root of that tree, U of the way from the trunk (0) to the mud (1), along the straight
+	// pieces it is drawn in. Roots 0 and 1 leave the foot of the trunk; this keeps to those.
+	FVector RootPoint(const FSite& S, int32 Root, double U)
+	{
+		const double X = S.X, Z = S.Z, Sz = S.Sz, Hh = S.Hh;
+		const double Base = FMath::Max(S.Ground, -.05), Foot = FMath::Min(S.Ground, -.35) - .25;
+		const int32 NR = (S.Detail == 2 ? 11 : 8) + int32(MHash(X + 1.0, Z) * 2.5), Seg = S.Detail == 2 ? 4 : 3, r = Root % 3 == 2 ? Root + 1 : Root;
+		const double A = 2 * PI * (r + MHash(X + r, Z)) / NR, Reach = (1.3 + 2.1 * MHash(X, Z + r)) * Sz;
+		const FVector From = FVector(X, Base + Hh, Z) + FVector(0, -Hh * .55 * MHash(r, X), 0);
+		const FVector End = FVector(X, Foot, Z) + FVector(FMath::Cos(A), 0, FMath::Sin(A)) * Reach;
+		const FVector Ctrl(From.X + (End.X - From.X) * .78, From.Y + (.1 + .4 * MHash(Z, r)) * Sz, From.Z + (End.Z - From.Z) * .78);
+		auto Bez = [&](double T) { return From * ((1 - T) * (1 - T)) + Ctrl * (2 * T * (1 - T)) + End * (T * T); };
+		const double F = FMath::Clamp(U, 0.0, 1.0) * Seg;
+		const int32 K = FMath::Min(Seg - 1, int32(F));
+		return FMath::Lerp(Bez(double(K) / Seg), Bez(double(K + 1) / Seg), F - K) + FVector(0, .052 * Sz * (1 - .3 * U) * .9, 0);
 	}
 }
