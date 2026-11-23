@@ -36,7 +36,10 @@ FILL_C, BANK_C, SHORE_C, NAV_C = 6.0, 4.0, 2.0, .4   # cost of a 2.5 m step: a f
 FINE = .5            # metres a cell when the coastline is drawn again to see whether a narrow inlet is water in life
 NEAR_RUN = 6.0       # ... and how far from the route that water may lie
 US1_OFF = 14.0       # nor the roadbed of US-1
-CUT_S = 3.0          # the route is a canal line where the grid's shore distance is under this, a way elsewhere
+CUT_S = 0.0          # the route is a canal line (seawalled) where the grid has land, a way elsewhere
+CUT_MIN = 10.0       # ... if there is this much of it
+STUB = 30.0          # ... or leaves a canal within this of its dead end
+MERGE = 14.0         # a new canal line that begins or ends this near the end of a centre line is made part of that line
 CUT_PAD = 8.0
 DEBUG_DIR = os.environ.get('CANALWAYS_DEBUG')
 
@@ -198,6 +201,7 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         return [(float(x0 + (a0 + q) * res), float(z0 + (b0 + p) * res)) for p, q in path], 0.0
 
     blocked = np.zeros((h, w), bool)
+    widths = []
     pb = np.array([p.bounds for p in polys]) if len(polys) else np.zeros((0, 4))
 
     def water_in_life(cells):
@@ -224,7 +228,13 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         def at_end(q):
             a, b = int((X[q] - fx0) / FINE), int((Z[q] - fz0) / FINE)
             return set(np.unique(lab_f[max(0, b - r):b + r + 1, max(0, a - r):a + r + 1])) - {0}
-        return bool(at_end(0) & at_end(len(cells) - 1))
+        ok = bool(at_end(0) & at_end(len(cells) - 1))
+        # how wide the water is along the run, in life: twice the distance from the nearest bank, at its widest within 3 m
+        ed = ndimage.distance_transform_edt(~np.array(im, dtype=bool)) * FINE
+        mx = ndimage.maximum_filter(ed, size=int(6 / FINE) + 1)
+        wid = [2 * float(mx[min(fh - 1, int((z - fz0) / FINE)), min(fw - 1, int((x - fx0) / FINE))]) for x, z in zip(X, Z)]
+        widths.append((float(X[len(X) // 2]), float(Z[len(Z) // 2]), len(cells) * res, float(np.median(wid)), float(np.min(wid)), ok))
+        return ok
 
     off_land = ndimage.distance_transform_edt(~land).astype(np.float32) * res      # metres from real land
 
@@ -258,6 +268,15 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         s = _sample(W.S, W, P[:, 0], P[:, 1])
         d = np.concatenate([[0], np.cumsum(np.hypot(np.diff(P[:, 0]), np.diff(P[:, 1])))])
         cutm = s < CUT_S
+        # (a sliver of the grid's land under CUT_MIN long is not walled: the way's own dredging takes it)
+        i = 0
+        while i < len(P):
+            j = i
+            while j + 1 < len(P) and cutm[j + 1] == cutm[i]:
+                j += 1
+            if cutm[i] and d[j] - d[i] < CUT_MIN:
+                cutm[i:j + 1] = False
+            i = j + 1
         # (a cut reaches CUT_PAD past the land at both ends, so its free end lies in the grid's water: a mouth)
         if cutm.any():
             dc = d[cutm]
@@ -334,6 +353,7 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
                        % (_length(ln), ln[0][0], ln[0][1], ln[-1][0], ln[-1][1], what, leads, near))
         return out
 
+    parent, way_owner, cline_owner, group = {}, {}, {}, {}
     n_open = n_left = 0
     shut0 = [k for k in range(n_base) if not flood(k)[0]]
     done = set()
@@ -343,9 +363,11 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         is_open, sub, lab, sea, own, org5, D5 = flood(k)
         pts = canals[k][1]
         mid = pts[len(pts) // 2]
+        widths.clear()
         path, land_m = plan(k, sub, lab, sea, own, org5, D5)
         tries = 0
         while path == 'again' and tries < 40:
+            widths.clear()
             path, land_m = plan(k, sub, lab, sea, own, org5, D5)
             tries += 1
         if path is None or path == 'again':
@@ -371,6 +393,18 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
                else 'the flat outside is too shallow')
         new_c, new_w = lines_of(path[first:])
         described = describe(k, path, new_c, new_w, own, lab, org5)
+        # whose new water it runs into, if anyone's: that way then serves this canal too
+        for q in range(n_ways0, len(ways)):
+            if line_d(path[-1], ways[q][1]) < ways[q][0] / 2 + 2:
+                parent[k] = way_owner[q]
+        for q in range(n_base, len(canals)):
+            if line_d(path[-1], canals[q][1]) < canals[q][0] / 2 + 2:
+                parent[k] = cline_owner[q]
+        for q in range(len(new_c)):
+            cline_owner[len(canals) + q] = k
+        for q in range(len(new_w)):
+            way_owner[len(ways) + q] = k
+        group[k] = dict(serves=[k], c_m=sum(_length(p) for p in new_c), w_m=sum(_length(p) for p in new_w), n=len(new_c) + len(new_w))
         canals += [(width, p) for p in new_c]
         ways += [(way_w, p) for p in new_w]
         rsub = window(mid[0], mid[1], REACH + 100)
@@ -381,6 +415,8 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
                      % (k, mid[0], mid[1], why, MIN_D, _length([tuple(q) for q in gap]), '' if ok else ' BUT STILL SHUT IN THE MODEL', _length(path[first:]), end[0], end[1], land_m,
                         len(new_c), '' if len(new_c) == 1 else 's', sum(_length(p) for p in new_c), len(new_w), '' if len(new_w) == 1 else 's', sum(_length(p) for p in new_w)))
         notes += described
+        for wx, wz, wl, wmed, wmin, wok in widths:
+            notes.append('  inlet at %.0f, %.0f: %.0f m of route on the shoreline\'s cells; water there in life is %.1f m wide (median), %.1f m at its narrowest%s' % (wx, wz, wl, wmed, wmin, '' if wok else '; NOT JOINED'))
         n_open += 1
         done.add(k)
         for q in shut0:
@@ -389,16 +425,104 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
                 notes.append('canal %d (middle %.0f, %.0f) was shut: joined to canal %d, and opened with it' % (q, qm[0], qm[1], k))
                 done.add(q)
                 n_open += 1
+                group[k]['serves'].append(q)
         if DEBUG_DIR:
             _preview(f'{DEBUG_DIR}/c{k:03d}_{mid[0]:.0f}_{mid[1]:.0f}.png', W, Dn, land, fill, street, x0, z0, res, sub, canals, ways, n_base, n_ways0, path, edge)
             import json
             json.dump(dict(canal=k, centre=pts, route=_simplify(path, 1.0), new_canal=new_c, new_way=new_w),
                       open(f'{DEBUG_DIR}/c{k:03d}_route.json', 'w'))
+    # ---- how many canals each piece of new water serves (its own, those joined to it, and those whose way runs into it)
+    def all_served(g):
+        out = list(group[g]['serves'])
+        for q in group:
+            if parent.get(q) == g:
+                out += all_served(q)
+        return out
+    for g in group:
+        sv = all_served(g)
+        notes.append('new water for canal %d: %d line%s, %.0f m of canal line and %.0f m of way; it serves %d canal%s (%s)%s'
+                     % (g, group[g]['n'], '' if group[g]['n'] == 1 else 's', group[g]['c_m'], group[g]['w_m'], len(sv), '' if len(sv) == 1 else 's',
+                        ', '.join(str(q) for q in sv), '' if g not in parent else '; it runs into the water made for canal %d' % parent[g]))
+    notes.append('new dredged water: %.0f m of canal line (real mouths and links) and %.0f m of way, %.0f m in all, for %d canals'
+                 % (sum(v['c_m'] for v in group.values()), sum(v['w_m'] for v in group.values()), sum(v['c_m'] + v['w_m'] for v in group.values()), n_open))
+    # ---- no more centre lines than need be: a new canal line that starts or ends at the end of a canal's own centre line
+    # is the same canal, so it is written as part of that line (and two canals it joins end to end become one line)
+    lines = [list(p) for _, p in canals]
+    alive = [True] * len(lines)
+    n_merge = n_fuse = 0
+
+    def end_near(pt, skip):
+        best = None
+        for q, ln in enumerate(lines):
+            if not alive[q] or q in skip:
+                continue
+            for at_end in (0, -1):
+                dd = float(np.hypot(ln[at_end][0] - pt[0], ln[at_end][1] - pt[1]))
+                if dd <= MERGE and (best is None or dd < best[0]):
+                    best = (dd, q, at_end)
+        return best
+
+    def cat(a, b):
+        return a + (b[1:] if np.hypot(a[-1][0] - b[0][0], a[-1][1] - b[0][1]) < 1.0 else b)
+    for n in range(n_base, len(lines)):
+        N = lines[n]
+        A = end_near(N[0], {n})
+        B = end_near(N[-1], {n} | ({A[1]} if A else set()))
+        if A:
+            a = lines[A[1]] if A[2] == -1 else lines[A[1]][::-1]          # ... ends where N begins
+            merged = cat(a, N)
+            if B:
+                b = lines[B[1]] if B[2] == 0 else lines[B[1]][::-1]       # begins where N ends
+                merged = cat(merged, b)
+                alive[B[1]] = False
+                n_fuse += 1
+            lines[A[1]] = merged
+            alive[n] = False
+            n_merge += 1
+        elif B:
+            b = lines[B[1]] if B[2] == 0 else lines[B[1]][::-1]
+            lines[B[1]] = cat(N, b)
+            alive[n] = False
+            n_merge += 1
+        else:
+            # it leaves a canal a little short of that canal's dead end: the centre line runs to the dead end and back
+            # to the turning, then on down the new stretch (the same water, one line)
+            for q in range(n_base):
+                if not alive[q]:
+                    continue
+                for ln in (lines[q], lines[q][::-1]):
+                    j = len(ln) - 1
+                    stub = 0.0
+                    hit = None
+                    while j > 0 and stub <= STUB:
+                        dd = seg_d(N[0], ln[j - 1], ln[j])
+                        if dd < 3.0:
+                            hit = j
+                            break
+                        stub += float(np.hypot(ln[j][0] - ln[j - 1][0], ln[j][1] - ln[j - 1][1]))
+                        j -= 1
+                    if hit is None:
+                        continue
+                    e, pv = ln[-1], ln[-2]
+                    r = float(np.hypot(e[0] - pv[0], e[1] - pv[1]))
+                    bx, bz = e[0] + (e[0] - pv[0]) / r * (width / 2 + 10), e[1] + (e[1] - pv[1]) / r * (width / 2 + 10)
+                    if float(_sample(W.S, W, np.array([bx]), np.array([bz]))[0]) >= 0:
+                        continue                                # (that end is a mouth, not a dead end: left an end)
+                    lines[q] = cat(ln + ln[hit:-1][::-1], N)
+                    alive[n] = False
+                    n_merge += 1
+                    break
+                if not alive[n]:
+                    break
+    n_lines_before = n_base
+    canals = [(width, ln) for q, ln in enumerate(lines) if alive[q]]
+    notes.append('centre lines: %d from the canals themselves, %d canal lines added for real mouths and links, %d of those made part of the line they continue (%d joining two lines into one): %d centre lines written'
+                 % (n_lines_before, len(lines) - n_base, n_merge, n_fuse, len(canals)))
     rpt['out_lines'] = [p for _, p in canals]
     rpt['ways'] = [p for _, p in ways]
     rpt['opened_n'], rpt['left_shut'] = n_open, n_left
     notes.append('ways out: %d canals had no %.1f m of water to the open sea; %d opened (%d canal lines and %d ways added), %d left shut'
-                 % (n_open + n_left, MIN_D, n_open, len(canals) - n_base, len(ways) - n_ways0, n_left))
+                 % (n_open + n_left, MIN_D, n_open, len(lines) - n_base, len(ways) - n_ways0, n_left))
 
 
 def _preview(path, W, Dn, land, fill, street, x0, z0, res, sub, canals, ways, n_base, n_ways, route, edge=None):

@@ -333,7 +333,7 @@ def main(argv):
             print(r.stdout[-2000:], r.stderr[-4000:])
             return 1
         for ln in r.stdout.splitlines():
-            if ln.startswith('  canal ') or ln.startswith('  ways out') or ln.startswith('  canals:') or ln.startswith('    line '):
+            if ln.startswith('  canal ') or ln.startswith('  ways out') or ln.startswith('  centre lines') or ln.startswith('  new ') or ln.startswith('  canals:') or ln.startswith('    line ') or ln.startswith('    inlet '):
                 print(ln.rstrip()[2:])
         new, old = os.path.join(scratch, name), os.path.join(geo, name)
         same = os.path.exists(old) and filecmp.cmp(new, old, shallow=False)
