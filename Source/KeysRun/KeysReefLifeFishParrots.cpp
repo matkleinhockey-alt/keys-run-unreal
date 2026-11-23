@@ -59,7 +59,7 @@ namespace KeysReefLifeFishParrots
 
 	static FLinearColor PaintMidnight(const FPaint& At)
 	{
-		static const FLinearColor Navy = Hex(0x1b2c80), NavyD = Hex(0x0e1746), Bright = Hex(0x2a8cf0), Beak = Hex(0x5ac0b6);
+		static const FLinearColor Navy = Hex(0x18266e), NavyD = Hex(0x0c1340), Bright = Hex(0x2a8cf0), Beak = Hex(0x5ac0b6);
 		switch (At.Part)
 		{
 		case PBody:
@@ -73,7 +73,7 @@ namespace KeysReefLifeFishParrots
 			return C;
 		}
 		case PDorsal: case PAnal: return At.V > .6 ? Bright : Navy;
-		case PTail: return At.U > .82 ? Bright : Navy;
+		case PTail: return At.U > .95 ? Bright : Navy;
 		case PPectoral: return Mix(Navy, Hex(0x3f66b8), At.U);
 		case PEye: return At.U < .6 ? FLinearColor(.004f, .004f, .004f) : Hex(0x24306e);
 		default: return Navy;

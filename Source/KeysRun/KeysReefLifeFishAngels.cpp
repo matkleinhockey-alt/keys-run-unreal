@@ -34,7 +34,7 @@ namespace KeysReefLifeFishAngels
 
 	static FLinearColor PaintQueen(const FPaint& At)
 	{
-		static const FLinearColor Blue = Hex(0x2c7fe6), Elec = Hex(0x35a8ff), Navy = Hex(0x101c5c), Yellow = Hex(0xf2cf1c), YelO = Hex(0xf0a81e), Face = Hex(0xe6c93a);
+		static const FLinearColor Blue = Hex(0x2c7fe6), Elec = Hex(0x1f8bff), Navy = Hex(0x101c5c), Yellow = Hex(0xf2cf1c), YelO = Hex(0xf0a81e), Face = Hex(0xe6c93a);
 		switch (At.Part)
 		{
 		case PBody:
@@ -52,7 +52,7 @@ namespace KeysReefLifeFishAngels
 		case PDorsal: case PAnal:
 		{
 			if (At.U > .8) return YelO;                                                   // the trailing tips
-			return At.V > .5 ? Elec : Mix(Blue, Yellow, .3);
+			return At.V > .5 ? Blue : Mix(Blue, Yellow, .45);                        // the body's colour at the root, blue toward the edge
 		}
 		case PTail: case PPectoral: case PPelvic: return Yellow;
 		case PEye: return At.U < .6 ? Pupil : Elec;
@@ -67,7 +67,7 @@ namespace KeysReefLifeFishAngels
 		{
 		case PBody:
 		{
-			if (At.U < .045) return Chin;                                                 // whitish mouth and chin
+			if (At.U < .06) return Chin;                                                  // whitish mouth and chin
 			if (At.U < .22) return Slate;                                                 // the head: no yellow edges
 			if (FMath::Abs(At.U - .3) < (At.Lod == 0 ? .025 : .05) && At.V > -.5 && At.V < -.05) return Yellow;   // the bar at the pectoral root
 			// a yellow crescent on the edge of each black scale: one grid point in four up close; far off, the mean
