@@ -1,6 +1,7 @@
 #include "KeysLife.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "KeysFeed.h"
+#include "KeysMangroveEco.h"
 #include "KeysWrecks.h"
 #include "KeysSea.h"
 #include "KeysBoatPawn.h"
@@ -2680,6 +2681,7 @@ FString AKeysLife::PickSpecies(const FKeysFishSpot& S, double BobX, double BobZ)
 		V *= B > 0 ? 1 + 4 * Of * B : 1 - .45 * Of;
 		if (Hump && (R.Key == TEXT("amberjack") || R.Key == TEXT("blackfin") || R.Key == TEXT("kingfish"))) V *= 4;
 		V *= KeysFeed::Mul(R.Key, KeysFeed::HourNow(this));   // the ones feeding now take the bait more often
+		V *= KeysMangroveEco::PickBoost(R.Key, BobX, BobZ);   // and the ones you can see lying under the mangroves here
 		Tot += V;
 		W.Add(V);
 	}

@@ -105,7 +105,7 @@ namespace
 			{TEXT("Flats"), .45, {{Bonefish, 4}, {Permit, 2}, {Silverside, 3.5}, {Barracuda, 1.5}, {Blacktip, .6}, {Jack, .8}}},
 			{TEXT("Backcountry"), .42, {{Silverside, 6}, {Barracuda, 1}, {Jack, 1}, {Grunt, 1}, {Bonefish, 1}}},
 			// under and along the mangroves: clouds of juveniles in the roots, snapper holding in the shade, and what hunts them
-			{TEXT("Creek"), .8, {{Silverside, 5}, {Schoolmaster, 2.5}, {Lane, 1.5}, {Grunt, 2}, {Barracuda, 1.3}, {Jack, 1}, {Blacktip, .7}, {Bonefish, .6}}},
+			{TEXT("Creek"), .4, {{Silverside, 5}, {Schoolmaster, 2.5}, {Lane, 1.5}, {Grunt, 2}, {Barracuda, 1.3}, {Jack, 1}, {Blacktip, .7}, {Bonefish, .6}}},
 			{TEXT("Bridge"), .62, {{Herring, 6}, {Grunt, 2}, {Schoolmaster, 2}, {Barracuda, 1}, {Jack, 1}}},
 			{TEXT("Hawk Channel"), .58, {{Herring, 5}, {Silverside, 4.5}, {Grunt, 2}, {Schoolmaster, 1}, {Lane, 1.5}, {RedGrouper, .8}, {Barracuda, 1}, {Bluerunner, 1.2}, {Bullshark, .2}}},
 			{TEXT("Reef"), .78, {{Silverside, 6}, {Herring, 4.5}, {Schoolmaster, 3}, {Grunt, 3}, {Lane, 2}, {Yellowtail, 2}, {Grouper, 1.2}, {RedGrouper, .8}, {Barracuda, 1.5}, {Bluerunner, 1.5}, {Jack, .8}, {Blacktip, .3}, {Bullshark, .25}}},
