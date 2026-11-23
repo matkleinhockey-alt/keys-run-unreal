@@ -123,7 +123,7 @@ namespace KeysReefLifeFishSergeant
 		S.Shy = .9;                         // he does not leave his eggs for a diver
 		S.Cruise = .3; S.Burst = 2.6; S.Roam = 1.5; S.Alt[0] = .1; S.Alt[1] = .3; S.Spacing = 2; S.Cull = 45;
 		S.bRows = true;
-		S.ChaseR = 2;                       // the ground he keeps round the eggs
+		S.ChaseR = 2.5;                     // the ground he keeps round the eggs
 		S.FirstSight = TEXT("A sergeant major gone dark blue: a male guarding his eggs.");
 		return S;
 	}
