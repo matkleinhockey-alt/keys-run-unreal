@@ -79,12 +79,12 @@ namespace KeysReefLifeBottomConch
 	static FVector ShellPt(double U, double Th, double Knob)
 	{
 		const double R = ShellR(U) * (1 + Knob), S = FMath::Sin(Th);
-		return FVector(.5 - U, R * FMath::Cos(Th), R * S * (S < 0 ? .5 : 1.0));
+		return FVector(.5 - U, R * .8 * FMath::Cos(Th), R * S * (S < 0 ? .45 : 1.0));
 	}
 
-	static const FLinearColor& SandA() { static const FLinearColor C = Hex(0xd8c7a0); return C; }
-	static const FLinearColor& SandB() { static const FLinearColor C = Hex(0xb99f78); return C; }
-	static const FLinearColor& Film() { static const FLinearColor C = Hex(0x9c8763); return C; }      // the skin of algae and sand
+	static const FLinearColor& SandA() { static const FLinearColor C = Hex(0xdcc096); return C; }
+	static const FLinearColor& SandB() { static const FLinearColor C = Hex(0xc4a070); return C; }
+	static const FLinearColor& Film() { static const FLinearColor C = Hex(0x8f7a55); return C; }      // the skin of algae and sand
 	static const FLinearColor& Worn() { static const FLinearColor C = Hex(0xeadfc8); return C; }      // knob tips, the spire
 	static const FLinearColor& Pink() { static const FLinearColor C = Hex(0xf2909f); return C; }
 	static const FLinearColor& Rose() { static const FLinearColor C = Hex(0xe0597a); return C; }
@@ -98,7 +98,8 @@ namespace KeysReefLifeBottomConch
 		FLinearColor C = Lod == 0 ? Mix(SandA(), SandB(), Hash(I, J)) : Mix(SandA(), SandB(), .5);
 		C = Mix(C, Film(), .4 * (.5 + .5 * FMath::Sin(U * 23 + Th * 2)) * Sm((S + .1) / .5));
 		C = Mix(C, Worn(), .22 * Sm((U - .66) / .15));
-		C = Mix(C, Worn(), .65 * Knob01);
+		if (FMath::Abs(U - .66) < .01 || FMath::Abs(U - .88) < .01) C = Mix(C, Hex(0x7d6646), .55);   // the seams between the whorls
+		C = Mix(C, Worn(), .7 * Knob01);
 		return C;
 	}
 
@@ -124,9 +125,9 @@ namespace KeysReefLifeBottomConch
 				{
 					const double Back = Sm((FMath::Sin(Th) + .15) / .4);
 					const bool bEven = (a & 1) == 0;   // (near, eight knobs a whorl; mid, four)
-					if (FMath::Abs(U - .6) < .01 && bEven) K = .24 * Back;
-					else if (FMath::Abs(U - .72) < .01 && !bEven) K = .17 * Back;
-					else if (FMath::Abs(U - .8) < .01 && bEven) K = .11 * Back;
+					if (FMath::Abs(U - .6) < .01 && bEven) K = .34 * Back;
+					else if (FMath::Abs(U - .72) < .01 && !bEven) K = .24 * Back;
+					else if (FMath::Abs(U - .8) < .01 && bEven) K = .16 * Back;
 				}
 				P.Add(ShellPt(U, Th, K));
 				C.Add(ShellCol(U, Th, K > 0 ? 1 : 0, r, a, Lod));
@@ -135,7 +136,7 @@ namespace KeysReefLifeBottomConch
 
 		// ---- the flared lip: a thick wing out from the right side, sandy above, glossy pink beneath and along its edge
 		static const double LU[] = {.07, .15, .25, .35, .45, .55, .62, .67, .71};
-		static const double LW[] = {0, .13, .22, .28, .31, .32, .29, .18, 0};
+		static const double LW[] = {0, .1, .17, .22, .25, .26, .24, .15, 0};
 		static const double LV0[] = {0, .35, .7, .9, 1};
 		static const double LV1[] = {0, .6, 1};
 		const int32 NL = Lod == 2 ? 5 : 9, LStep = Lod == 2 ? 2 : 1;
@@ -146,16 +147,19 @@ namespace KeysReefLifeBottomConch
 		for (int32 i = 0; i < NL; i++)
 		{
 			const double U = LU[i * LStep], W = LW[i * LStep];
-			const FVector B = ShellPt(U, FMath::DegreesToRadians(40.0), 0);
+			const FVector B = ShellPt(U, FMath::DegreesToRadians(15.0), 0);
+			// the wing's edge: low by the front, lifting toward the spire
+			const double EdgeZ = -.04 + .1 * Sm((U - .4) / .25);
 			for (int32 k = 0; k < NV; k++)
 			{
 				const double V = Vs[k];
-				FVector Q(B.X + .05 * V * (U - .4), B.Y + W * V, B.Z + (-.02 - B.Z) * FMath::Pow(V, 1.5) + .035 * Sm((V - .75) / .25) * (W / .32));
+				FVector Q(B.X + .05 * V * (U - .4), B.Y + W * V, B.Z + (EdgeZ - B.Z) * FMath::Pow(V, 1.2) + .03 * Sm((V - .75) / .25) * (W / .26));
 				Top.Add(Q);
-				FLinearColor Tc = Mix(Mix(SandA(), SandB(), Lod == 0 ? Hash(i + 40, k) : .5), Peach(), Sm((V - .45) / .4));
-				if (V >= .9) Tc = Mix(Tc, Pink(), .75);
+				// sandy where it leaves the shell, the pink-orange of the lip showing toward its edge
+				FLinearColor Tc = Mix(Mix(SandA(), SandB(), Lod == 0 ? Hash(i + 40, k) : .5), Hex(0xf0a890), Sm((V - .25) / .5));
+				if (V >= .9) Tc = Mix(Tc, Pink(), .8);
 				TopC.Add(Tc);
-				Bot.Add(Q - FVector(0, V < .01 ? .03 : 0, .016));
+				Bot.Add(Q - FVector(0, V < .01 ? .03 : 0, .012 + .02 * V));
 				BotC.Add(Mix(Rose(), Pink(), V));
 			}
 		}
@@ -234,8 +238,8 @@ namespace KeysReefLifeBottomConch
 		const FQuat Rot = FRotationMatrix::MakeFromX(F).ToQuat() * FRotator(Pitch, 0, 0).Quaternion();
 		const FVector Loc = FVector(In.P.X, In.P.Z, In.P.Y + Lift) * 100.0 + F * (Ahead * 100.0);
 		Out.Xf = FTransform(Rot, Loc, FVector(In.Len));
-		// the eye stalks: out when nothing is near, drawn in under the shell as the diver comes inside a metre and a half
-		const double E = Sm((In.DiverDist - .7) / .8);
+		// the eye stalks: out when nothing is near, drawn in under the shell as the diver comes inside a metre and a half (gone at 0.8 m)
+		const double E = Sm((In.DiverDist - .8) / .8);
 		for (int32 k = 0; k < 2; k++)
 		{
 			const double Sd = k ? -1 : 1, Wob = 6 * FMath::Sin(In.Now * .6 + k * 2.1 + In.Seed * 20);

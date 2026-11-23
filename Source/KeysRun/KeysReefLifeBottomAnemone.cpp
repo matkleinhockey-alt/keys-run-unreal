@@ -78,14 +78,14 @@ namespace KeysReefLifeBottomAnemone
 		}
 		// ---- the tentacles: three whorls, the inner ones upright, the outer ones spread, every one curving up to
 		// its swollen tip
-		static const int32 Count[3][3] = {{6, 9, 13}, {4, 6, 8}, {3, 0, 5}};
-		static const double RootR[3] = {.04, .085, .13}, Lean[3] = {10, 34, 60}, Long[3] = {.52, .47, .42};
-		static const double T0[] = {0, .45, .82, .94, 1}, R0[] = {.034, .028, .024, .04, .008};
-		static const double T1[] = {0, .82, .94, 1}, R1[] = {.036, .026, .042, .008};
-		static const double T2[] = {0, 1}, R2[] = {.04, .03};
+		static const int32 Count[3][3] = {{7, 12, 17}, {4, 6, 8}, {3, 0, 5}};
+		static const double RootR[3] = {.04, .085, .13}, Lean[3] = {12, 42, 78}, Long[3] = {.5, .47, .42};
+		static const double T0[] = {0, .5, .86, .95, 1}, R0[] = {.04, .032, .027, .04, .01};
+		static const double T1[] = {0, .86, .95, 1}, R1[] = {.042, .029, .042, .01};
+		static const double T2[] = {0, 1}, R2[] = {.045, .034};
 		const double* Ts = Lod == 0 ? T0 : Lod == 1 ? T1 : T2;
 		const double* Rs = Lod == 0 ? R0 : Lod == 1 ? R1 : R2;
-		const int32 NT = Lod == 0 ? 5 : Lod == 1 ? 4 : 2, Sides = Lod == 0 ? 4 : 3;
+		const int32 NT = Lod == 0 ? 5 : Lod == 1 ? 4 : 2, Sides = 3;
 		for (int32 w = 0; w < 3; w++)
 			for (int32 i = 0; i < Count[Lod][w]; i++)
 			{
@@ -104,13 +104,13 @@ namespace KeysReefLifeBottomAnemone
 					// (stepped along the curve: it leans out at the root and turns up toward the tip)
 					for (int32 s = 0; s < 4; s++)
 					{
-						const double Tm = Tp + (T - Tp) * (s + .5) / 4, Ph = Ln - FMath::DegreesToRadians(16.0) * Tm;
+						const double Tm = Tp + (T - Tp) * (s + .5) / 4, Ph = Ln * (1 - .4 * Tm);
 						P += (Out * FMath::Sin(Ph) - FVector(FMath::Cos(Ph), 0, 0)) * (Len * (T - Tp) / 4);
 					}
 					Tp = T;
 					Ctr.Add(P);
 					Rad.Add(Rs[k]);
-					Col.Add(Lod == 2 ? Mix(Body, Tip, T * .7) : T < .5 ? Mix(Root, Body, T / .45) : T < .9 ? Mix(Body, Tip, .25) : Tip);
+					Col.Add(Lod == 2 ? Mix(Body, Tip, T * .7) : T < .55 ? Mix(Root, Body, T / .5) : T < .9 ? Mix(Body, Tip, .2) : Tip);
 				}
 				AddTube(M, Ctr, Rad, Col, Sides, FVector::CrossProduct(Out, FVector(1, 0, 0)));
 			}
@@ -122,14 +122,14 @@ namespace KeysReefLifeBottomAnemone
 		const FVector2D N = KeysSea::ChainNormal(In.P.X);            // the surge runs in and out along this
 		const double Decay = FMath::Exp(-FMath::Max(0.0, -In.P.Y) / KeysSea::SurgeDecayDepth);
 		// drawn in as the diver's hand comes near: shorter, narrower, and stiller
-		const double Shut = 1 - Sm((In.DiverDist - .35) / .6);
+		const double Shut = 1 - Sm((In.DiverDist - .55) / .75);
 		const double SLen = 1 - .4 * Shut, SWide = 1 - .22 * Shut;
 		// stood on end, leaning a little out from the coral head it is tucked against (the framework faces it away
 		// from the head), local Y along the surge
 		FVector UpU = FVector(0, 0, 1) + FVector(In.Fwd.X, In.Fwd.Z, 0) * .22;
 		UpU.Normalize();
 		const FQuat Rot = FRotationMatrix::MakeFromXY(-UpU, FVector(N.X, N.Y, 0)).ToQuat();
-		// (the framework holds the origin HalfH = 0.30 crown diameters over the floor; shortened, the foot stays down)
+		// (the framework holds the origin HalfH = 0.12 crown diameters over the floor; shortened, the foot stays down)
 		const FVector Loc = FVector(In.P.X, In.P.Z, In.P.Y) * 100.0 - UpU * (BaseX * (1 - SLen) * In.Len * 100.0);
 		Out.Xf = FTransform(Rot, Loc, FVector(In.Len * SLen, In.Len * SWide, In.Len * SWide));
 		// the tentacles follow the water a little behind it
@@ -151,7 +151,7 @@ namespace KeysReefLifeBottomAnemone
 		S.Role = ERole::Sitter;
 
 		FBody B;
-		B.HalfH = .3;     // (a Sitter is held HalfH above the floor: the column's foot, 0.33 below the origin, is just in the rock)
+		B.HalfH = .12;    // (a Sitter is held HalfH above the floor: most of the column, which runs to 0.33 below the origin, is down in the rock and only the crown shows)
 		B.HalfW = .12;
 		// the three colours it comes in; Len is the crown's width
 		S.Phases = {FPhase{TEXT("white"), .15, .30, B}, FPhase{TEXT("green"), .15, .30, B}, FPhase{TEXT("pink"), .15, .28, B}};
