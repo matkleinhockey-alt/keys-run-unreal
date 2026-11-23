@@ -1,0 +1,20 @@
+diff --git a/Source/KeysRun/KeysBoatPawn.cpp b/Source/KeysRun/KeysBoatPawn.cpp
+index 6ab1197..c89f9a5 100644
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -9,6 +9,7 @@
+ #include "KeysWrecks.h"
+ #include "KeysOcean.h"
+ #include "KeysSchools.h"
++#include "KeysReefLife.h"
+ #include "KeysWeather.h"
+ #include "Components/PointLightComponent.h"
+ #include "KeysGeo.h"
+@@ -987,6 +988,7 @@ void AKeysBoatPawn::RunTestScript(double T)
+ 				if (It->GetClass()->GetName() == TEXT("KeysSeafloor") || It->GetClass()->GetName() == TEXT("KeysReef")) It->SetActorHiddenInGame(bOld);
+ 		}
+ 		else if (Cmd.StartsWith(TEXT("fish:"))) { if (AKeysSchools* Sc = AKeysSchools::Get(this)) Sc->DebugCmd(Cmd.Mid(5)); }   // fish:bait, fish:snapper, fish:pred, fish:scare, fish:flats, fish:stats ...
++		else if (Cmd.StartsWith(TEXT("reef:"))) { if (AKeysReefLife* Rl = AKeysReefLife::Get(this)) Rl->DebugCmd(Cmd.Mid(5)); }   // reef life's test hooks (KeysReefLife.h): reef:stats, reef:find <key>, reef:look <key>, reef:census
+ 		else if (Cmd.StartsWith(TEXT("dv:")))
+ 		{
+ 			// dv:depth=6, dv:look=1.2,-0.3, dv:aimfish, dv:spear, dv:reload, dv:air=0.2, dv:swim=1, dv:haul=1, dv:chase, dv:mask
