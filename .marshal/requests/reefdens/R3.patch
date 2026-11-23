@@ -1,0 +1,94 @@
+diff --git a/Source/KeysRun/KeysWrecks.cpp b/Source/KeysRun/KeysWrecks.cpp
+index 834d248..cf40e6f 100644
+--- a/Source/KeysRun/KeysWrecks.cpp
++++ b/Source/KeysRun/KeysWrecks.cpp
+@@ -2,6 +2,7 @@
+ #include "KeysGeo.h"
+ #include "KeysSea.h"
+ #include "KeysMesh.h"
++#include "KeysReefDen.h"
+ 
+ using namespace KeysGeo;
+ 
+@@ -81,7 +82,12 @@ namespace
+ 
+ 	// append a part built in the wreck's own frame (meters: X along the hull toward the bow, Y across, Z up from the
+ 	// keel) to the world mesh, lying on the bottom with its list, pitch, heading and - aft of a break - its own twist
+-	void Place(FKeysMesh& Out, const FKeysMesh& Part, const KeysWrecks::FWreck& W, bool bAftPiece)
++	// a place where a part's plating is torn open, in the part's own frame: the middle of the gap on the plate, the
++	// plate's outward normal, and the gap's width and height (m). The reef's dens (KeysReefDen.h) put the dark behind
++	// it and what lives there.
++	struct FGapAt { FVector P, N; double W, H; };
++
++	void Place(FKeysMesh& Out, const FKeysMesh& Part, const KeysWrecks::FWreck& W, bool bAftPiece, const TArray<FGapAt>* Gaps = nullptr, uint32 GapSeed = 0)
+ 	{
+ 		const FVector2D F = Fwd(W.Heading), R(-F.Y, F.X);
+ 		// on the sea floor as it is drawn (KeysSea relief on top of the depth), pitched to its slope under the hull
+@@ -107,6 +113,13 @@ namespace
+ 			Out.C.Add(Part.C[i]);
+ 		}
+ 		for (int32 Ix : Part.T) Out.T.Add(Base + Ix);
++		// the gaps go where the steel went (Xf gives Unreal's axes; the dens take game metres, y up)
++		if (Gaps)
++			for (int32 g = 0; g < Gaps->Num(); g++)
++			{
++				const FVector P = Xf((*Gaps)[g].P, false), N = Xf((*Gaps)[g].N, true).GetSafeNormal();
++				KeysReefDen::AddWreckGap(FVector(P.X, P.Z, P.Y), FVector(N.X, N.Z, N.Y), (*Gaps)[g].W, (*Gaps)[g].H, GapSeed * 31 + g);
++			}
+ 	}
+ 
+ 	// what grows on a wreck, scattered over a part's upper surfaces: barnacle and coral crusts, barrel and tube sponges
+@@ -275,6 +288,7 @@ namespace KeysWrecks
+ 			const double L = W.Len, B = W.Beam, H = W.Height;
+ 			// the forward piece (the whole hull if it is in one piece) and, if broken, the aft one
+ 			FKeysMesh Fore, Aft;
++			TArray<FGapAt> GFore, GAft;   // torn plating: dens for morays, a goliath, sweepers
+ 			switch (W.Kind)
+ 			{
+ 			case EKind::Freighter:
+@@ -312,6 +326,8 @@ namespace KeysWrecks
+ 				Front.AddTube(FVector(W.bBroken ? L * .2 : L * .02, 0, Deck), FVector(W.bBroken ? L * .2 : L * .02, 0, Deck + H * .55), .3, .22, 6, Rust);
+ 				Front.AddTube(FVector(W.bBroken ? L * .34 : L * .28, -B * .2, Deck + .3), FVector(W.bBroken ? L * .1 : L * .05, B * .55, Deck + 1.2), .25, .2, 6, Rust);
+ 				Portholes(Back, HX - L * .05, HX + L * .05, B * .39, Deck + H * .12, 4);
++				// the bridge house's side plating is holed above the ports, either side
++				for (int32 sd = -1; sd <= 1; sd += 2) (W.bBroken ? GAft : GFore).Add({FVector(HX - sd * L * .02, sd * B * .39, Deck + H * .28), FVector(0, sd, 0), 1.1, .6});
+ 				Portholes(Fore, W.bBroken ? L * .05 : -L * .2, W.bBroken ? L * .4 : L * .35, B * .47, Deck - 1.2, 8);
+ 				Rail(Front, W.bBroken ? 0 : -L * .3, W.bBroken ? L * .42 : L * .42, B * .46, Deck, Wi);
+ 				Rail(Back, W.bBroken ? -L * .48 : -L * .48, W.bBroken ? -L * .02 : -L * .3, B * .46, Deck, Wi + 7);
+@@ -339,6 +355,8 @@ namespace KeysWrecks
+ 					for (int32 sd = -1; sd <= 1; sd += 2)
+ 						Fore.AddTube(FVector(-L * .35 + k * L * .13, sd * (B * .5 + .1), Deck - .6), FVector(-L * .35 + k * L * .13 + .3, sd * (B * .5 + .1), Deck - .6), .35, .35, 8, Dark);
+ 				Portholes(Fore, -L * .1, L * .2, B * .31, Deck + 1.4, 3);
++				// the deckhouse is holed under the ports, either side
++				for (int32 sd = -1; sd <= 1; sd += 2) GFore.Add({FVector(0, sd * B * .31, Deck + .7), FVector(0, sd, 0), .7, .42});
+ 				Rail(Fore, -L * .48, L * .3, B * .47, Deck, Wi);
+ 				// the mast with its radar bar and a towing bitt aft
+ 				Fore.AddTube(FVector(L * .1, 0, Deck + 4), FVector(L * .1, 0, Deck + 7.5), .12, .08, 6, Rust);
+@@ -360,6 +378,9 @@ namespace KeysWrecks
+ 				for (int32 k = 0; k < 4; k++)
+ 					for (int32 sd = -1; sd <= 1; sd += 2) Fore.AddTube(FVector(-L * .4 + k * L * .27, sd * (B * .5 - .3), H), FVector(-L * .4 + k * L * .27, sd * (B * .5 - .3), H + .5), .18, .18, 8, Dark);
+ 				for (int32 k = 0; k < 7; k++) Fore.AddBox(FVector(-L * .3 + k * L * .1, B * .5 + .05, H * .5 - .4), FVector(.25, .12, H * .9), Rust * .6f);
++				// two holes in the side plating: between the bared ribs, and low on the other side
++				GFore.Add({FVector(-L * .25, B * .5, H * .45 - .4), FVector(0, 1, 0), 1.1, .6});
++				GFore.Add({FVector(L * .12, -B * .5, H * .4 - .4), FVector(0, -1, 0), .7, .42});
+ 				Growth(Fore, Wi * 3, L, B, H - .3, 32);
+ 				Debris(Fore, Wi, L, B, -.4, 8);
+ 				break;
+@@ -391,14 +412,15 @@ namespace KeysWrecks
+ 						Fore.AddBox(Hc + FVector(0, FMath::Cos(Ab), FMath::Sin(Ab)) * .75, FVector(.06, .3, 1.5), Dark, FQuat(FVector::XAxisVector, Ab - PI * .5) * FQuat(FVector::ZAxisVector, .3));
+ 					}
+ 				Fore.AddBox(FVector(-L * .02, -R * .98, Y0), FVector(1.1, .06, 1.7), Dark);
++				GFore.Add({FVector(-L * .02, -R * .98 - .04, Y0 - .15), FVector(0, -1, 0), .7, .42});   // the cabin door stands open on the dark
+ 				for (int32 k = -1; k <= 1; k++) Fore.AddBox(FVector(L * .44, k * .45, Y0 + .66), FVector(.7, .06, .08), Alu * .7f);
+ 				Growth(Fore, Wi * 3, L * .5, B * .6, Y0 - .4, 20);
+ 				Debris(Fore, Wi, L, B * .4, -.4, 6);
+ 				break;
+ 			}
+ 			}
+-			Place(Out, Fore, W, false);
+-			if (Aft.V.Num()) Place(Out, Aft, W, W.bBroken);
++			Place(Out, Fore, W, false, &GFore, Wi * 100);
++			if (Aft.V.Num()) Place(Out, Aft, W, W.bBroken, &GAft, Wi * 100 + 50);
+ 		}
+ 	}
+ }

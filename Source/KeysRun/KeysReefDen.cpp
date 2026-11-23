@@ -157,8 +157,8 @@ namespace KeysReefDen
 			if (bRough)
 			{
 				const FVector Q = Dir * (D.Freq * 2.2);
-				const double N = Noise3(Q + FVector(3.1), D.Seed) * .65 + Noise3(Q * 2.6 + FVector(9.7), D.Seed + 5) * .35;
-				R *= 1 + (N - .5) * 2 * D.Amp;
+				const double N = Noise3(Q + FVector(3.1), D.Seed) * .55 + Noise3(Q * 2.6 + FVector(9.7), D.Seed + 5) * .3 + Noise3(Q * 6.5 + FVector(4.4), D.Seed + 9) * .15;
+				R *= 1 + (N - .5) * 2 * D.Amp * 1.6;
 			}
 			return R;
 		}
@@ -249,7 +249,7 @@ namespace KeysReefDen
 		{
 			const bool bWide = D.MW > 1.2;
 			const int32 NU = Lod == 0 ? (bWide ? 64 : 44) : (bWide ? 28 : 20);
-			const int32 NE = Lod == 0 ? 12 : 6;
+			const int32 NE = Lod == 0 ? 16 : 7;
 			const FVector C(0, D.Cy, 0);
 			const FVector A(0, FMath::Sin(D.Pitch), FMath::Cos(D.Pitch));           // out of the opening
 			const FVector Rt(1, 0, 0), Up(0, FMath::Cos(D.Pitch), -FMath::Sin(D.Pitch));
@@ -264,8 +264,9 @@ namespace KeysReefDen
 				const double Th = 2 * PI * u / NU, Cs = FMath::Cos(Th), Sn = FMath::Sin(Th);
 				double Ex = FMath::Sign(Cs) * FMath::Pow(FMath::Abs(Cs), 2 / D.MExp), Ey = FMath::Sign(Sn) * FMath::Pow(FMath::Abs(Sn), 2 / D.MExp);
 				if (Ey < 0) Ey *= D.Flat;
-				const double Wob = 1 + .08 * FMath::Sin(3 * Th + D.Seed) + .05 * FMath::Sin(5 * Th + D.Seed * 1.7) + (Ey > 0 ? .07 * FMath::Sin(9 * Th + D.Seed * .6) : 0);
-				const FVector Q = Mc0 + Rt * (D.MW * .5 * Ex) + Up * (D.MH * .5 * Ey * Wob);
+				// the upper lip is broken rock, higher here and lower there; the lower is the sand's own line
+				const double Wob = 1 + .06 * FMath::Sin(3 * Th + D.Seed) + (Ey > 0 ? .7 * (Noise3(FVector(Ex * D.MW * 1.6 + D.Seed, .5, .5), D.Seed + 31) - .3) + .3 * (Noise3(FVector(Ex * D.MW * 5 + D.Seed, 1.5, .5), D.Seed + 37) - .5) : 0);
+				const FVector Q = Mc0 + Rt * (D.MW * .5 * Ex * (1 + .05 * FMath::Sin(2 * Th + D.Seed * .9))) + Up * (D.MH * .5 * Ey * Wob);
 				const FVector Dir = (Q - C).GetSafeNormal();
 				FVector P = C + Dir * RockR(D, Dir) * .985;
 				P.Y = FMath::Max(P.Y, D.Sill);
@@ -312,7 +313,7 @@ namespace KeysReefDen
 				const int32 v = NI + e;
 				for (int32 u = 0; u < NU; u++)
 				{
-					if (e == 0) { P[v * NU + u] = Rim[u]; Col[v * NU + u] = Mul(RockColor(D, Rim[u]), .4); continue; }
+					if (e == 0) { P[v * NU + u] = Rim[u]; Col[v * NU + u] = Mul(RockColor(D, Rim[u]), .5); continue; }
 					const FVector D0 = (Rim[u] - C).GetSafeNormal();
 					const double Cos0 = FMath::Clamp(FVector::DotProduct(D0, Am), -1.0, 1.0), Phi0 = FMath::Acos(Cos0);
 					const FVector E0 = (D0 - Am * Cos0).GetSafeNormal();
@@ -342,7 +343,7 @@ namespace KeysReefDen
 						Q.Y = -Skirt * Tt;
 					}
 					P[v * NU + u] = Q;
-					Col[v * NU + u] = Mul(RockColor(D, Q), FMath::Lerp(.4, 1.0, Smooth(S, 0, .14)));
+					Col[v * NU + u] = Mul(RockColor(D, Q), FMath::Lerp(.55, 1.0, Smooth(S, 0, .07)));
 					Out.Shape.Top = FMath::Max(Out.Shape.Top, Q.Y);
 				}
 			}
@@ -1076,6 +1077,11 @@ namespace KeysReefDen
 					for (const FDen& Dn : DensOfChunk(cx, cz))
 						if (FVector2D::Distance(FVector2D(Dn.Mouth.X, Dn.Mouth.Z), At) <= R) Out.Add(Dn);
 			for (const FDen& Dn : D->Gaps) if (FVector2D::Distance(FVector2D(Dn.Mouth.X, Dn.Mouth.Z), At) <= R) Out.Add(Dn);
+			{
+				TArray<FDen> Sheet;
+				LifeSheetDens(D->Life, Sheet);
+				for (const FDen& Dn : Sheet) if (FVector2D::Distance(FVector2D(Dn.Mouth.X, Dn.Mouth.Z), At) <= R) Out.Add(Dn);
+			}
 			Out.Sort([&](const FDen& A, const FDen& B) { return FVector2D::DistSquared(FVector2D(A.Mouth.X, A.Mouth.Z), At) < FVector2D::DistSquared(FVector2D(B.Mouth.X, B.Mouth.Z), At); });
 		}
 
@@ -1241,7 +1247,7 @@ namespace KeysReefDen
 			if (A[1] == TEXT("off")) { D->bPin = false; return; }
 			const int32 Which = A.Num() > 2 ? FCString::Atoi(*A[2]) : 0;
 			const double Off = A.Num() > 3 ? FCString::Atod(*A[3]) : 1.5, Side = A.Num() > 4 ? FCString::Atod(*A[4]) : 0, Up = A.Num() > 5 ? FCString::Atod(*A[5]) : .15;
-			const double R = A.Num() > 6 ? FCString::Atod(*A[6]) : 250;
+			const double R = A.Num() > 6 ? FCString::Atod(*A[6]) : 150;
 			TArray<FDen> Hits;
 			DensNear(D, At, R, Hits);
 			int32 Got = 0;

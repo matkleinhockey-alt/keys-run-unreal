@@ -320,7 +320,7 @@ namespace KeysReefDen
 			for (int32 i = 0; i < 5; i++) Fin(M, FVector(.03 + i * .04, 0, .02), FVector(.05 + i * .04, 0, .022), FVector(.045 + i * .04, 0, .05), Pale);
 			TArray<FVector> Pts;
 			for (int32 i = 0; i <= 10; i++) { const double T = i / 10.0; Pts.Add(FVector(.22 + T * 1.15, 0, .02 + .16 * T - .22 * T * T)); }
-			Limb(M, Pts, .015, .002, 5, Whip, Pale, 9);
+			Limb(M, Pts, .02, .004, 5, Whip, Pale, 9);
 		}
 
 		// Caribbean reef octopus at life size: mantle and head with the eyes raised on top; one arm along +x, 1 long
@@ -363,7 +363,7 @@ namespace KeysReefDen
 					Q = FVector(.7 + FMath::Sin(A) * Rr, .05 * FMath::Sin(3.5), Rr - FMath::Cos(A) * Rr);
 				}
 				Pts.Add(Q);
-				R.Add(FMath::Lerp(.042, .005, FMath::Pow(T, .8)));
+				R.Add(FMath::Lerp(.032, .006, FMath::Pow(T, .8)));
 			}
 			Sweep(M, Pts, R, 7, [&](double T, double Ang, const FVector& P)
 			{
@@ -617,6 +617,7 @@ namespace KeysReefDen
 		double CpuAcc = 0, FoundT = 0;
 		int32 CpuN = 0, Links[4] = {0, 0, 0, 0};
 		bool bForceHunt = false, bDirty = true;
+		TArray<FHouse> Sheet;   // test: one of every resident set out in open water (kr.den sheet)
 		FRandomStream Rng = FRandomStream(4242);
 	};
 
@@ -666,7 +667,8 @@ namespace KeysReefDen
 		}
 
 		// how much light is left on something this far inside the opening (m; 0 or less is outside)
-		double ShadeIn(double Inside) { return FMath::Lerp(1.0, .1, Smooth(Inside, -.02, .22)); }
+		bool GNoShade = false;   // (the specimen sheet: every animal in full light)
+		double ShadeIn(double Inside) { return GNoShade ? 1.0 : FMath::Lerp(1.0, .1, Smooth(Inside, -.02, .22)); }
 		double InsideOf(const FDen& D, const FVector& P) { return FVector::DotProduct(D.Mouth - P, D.Axis); }
 		double ShadeAt(const FDen& D, const FVector& P) { return ShadeIn(InsideOf(D, P)); }
 		// the floor of the opening (the lip of its sill), and the sand in front of the den
@@ -1149,7 +1151,7 @@ namespace KeysReefDen
 				const FVector Dir = (Me.Fwd * FMath::Cos(Yaw) + Side * FMath::Sin(Yaw)).GetSafeNormal();
 				const FVector Base = Me.P + Dir * (.035 * S) + Up3() * (-.012 * S);
 				const FVector Aim = (Dir + Up3() * (bOutside ? -.03 : -.12)).GetSafeNormal();
-				Put(L, POctoArm, Base, Face(Aim) * FQuat(FVector(1, 0, 0), Curl), FVector(Len, S, S), bOutside ? 1 : ShadeAt(D, Base + Dir * Len * .5));
+				Put(L, POctoArm, Base, Face(Aim) * FQuat(FVector(1, 0, 0), Curl), FVector(Len), bOutside ? 1 : ShadeAt(D, Base + Dir * Len * .5));
 			}
 			H.Where = Me.P;
 			if (bOutside && !H.bScared) L.Threats.Add(FVector4(Me.P.X, Me.P.Y, Me.P.Z, 1.0));
@@ -1548,7 +1550,7 @@ namespace KeysReefDen
 			if (bShow) { Drawn++; if (H.Dist < 25) Moving++; }
 		}
 		// nothing near enough to move, and nothing come or gone: last frame's instances stand
-		if (!Moving && !L.bDirty) { L.CpuAcc += (FPlatformTime::Seconds() - T0) * 1000; L.CpuN++; return; }
+		if (!Moving && !L.bDirty && !L.Sheet.Num()) { L.CpuAcc += (FPlatformTime::Seconds() - T0) * 1000; L.CpuN++; return; }
 		L.bDirty = Moving > 0;
 		for (int32 P = 0; P < NumParts; P++) { L.Xf[P].Reset(); L.Data[P].Reset(); }
 		L.Threats.Reset();
@@ -1559,6 +1561,12 @@ namespace KeysReefDen
 			if (!H.bShown) continue;
 			TickHouse(L, H, H.Dist < 25);
 			L.Stats.ByRes[H.D.Res] += H.M.Num();
+		}
+		if (L.Sheet.Num())
+		{
+			GNoShade = true;
+			for (FHouse& H : L.Sheet) TickHouse(L, H, true);
+			GNoShade = false;
 		}
 		Flush(L);
 		L.Stats.Animals = Drawn; L.Stats.Animated = Moving;
@@ -1606,8 +1614,11 @@ namespace KeysReefDen
 	FVector LifeWhere(const FLife* L, const FDen& D)
 	{
 		if (L) if (const FHouse* H = L->Houses.Find(D.Id)) if (!H->Where.IsZero()) return H->Where;
+		if (L) for (const FHouse& H : L->Sheet) if (H.D.Id == D.Id && !H.Where.IsZero()) return H.Where;
 		return D.Mouth;
 	}
+
+	void LifeSheetDens(const FLife* L, TArray<FDen>& Out) { if (L) for (const FHouse& H : L->Sheet) Out.Add(H.D); }
 
 	FLifeStats LifeStatsOf(const FLife* L)
 	{
@@ -1625,6 +1636,31 @@ namespace KeysReefDen
 			L->bForceHunt = true;
 			for (TPair<int64, FHouse>& Kv : L->Houses) if (Kv.Value.D.bBuddy) Kv.Value.NextHunt = 0;
 			UE_LOG(LogTemp, Log, TEXT("KRDen hunt: asked for now"));
+			return true;
+		}
+		if (A[0] == TEXT("sheet"))
+		{
+			// one of every resident, at home, set out in a row in open water 3 m ahead of the camera and in full light:
+			// to look the animals over without hunting the reef for them (goto finds them as it does real dens).
+			// sheet 0 takes it away.
+			L->Sheet.Reset();
+			L->bDirty = true;
+			if (A.Num() > 1 && A[1] == TEXT("0")) return true;
+			const FVector Fw = Flat(W.CamFwd).GetSafeNormal(.0001, FVector(0, 0, 1)), Rt = FVector::CrossProduct(Up3(), Fw).GetSafeNormal();
+			for (int32 r = ResEyes; r < NumRes; r++)
+			{
+				FHouse H;
+				FDen& D = H.D;
+				D.Id = -(r + 1); D.Kind = uint8(Ledge); D.Res = uint8(r); D.Seed = 1000 + r * 77;
+				D.Count = r == Lobster ? 3 : r == Squirrelfish ? 4 : r == Soldierfish ? 5 : r == Sweepers ? 24 : 1;
+				D.Mouth = W.Cam + Fw * 3 + Rt * ((r - ResEyes - 6.5) * 1.6) + Up3() * -.2;
+				D.Axis = -Fw; D.Right = Rt;
+				D.W = r == Sweepers || r == Goliath ? 1.6 : 1.3; D.H = r == Goliath || r == BlackGrouper ? .7 : .4; D.Deep = 1; D.Depth = -D.Mouth.Y;
+				D.X = D.Mouth.X; D.Y = D.Mouth.Y - D.H * .5; D.Z = D.Mouth.Z;
+				InitHouse(*L, H);
+				L->Sheet.Add(H);
+			}
+			UE_LOG(LogTemp, Log, TEXT("KRDen sheet: %d residents set out at %.1f, %.1f, %.1f"), L->Sheet.Num(), W.Cam.X + Fw.X * 3, W.Cam.Y, W.Cam.Z + Fw.Z * 3);
 			return true;
 		}
 		if (A[0] == TEXT("who"))

@@ -1,0 +1,44 @@
+diff --git a/Source/KeysRun/KeysDive.cpp b/Source/KeysRun/KeysDive.cpp
+index 15ff982..87ae55b 100644
+--- a/Source/KeysRun/KeysDive.cpp
++++ b/Source/KeysRun/KeysDive.cpp
+@@ -1,4 +1,5 @@
+ #include "KeysDive.h"
++#include "KeysReefDen.h"
+ #include "KeysSea.h"
+ #include "KeysGeo.h"
+ #include "KeysData.h"
+@@ -95,6 +96,9 @@ namespace KeysDive
+ 			if (S.VY < 0) S.VY = 0;
+ 			S.Events.Add(EEvent::GroundHit);
+ 		}
++		// a den's rock on the reef is as solid as the bottom (KeysReefDen.h): she is put back outside it, and what speed
++		// she had into it is lost
++		if (KeysReefDen::PushOut(S.X, S.Y, S.Z, DiverRadius)) { S.VX *= .5; S.VZ *= .5; if (S.VY < 0) S.VY = 0; }
+ 		S.X = DClamp(S.X, KeysGeo::WBX0, KeysGeo::WBX1);
+ 		S.Z = DClamp(S.Z, KeysGeo::WBZ0, KeysGeo::WBZ1);
+ 	}
+diff --git a/Source/KeysRun/KeysDiver.cpp b/Source/KeysRun/KeysDiver.cpp
+index f20ad8a..04a5337 100644
+--- a/Source/KeysRun/KeysDiver.cpp
++++ b/Source/KeysRun/KeysDiver.cpp
+@@ -1,4 +1,5 @@
+ #include "KeysDiver.h"
++#include "KeysReefDen.h"
+ #include "KeysExtras.h"
+ #include "KeysSchools.h"
+ #include "KeysBoatPawn.h"
+@@ -955,7 +956,12 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
+ 		GetTargets(Tg);
+ 		FHit Hit;
+ 		const FVector Tip0 = Shot.At(Shot.Dist);
+-		const bool bHitNow = StepSpear(Shot, Tg, Dt, Hit);
++		bool bHitNow = StepSpear(Shot, Tg, Dt, Hit);
++		// a den's rock stops the shaft (KeysReefDen.h): what it would have reached behind the rock is safe
++		if (const double Rock = KeysReefDen::RayHit(Shot.O, Shot.D, Shot.Range); Rock < Shot.Range && (bHitNow ? Hit.AtDist : Shot.Dist) > Rock)
++		{
++			bHitNow = false; Shot.Dist = Rock; Shot.bAlive = false;
++		}
+ 		// the shaft drags a seam of fine bubbles through the water behind it (the line, a thinner trickle)
+ 		if (bDiving)
+ 		{

@@ -70,6 +70,7 @@ namespace KeysReefDen
 	bool LifeDebug(FLife* L, const FWorldNow& W, const TArray<FString>& Args);
 	// where to put a camera to look at this den's resident (it may have walked off): its place now
 	FVector LifeWhere(const FLife* L, const FDen& D);
+	void LifeSheetDens(const FLife* L, TArray<FDen>& Out);   // the test sheet's stand-in dens (kr.den sheet)
 	struct FLifeStats { int32 Animals = 0, Animated = 0, Instances = 0, Tris = 0, Pools = 0; int32 ByRes[NumRes] = {}; double CpuMs = 0; };
 	FLifeStats LifeStatsOf(const FLife* L);
 }
