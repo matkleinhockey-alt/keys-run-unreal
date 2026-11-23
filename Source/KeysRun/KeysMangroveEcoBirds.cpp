@@ -163,7 +163,7 @@ namespace KeysMangroveEco
 		{
 			const FBirdSpec& K = Specs[B.Kind];
 			FPen Pen{Buf};
-			Pen.Rim = Rim; Pen.MinR = Rim * .5; Pen.Back = Away * (K.Body * B.Sz * 1.15 + .05);
+			Pen.Rim = Rim; Pen.MinR = Rim * .25; Pen.Back = Away * (K.Body * B.Sz * 1.15 + .05);
 			const double S = B.Sz;
 			const FVector F(FMath::Cos(B.Yaw), 0, FMath::Sin(B.Yaw)), Up(0, 1, 0), Rt(-F.Z, 0, F.X);
 			const bool bAir = B.State == BFly || B.State == BHover || B.State == BDive || B.State == BPatrol, bSwim = B.State == BSwim;
@@ -255,7 +255,7 @@ namespace KeysMangroveEco
 		void EmitSnag(FSoup& Buf, const FEco& E, const FBird& B, double Rim)
 		{
 			FPen Pen{Buf};
-			Pen.MinR = Rim * .6;
+			Pen.MinR = Rim * .3;
 			const FLinearColor Wood = Hex(0x6e6052), Pale = Hex(0x93877a);
 			const FVector Top = B.Perch - FVector(0, .05, 0);
 			const double Foot = FMath::Min(FloorAt(Top.X, Top.Z), E.Sea - .4);
@@ -832,15 +832,15 @@ namespace KeysMangroveEco
 			if (bStillPass && !Before() && (B.Kind == Cormorant || B.Kind == Anhinga) && B.Rook < 0)
 			{
 				const double Ds = FVector2D::Distance(FVector2D(B.Perch.X, B.Perch.Z), Cam2);
-				if (Ds < 320) EmitSnag(Buf, E, B, FMath::Clamp(Ds * .0008, .01, .15));
+				if (Ds < 320) EmitSnag(Buf, E, B, FMath::Clamp(Ds * .0016, .015, .22));
 			}
 			if (B.State == BAway || B.bStill != bStillPass || (B.State == BFly && B.FlyT < 0 && B.Next != BAway && B.From.Y > 15)) continue;
 			const double D2 = FVector2D::DistSquared(FVector2D(B.P.X, B.P.Z), Cam2);
 			if (D2 > FMath::Square(Specs[B.Kind].Draw)) continue;
 			if (B.State == BSwim && B.P.Y < E.Sea - .4) continue;
-			// (past 70 m a bird is drawn in half the pieces; its dark edge is about a pixel and a half wide through the
+			// (past 70 m a bird is drawn in half the pieces; its dark edge is two or three pixels wide through the
 			// closer look's lens at whatever distance it stands)
-			Emit(Buf, B, D2 > 70.0 * 70.0, Before() ? 0 : FMath::Clamp(FMath::Sqrt(D2) * (B.Rook >= 0 ? .0005 : .0008), .01, .15), (B.P - E.Cam).GetSafeNormal());   // (on a rookery's green crowns they need less of it)
+			Emit(Buf, B, D2 > 70.0 * 70.0, Before() ? 0 : FMath::Clamp(FMath::Sqrt(D2) * (B.Rook >= 0 ? .0008 : .0016), .015, .22), (B.P - E.Cam).GetSafeNormal());   // (on a rookery's green crowns they need less of it)
 			if (bStillPass) E.StillN++; else E.BirdsMoved++;
 		}
 	}

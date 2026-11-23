@@ -483,15 +483,39 @@ namespace KeysMangroveEco
 		return C;
 	}
 
-	// where to put the boat to look at something at P whose open water lies along Out: off it in water she floats in,
-	// bow toward it (forward is (-sin H, -cos H))
+	// where to put the boat to look at something at P whose open water lies along Out: off it, bow toward it (forward
+	// is (-sin H, -cos H)), in water a boat lies afloat in with room to swing (1.1 m charted, nothing dry within 7 m);
+	// if there is none at Dist that way, further out and round to either side. It says how far off she ends up.
+	static bool BoatSpot(const FVector2D& P, const FVector2D& Out, double Dist, FVector2D& B, double& H)
+	{
+		auto Ok = [](const FVector2D& Q0)
+		{
+			if (KeysGeo::DepthAt(Q0.X, Q0.Y) < 1.1 || KeysGeo::LandH(Q0.X, Q0.Y) > -.05) return false;
+			for (int32 k = 0; k < 6; k++)
+			{
+				const FVector2D Q = Q0 + FVector2D(FMath::Cos(k * PI / 3), FMath::Sin(k * PI / 3)) * 7;
+				if (KeysGeo::LandH(Q.X, Q.Y) > -.05 || KeysGeoReal::MangroveAt(Q.X, Q.Y)) return false;
+			}
+			return true;
+		};
+		B = P + Out * Dist;
+		bool bOk = Ok(B);
+		for (int32 a = 0; a < 7 && !bOk; a++)
+		{
+			const double An = ((a + 1) / 2) * (a % 2 ? 1 : -1) * .4;
+			const FVector2D O2(Out.X * FMath::Cos(An) - Out.Y * FMath::Sin(An), Out.X * FMath::Sin(An) + Out.Y * FMath::Cos(An));
+			for (double D = Dist; D <= Dist + 80 && !bOk; D += 4) { B = P + O2 * D; bOk = Ok(B); }
+		}
+		H = FMath::Atan2(-(P.X - B.X), -(P.Y - B.Y));
+		return bOk;
+	}
 	static FString TpFor(const FVector2D& P, const FVector2D& Out, double Dist)
 	{
-		FVector2D B = P + Out * Dist;
-		for (int32 k = 0; k < 12 && (KeysGeo::DepthAt(B.X, B.Y) < .8 || KeysGeo::LandH(B.X, B.Y) > -.05); k++) B += Out * 4;
-		// (and lying along the shore a little short of it, so the chase camera sees it past the boat's bow)
-		const FVector2D Tn(-Out.Y, Out.X), B2 = B - Tn * (Dist * .9);
-		return FString::Printf(TEXT("bow on tp=%.0f,%.0f,%.3f alongside tp=%.0f,%.0f,%.3f"), B.X, B.Y, FMath::Atan2(-(P.X - B.X), -(P.Y - B.Y)), B2.X, B2.Y, FMath::Atan2(-Tn.X, -Tn.Y));
+		FVector2D B;
+		double H;
+		const bool bOk = BoatSpot(P, Out, Dist, B, H);
+		return FString::Printf(TEXT("bow on tp=%.0f,%.0f,%.3f (%.0f m off, %.1f m charted%s)"), B.X, B.Y, H, FVector2D::Distance(B, P), KeysGeo::DepthAt(B.X, B.Y),
+			bOk ? TEXT("") : TEXT(": NO WATER FOR A BOAT WITHIN REACH"));
 	}
 
 	// Where to lie to look at a rookery key: off it toward its open water, about 150 m from its middle, in water that
@@ -825,6 +849,18 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 				}
 			}
 	}
+	// ---- stills of an event from the player's own view (kr.eco jump, kr.eco shower)
+	if (S.bEvArmed && S.Showers.Num() && S.Showers.Last().Id != S.EvShowerId)
+	{
+		S.bEvArmed = false; S.EvShots = 6; S.EvShotT = .12; S.EvName = TEXT("showerview");
+		UE_LOG(LogTemp, Log, TEXT("KREco test: a shower of bait at %.0f, %.0f, %.0f m from the boat: stills from the player's view"), S.Showers.Last().P.X, S.Showers.Last().P.Y, FVector2D::Distance(S.Showers.Last().P, S.Boat));
+	}
+	if (S.EvShots > 0 && (S.EvShotT -= S.Dt) <= 0)
+	{
+		static int32 EvN = 0;
+		FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / FString::Printf(TEXT("KREco_%s_%02d.png"), *S.EvName, EvN++), false, false);
+		S.EvShots--; S.EvShotT = .3;
+	}
 	// ---- the test camera, held on what it was pointed at
 	if (S.bLook && S.LookCam.IsValid())
 	{
@@ -1013,13 +1049,24 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			for (FGroup& G : T.Value->Groups)
 				if ((G.Kind == Snook || G.Kind == Jack || G.Kind == Tarpon || G.Kind == LemonShark || G.Kind == Barracuda) && FVector2D::Distance(G.C, S.Boat) < 120) { G.Hunger = 0; N++; }
 		UE_LOG(LogTemp, Log, TEXT("KREco test: %d packs of predators within 120 m of the boat made hungry"), N);
+		// (and stills from the player's own view when the bait next goes up)
+		S.bEvArmed = true; S.EvShowerId = S.Showers.Num() ? S.Showers.Last().Id : 0;
+	}
+	else if (C0 == TEXT("jump"))
+	{
+		// test: the mullet nearest the boat jump now, one after another, with stills from the player's own view
+		FGroup* G = NearestGroup(S, S.Boat, 400, Mullet);
+		if (!G) { UE_LOG(LogTemp, Log, TEXT("KREco test: no mullet within 400 m of the boat")); return; }
+		for (int32 i = 0; i < G->M.Num(); i++) G->M[i].T = .3 + i * .22;
+		S.EvShots = 7; S.EvShotT = .55; S.EvName = TEXT("jump");
+		UE_LOG(LogTemp, Log, TEXT("KREco test: %d mullet at %.0f, %.0f, %.0f m from the boat, told to jump"), G->M.Num(), G->C.X, G->C.Y, FVector2D::Distance(G->C, S.Boat));
 	}
 	else if (C0 == TEXT("findall"))
 	{
 		// the nearest of every kind
 		for (int32 k = 0; k < NumKinds; k++) DebugCmd(FString::Printf(TEXT("find1 %s %s"), KindName(k), A.Num() > 1 ? *A[1] : TEXT("9")));
 	}
-	else if ((C0 == TEXT("find") || C0 == TEXT("find1")) && A.Num() > 1)
+	else if ((C0 == TEXT("find") || C0 == TEXT("find1") || C0 == TEXT("goto")) && A.Num() > 1)
 	{
 		// (a kind's name may be two words: the distance is the last one if it is a number)
 		if (A.Num() > 2 && !A.Last().IsNumeric()) { for (int32 i = 2; i < A.Num(); i++) A[1] += TEXT(" ") + A[i]; A.SetNum(2); }
@@ -1030,7 +1077,8 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		auto Try = [&](int32 Kind, const FVector2D& P, const FVector2D& O) { if (FString(KindName(Kind)).Contains(A[1])) Hits.Add({FVector2D::Distance(P, S.Boat), P, O, Kind}); };
 		for (TPair<int64, FTileE*>& T : S.Tiles)
 		{
-			for (FBird& B : T.Value->Birds) if (B.Leader < 0) Try(B.Kind, FVector2D(B.Home.X, B.Home.Z), B.Out);
+			// (a rookery's birds are found by the rookery's own bookmark, not here)
+			for (FBird& B : T.Value->Birds) if (B.Leader < 0 && B.Rook < 0) Try(B.Kind, C0 == TEXT("goto") && B.State != BAway ? FVector2D(B.P.X, B.P.Z) : FVector2D(B.Home.X, B.Home.Z), B.Out);
 			for (FSchoolE& Sc : T.Value->Schools) Try(Sc.Kind, Sc.Home, Sc.Out);
 			for (FGroup& G : T.Value->Groups) Try(G.Kind, G.Home, G.Out);
 			for (FCrabs& Cr : T.Value->Crabs) Try(Cr.Kind, Cr.C, Cr.Out);
@@ -1038,6 +1086,24 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		}
 		Hits.Sort([](const FHit& X, const FHit& Y) { return X.D < Y.D; });
 		const double Dist = A.Num() > 2 ? FCString::Atod(*A[2]) : 12;
+		if (C0 == TEXT("goto"))
+		{
+			// goto <kind> [dist]: put the boat bow on to the nearest of that kind she can lie that far off (test), and
+			// tell the closer look to prefer the kind
+			AKeysBoatPawn* Pw = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0));
+			for (const FHit& Ht : Hits)
+			{
+				FVector2D B;
+				double Hd;
+				if (!Pw || !BoatSpot(Ht.P, Ht.O, Dist, B, Hd) || FVector2D::Distance(B, Ht.P) > Dist + 9) continue;
+				Pw->DebugPlace(B.X, B.Y, Hd);
+				CloserCmd(FString(TEXT("want ")) + KindName(Ht.Kind));
+				UE_LOG(LogTemp, Log, TEXT("KREco goto %s: at %.0f, %.0f; the boat put at tp=%.0f,%.0f,%.3f, %.0f m off, in %.1f m charted"), KindName(Ht.Kind), Ht.P.X, Ht.P.Y, B.X, B.Y, Hd, FVector2D::Distance(B, Ht.P), KeysGeo::DepthAt(B.X, B.Y));
+				return;
+			}
+			UE_LOG(LogTemp, Log, TEXT("KREco goto %s: none of %d in the tiles planned round the boat has water for her within %.0f m"), *A[1], Hits.Num(), Dist + 9);
+			return;
+		}
 		for (int32 i = 0; i < FMath::Min(C0 == TEXT("find1") ? 1 : 4, Hits.Num()); i++)
 			UE_LOG(LogTemp, Log, TEXT("KREco find %s: at %.0f, %.0f, %.0f m from the boat; %s"), KindName(Hits[i].Kind), Hits[i].P.X, Hits[i].P.Y, Hits[i].D, *TpFor(Hits[i].P, Hits[i].O, Dist));
 		if (!Hits.Num()) UE_LOG(LogTemp, Log, TEXT("KREco find %s: none in the %d tiles planned round the boat"), *A[1], S.Tiles.Num());

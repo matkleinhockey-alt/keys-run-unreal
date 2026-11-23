@@ -27,8 +27,8 @@ namespace KeysMangroveEco
 			double LastYaw = 0, LastPitch = 0, LastZoom = 1;
 			uint64 Frame = 0;
 			FVector Tgt = FVector::ZeroVector, Look = FVector::ZeroVector;
-			FString What;
-			int32 Rook = -1, Ons = 0, Offs = 0;
+			FString What, Want;   // Want (a test's): the kind the look is told to prefer
+			int32 Rook = -1, Ons = 0, Offs = 0, Shower = 0;
 		};
 		FLookIn GL;
 
@@ -56,6 +56,13 @@ namespace KeysMangroveEco
 				const double Sc = 2.0 + N * .02 + (L.Rook == r ? 1 : 0);
 				if (Sc > Best) { Best = Sc; BestP = FVector(Rk[r].C.X, Y / N - .5, Rk[r].C.Y); BestRook = r; BestAcross = Rk[r].R * 2.3; BestWhat = FString::Printf(TEXT("rookery %d (%d birds at home)"), r, N); }
 			}
+			// (bait going up in a shower within sight takes the eye for a few seconds: the birds are coming to it)
+			for (const FShower& Sh : E.Showers)
+			{
+				const double D = FVector2D::Distance(Sh.P, Boat);
+				if (E.Now - Sh.T > 6 || D > 80 || D < 5 || Best >= 5) continue;
+				Best = 5; BestP = FVector(Sh.P.X, E.Sea + .4, Sh.P.Y); BestRook = -1; BestAcross = 26; BestWhat = TEXT("a shower of bait");
+			}
 			TArray<FCand> C;
 			auto Add = [&](const FVector& P, double W, int32 Kind, const FVector2D& Out)
 			{
@@ -64,7 +71,8 @@ namespace KeysMangroveEco
 				if (D > 95 || D < 3) return;
 				// (what stands on the boat's side of its trees counts for more than what is behind them)
 				const bool bSeen = FVector2D::DotProduct(Out, Boat - P2) > 0;
-				C.Add({P, W * (bSeen ? 1 : .3) / (1 + D / 28), Kind, bSeen});
+				// (the near ones count for much more: a kingfisher 25 m off is worth more than a heron at 60)
+				C.Add({P, W * (bSeen ? 1 : .3) / (1 + FMath::Square(D / 22)) * (!L.Want.IsEmpty() && FString(KindName(Kind)).Contains(L.Want) ? 25 : 1), Kind, bSeen});
 			};
 			for (TPair<int64, FTileE*>& T : E.Tiles)
 			{
@@ -89,7 +97,7 @@ namespace KeysMangroveEco
 				if (L.Rook < 0 && L.bOn && FVector::Dist2D(FVector(C[i].P.X, C[i].P.Z, 0), FVector(L.Tgt.X, L.Tgt.Z, 0)) < 8) Sc *= 1.6;   // (it stays on what it has)
 				if (Sc > Best && Wsum > 0) { Best = Sc; BestP = Mid / Wsum; BestRook = -1; BestAcross = 26; BestWhat = KindName(C[i].Kind); }
 			}
-			if (Best < .12) return;
+			if (Best < .05) return;
 			L.bHave = true;
 			L.Score = Best; L.Tgt = BestP; L.Rook = BestRook; L.Across = BestAcross; L.What = BestWhat;
 		}
@@ -127,6 +135,7 @@ namespace KeysMangroveEco
 		if (bCan && Sp < ReleaseMs)
 		{
 			L.PickT -= Dt;
+			if (E->Showers.Num() && E->Showers.Last().Id != L.Shower) { L.Shower = E->Showers.Last().Id; L.PickT = 0; }
 			if (L.PickT <= 0) { L.PickT = L.bOn ? .8 : .4; Pick(*E, Boat, L); }
 		}
 		const bool bWant = bCan && L.bHave && (L.bOn ? Sp < ReleaseMs : L.SlowT > 1.2);
@@ -159,7 +168,9 @@ namespace KeysMangroveEco
 		const FVector2D T2(L.Tgt.X, L.Tgt.Z);
 		const double D = FMath::Max(4.0, FVector2D::Distance(T2, Boat));
 		const FVector2D ToT = (T2 - Boat) / D;
-		const double WantDist = FMath::Clamp(BaseDist * .5, 9.0, 16.0), WantHt = FMath::Clamp(BaseHt * .4, 2.4, 3.6);
+		// (with no room beside her - a creek, a pond - it stays astern and above, where it was, and only draws in a little)
+		const double SideDist = FMath::Clamp(BaseDist * .5, 9.0, 16.0);
+		const double WantDist = L.bBehind ? BaseDist * .7 : SideDist, WantHt = L.bBehind ? BaseHt * .85 : FMath::Clamp(BaseHt * .4, 2.4, 3.6);
 		if (L.bOn)
 		{
 			// the lens: closes up on what is far, and takes in the whole of a key
@@ -168,22 +179,22 @@ namespace KeysMangroveEco
 			L.Fov = FMath::Clamp(L.Rook >= 0 ? Fit : FMath::Lerp(46.0, 40.0, FMath::Clamp((D - 25) / 55, 0.0, 1.0)), 34.0, 56.0) + (L.bBehind ? 8 : 0);
 		}
 		// (her middle sits just outside the edge of the frame, so only her near end is in its corner)
-		const double Off = FMath::Clamp((FMath::DegreesToRadians(L.Fov * .5) + .04) * (WantDist + D) / D, .3, 1.15);
+		const double Off = FMath::Clamp((FMath::DegreesToRadians(L.Fov * .5) + .04) * (SideDist + D) / D, .3, 1.15);
 		const double Opp = FMath::Atan2(-ToT.X, -ToT.Y);
 		if (L.bOn)
 		{
 			double Aw = Opp + L.Sign * Off;
-			bool bOk = !Dry(X + FMath::Sin(Aw) * WantDist, Z + FMath::Cos(Aw) * WantDist) && !Dry(X + FMath::Sin(Aw) * WantDist * .6, Z + FMath::Cos(Aw) * WantDist * .6);
+			bool bOk = !Dry(X + FMath::Sin(Aw) * SideDist, Z + FMath::Cos(Aw) * SideDist) && !Dry(X + FMath::Sin(Aw) * SideDist * .6, Z + FMath::Cos(Aw) * SideDist * .6);
 			if (!bOk)
 			{
 				// (trees or ground where the lens would stand: the other shoulder; failing that it stays astern, as it was)
 				const double Ao = Opp - L.Sign * Off;
-				if (!Dry(X + FMath::Sin(Ao) * WantDist, Z + FMath::Cos(Ao) * WantDist) && !Dry(X + FMath::Sin(Ao) * WantDist * .6, Z + FMath::Cos(Ao) * WantDist * .6)) { Aw = Ao; L.Sign = -L.Sign; bOk = true; }
+				if (!Dry(X + FMath::Sin(Ao) * SideDist, Z + FMath::Cos(Ao) * SideDist) && !Dry(X + FMath::Sin(Ao) * SideDist * .6, Z + FMath::Cos(Ao) * SideDist * .6)) { Aw = Ao; L.Sign = -L.Sign; bOk = true; }
 			}
 			L.bBehind = !bOk;
 			if (!bOk) Aw = Base;
 			L.A += WrapPi(Aw - L.A) * FMath::Min(1.0, Dt * 1.6);
-			L.Look = L.bBehind ? FVector(X + ToT.X * D * .5, FMath::Lerp(1.8, L.Tgt.Y, .5), Z + ToT.Y * D * .5) : L.Tgt;
+			L.Look = L.bBehind ? FVector(X + ToT.X * D * .7, FMath::Lerp(1.8, L.Tgt.Y, .7), Z + ToT.Y * D * .7) : L.Tgt;
 		}
 		Out.K = Ks;
 		Out.Dist = FMath::Lerp(1.0, WantDist / FMath::Max(1.0, BaseDist), Ks);
@@ -207,6 +218,7 @@ namespace KeysMangroveEco
 		FLookIn& L = GL;
 		if (Arg == TEXT("off")) { L.bOff = true; UE_LOG(LogTemp, Log, TEXT("KREco closer look: switched off for this run (test)")); }
 		else if (Arg == TEXT("on")) { L.bOff = false; UE_LOG(LogTemp, Log, TEXT("KREco closer look: switched on")); }
+		else if (Arg.StartsWith(TEXT("want"))) { L.Want = Arg.Mid(5).TrimStartAndEnd(); L.PickT = 0; UE_LOG(LogTemp, Log, TEXT("KREco closer look: told to prefer '%s' (test)"), *L.Want); }
 		else UE_LOG(LogTemp, Log, TEXT("KREco closer look: %s, in %.2f, lens %.0f deg, on %s; engaged %d times, released %d; %s%s"), L.bOn ? TEXT("engaged") : TEXT("not engaged"), L.K, CloserFov(),
 			L.bHave ? *L.What : TEXT("nothing"), L.Ons, L.Offs, L.bHeld ? TEXT("held off: the player moved the camera") : TEXT("not held off"), L.bBehind ? TEXT("; the lens stays astern (no room beside her)") : TEXT(""));
 	}
@@ -293,7 +305,7 @@ namespace KeysMangroveEco
 		const AKeysBoatPawn* P = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(World, 0));
 		if (!P) return;
 		const double D = KeysGeo::DepthFast(P->BoatX(), P->BoatZ()) + KeysGeo::TideRise(), Hull = P->TrimProfile().HullDraftM;
-		UE_LOG(LogTemp, Log, TEXT("KREco afloat %s: the boat at %.0f, %.0f lies in %.2f m at this tide (charted %.2f m, tide %+.2f m); her hull grounds at %.2f m: %s"),
-			*Tag, P->BoatX(), P->BoatZ(), D, KeysGeo::DepthAt(P->BoatX(), P->BoatZ()), KeysGeo::TideRise(), Hull, D < Hull ? TEXT("AGROUND") : TEXT("afloat"));
+		UE_LOG(LogTemp, Log, TEXT("KREco afloat %s: the boat at %.0f, %.0f, heading %.3f, making %.1f kn, lies in %.2f m at this tide (charted %.2f m, tide %+.2f m); her hull grounds at %.2f m: %s"),
+			*Tag, P->BoatX(), P->BoatZ(), P->BoatH(), FMath::Abs(P->GetSpeed()) * 1.944, D, KeysGeo::DepthAt(P->BoatX(), P->BoatZ()), KeysGeo::TideRise(), Hull, D < Hull ? TEXT("AGROUND") : TEXT("afloat"));
 	}
 }
