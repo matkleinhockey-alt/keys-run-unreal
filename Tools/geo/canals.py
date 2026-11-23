@@ -9,10 +9,22 @@ and gets back, on its fine grid, the water to cut and the land to fill:
   kept (the comb of canals 38 m apart keeps every second tooth, so the land between still holds a row of houses);
 - kept lines become water WIDTH across and DEPTH deep; teeth dropped for crowding are filled in as land;
 - from each canal's mouth a cut DREDGE_W wide follows the water to the nearest water DEEP deep, if that is within
-  DREDGE_MAX; dropped dead ends and short blind stubs are filled too.
+  DREDGE_MAX; dropped dead ends and short blind stubs are filled too;
+- last, every canal a boat still cannot leave in the game is opened (canalways.py: the real mouth cut back open where
+  the grid closed it, a way dredged across the flat where the water outside plays too shallow). That step reads the
+  map as it is baked (every phase's .kgeo and marks), so it wants the phase baked already, and it changes no .kgeo.
 
-Nothing here is random: the same inputs give the same canals."""
-import heapq, json
+Nothing here is random: the same inputs give the same canals.
+
+Run as a script it writes a phase's canals file again, on its own, from the raw downloads and the baked map:
+
+  devkit/pyenv/bin/python Tools/geo/canals.py <p2|p3|p4> [--check] [--geo <dir>] [--raw <dir>] [--preview <dir>]
+
+(the bake of the phase is run into a scratch copy of the geo dir and only <phase>_canals.txt is taken from it; --check
+writes nothing and says whether the file in the geo dir is the one the tool makes). Run it last after any re-bake
+(bake.py twice, bake_marks.py, bake_mangrove.py, then this): a bake in the middle of that sequence plans the ways
+on the map as it stood at that moment."""
+import heapq, json, os, sys
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -287,4 +299,55 @@ def cut(polys, built_json, to_game, x0, z0, fnx, fnz, fc, fine_h):
     report['near'] = near[::k, ::k].copy()
     report['out_lines'] = out_lines
     report['ways'] = ways
+    # ---- the canals a boat still cannot leave in the game, opened (canalways.py)
+    import canalways
+    canalways.open_shut(report, polys, land, fill, built_json, to_game, x0, z0, RES, WIDTH, DREDGE_W)
+    for note in report.get('opened', []):
+        print('  ' + note)
     return canal_f, fill_f, depth, report
+
+
+def main(argv):
+    import filecmp, shutil, subprocess, tempfile
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    def opt(name, default):
+        return argv[argv.index(name) + 1] if name in argv else default
+    phase = argv[1] if len(argv) > 1 else ''
+    geo = os.path.abspath(opt('--geo', os.path.join(here, '..', '..', 'Content', 'KeysRun', 'Geo')))
+    raw = opt('--raw', os.environ.get('RAW', '/Users/mat/Documents/Unreal Projects/KeysRun-devkit/geo/raw'))
+    if phase not in ('p2', 'p3', 'p4'):
+        print('canals.py <p2|p3|p4> [--check] [--geo <dir>] [--raw <dir>] [--preview <dir>]')
+        return 2
+    name = phase + '_canals.txt'
+    tmp = tempfile.mkdtemp(prefix='canals_')
+    try:
+        scratch = os.path.join(tmp, 'geo')
+        shutil.copytree(geo, scratch)
+        env = dict(os.environ, CANALWAYS_GEO=geo)
+        if '--preview' in argv:
+            os.makedirs(opt('--preview', ''), exist_ok=True)
+            env['CANALWAYS_DEBUG'] = os.path.abspath(opt('--preview', ''))
+        r = subprocess.run([sys.executable, os.path.join(here, 'bake.py'), phase, raw, scratch], env=env, capture_output=True, text=True)
+        if r.returncode != 0:
+            print(r.stdout[-2000:], r.stderr[-4000:])
+            return 1
+        for ln in r.stdout.splitlines():
+            if ln.startswith('  canal ') or ln.startswith('  ways out') or ln.startswith('  centre lines') or ln.startswith('  new ') or ln.startswith('  canals:') or ln.startswith('    line ') or ln.startswith('    inlet '):
+                print(ln.rstrip()[2:])
+        new, old = os.path.join(scratch, name), os.path.join(geo, name)
+        same = os.path.exists(old) and filecmp.cmp(new, old, shallow=False)
+        n_lines = sum(1 for _ in open(new))
+        if '--check' in argv:
+            print('%s: %s (%d lines)' % (name, 'the same, byte for byte' if same else 'DIFFERENT from what the tool makes', n_lines))
+            return 0 if same else 1
+        if not same:
+            shutil.copyfile(new, old)
+        print('%s: %s (%d lines)' % (name, 'unchanged' if same else 'written', n_lines))
+        return 0
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
