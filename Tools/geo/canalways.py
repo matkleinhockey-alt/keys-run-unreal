@@ -296,6 +296,9 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
                 n_open += 1
         if DEBUG_DIR:
             _preview(f'{DEBUG_DIR}/c{k:03d}_{mid[0]:.0f}_{mid[1]:.0f}.png', W, Dn, land, fill, street, x0, z0, res, sub, canals, ways, n_base, n_ways0, path, edge)
+            import json
+            json.dump(dict(canal=k, centre=pts, route=_simplify(path, 1.0), new_canal=new_c, new_way=new_w),
+                      open(f'{DEBUG_DIR}/c{k:03d}_route.json', 'w'))
     rpt['out_lines'] = [p for _, p in canals]
     rpt['ways'] = [p for _, p in ways]
     rpt['opened_n'], rpt['left_shut'] = n_open, n_left
@@ -340,3 +343,61 @@ def _preview(path, W, Dn, land, fill, street, x0, z0, res, sub, canals, ways, n_
     for a, b, cc, dd in W.nav:
         d.line(px([(a, b), (cc, dd)]), fill=(255, 0, 255), width=1)
     im.save(path)
+
+
+def beacons(geo=None):
+    """where a pair of daybeacons belongs: the outer end of every way that crosses a flat. The same rule as the game's
+    (request R1, KeysGeoReal MarkWays): a way 60 m long or more that ends 30 m or more off the shore, not in another
+    way, with no mark within 45 m already -> [(way index over the whole map, length, (green x, z), (red x, z))]"""
+    W = M.World(geo or GEO)
+    _, ways = M.load_all(geo or GEO)
+    marks = [(x, z) for x, z, _, _, _ in W.marks]
+    S = lambda x, z: float(_sample(W.S, W, np.array([x]), np.array([z]))[0])
+
+    def seg_d(p, a, b):
+        v = (b[0] - a[0], b[1] - a[1])
+        l2 = v[0] * v[0] + v[1] * v[1]
+        t = min(1.0, max(0.0, ((p[0] - a[0]) * v[0] + (p[1] - a[1]) * v[1]) / l2)) if l2 > 1e-9 else 0.0
+        return float(np.hypot(p[0] - a[0] - v[0] * t, p[1] - a[1] - v[1] * t))
+    out = []
+    for n, (_, wd, pts) in enumerate(ways):
+        e = pts[-1]
+        ln = _length(pts)
+        if ln < 60 or S(*e) < 30:
+            continue
+        d = None
+        for q in pts[-2::-1]:
+            r = np.hypot(e[0] - q[0], e[1] - q[1])
+            if r > 4:
+                d = ((e[0] - q[0]) / r, (e[1] - q[1]) / r)
+                break
+        if d is None:
+            continue
+        skip = False
+        for o, (_, owd, op) in enumerate(ways):
+            if o == n or np.hypot(op[-1][0] - e[0], op[-1][1] - e[1]) < 20:
+                continue
+            if any(seg_d(e, a, b) < owd / 2 for a, b in zip(op, op[1:])):
+                skip = True
+                break
+        if skip or any((mx - e[0]) ** 2 + (mz - e[1]) ** 2 < 45.0 ** 2 for mx, mz in marks):
+            continue
+        sb = (d[1], -d[0])
+        red = (e[0] + sb[0] * (wd / 2 + 2), e[1] + sb[1] * (wd / 2 + 2))
+        grn = (e[0] - sb[0] * (wd / 2 + 2), e[1] - sb[1] * (wd / 2 + 2))
+        if S(*red) < 10 or S(*grn) < 10:
+            continue
+        marks += [grn, red]
+        out.append((n, ln, grn, red))
+    return out
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'beacons':
+        B = beacons(sys.argv[2] if len(sys.argv) > 2 else None)
+        for n, ln, g, r in B:
+            print('way %d (%.0f m): green %.1f, %.1f red %.1f, %.1f' % (n, ln, g[0], g[1], r[0], r[1]))
+        print('%d pairs' % len(B))
+    else:
+        print('canalways.py beacons [geo dir]: the daybeacon pairs at the outer ends of the ways (the opening itself is run by canals.py)')
