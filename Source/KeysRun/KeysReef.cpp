@@ -688,6 +688,13 @@ bool AKeysReef::IsSolidCoral(int32 Species)
 	return M >= 0 && M <= 12 && M != 6 && M != 7;
 }
 
+bool AKeysReef::IsTallCoral(int32 Species)
+{
+	if (Species < NumSp) return Species == SeaFan || Species == SeaPlume;
+	const int32 M = Species - NumSp;
+	return M == 6 || M == 7;
+}
+
 int32 AKeysReef::DenStandIn() { return Star; }
 
 AKeysReef::AKeysReef()

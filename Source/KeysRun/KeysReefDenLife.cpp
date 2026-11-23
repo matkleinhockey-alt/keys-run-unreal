@@ -1172,10 +1172,11 @@ namespace KeysReefDen
 			H.NightK += FMath::Clamp((W.bNight ? 1.0 : 0.0) - H.NightK, -Dt * .25, Dt * .25);
 			if (W.bNight != H.bWasNight)
 			{
-				H.bWasNight = W.bNight;
+				H.bWasNight = W.bNight; H.StateT = 0;
 				if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen %s: %d %s at %.1f, %.1f %s (hour %.1f)"), W.bNight ? TEXT("night") : TEXT("day"), H.M.Num(), ResName(D.Res), D.Mouth.X, D.Mouth.Z,
 					W.bNight ? (bSweep ? TEXT("pour out of the cave mouth and spread over the reef to feed") : TEXT("leave the ledge, each to its own beat over the bottom")) : TEXT("go back into its shadow"), W.Hour);
 			}
+			H.StateT += Dt;
 			const FVector Centre = D.Mouth - D.Axis * (.1 + .3 * (1 - H.Out));
 			for (FMember& Mb : H.M)
 			{
@@ -1194,26 +1195,32 @@ namespace KeysReefDen
 					Home = Centre + D.Right * Mb.U + Up3() * (Mb.V * D.H * .3) - D.Axis * Mb.In + Drift(H.T, Mb.Seed, .018);
 					HomeFwd = (D.Right * (Mb.Seed > .5 ? 1 : -1) + D.Axis * .35).GetSafeNormal();
 				}
-				if (H.NightK < .02) { Mb.P = Home; Mb.Fwd = HomeFwd; Mb.Mode = 0; }
-				else
+				// 0 at home in the shadow, 1 out on its own beat over the reef by night (the sweepers keep together, a looser
+				// cloud above the cave), 2 swimming home at dawn
+				if (Mb.Mode == 0)
 				{
-					// its own beat over the reef by night (the sweepers keep together, a looser cloud above the cave)
-					if ((Mb.Hold -= Dt) <= 0 || Mb.Mode == 0)
+					Mb.P = Home; Mb.Fwd = HomeFwd;
+					if (W.bNight && H.StateT > 2 + Mb.Seed * 7 && !H.bScared) { Mb.Mode = 1; Mb.Hold = 0; }
+				}
+				else if (Mb.Mode == 1)
+				{
+					if ((Mb.Hold -= Dt) <= 0)
 					{
-						Mb.Mode = 1; Mb.Step++; Mb.Hold = 5 + Hash01(D.Seed, 600 + int32(Mb.Seed * 131) + Mb.Step) * 8;
+						Mb.Step++; Mb.Hold = 5 + Hash01(D.Seed, 600 + int32(Mb.Seed * 131) + Mb.Step) * 8;
 						const double A = Hash01(D.Seed, 620 + int32(Mb.Seed * 113) + Mb.Step) * 2 * PI, R = bSweep ? 1 + Hash01(D.Seed, 640 + Mb.Step + int32(Mb.Seed * 71)) * 2.2 : 2.5 + Hash01(D.Seed, 640 + Mb.Step + int32(Mb.Seed * 71)) * 6;
 						const FVector Mid = bSweep ? D.Mouth + D.Axis * 2.2 + Up3() * 1.4 : D.Mouth + D.Axis * 1.5;
 						Mb.Goal = Mid + FVector(FMath::Cos(A), 0, FMath::Sin(A)) * R;
 						Mb.Goal.Y = FMath::Max(Mb.Goal.Y, FloorNear(Mb.Goal.X, Mb.Goal.Z) + (bSweep ? 1.0 : .35) + Mb.Seed * .8);
 					}
-					const FVector Goal = W.bNight ? Mb.Goal : Home;
-					if (SwimTo(Mb, Goal, W.bNight ? .22 : .5, 2.2, Dt, .15) && !W.bNight) { Mb.P = Home; Mb.Fwd = HomeFwd; }
+					SwimTo(Mb, Mb.Goal, .22, 2.2, Dt, .15);
+					if (!W.bNight) Mb.Mode = 2;
 				}
-				const bool bAtHome = H.NightK < .02 || (!W.bNight && InsideOf(D, Mb.P) > -.05);
+				else if (SwimTo(Mb, Home, .5, 2.2, Dt, .15)) Mb.Mode = 0;
+				const bool bAtHome = Mb.Mode == 0 || (Mb.Mode == 2 && InsideOf(D, Mb.P) > -.05);
 				const double Len = Mb.Size;
 				Put(L, Part, Mb.P, Face(Mb.Fwd), FVector(Len), bAtHome ? FMath::Max(.3, ShadeAt(D, Mb.P) * 1.6) : 1, bAtHome && !bSweep ? .1 : .3, bAtHome && !bSweep ? 2.5 : 5, Mb.T * 5 + Mb.Seed * 6, 0, Mb.Seed);
 			}
-			H.Where = H.NightK > .5 && H.M.Num() ? H.M[0].P : D.Mouth;
+			H.Where = H.M.Num() && H.M[0].Mode != 0 ? H.M[0].P : D.Mouth;
 		}
 
 		// ---------------------------------------------------------------- nurse shark, goliath and black grouper
@@ -1231,34 +1238,33 @@ namespace KeysReefDen
 				const FVector Lie = (Flat(D.Axis) * FMath::Cos(Skew) + D.Right * FMath::Sin(Skew)).GetSafeNormal(.0001, FVector(0, 0, 1));   // from head to tail
 				FVector Rest = D.Mouth + Lie * (Len * .08) + D.Right * Me.U;
 				Rest.Y = SillY(D) + Len * .062;
-				H.NightK += FMath::Clamp((W.bNight ? 1.0 : 0.0) - H.NightK, -Dt * .2, Dt * .2);
 				if (W.bNight != H.bWasNight)
 				{
 					H.bWasNight = W.bNight; H.StateT = 0;
 					if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen %s: the nurse shark under the ledge at %.1f, %.1f %s (hour %.1f)"), W.bNight ? TEXT("night") : TEXT("day"), D.Mouth.X, D.Mouth.Z, W.bNight ? TEXT("backs out and goes off to hunt") : TEXT("comes back to sleep"), W.Hour);
 				}
 				H.StateT += Dt;
-				if (H.NightK < .01) { Me.P = Rest; Me.Fwd = -Lie; Me.Mode = 0; }
-				else if (W.bNight)
+				// 0 asleep, 1 backing out from under the ledge, 2 away on its round, 3 coming back to a point off the ledge,
+				// 4 gliding in under it
+				const FVector Off = Rest + Lie * (Len * .9);
+				if (Me.Mode == 0)
 				{
-					if (H.StateT < 4) { Me.P += Lie * (.45 * Dt); Me.Mode = 1; }   // backing out from under the ledge
-					else
-					{
-						const double A = H.T * .06 + Me.Seed * 6;
-						FVector Goal = D.Mouth + Flat(D.Axis) * 9 + FVector(FMath::Cos(A), 0, FMath::Sin(A)) * 7;
-						Goal.Y = FloorNear(Goal.X, Goal.Z) + .6;
-						SwimTo(Me, Goal, .5, .7, Dt, .5);
-						Me.P.Y = FMath::Max(Me.P.Y, FloorNear(Me.P.X, Me.P.Z) + .35);
-					}
+					Me.P = Rest; Me.Fwd = -Lie;
+					if (W.bNight && H.StateT > 4) { Me.Mode = 1; Me.Hold = 0; }
 				}
-				else
+				else if (Me.Mode == 1) { Me.P += Lie * (.45 * Dt); if ((Me.Hold += Dt) > 4) Me.Mode = 2; }
+				else if (Me.Mode == 2)
 				{
-					// home: to a point off the ledge, then in under it
-					const FVector Off = Rest + Lie * (Len * .9);
-					if (Me.Mode == 1) { if (SwimTo(Me, Off, .5, .9, Dt, .4)) Me.Mode = 2; }
-					else if (SwimTo(Me, Rest, .3, 1.2, Dt, .08)) { Me.P = Rest; Me.Fwd = -Lie; H.NightK = 0; }
+					const double A = H.T * .06 + Me.Seed * 6;
+					FVector Goal = D.Mouth + Flat(D.Axis) * 9 + FVector(FMath::Cos(A), 0, FMath::Sin(A)) * 7;
+					Goal.Y = FloorNear(Goal.X, Goal.Z) + .6;
+					SwimTo(Me, Goal, .5, .7, Dt, .5);
+					Me.P.Y = FMath::Max(Me.P.Y, FloorNear(Me.P.X, Me.P.Z) + .35);
+					if (!W.bNight) Me.Mode = 3;
 				}
-				const bool bAsleep = H.NightK < .01;
+				else if (Me.Mode == 3) { if (SwimTo(Me, Off, .5, .9, Dt, .4)) Me.Mode = 4; }
+				else if (SwimTo(Me, Rest, .3, 1.2, Dt, .08)) Me.Mode = 0;
+				const bool bAsleep = Me.Mode == 0;
 				// (a body this long is shaded as one: by where its shoulders are)
 				Put(L, PNurse, Me.P, Face(Me.Fwd), FVector(Len), bAsleep ? FMath::Max(.45, ShadeAt(D, Me.P + Me.Fwd * Len * .1)) : 1, bAsleep ? .012 : .26, bAsleep ? .8 : 2.6, H.T * 2.6, 0, Me.Seed);
 				H.Where = bAsleep ? Me.P - Me.Fwd * Len * .3 : Me.P;
@@ -1464,8 +1470,8 @@ namespace KeysReefDen
 			// at night it is found already out
 			if (L.W.bNight && (D.Res == GreenMoray || D.Res == SpottedMoray)) H.StateT = 6;
 			if (L.W.bNight && D.Res == Octopus) H.StateT = 5;
-			if (L.W.bNight && D.Res == NurseShark) { H.StateT = 5; H.M[0].P = D.Mouth + D.Axis * 6; H.M[0].Mode = 1; }
-			if (L.W.bNight && (D.Res == Squirrelfish || D.Res == Soldierfish || D.Res == Sweepers)) for (FMember& Mb : H.M) Mb.P = D.Mouth + D.Axis * (1 + Mb.Seed * 3) + D.Right * ((Mb.Seed - .5) * 4) + Up3() * .5;
+			if (L.W.bNight && D.Res == NurseShark) { H.M[0].P = D.Mouth + D.Axis * 6; H.M[0].Mode = 2; }
+			if (L.W.bNight && (D.Res == Squirrelfish || D.Res == Soldierfish || D.Res == Sweepers)) for (FMember& Mb : H.M) { Mb.Mode = 1; Mb.P = D.Mouth + D.Axis * (1 + Mb.Seed * 3) + D.Right * ((Mb.Seed - .5) * 4) + Up3() * .5; }
 		}
 
 		void TickHouse(FLife& L, FHouse& H, bool bMove)

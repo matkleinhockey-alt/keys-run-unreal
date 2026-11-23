@@ -38,6 +38,9 @@ public:
 	// ---- the dens (KeysReefDen*.cpp): hiding places in the reef and what lives in them
 	// a coral that stands up solid (heads, branches, sponges), which a den's rock must not bury
 	static bool IsSolidCoral(int32 Species);
+	// one that stands up but is no more than a card (sea fans, plumes and rods): it may grow through a rock, but not
+	// across a den's opening
+	static bool IsTallCoral(int32 Species);
 	// the species a den's rock stands in the instance list as (a boulder star coral)
 	static int32 DenStandIn();
 	KeysReefDen::FDens* DenState() const { return Dens; }

@@ -220,7 +220,7 @@ namespace KeysReefDen
 			AddSheet(M, P, Col, NU, NV, Cn, NV / 2);
 		}
 
-		const FLinearColor RockTan = Hex(0x7d7460), RockOlive = Hex(0x5c5636), RockMauve = Hex(0x7a5866), RockDark = Hex(0x3e382a), SandCol = Hex(0xb9ad8a);
+		const FLinearColor RockTan = Hex(0x8a7c62), RockOlive = Hex(0x645c38), RockMauve = Hex(0x86586a), RockDark = Hex(0x3a3426), RockPale = Hex(0xb3a88c), SandCol = Hex(0xb9ad8a);
 		const FLinearColor CoralBrown = Hex(0x8c5a24), CoralMustard = Hex(0x9c7c3c), CoralGreen = Hex(0x5e6a30), SpongeOrange = Hex(0xa8502a), SpongeLav = Hex(0x74658a);
 		const FLinearColor Rust = Hex(0x6a3a22), RustDark = Hex(0x3a2418), Steel = Hex(0x4a4e4c);
 
@@ -229,18 +229,19 @@ namespace KeysReefDen
 		// reef rock: old coral limestone under turf algae and crusts of coralline, sanded in at its foot
 		FLinearColor RockColor(const FRockDef& D, const FVector& P)
 		{
-			const double N1 = Noise3(P * 1.3 + FVector(1.7), D.Seed + 11), N2 = Noise3(P * 4.1 + FVector(5.2), D.Seed + 17), N3 = Noise3(P * 13.0, D.Seed + 23);
-			FLinearColor C = FMath::Lerp(RockTan, RockOlive, float(Smooth(N1, .32, .68)));
-			C = FMath::Lerp(C, RockMauve, float(Smooth(N2, .6, .8) * .65));
-			C = FMath::Lerp(C, RockDark, float(Smooth(N2, .3, .1) * .6));
+			const double N1 = Noise3(P * 1.6 + FVector(1.7), D.Seed + 11), N2 = Noise3(P * 4.6 + FVector(5.2), D.Seed + 17), N3 = Noise3(P * 15.0, D.Seed + 23), N4 = Noise3(P * 2.7 + FVector(8.8), D.Seed + 29);
+			FLinearColor C = FMath::Lerp(RockTan, RockOlive, float(Smooth(N1, .38, .62)));
+			C = FMath::Lerp(C, RockPale, float(Smooth(N4, .58, .72) * .7));        // bare limestone, sanded over
+			C = FMath::Lerp(C, RockMauve, float(Smooth(N2, .58, .72) * .75));      // crusts of coralline
+			C = FMath::Lerp(C, RockDark, float(Smooth(N2, .34, .2) * .7));         // the pits and the turf in them
 			if (D.Style == 1)
 			{
 				// the two heads are living boulder coral above their dead feet
 				const double Live = Smooth(P.Y, .22, .5);
 				C = FMath::Lerp(C, FMath::Lerp(CoralBrown, CoralMustard, float(Smooth(P.X, -.2, .2))), float(Live * .85));
 			}
-			C = Mul(C, .8 + .4 * N3);
-			return FMath::Lerp(C, Mul(SandCol, .78), float(Smooth(P.Y, .2, -.02) * .8));
+			C = Mul(C, .72 + .56 * N3);
+			return FMath::Lerp(C, Mul(SandCol, .8), float(Smooth(P.Y, .16, -.02) * .8));
 		}
 
 		struct FBuilt { FShape Shape; int32 Outside = 0; };
@@ -282,7 +283,7 @@ namespace KeysReefDen
 			// curve has been flattened out, how much light is left)
 			struct FIn { double D, Sh, T, K; };
 			TArray<FIn> In;
-			if (Lod == 0) In = {{D.Deep, 0, 1, .003}, {D.Deep, .3, 1, .004}, {D.Deep * .7, .66, .9, .006}, {D.Deep * .35, .86, .6, .012}, {.12, .93, .3, .03}, {.035, .97, .1, .10}};
+			if (Lod == 0) In = {{D.Deep, 0, 1, .003}, {D.Deep, .3, 1, .004}, {D.Deep * .7, .66, .9, .006}, {D.Deep * .35, .86, .6, .012}, {.12, .93, .3, .02}, {.03, .975, .1, .07}};
 			else In = {{D.Deep, 0, 1, .003}, {D.Deep * .7, .66, .9, .006}, {.12, .93, .3, .03}};
 			const int32 NI = In.Num(), NV = NI + 1 + NE;
 			TArray<FVector> P;
@@ -313,7 +314,7 @@ namespace KeysReefDen
 				const int32 v = NI + e;
 				for (int32 u = 0; u < NU; u++)
 				{
-					if (e == 0) { P[v * NU + u] = Rim[u]; Col[v * NU + u] = Mul(RockColor(D, Rim[u]), .5); continue; }
+					if (e == 0) { P[v * NU + u] = Rim[u]; Col[v * NU + u] = Mul(RockColor(D, Rim[u]), .8); continue; }
 					const FVector D0 = (Rim[u] - C).GetSafeNormal();
 					const double Cos0 = FMath::Clamp(FVector::DotProduct(D0, Am), -1.0, 1.0), Phi0 = FMath::Acos(Cos0);
 					const FVector E0 = (D0 - Am * Cos0).GetSafeNormal();
@@ -336,14 +337,14 @@ namespace KeysReefDen
 						{
 							auto Section = [&](double Y) { return FMath::Pow(FMath::Max(0.0, 1 - FMath::Pow(FMath::Min(1.0, FMath::Abs(Y - D.Cy) / D.Ry), D.Pw)), 1 / D.Pw); };
 							const double Here = Section(Q.Y), Ground = Section(0);
-							const double Want = Here > .08 ? L * Ground / Here * (1 + .12 * Tt) : L;
+							const double Want = Here > .08 ? L * Ground / Here : L;
 							const double NewL = FMath::Lerp(FMath::Max(L, Want), L, Smooth(Tt, .9, 1));
 							Q.X *= NewL / L; Q.Z *= NewL / L;
 						}
 						Q.Y = -Skirt * Tt;
 					}
 					P[v * NU + u] = Q;
-					Col[v * NU + u] = Mul(RockColor(D, Q), FMath::Lerp(.55, 1.0, Smooth(S, 0, .07)));
+					Col[v * NU + u] = Mul(RockColor(D, Q), FMath::Lerp(.8, 1.0, Smooth(S, 0, .06)));
 					Out.Shape.Top = FMath::Max(Out.Shape.Top, Q.Y);
 				}
 			}
@@ -656,84 +657,105 @@ namespace KeysReefDen
 		D.Rad = S.Rad * D.Scale;
 	}
 
+	// how the dealing has gone since the game began (kr.den stats)
+	struct FPlaceStats { int32 Rolled = 0, Placed = 0, Moved = 0, Smaller = 0, NoRoom = 0, Rough = 0; };
+	static FPlaceStats GPlaced;
+
 	void PlaceChunk(int32 CX, int32 CZ, const TArray<AKeysReef::FInst>& Corals, TArray<FDen>& Out)
 	{
 		const double X0 = CX * ChunkM, Z0 = CZ * ChunkM;
-		// the corals a den must leave alone: anything solid (the fans, rods and weed bend round a rock; a head would be buried)
-		TArray<FVector2D> Solid;
-		for (const AKeysReef::FInst& I : Corals) if (AKeysReef::IsSolidCoral(I.Species)) Solid.Add(FVector2D(I.X, I.Z));
+		// the corals a den must leave alone: nothing solid inside its rock (a head would be buried), and nothing that
+		// stands up, solid or not, in front of its opening
+		TArray<FVector2D> Solid, Tall;
+		for (const AKeysReef::FInst& I : Corals)
+		{
+			if (AKeysReef::IsSolidCoral(I.Species)) Solid.Add(FVector2D(I.X, I.Z));
+			else if (AKeysReef::IsTallCoral(I.Species)) Tall.Add(FVector2D(I.X, I.Z));
+		}
 		for (int32 Slot = 0; Slot < NCand; Slot++)
 		{
 			auto Hs = [&](int32 A) { return ChunkHash(CX, CZ, DenSalt + Slot * 64 + A); };
 			// (kept 4 m inside the chunk, so no den lies across two chunks)
-			const double X = X0 + 4 + Hs(0) * (ChunkM - 8), Z = Z0 + 4 + Hs(1) * (ChunkM - 8);
-			const FGround G = GroundAt(X, Z);
-			const EHab Hab = HabitatOf(G);
+			const double BX = X0 + 4 + Hs(0) * (ChunkM - 8), BZ = Z0 + 4 + Hs(1) * (ChunkM - 8);
+			const FGround G0 = GroundAt(BX, BZ);
+			const EHab Hab = HabitatOf(G0);
 			if (Hab == HabNone || Hs(2) >= HabDens[Hab] / NCand) continue;
-			FDen D;
-			D.Hab = uint8(Hab);
+			GPlaced.Rolled++;
+			int32 Kind0 = 0;
 			double Wk = 0, Rk = Hs(3);
 			for (int32 k = 0; k < NumKinds; k++) Wk += KindW[Hab][k];
 			Rk *= Wk;
-			for (int32 k = 0; k < NumKinds; k++) { if (Rk < KindW[Hab][k]) { D.Kind = uint8(k); break; } Rk -= KindW[Hab][k]; }
-			D.Var = uint8(FMath::Min(NumVariants - 1, int32(Hs(4) * NumVariants)));
-			D.Scale = FMath::Lerp(.85, 1.18, Hs(5));
-			D.Seed = uint32(Hs(6) * 4294967295.0);
-			D.Id = (int64(CX) << 40) ^ (int64(uint32(CZ)) << 8) ^ int64(Slot);
-			D.Depth = G.Depth;
-			const FShape& S = ShapeOf(D.Kind, D.Var);
-			const double Rx = S.Rad.X * D.Scale, Rz = S.Rad.Z * D.Scale;
-			// not on top of another den
-			bool bClash = false;
-			for (const FDen& O : Out) if (FVector2D::Distance(FVector2D(O.X, O.Z), FVector2D(X, Z)) < FMath::Max(Rx, Rz) + FMath::Max(O.Rad.X, O.Rad.Z) + 1) { bClash = true; break; }
-			if (bClash) continue;
-			// which way it opens: on a spur's flank, toward the sand of the groove; else as the dice say
-			double Yaw0 = Hs(7) * 2 * PI;
-			if (Hab == HabSpur)
+			for (int32 k = 0; k < NumKinds; k++) { if (Rk < KindW[Hab][k]) { Kind0 = k; break; } Rk -= KindW[Hab][k]; }
+			const int32 Var0 = FMath::Min(NumVariants - 1, int32(Hs(4) * NumVariants));
+			// the reef is crowded: the kind and size the dice gave is tried here and at four places near by, turned six
+			// ways at each; then its smallest size; then a hole in a small mound, which fits where little else will
+			const int32 Shapes[4][2] = {{Kind0, Var0}, {Kind0, 1}, {Hole, Var0}, {Hole, 1}};
+			bool bPlaced = false, bRough = false;
+			for (int32 sh = 0; sh < 4 && !bPlaced; sh++)
 			{
-				const double Gx = GroundAt(X + 1.5, Z).Sand - GroundAt(X - 1.5, Z).Sand, Gz = GroundAt(X, Z + 1.5).Sand - GroundAt(X, Z - 1.5).Sand;
-				if (Gx * Gx + Gz * Gz > 1e-4) Yaw0 = FMath::Atan2(-Gx, -Gz) + (Hs(7) - .5) * .5;   // (local +z turns to (sin, cos) of the yaw)
-			}
-			const double YawTry[] = {0, .7, -.7, 1.5, -1.5, PI};
-			bool bFits = false;
-			for (const double Dy : YawTry)
-			{
-				const double Yaw = Yaw0 + Dy, Cs = FMath::Cos(Yaw), Sn = FMath::Sin(Yaw);
-				bool bHit = false;
-				for (const FVector2D& C : Solid)
+				if (sh > 0 && Shapes[sh][0] == Shapes[sh - 1][0] && Shapes[sh][1] == Shapes[sh - 1][1]) continue;
+				FDen D;
+				D.Hab = uint8(Hab);
+				D.Kind = uint8(Shapes[sh][0]); D.Var = uint8(Shapes[sh][1]);
+				D.Scale = FMath::Lerp(.85, 1.18, Hs(5));
+				D.Seed = uint32(Hs(6) * 4294967295.0);
+				D.Id = (int64(CX) << 40) ^ (int64(uint32(CZ)) << 8) ^ int64(Slot);
+				const FShape& S = ShapeOf(D.Kind, D.Var);
+				const double Rx = S.Rad.X * D.Scale, Rz = S.Rad.Z * D.Scale, Big = FMath::Max(Rx, Rz);
+				for (int32 ps = 0; ps < 5 && !bPlaced; ps++)
 				{
-					const double Wx = C.X - X, Wz = C.Y - Z;
-					if (FMath::Abs(Wx) > Rx + Rz + 2 || FMath::Abs(Wz) > Rx + Rz + 2) continue;
-					const double Lx = Wx * Cs - Wz * Sn, Lz = Wx * Sn + Wz * Cs;
-					// inside the rock, or in the way of the opening
-					if (FMath::Square(Lx / (Rx + .15)) + FMath::Square(Lz / (Rz + .15)) < 1) { bHit = true; break; }
-					if (FMath::Abs(Lx - S.Mouth.X * D.Scale) < S.W * D.Scale * .5 + .3 && Lz > 0 && Lz < Rz + 1.3) { bHit = true; break; }
+					const double X = ps == 0 ? BX : FMath::Clamp(BX + (Hs(20 + ps) - .5) * 12, X0 + 4, X0 + ChunkM - 4), Z = ps == 0 ? BZ : FMath::Clamp(BZ + (Hs(30 + ps) - .5) * 12, Z0 + 4, Z0 + ChunkM - 4);
+					const FGround G = ps == 0 ? G0 : GroundAt(X, Z);
+					if (ps > 0 && HabitatOf(G) == HabNone) continue;
+					// not on top of another den
+					bool bClash = false;
+					for (const FDen& O : Out) if (FVector2D::Distance(FVector2D(O.X, O.Z), FVector2D(X, Z)) < Big + FMath::Max(O.Rad.X, O.Rad.Z) + 1) { bClash = true; break; }
+					if (bClash) continue;
+					// which way it opens: on a spur's flank, toward the sand of the groove; else as the dice say
+					double Yaw0 = Hs(7) * 2 * PI;
+					if (Hab == HabSpur)
+					{
+						const double Gx = GroundAt(X + 1.5, Z).Sand - GroundAt(X - 1.5, Z).Sand, Gz = GroundAt(X, Z + 1.5).Sand - GroundAt(X, Z - 1.5).Sand;
+						if (Gx * Gx + Gz * Gz > 1e-4) Yaw0 = FMath::Atan2(-Gx, -Gz) + (Hs(7) - .5) * .5;   // (local +z turns to (sin, cos) of the yaw)
+					}
+					const double YawTry[] = {0, .7, -.7, 1.5, -1.5, PI};
+					for (const double Dy : YawTry)
+					{
+						const double Yaw = Yaw0 + Dy, Cs = FMath::Cos(Yaw), Sn = FMath::Sin(Yaw);
+						bool bHit = false;
+						for (int32 Pass = 0; Pass < 2 && !bHit; Pass++)
+							for (const FVector2D& C : Pass ? Tall : Solid)
+							{
+								const double Wx = C.X - X, Wz = C.Y - Z;
+								if (FMath::Abs(Wx) > Big + 2 || FMath::Abs(Wz) > Big + 2) continue;
+								const double Lx = Wx * Cs - Wz * Sn, Lz = Wx * Sn + Wz * Cs;
+								// inside the rock (its outermost hand's width may touch a coral), or in the way of the opening
+								if (!Pass && FMath::Pow(FMath::Abs(Lx) / Rx, S.Pw) + FMath::Pow(FMath::Abs(Lz) / Rz, S.Pw) < FMath::Pow(.9, S.Pw)) { bHit = true; break; }
+								if (FMath::Abs(Lx - S.Mouth.X * D.Scale) < S.W * D.Scale * .5 + .25 && Lz > Rz * .45 && Lz < Rz + .9) { bHit = true; break; }
+							}
+						if (bHit) continue;
+						// it stands at the highest the bottom is drawn under its opening and its pocket, as a diver near by sees
+						// the bottom (the seafloor's 2 m squares), so sand never comes up inside; its foot goes on down
+						D.X = X; D.Z = Z; D.Y = 0; D.Yaw = Yaw; D.Depth = G.Depth;
+						Stand(D);
+						double Hi = -1e9, Lo = 1e9;
+						const FVector2D Mc(D.Mouth.X, D.Mouth.Z), Ax(D.Axis.X, D.Axis.Z), Rt(D.Right.X, D.Right.Z);
+						const FVector2D Pts[] = {Mc, Mc + Rt * (D.W * .45), Mc - Rt * (D.W * .45), Mc - Ax * D.Deep, Mc - Ax * (D.Deep * .5) + Rt * (D.W * .3), Mc - Ax * (D.Deep * .5) - Rt * (D.W * .3), Mc + Ax * .4};
+						for (const FVector2D& P : Pts) { const double Hf = LatticeFloor(P.X, P.Y, 2.0); Hi = FMath::Max(Hi, Hf); Lo = FMath::Min(Lo, Hf); }
+						// too steep or too broken for a den to sit right, or its top too near the surface
+						if (Hi - Lo > .35 || -Hi - S.Top * D.Scale < .8) { bRough = true; continue; }
+						D.Y = Hi;
+						Stand(D);
+						RollResident(D);
+						Out.Add(D);
+						bPlaced = true;
+						GPlaced.Placed++;
+						if (sh > 0) GPlaced.Smaller++; else if (ps > 0) GPlaced.Moved++;
+						break;
+					}
 				}
-				if (bHit) continue;
-				D.Yaw = Yaw; bFits = true;
-				break;
 			}
-			if (!bFits) continue;
-			// it stands at the highest the bottom is drawn under its opening and its pocket, at any of the seafloor's
-			// levels of detail (2 m squares near a diver, 6.4 m further off, 3.6 m from the boat), so the floor never
-			// comes up inside; the rock's own foot goes down past the lowest
-			D.X = X; D.Z = Z; D.Y = 0;
-			Stand(D);
-			double Hi = -1e9, Lo = 1e9;
-			const FVector2D Mc(D.Mouth.X, D.Mouth.Z), Ax(D.Axis.X, D.Axis.Z), Rt(D.Right.X, D.Right.Z);
-			const FVector2D Pts[] = {Mc, Mc + Rt * (D.W * .45), Mc - Rt * (D.W * .45), Mc - Ax * D.Deep, Mc - Ax * (D.Deep * .5) + Rt * (D.W * .3), Mc - Ax * (D.Deep * .5) - Rt * (D.W * .3), Mc + Ax * .5, FVector2D(X, Z)};
-			for (const FVector2D& P : Pts)
-				for (const double Step : {2.0, 6.4, 64.0 / 18})
-				{
-					const double Hf = LatticeFloor(P.X, P.Y, Step);
-					Hi = FMath::Max(Hi, Hf); Lo = FMath::Min(Lo, Hf);
-				}
-			if (Hi - Lo > .45) continue;   // too steep or too broken for a den to sit right
-			if (-Hi < 2.2) continue;       // and never where its top would near the surface
-			D.Y = Hi;
-			Stand(D);
-			RollResident(D);
-			Out.Add(D);
+			if (!bPlaced) { if (bRough) GPlaced.Rough++; else GPlaced.NoRoom++; }
 		}
 	}
 
@@ -760,7 +782,8 @@ namespace KeysReefDen
 		// test camera work: hold the diver in front of a den
 		bool bPin = false, bPinNew = false;
 		FVector PinP = FVector::ZeroVector;
-		double PinYaw = 0, PinPitch = 0;
+		double PinYaw = 0, PinPitch = 0, PinOff = 1.5, PinSide = 0, PinUp = .15, PinAimYaw = 0, PinAimPitch = 0;
+		FDen PinDen;
 		TWeakObjectPtr<USpotLightComponent> Torch;
 		double PlaceMs = 0, WorstPlaceMs = 0;
 		int32 PlaceN = 0;
@@ -1055,12 +1078,22 @@ namespace KeysReefDen
 				}
 				if (D->bPin)
 				{
-					// (the current carries her off: put back when she has drifted a hand's width)
-					if (D->bPinNew || FVector2D(S.X - D->PinP.X, S.Z - D->PinP.Z).Size() > .08) Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), D->PinP.X, D->PinP.Z));
-					if (D->bPinNew)
+					// where its animal is now (it may have walked off), else the opening; she is held off it and looks at it
+					const FDen& Dn = D->PinDen;
+					const FVector Look = D->Life ? LifeWhere(D->Life, Dn) : Dn.Mouth;
+					const FVector Ax = FVector(Dn.Axis.X, 0, Dn.Axis.Z).GetSafeNormal(.0001, FVector(0, 0, 1));
+					FVector P = Look + Ax * D->PinOff + Dn.Right * D->PinSide + FVector(0, D->PinUp, 0);
+					P.Y = FMath::Max(P.Y, FloorNear(P.X, P.Z) + .45);
+					const FVector To = (Look - P).GetSafeNormal();
+					// (the diver's forward is (-sin yaw cos pitch, sin pitch, -cos yaw cos pitch); the aim is put a little off
+					// the animal, so that in the dive-mask view the gun in her hand does not hide it)
+					const double Yaw = FMath::Atan2(-To.X, -To.Z) + D->PinAimYaw, Pitch = FMath::Asin(FMath::Clamp(To.Y, -1.0, 1.0)) + D->PinAimPitch;
+					if (D->bPinNew || FVector2D(S.X - P.X, S.Z - P.Z).Size() > .08) Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), P.X, P.Z));
+					if (D->bPinNew || FMath::Abs(P.Y - D->PinP.Y) > .04) { Dv->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -P.Y)); D->PinP = P; }
+					if (D->bPinNew || FMath::Abs(Yaw - D->PinYaw) > .006 || FMath::Abs(Pitch - D->PinPitch) > .006)
 					{
-						Dv->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -D->PinP.Y));
-						Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%.4f,%.4f"), D->PinYaw, D->PinPitch));
+						Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%.4f,%.4f"), Yaw, Pitch));
+						D->PinYaw = Yaw; D->PinPitch = Pitch;
 					}
 					D->bPinNew = false;
 				}
@@ -1196,6 +1229,8 @@ namespace KeysReefDen
 			const FLifeStats Ls = D->Life ? LifeStatsOf(D->Life) : FLifeStats();
 			UE_LOG(LogTemp, Log, TEXT("KRDen drawn: %d den rocks, %d triangles; %d dens within 60 m of the camera (%d within 25 m), %d of them empty; living there:%s"),
 				D->DrawnN, D->DrawnTris, D->Near.Num(), Near25, NearRes[ResNone], Who.IsEmpty() ? TEXT(" nothing") : *Who);
+			UE_LOG(LogTemp, Log, TEXT("KRDen dealt so far: %d places the habitat kept; %d dens placed (%d of them moved a few metres for room, %d made smaller or a plain hole), %d found no room among the corals, %d found the ground too steep or broken"),
+				GPlaced.Rolled, GPlaced.Placed, GPlaced.Moved, GPlaced.Smaller, GPlaced.NoRoom, GPlaced.Rough);
 			UE_LOG(LogTemp, Log, TEXT("KRDen animals: %d drawn (%d moving), %d instances in %d instanced meshes, %d triangles; residents' cpu %.3f ms a frame; hour %.1f (%s); dealing a chunk its dens: %.2f ms mean, %.2f ms worst over %d chunks"),
 				Ls.Animals, Ls.Animated, Ls.Instances, Ls.Pools, Ls.Tris, Ls.CpuMs, W.Hour, W.bNight ? TEXT("night") : TEXT("day"), D->PlaceN ? D->PlaceMs / D->PlaceN : 0.0, D->WorstPlaceMs, D->PlaceN);
 		}
@@ -1242,7 +1277,7 @@ namespace KeysReefDen
 		}
 		else if (A[0] == TEXT("goto") && A.Num() >= 2)
 		{
-			// goto <kind | resident> [which] [metres off] [metres to the side] [metres up] [within]: the diver is held in
+			// goto <kind | resident> [which] [metres off] [to the side] [up] [within] [aim yaw] [aim pitch]: the diver is held in
 			// front of that den, looking at its opening (she must be in the water). goto off lets her go.
 			if (A[1] == TEXT("off")) { D->bPin = false; return; }
 			const int32 Which = A.Num() > 2 ? FCString::Atoi(*A[2]) : 0;
@@ -1255,15 +1290,9 @@ namespace KeysReefDen
 			{
 				const FDen* Dn = &DnR;
 				if (!Matches(*Dn, A[1]) || Got++ < Which) continue;
-				// where its animal is now, if it has walked off; else the opening
-				const FVector Look = D->Life ? LifeWhere(D->Life, *Dn) : Dn->Mouth;
-				const FVector Ax = FVector(Dn->Axis.X, 0, Dn->Axis.Z).GetSafeNormal(.0001, FVector(0, 0, 1));
-				FVector P = Look + Ax * Off + Dn->Right * Side + FVector(0, Up, 0);
-				P.Y = FMath::Max(P.Y, FloorNear(P.X, P.Z) + .45);
-				const FVector To = (Look - P).GetSafeNormal();
-				D->bPin = true; D->bPinNew = true; D->PinP = P;
-				// (the diver's forward is (-sin yaw cos pitch, sin pitch, -cos yaw cos pitch))
-				D->PinYaw = FMath::Atan2(-To.X, -To.Z); D->PinPitch = FMath::Asin(FMath::Clamp(To.Y, -1.0, 1.0));
+				D->bPin = true; D->bPinNew = true; D->PinDen = *Dn; D->PinOff = Off; D->PinSide = Side; D->PinUp = Up;
+				D->PinAimYaw = A.Num() > 7 ? FCString::Atod(*A[7]) : 0; D->PinAimPitch = A.Num() > 8 ? FCString::Atod(*A[8]) : 0;
+				const FVector P = Dn->Mouth + FVector(Dn->Axis.X, 0, Dn->Axis.Z).GetSafeNormal(.0001, FVector(0, 0, 1)) * Off + Dn->Right * Side + FVector(0, Up, 0);
 				UE_LOG(LogTemp, Log, TEXT("KRDen goto %s #%d: a %s at %.1f, %.1f, %.1f (%s, %.1f m of water, %s), lives there: %s x%d; the diver held %.1f m off at %.1f, %.1f, %.1f"),
 					*A[1], Which, KindName(Dn->Kind), Dn->Mouth.X, Dn->Mouth.Y, Dn->Mouth.Z, *ReefNameAt(Dn->Mouth.X, Dn->Mouth.Z), Dn->Depth, HabName(Dn->Hab), ResName(Dn->Res), Dn->Count, Off, P.X, P.Y, P.Z);
 				return;
