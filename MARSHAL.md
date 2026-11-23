@@ -23,6 +23,9 @@ once).
 | `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | merged 2026-11-23 |
 | `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | running since 2026-11-23 (background agent) |
 | `reefparrot` | Reef ecosystem, template lane: the reef-life framework, the stoplight parrotfish end to end, and the recipe later lanes follow (brief written by the marshal) | `lane/reefparrot` | `../KeysRun-reefparrot` | merged 2026-11-23 |
+| `reeffish` | Rainbow and midnight parrotfish, queen, French and gray angelfish, sergeant major (brief written by the marshal) | `lane/reeffish` | `../KeysRun-reeffish` | running since 2026-11-23 (background agent) |
+| `reefvisitors` | Southern stingray, green and loggerhead turtles, audit of the fish already there (brief written by the marshal) | `lane/reefvisitors` | `../KeysRun-reefvisitors` | running since 2026-11-23 (background agent) |
+| `reefbottom` | Queen conch, giant Caribbean anemone, purple sea fans, audit of the reef itself (brief written by the marshal) | `lane/reefbottom` | `../KeysRun-reefbottom` | running since 2026-11-23 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -46,6 +49,9 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `canalways` | `Content/KeysRun/Geo/p2_canals.txt`, `p3_canals.txt`, `p4_canals.txt`, `Tools/geo/canals.py`, new `Tools/geo/canalways*` |
 | `reefdens` | `Source/KeysRun/KeysReef.*` (while the lane runs), new `Source/KeysRun/KeysReefDen*` |
 | `reefparrot` | new `Source/KeysRun/KeysReefLife*` (the framework becomes marshal-only once merged; each later reef lane owns its own `KeysReefLife<Group>.cpp`) |
+| `reeffish` | new `Source/KeysRun/KeysReefLifeFish*.cpp` |
+| `reefvisitors` | new `Source/KeysRun/KeysReefLifeVisitors*.cpp` |
+| `reefbottom` | new `Source/KeysRun/KeysReefLifeBottom*.cpp` |
 
 ## Marshal-only files
 
@@ -274,3 +280,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   what is already there), `reefbottom` (queen conch, giant Caribbean anemone, purple sea fans, the audit of the
   reef itself), and `reefdens` resumed (morays, octopus, spiny lobster, stone crab). `reeflinks`, `reefaudio`
   and `reefreal` are held back. `birdview` was stopped by the user and is not restarted.
+- 2026-11-23: `lane/reeffish`, `lane/reefvisitors` and `lane/reefbottom` created from `main` (this entry), run as background agents; `reefdens` resumed.
