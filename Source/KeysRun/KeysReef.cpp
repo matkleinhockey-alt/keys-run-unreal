@@ -1,4 +1,5 @@
 #include "KeysReef.h"
+#include "KeysReefDenInt.h"
 #include "KeysGeo.h"
 #include "KeysSea.h"
 #include "KeysMesh.h"
@@ -659,6 +660,36 @@ namespace
 	}
 }
 
+// ---- what the dens ask of the reef's own rules (KeysReefDen.h)
+KeysReefDen::FGround KeysReefDen::GroundAt(double X, double Z)
+{
+	FGround G;
+	G.Depth = DepthFast(X, Z);
+	G.DZ = DZAt(X, Z);
+	G.Dredged = KeysSea::DredgedAt(X, Z);
+	const EZ Zone = ReefZone(G.Depth, G.DZ);
+	G.Zone = Zone == EZ::Reef ? 2 : Zone == EZ::Hawk ? 1 : 0;
+	G.Patch = PatchFactor(X, G.DZ);
+	G.bMicro = Zone == EZ::Hawk && H(FMath::FloorToInt32(X / ChunkSize), FMath::FloorToInt32(Z / ChunkSize), 20000001) < MicroPatchP;
+	G.Sand = SandChannel(X, G.DZ);
+	double T;
+	G.Site = DiveSite(X, G.DZ, T);
+	G.HardDeep = HardBottom(X, Z, .009, 4.2);
+	return G;
+}
+
+double KeysReefDen::ChunkHash(int32 CX, int32 CZ, int32 Salt) { return H(CX, CZ, Salt); }
+
+bool AKeysReef::IsSolidCoral(int32 Species)
+{
+	if (Species < NumSp) return Species == Elkhorn || Species == Staghorn || Species == Brain || Species == Star || Species == Barrel || Species == Tube || Species == Encrusting;
+	// the modelled ones: everything but the fans, the rods, the algae and the grass
+	const int32 M = Species - NumSp;
+	return M >= 0 && M <= 12 && M != 6 && M != 7;
+}
+
+int32 AKeysReef::DenStandIn() { return Star; }
+
 AKeysReef::AKeysReef()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -757,6 +788,15 @@ void AKeysReef::BeginPlay()
 			else UE_LOG(LogTemp, Warning, TEXT("KeysReef: no model for %s"), *Key);
 			Pools.Add(C);
 		}
+	// the hiding places, and what lives in them
+	Dens = KeysReefDen::Create(this);
+}
+
+void AKeysReef::EndPlay(const EEndPlayReason::Type Reason)
+{
+	KeysReefDen::Destroy(Dens);
+	Dens = nullptr;
+	Super::EndPlay(Reason);
 }
 
 const TArray<AKeysReef::FInst>& AKeysReef::ChunkInstances(int32 CX, int32 CZ)
@@ -774,8 +814,10 @@ const TArray<AKeysReef::FInst>& AKeysReef::ChunkInstances(int32 CX, int32 CZ)
 	PlaceSpecies(Seagrass, CX, CZ, nullptr, Out);
 	// the modelled species around and between them
 	for (int32 M = 0; M < NumModelSp; M++) PlaceModel(M, CX, CZ, Solids, Out);
+	// the dens last, in the room the corals leave (so no coral is where it was not)
+	KeysReefDen::OnChunk(Dens, CX, CZ, Out);
 	CacheOrder.Add(K);
-	if (CacheOrder.Num() > 900) { Cache.Remove(CacheOrder[0]); CacheOrder.RemoveAt(0); }
+	if (CacheOrder.Num() > 900) { KeysReefDen::Forget(Dens, CacheOrder[0]); Cache.Remove(CacheOrder[0]); CacheOrder.RemoveAt(0); }
 	return Cache.Add(K, MoveTemp(Out));
 }
 
@@ -792,6 +834,7 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
 		for (int32 dx = -ResidentR; dx <= ResidentR; dx++)
 			for (const FInst& I : ChunkInstances(CCX + dx, CCZ + dz))
 			{
+				if (I.Den) continue;   // a den's rock: the dens draw it
 				const double Rim = FVector2D(I.X - FMath::Clamp(I.X, CCX * ChunkSize, (CCX + 1) * ChunkSize), I.Z - FMath::Clamp(I.Z, CCZ * ChunkSize, (CCZ + 1) * ChunkSize)).Size();
 				if (Rim >= Reach) continue;
 				const double Grow = RSmooth(Reach - Rim, 0, RimFade);
@@ -836,6 +879,7 @@ void AKeysReef::Rebuild(double CamX, double CamZ)
 		C->MarkRenderStateDirty();
 		Drawn += Xf[P].Num();
 	}
+	KeysReefDen::Rebuild(Dens, CamX, CamZ, CCX, CCZ);
 }
 
 void AKeysReef::Tick(float DeltaSeconds)
@@ -851,6 +895,7 @@ void AKeysReef::Tick(float DeltaSeconds)
 		LastCX = CX; LastCZ = CZ;
 		Rebuild(CamX, CamZ);
 	}
+	KeysReefDen::Tick(Dens, DeltaSeconds);
 	// sway: lean with the steady current, swing with the wave surge (world/reef/flow.ts)
 	if (CardMID)
 	{
