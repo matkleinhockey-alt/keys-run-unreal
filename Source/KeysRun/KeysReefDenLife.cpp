@@ -214,7 +214,7 @@ namespace KeysReefDen
 		{
 			// a pair of eyes that catch the light from the back of a hole (whose they are is not told)
 			M.Surf = SurfEye;
-			for (const double Sd : {-1.0, 1.0}) Ball(M, FVector(0, Sd * .022, 0), FVector(.009, .011, .011), Hex(0xc9d4a8), 8, FVector(1, 0, 0), Hex(0x0a0a08), .55);
+			for (const double Sd : {-1.0, 1.0}) Ball(M, FVector(0, Sd * .022, 0), FVector(.009, .011, .011), Hex(0xd9e4b8), 8, FVector(1, 0, 0), Hex(0x0a0a08), .86);
 		}
 
 		// a moray's head (1 long, the neck at x 0, the snout at 1), its lower jaw (hinge at the origin) and one length of
@@ -282,7 +282,7 @@ namespace KeysReefDen
 			M.Surf = SurfSkin;
 			const TArray<FSta> S = {{-.5, 0, .5, .5}, {-.3, 0, .5, .5}, {-.1, 0, .5, .5}, {.1, 0, .5, .5}, {.3, 0, .5, .5}, {.5, 0, .5, .5}};
 			// (painted at the size of a real body: a unit here is some 8 cm across and 14 long)
-			Loft(M, S, 12, [&](double, double Ang, const FVector& P) { return MorayPaint(bSpot, FVector(P.X * .14, P.Y * .06, P.Z * .09), Ang, .13); }, 2, .38, true);
+			Loft(M, S, 12, [&](double, double Ang, const FVector& P) { return MorayPaint(bSpot, FVector(P.X * .14, P.Y * .06, P.Z * .09), Ang, .13); }, 2, .2, true);
 		}
 
 		// Caribbean spiny lobster, at 1 m long in the body (it is scaled to 25 - 45 cm): the carapace with its two
