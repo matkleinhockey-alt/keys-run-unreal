@@ -26,7 +26,7 @@ from skimage.graph import MCP_Geometric
 
 import canalways_model as M
 
-GEO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Content', 'KeysRun', 'Geo'))
+GEO = os.environ.get('CANALWAYS_GEO') or os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Content', 'KeysRun', 'Geo'))
 MIN_D = 1.0          # the water a boat needs (the game's test)
 SEA_D = 1.5          # a way ends in water this deep that is joined to the open sea
 REACH = 1400.0       # how far from a canal the game's test looks
@@ -240,10 +240,12 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         return new_c, new_w
 
     n_open = n_left = 0
-    for k in range(n_base):
-        is_open, sub, lab, sea, own, org5, D5 = flood(k)
-        if is_open:
+    shut0 = [k for k in range(n_base) if not flood(k)[0]]
+    done = set()
+    for k in shut0:
+        if k in done:
             continue
+        is_open, sub, lab, sea, own, org5, D5 = flood(k)
         pts = canals[k][1]
         mid = pts[len(pts) // 2]
         path, land_m = plan(k, sub, lab, sea, own, org5, D5)
@@ -260,11 +262,20 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
             n_left += 1
             continue
         # the part of the route still inside the water the canal reaches is not dredged again
-        fi = np.clip(np.round((np.array(path)[:, 0] - org5[0]) / (c / 2)).astype(int), 0, lab.shape[1] - 1)
-        fj = np.clip(np.round((np.array(path)[:, 1] - org5[1]) / (c / 2)).astype(int), 0, lab.shape[0] - 1)
+        P = np.array(path)
+        fi = np.clip(np.round((P[:, 0] - org5[0]) / (c / 2)).astype(int), 0, lab.shape[1] - 1)
+        fj = np.clip(np.round((P[:, 1] - org5[1]) / (c / 2)).astype(int), 0, lab.shape[0] - 1)
         inside = np.isin(lab[fj, fi], list(own)) if own else np.zeros(len(path), bool)
-        first = int(np.nonzero(inside)[0].max()) if inside.any() else 0
-        first = max(0, first - 4)                               # (10 m of overlap with the water it has)
+        last_in = int(np.nonzero(inside)[0].max()) if inside.any() else 0
+        first = max(0, last_in - 4)                             # (10 m of overlap with the water it has)
+        # why it was shut, and how far the nearest metre of water joined to the sea was (along the route)
+        at_sea = np.nonzero(sea[lab[fj, fi]] & (np.arange(len(path)) > last_in))[0]
+        to_sea = int(at_sea.min()) if len(at_sea) else len(path) - 1
+        gap = P[last_in:to_sea + 1]
+        gS = _sample(W.S, W, gap[:, 0], gap[:, 1])
+        why = ('a pond on the grid (its mouth is land on the 10 m grid)' if (gS < 0).any()
+               else 'a pinched mouth (so narrow on the grid that the shore rule shoals it)' if (gS < 12.5).mean() > .5
+               else 'the flat outside is too shallow')
         new_c, new_w = lines_of(path[first:])
         canals += [(width, p) for p in new_c]
         ways += [(way_w, p) for p in new_w]
@@ -272,10 +283,17 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         Dn[rsub[2]:rsub[3], rsub[0]:rsub[1]] = W.with_lines(D0[rsub[2]:rsub[3], rsub[0]:rsub[1]], canals, ways, rsub)
         ok = flood(k)[0]
         end = path[-1]
-        notes.append('canal %d (middle %.0f, %.0f) opened%s: %.0f m to %.0f, %.0f; %.0f m of it over real land; %d canal line%s (%.0f m), %d way%s (%.0f m)'
-                     % (k, mid[0], mid[1], '' if ok else ' BUT STILL SHUT IN THE MODEL', _length(path[first:]), end[0], end[1], land_m,
+        notes.append('canal %d (middle %.0f, %.0f) was shut: %s; the nearest %.1f m water joined to the sea was %.0f m off. Opened%s: %.0f m to %.0f, %.0f; %.0f m of it over real land; %d canal line%s (%.0f m), %d way%s (%.0f m)'
+                     % (k, mid[0], mid[1], why, MIN_D, _length([tuple(q) for q in gap]), '' if ok else ' BUT STILL SHUT IN THE MODEL', _length(path[first:]), end[0], end[1], land_m,
                         len(new_c), '' if len(new_c) == 1 else 's', sum(_length(p) for p in new_c), len(new_w), '' if len(new_w) == 1 else 's', sum(_length(p) for p in new_w)))
         n_open += 1
+        done.add(k)
+        for q in shut0:
+            if q not in done and flood(q)[0]:
+                qm = canals[q][1][len(canals[q][1]) // 2]
+                notes.append('canal %d (middle %.0f, %.0f) was shut: joined to canal %d, and opened with it' % (q, qm[0], qm[1], k))
+                done.add(q)
+                n_open += 1
         if DEBUG_DIR:
             _preview(f'{DEBUG_DIR}/c{k:03d}_{mid[0]:.0f}_{mid[1]:.0f}.png', W, Dn, land, fill, street, x0, z0, res, sub, canals, ways, n_base, n_ways0, path, edge)
     rpt['out_lines'] = [p for _, p in canals]
