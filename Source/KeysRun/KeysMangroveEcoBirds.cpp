@@ -5,14 +5,17 @@
 //
 // Each bird is a few dozen triangles built from its pose (body, an S of neck, head and bill, legs, two-part wings),
 // written into one of two meshes: the ones that are moving, rebuilt every frame, and the ones standing still or far
-// off, rebuilt only when one of them changes. They are drawn half as large again as life (the old still waders were
-// drawn large too),
-// so they read from a boat.
+// off, rebuilt only when one of them changes. They are drawn larger than life (BirdScale: the tall waders a little, the
+// small ones on the roots twice and more; none stands taller than a person on deck), each with a dark edge as wide
+// as a pixel or two at the distance it is seen from (a dark copy of itself, a little larger, standing just behind it
+// as the camera sees it: the material is two-sided, so a hull turned inside out would hide the bird), and with legs, neck and
+// bill never thinner than about a pixel, so they read from a boat against bright water.
 #include "KeysMangroveEcoInt.h"
 #include "KeysGeo.h"
 #include "KeysGeoReal.h"
 #include "KeysLife.h"
 #include "KeysTown.h"
+#include "Misc/CommandLine.h"
 
 namespace KeysMangroveEco
 {
@@ -30,23 +33,36 @@ namespace KeysMangroveEco
 			{.42, .50, .48, .12, .045, 1.40, 9,   2.4, .55, .45, 30, 700, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xe8b030, 0x1c1c1c, 0xf4f4ee, 0xf0f0e8, 0, false},   // great egret
 			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x5a6a80, 0x6f7a8c, 0x8a8494, 0xe8e8e8, 0xd8a838, 0x5a5648, 0x5f6f84, 0x2c3440, 0, false},   // great blue heron
 			{.30, .32, .30, .08, .035, 1.00, 9,   3.0, .50, .30, 24, 450, 0x3c4a66, 0x3c4a66, 0x5a4660, 0x5a4660, 0x4a5a70, 0x4a5240, 0x3c4a66, 0x2c3850, 0, false},   // little blue heron
-			{.30, .30, .24, .16, .035, .95,  10,  3.6, .35, .22, 22, 500, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf0e8e4, 0xd8604a, 0xd0604a, 0xf4f4ee, 0x181818, 1, true},    // white ibis
+			{.30, .30, .24, .16, .035, .95,  10,  3.6, .35, .22, 22, 500, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf2d8d0, 0xe04a30, 0xdc4a32, 0xf4f4ee, 0x181818, 1, true},    // white ibis
 			{.40, .40, .32, .17, .040, 1.25, 9.5, 3.0, .40, .32, 26, 600, 0xf2a0b4, 0xf4b4c4, 0xf6ecec, 0xe4e6d4, 0x9aa088, 0xc05060, 0xf08aa6, 0xe0607a, 2, true},    // roseate spoonbill
 			{.42, .07, .28, .07, .040, 1.20, 12,  4.0, 1.0, 0,   20, 400, 0x1c1c1e, 0x242426, 0x1c1c1e, 0x1c1c1e, 0xd09030, 0x141414, 0x26262a, 0x141414, 0, true},    // cormorant
 			{.42, .06, .38, .09, .030, 1.15, 11,  3.5, .90, 0,   20, 400, 0x1a1a1c, 0x1a1a1c, 0x4a3a2a, 0x4a3a2a, 0xd8b040, 0x2a2a20, 0x2c2c30, 0xb8b8b0, 0, true},    // anhinga
-			{.16, .025, .03, .06, .040, .50, 11,  7.0, .90, 0,   14, 200, 0x5a7896, 0xf0f0ee, 0xf0f0ee, 0x4a6888, 0x202428, 0x3a3a3a, 0x4a6888, 0x2a3a50, 0, true},    // belted kingfisher
+			{.16, .025, .03, .06, .046, .50, 11,  7.0, .90, 0,   14, 200, 0x35639a, 0xf0f0ee, 0xf0f0ee, 0x2c5488, 0x181c20, 0x3a3a3a, 0x2c5488, 0x1c2c44, 0, true},    // belted kingfisher
 			{.22, .14, .14, .07, .035, .65,  9,   4.0, .25, .12, 12, 250, 0x3a5a4a, 0x7a4a3a, 0x7a3a2a, 0x24382e, 0x2a2a2a, 0xd8b838, 0x3a5a4a, 0x24382e, 0, false},   // green heron
-			{.30, .22, .14, .08, .050, 1.10, 9,   2.8, .60, .20, 16, 350, 0x6a727c, 0x9aa0a8, 0x9aa0a8, 0x14181c, 0x1a1a1c, 0xd8c048, 0x555c66, 0x30363e, 0, false},   // night heron
+			{.30, .22, .14, .08, .050, 1.10, 9,   2.8, .60, .20, 16, 350, 0x27303c, 0xc4cad2, 0xc4cad2, 0x0e1216, 0x1a1a1c, 0xe0c440, 0x66707e, 0x30363e, 0, false},   // night heron
 			{.20, .03, .03, .06, .035, .80,  10,  3.5, .15, 0,   0,  400, 0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0x1a1a1c, 0xf08020, 0x202020, 0xc8ccd0, 0x8a9098, 0, true},    // tern
 			{.34, .10, .06, .035, .050, 1.60, 11, 2.4, .90, 0,   0,  700, 0x4a3a2c, 0xf0ece4, 0xf0ece4, 0xf0ece4, 0x2a2a2a, 0xc8c8b8, 0x4a3a2c, 0x2a2018, 0, true},    // osprey
 			{.55, .10, .38, .30, .060, 2.10, 10,  1.8, .70, 0,   22, 700, 0x9a9288, 0x6b645c, 0xf2efe4, 0xf6e9a8, 0xd9b45e, 0x2a2a2c, 0x6b645c, 0x3a3632, 3, false},   // brown pelican
 		};
 		bool IsWader(int32 K) { return K <= Spoonbill; }
+		// How large each is drawn, as a scale on its model. At 1 the models already stand taller than the birds do in
+		// life (their necks are drawn upright), so at the 1.5 they all had a great blue heron stood 1.89 m above its
+		// feet: taller than a person on deck. It is brought down to 1.67 m, the same as the great egret; the two
+		// smallest on the roots, which were specks, are drawn larger (a kingfisher .57 m, a green heron .62 m); the rest
+		// stay as they were. What makes them all read is the closer look's lens.
+		const double Scales[NumBirds] = {1.5, 1.35, 1.5, 1.5, 1.5, 1.5, 1.5, 2.5, 1.8, 1.5, 1.5, 1.5, 1.5};
+		// -KRBirdsBefore (a test switch, for measuring against): the birds as they were before the birdview lane, 1.5
+		// times life (kingfisher 1.9, green heron 1.7), no dark edge, no least thickness, and no closer look
+		bool Before() { static const bool b = FParse::Param(FCommandLine::Get(), TEXT("KRBirdsBefore")); return b; }
+		double ScaleOf(int32 K) { return Before() ? (K == Kingfisher ? 1.9 : K == GreenHeron ? 1.7 : 1.5) : Scales[K]; }
 
 		// ---- writing triangles (game metres in, Unreal out)
 		struct FPen
 		{
 			FSoup& B;
+			double Rim = 0, MinR = 0;   // the dark edge's width, and the least a limb is thick (metres; both grow with the distance it is seen from)
+			FVector Back = FVector::ZeroVector;   // from the bird straight away from the camera, a body's length: where its dark copy stands
+			FLinearColor RimC = FLinearColor(.012f, .016f, .022f);
 			void Tri(const FVector& A, const FVector& Bb, const FVector& C, const FVector& N, const FLinearColor& Col)
 			{
 				const FVector UA = G2U(A), UB = G2U(Bb), UC = G2U(C), UN = D2U(N).GetSafeNormal();
@@ -65,32 +81,55 @@ namespace KeysMangroveEco
 				Tri(A, Bb, C, -N, Under);
 			}
 			// a three-sided limb
-			void Prism(const FVector& P0, const FVector& P1, double R0, double R1, const FLinearColor& Col)
+			void Prism(const FVector& P0, const FVector& P1, double R0In, double R1In, const FLinearColor& Col, bool bEdge = false)
 			{
+				// (a limb that is there at all is never thinner than MinR; one drawn shut, with no thickness, stays shut)
+				const bool bIs = R0In > 0 || R1In > 0;
+				const double R0 = bIs ? FMath::Max(R0In, MinR) : 0, R1 = bIs ? FMath::Max(R1In, MinR * .6) : 0;
 				const FVector D = (P1 - P0).GetSafeNormal(.0001, FVector(0, 1, 0));
 				const FVector U = FVector::CrossProduct(D, FMath::Abs(D.Y) < .9 ? FVector(0, 1, 0) : FVector(1, 0, 0)).GetSafeNormal();
 				const FVector W = FVector::CrossProduct(D, U);
-				FVector Rim[3];
-				for (int32 k = 0; k < 3; k++) { const double A = 2 * PI * k / 3; Rim[k] = U * FMath::Cos(A) + W * FMath::Sin(A); }
+				FVector Ring[3];
+				for (int32 k = 0; k < 3; k++) { const double A = 2 * PI * k / 3; Ring[k] = U * FMath::Cos(A) + W * FMath::Sin(A); }
 				for (int32 k = 0; k < 3; k++)
 				{
-					const FVector& Ra = Rim[k];
-					const FVector& Rb = Rim[(k + 1) % 3];
+					const FVector& Ra = Ring[k];
+					const FVector& Rb = Ring[(k + 1) % 3];
 					const FVector N = (Ra + Rb).GetSafeNormal();
 					Tri(P0 + Ra * R0, P0 + Rb * R0, P1 + Rb * R1, N, Col);
 					Tri(P0 + Ra * R0, P1 + Rb * R1, P1 + Ra * R1, N, Col);
 				}
+				if (!bEdge || Rim <= 0) return;
+				// its dark edge: the same limb a little thicker, behind it, so only its rim shows round it
+				const double E0 = bIs ? R0 + Rim : 0, E1 = bIs ? R1 + Rim : 0;
+				const FVector Q0 = P0 + Back, Q1 = P1 + Back;
+				for (int32 k = 0; k < 3; k++)
+				{
+					const FVector& Ra = Ring[k];
+					const FVector& Rb = Ring[(k + 1) % 3];
+					const FVector N = (Ra + Rb).GetSafeNormal();
+					Tri(Q0 + Ra * E0, Q0 + Rb * E0, Q1 + Rb * E1, N, RimC);
+					Tri(Q0 + Ra * E0, Q1 + Rb * E1, Q1 + Ra * E1, N, RimC);
+				}
 			}
 			// a rounded body: a spindle Len long on Axis, Rw wide (along Side) and Rh deep (along Top), smooth shaded,
 			// one colour above and another below
-			void Egg(const FVector& C, const FVector& Axis, const FVector& Side, const FVector& Top, double Len, double Rw, double Rh, const FLinearColor& Above, const FLinearColor& Below, int32 Seg)
+			void Egg(const FVector& C, const FVector& Axis, const FVector& Side, const FVector& Top, double Len, double Rw, double Rh, const FLinearColor& Above, const FLinearColor& Below, int32 Seg, bool bEdge = true)
+			{
+				Shell(C, Axis, Side, Top, Len, Rw, Rh, Above, Below, Seg, 0);
+				// its dark edge: the same body a little larger, behind it (nothing, for a body drawn with no size)
+				if (bEdge && Rim > 0) Shell(C + Back, Axis, Side, Top, Len, Rw, Rh, RimC, RimC, Seg, Len > 0 ? Rim : 0);
+			}
+			void Shell(const FVector& C, const FVector& Axis, const FVector& Side, const FVector& Top, double Len, double Rw, double Rh, const FLinearColor& Above, const FLinearColor& Below, int32 Seg, double Grow)
 			{
 				const int32 I0 = B.V.Num();
 				auto Put = [&](const FVector& P)
 				{
 					const FVector Nn = FVector((P - C).GetSafeNormal(.0001, Top));
-					B.V.Add(G2U(P)); B.N.Add(D2U(Nn));
-					B.C.Add(FMath::Lerp(Below, Above, float(FMath::Clamp(FVector::DotProduct(Nn, Top) * 1.6 + .5, 0.0, 1.0))));
+					B.V.Add(G2U(P + Nn * Grow)); B.N.Add(D2U(Nn));
+					// (its back and flanks are the upper colour; the under colour is the belly only: seen from the side a
+					// kingfisher or a night heron is its dark back, not a wash of the two)
+					B.C.Add(FMath::Lerp(Below, Above, float(FMath::Clamp(FVector::DotProduct(Nn, Top) * 3.0 + .8, 0.0, 1.0))));
 				};
 				Put(C - Axis * Len * .5);
 				for (int32 r = 0; r < 2; r++)
@@ -120,10 +159,11 @@ namespace KeysMangroveEco
 
 		// One bird from its pose. Every bird writes the same number of vertices whatever it is doing (a folded wing is
 		// drawn shut, not left out), so a mesh's layout only changes when a bird joins or leaves it.
-		void Emit(FSoup& Buf, const FBird& B, bool bFar)
+		void Emit(FSoup& Buf, const FBird& B, bool bFar, double Rim, const FVector& Away)
 		{
 			const FBirdSpec& K = Specs[B.Kind];
 			FPen Pen{Buf};
+			Pen.Rim = Rim; Pen.MinR = Rim * .5; Pen.Back = Away * (K.Body * B.Sz * 1.15 + .05);
 			const double S = B.Sz;
 			const FVector F(FMath::Cos(B.Yaw), 0, FMath::Sin(B.Yaw)), Up(0, 1, 0), Rt(-F.Z, 0, F.X);
 			const bool bAir = B.State == BFly || B.State == BHover || B.State == BDive || B.State == BPatrol, bSwim = B.State == BSwim;
@@ -153,8 +193,8 @@ namespace KeysMangroveEco
 				HeadPitch = -.1 - .65 * Nk;
 			}
 			const double Nr = FMath::Max(.014, K.Body * (B.Kind == Anhinga ? .05 : .075)) * S;
-			if (bFar) Pen.Prism(Sh - A * BodyR * .3, Head, Nr * 1.25, Nr * .8, NeckC);
-			else { Pen.Prism(Sh - A * BodyR * .3, Bend, Nr * 1.25, Nr, NeckC); Pen.Prism(Bend, Head, Nr, Nr * .8, NeckC); }
+			if (bFar) Pen.Prism(Sh - A * BodyR * .3, Head, Nr * 1.25, Nr * .8, NeckC, true);
+			else { Pen.Prism(Sh - A * BodyR * .3, Bend, Nr * 1.25, Nr, NeckC, true); Pen.Prism(Bend, Head, Nr, Nr * .8, NeckC, true); }
 			const FVector Hd = (F * FMath::Cos(HeadPitch) + Up * FMath::Sin(HeadPitch)).GetSafeNormal(), HdUp = Up * FMath::Cos(HeadPitch) - F * FMath::Sin(HeadPitch);
 			const double HeadR = K.Head * S;
 			Pen.Egg(Head + Hd * HeadR * .5, Hd, Rt, HdUp, HeadR * 2.8, HeadR, HeadR, Hex(K.HeadC), Hex(K.BillShape == 3 ? K.NeckC : K.HeadC), 5);
@@ -163,8 +203,8 @@ namespace KeysMangroveEco
 			const double BL = K.Bill * S, Br = FMath::Max(.008, K.Head * .32) * S;
 			const FVector Mid = B0 + Hd * BL * .5;
 			const FVector Tip = K.BillShape == 1 ? Mid + (Hd * .45 - HdUp * .26) * BL : B0 + Hd * BL;
-			if (bFar) Pen.Prism(B0, Tip, Br, Br * .3, BillC);
-			else { Pen.Prism(B0, Mid, Br, Br * .65, BillC); Pen.Prism(Mid, Tip, Br * .65, Br * .2, BillC); }
+			if (bFar) Pen.Prism(B0, Tip, Br, Br * .3, BillC, true);
+			else { Pen.Prism(B0, Mid, Br, Br * .65, BillC, true); Pen.Prism(Mid, Tip, Br * .65, Br * .2, BillC, true); }
 			if (bFar) {}
 			else if (K.BillShape == 2) Pen.Prism(Tip - Hd * .035 * S, Tip + Hd * .03 * S, .03 * S, .026 * S, BillC);
 			else if (K.BillShape == 3) Pen.Prism(B0 - HdUp * .035 * S, Tip - HdUp * .012 * S, .034 * S, .01 * S, Hex(0x7a5c48));
@@ -205,7 +245,26 @@ namespace KeysMangroveEco
 			Pen.Tri2(Tail + Rt * TailW, Tail - Rt * TailW, Tail - A * TailL - Dn * TailL * (bAir ? 0 : .25), B.Kind == Anhinga ? TipC : WingC, WingC * .7f);
 			// what an osprey or a kingfisher carries off
 			const double Fl = B.bCarry ? (B.Kind == Osprey ? .3 : .09) * S : 0;
-			if (!bFar) Pen.Egg(Body - Dn * (BodyR + Fl * .25) - A * Fl * .1, A, Rt, Dn, Fl, Fl * .14, Fl * .2, Hex(0x8a98a0), Hex(0xe8ecec), 4);
+			if (!bFar) Pen.Egg(Body - Dn * (BodyR + Fl * .25) - A * Fl * .1, A, Rt, Dn, Fl, Fl * .14, Fl * .2, Hex(0x8a98a0), Hex(0xe8ecec), 4, false);
+		}
+
+		// The dead snag a cormorant or an anhinga dries its wings on: a weathered post standing in the water under the
+		// end of its limb, with a bar across the top that the bird sits on. The limb alone (KeysMangrove.cpp) is thin
+		// and, from the open water, end on: the bird seemed to sit in mid-air. The bar lies along the shore, so it is
+		// seen side on from the water, and the post is seen from everywhere.
+		void EmitSnag(FSoup& Buf, const FEco& E, const FBird& B, double Rim)
+		{
+			FPen Pen{Buf};
+			Pen.MinR = Rim * .6;
+			const FLinearColor Wood = Hex(0x6e6052), Pale = Hex(0x93877a);
+			const FVector Top = B.Perch - FVector(0, .05, 0);
+			const double Foot = FMath::Min(FloorAt(Top.X, Top.Z), E.Sea - .4);
+			const double Lean = (EHash(B.Seed * 1e-6, 7.0) - .5) * .5;
+			const FVector2D Tn(-B.Out.Y, B.Out.X);
+			const FVector Along(Tn.X, 0, Tn.Y);
+			Pen.Prism(FVector(Top.X + Tn.X * Lean, Foot, Top.Z + Tn.Y * Lean), Top, .085, .06, Wood);
+			Pen.Prism(Top - Along * .75 - FVector(0, .06, 0), Top + Along * .8 + FVector(0, .05, 0), .05, .035, Pale);
+			Pen.Prism(Top + FVector(0, -.5, 0), Top + FVector(0, -.2, 0) - Along * .45 + FVector(B.Out.X, 0, B.Out.Y) * .25, .04, .02, Wood);
 		}
 
 		// where its feet are: on the bottom, but never so deep that the water is over its knees (it keeps to the shallow side)
@@ -253,12 +312,33 @@ namespace KeysMangroveEco
 		}
 	}
 
+	double BirdScale(int32 Kind) { return Kind >= 0 && Kind < NumBirds ? ScaleOf(Kind) : 1; }
+	bool BirdsBefore() { return Before(); }
+	void BirdSoup(FSoup& Buf, const FBird& B, bool bFar, double Rim) { Emit(Buf, B, bFar, Rim, FVector::ZeroVector); }
+	void PoseBird(FBird& B, int32 Kind)
+	{
+		B = FBird();
+		B.Kind = uint8(Kind);
+		B.Sz = ScaleOf(Kind);
+		B.State = IsWader(Kind) ? BStand : Kind == Cormorant || Kind == Anhinga ? BDry : Kind == NightHeron ? BRoost : Kind == Tern || Kind == Osprey ? BPatrol : BPerch;
+		B.Wing = B.State == BDry ? .8 : B.State == BPatrol ? 1 : 0;
+		B.Neck = B.State == BRoost ? -1 : 0;
+		B.FlapHz = Specs[Kind].FlapHz;
+	}
+	// how much of a rookery's day birds are at home at this hour, and a bird's place in the queue: by day its turn to
+	// be out on the flats and to be at home comes round every seven minutes, so there is always someone coming or going
+	static double RookHome(const FEco& E)
+	{
+		const double H = E.Hour;
+		return E.Phase == 0 ? 1 : E.Phase == 1 ? FMath::Lerp(1.0, .45, FMath::Clamp((H - 5.25) / 2.5, 0.0, 1.0)) : E.Phase == 2 ? .62 : FMath::Lerp(.62, 1.0, FMath::Clamp((H - 17.5) / 2.25, 0.0, 1.0));
+	}
+	static double RookRank(const FEco& E, const FBird& B) { return FMath::Frac(B.Rank + E.Now / 420.0); }
+
 	// ---------------------------------------------------------------- making a tile's birds
 	void SpawnBirds(FEco& E, FTileE& T, const FPlan& P)
 	{
 		// how much of a rookery is at home at this hour (the rest are out on the flats)
-		const double H = E.Hour;
-		E.HomeFrac = E.Phase == 0 ? 1 : E.Phase == 1 ? FMath::Lerp(1.0, .3, (H - 5.25) / 2.5) : E.Phase == 2 ? .3 : FMath::Lerp(.3, 1.0, (H - 17.5) / 2.25);
+		E.HomeFrac = RookHome(E);
 		for (const FSpot& Sp : P.Spots)
 		{
 			if (Sp.Kind >= NumBirds) continue;
@@ -269,7 +349,7 @@ namespace KeysMangroveEco
 				B.Kind = Sp.Kind; B.Rook = Sp.Rook; B.Out = Sp.Out; B.Site = Sp.Site; B.bHasSite = Sp.Rook < 0;
 				B.Seed = Sp.Seed + i * 7919;
 				const double R1 = EHash(B.Seed * 1e-6, 1.0 + i), R2 = EHash(B.Seed * 1e-6, 2.0 + i);
-				B.Sz = (B.Kind == Kingfisher ? 1.9 : B.Kind == GreenHeron ? 1.7 : 1.5) * (.94 + .12 * R1);
+				B.Sz = ScaleOf(B.Kind) * (.96 + .08 * R1);
 				B.Yaw = 2 * PI * R2;
 				// (a bird drying its wings on a limb sits across it, its back or its breast to the water)
 				if ((B.Kind == Cormorant || B.Kind == Anhinga) && B.Rook < 0) B.Yaw = FMath::Atan2(Sp.Out.Y, Sp.Out.X) + (R2 < .5 ? PI : 0) + (R1 - .5) * .5;
@@ -292,7 +372,7 @@ namespace KeysMangroveEco
 				B.State = RestState(E, B);
 				if (B.Kind == Tern || B.Kind == Osprey) { B.State = E.Phase == 0 ? BAway : BPatrol; B.Wing = 1; B.To = B.Home; }
 				else if (B.Kind == NightHeron && B.Rook < 0 && E.Phase == 0) B.State = BRoost;   // (it leaves its root for the water at its first thought)
-				else if (B.Rook >= 0 && B.Kind != NightHeron && B.Rank > E.HomeFrac) B.State = BAway;
+				else if (B.Rook >= 0 && B.Kind != NightHeron && RookRank(E, B) > E.HomeFrac) B.State = BAway;
 				B.Wing = B.State == BDry ? .8 : B.State == BPatrol ? 1 : 0;
 				B.Neck = B.State == BRoost ? -1 : 0;
 				B.bStill = B.bWasStill = false;
@@ -304,7 +384,7 @@ namespace KeysMangroveEco
 	void TickRookeries(FEco& E)
 	{
 		const TArray<FRookery>& Rk = Rookeries();
-		const double Target = E.Phase == 0 || E.Phase == 3 ? 1.0 : .3;
+		const double Target = E.Phase == 3 ? 1.0 : RookHome(E);
 		for (int32 r = 0; r < Rk.Num(); r++)
 		{
 			if (FVector2D::Distance(Rk[r].C, FVector2D(E.Cam.X, E.Cam.Z)) > 600 + Rk[r].R) continue;
@@ -322,8 +402,9 @@ namespace KeysMangroveEco
 					All++;
 					const bool bHome = B.State != BAway && !(B.State == BFly && B.Next == BAway);
 					Home += bHome ? 1 : 0;
-					if (bHome && B.Rank > Target && B.State != BFly && B.Delay <= 0 && Go.Num() < 7) Go.Add(&B);
-					if (B.State == BAway && B.Rank <= Target && B.Delay <= 0 && B.Cool <= 0 && Come.Num() < 7) Come.Add(&B);
+					const double Rank = RookRank(E, B);
+					if (bHome && Rank > Target && B.State != BFly && B.Delay <= 0 && Go.Num() < 7) Go.Add(&B);
+					if (B.State == BAway && Rank <= Target && B.Delay <= 0 && B.Cool <= 0 && Come.Num() < 7) Come.Add(&B);
 				}
 			if (Go.Num())
 			{
@@ -339,7 +420,7 @@ namespace KeysMangroveEco
 				E.Sound(TEXT("flight"), Go[0]->Kind, Go[0]->P, FMath::Min(1.f, N / 6.f));
 				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d leaves for the flats (%d of its %d day birds were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
 			}
-			else if (Come.Num())
+			if (Come.Num() && (!Go.Num() || E.Phase == 2))
 			{
 				const int32 N = FMath::Min(Come.Num(), FMath::RandRange(4, 7));
 				for (int32 i = 0; i < N; i++)
@@ -350,6 +431,7 @@ namespace KeysMangroveEco
 					StartFly(B, B.Perch, RestState(E, B), 3);
 					B.FlyT = -i * .45;
 				}
+				E.bStillDirty = true;
 				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d comes in to roost (%d of its %d day birds were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
 			}
 		}
@@ -746,11 +828,19 @@ namespace KeysMangroveEco
 		FSoup& Buf = bStillPass ? E.Still : E.Live;
 		for (const FBird& B : T.Birds)
 		{
+			// (its snag stands whether the bird is on it or not)
+			if (bStillPass && !Before() && (B.Kind == Cormorant || B.Kind == Anhinga) && B.Rook < 0)
+			{
+				const double Ds = FVector2D::Distance(FVector2D(B.Perch.X, B.Perch.Z), Cam2);
+				if (Ds < 320) EmitSnag(Buf, E, B, FMath::Clamp(Ds * .0008, .01, .15));
+			}
 			if (B.State == BAway || B.bStill != bStillPass || (B.State == BFly && B.FlyT < 0 && B.Next != BAway && B.From.Y > 15)) continue;
 			const double D2 = FVector2D::DistSquared(FVector2D(B.P.X, B.P.Z), Cam2);
 			if (D2 > FMath::Square(Specs[B.Kind].Draw)) continue;
 			if (B.State == BSwim && B.P.Y < E.Sea - .4) continue;
-			Emit(Buf, B, D2 > 70.0 * 70.0);   // (past 70 m a bird is drawn in half the pieces)
+			// (past 70 m a bird is drawn in half the pieces; its dark edge is about a pixel and a half wide through the
+			// closer look's lens at whatever distance it stands)
+			Emit(Buf, B, D2 > 70.0 * 70.0, Before() ? 0 : FMath::Clamp(FMath::Sqrt(D2) * (B.Rook >= 0 ? .0005 : .0008), .01, .15), (B.P - E.Cam).GetSafeNormal());   // (on a rookery's green crowns they need less of it)
 			if (bStillPass) E.StillN++; else E.BirdsMoved++;
 		}
 	}

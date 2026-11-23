@@ -90,7 +90,7 @@ namespace KeysMangroveEco
 		uint8 Kind = 0, State = GHold;
 		uint32 Seed = 0;
 		FVector2D Home = FVector2D::ZeroVector, C = FVector2D::ZeroVector, Out = FVector2D(1, 0), Aim = FVector2D::ZeroVector;
-		double T = 0, Hunger = 30, Yaw = 0, Depth = 1, FleeT = 0, Wander = 0, RushD = 0;
+		double T = 0, Hunger = 30, Yaw = 0, Depth = 1, FleeT = 0, Wander = 0, RushD = 0, Spd = 0;
 		int32 Prey = -1;
 		bool bBank = false, bActive = false;
 		TArray<FSwim> M;
@@ -224,10 +224,22 @@ namespace KeysMangroveEco
 	void UpdateBirds(FEco& E, FTileE& T);
 	void EmitBirds(FEco& E, FTileE& T, bool bStillPass);
 	void TickRookeries(FEco& E);
+	// how much larger than life a kind is drawn; one bird's triangles as it is drawn (Rim: the width in metres of its
+	// dark edge, 0 for none); a kind in the pose it is mostly seen in, at the origin
+	double BirdScale(int32 Kind);
+	bool BirdsBefore();
+	void BirdSoup(FSoup& Buf, const FBird& B, bool bFar, double Rim);
+	void PoseBird(FBird& B, int32 Kind);
+	// ---- KeysMangroveEcoView.cpp
+	void CloserCmd(const FString& Arg);
+	void PxReport(FEco& E, UWorld* World, const FString& Tag);
+	void AfloatReport(FEco& E, UWorld* World, const FString& Tag);
 	// ---- KeysMangroveEcoWater.cpp
 	void SpawnWater(FEco& E, FTileE& T, const FPlan& P);
 	void UpdateWater(FEco& E, FTileE& T);
 	void FlushPools(class AKeysMangroveEco* A, FEco& E);
+	// what shows of them at the surface from a boat: a school's dark patch and flashes, a wake (into the moving mesh)
+	void EmitWaterMarks(FEco& E, FTileE& T);
 	// the nearest school of small fish to a point (within R): where it is now and how many it holds
 	FSchoolE* NearestSchool(FEco& E, const FVector2D& P, double R, double* OutD = nullptr);
 	FSchoolE* FindSchool(FEco& E, int32 Id);

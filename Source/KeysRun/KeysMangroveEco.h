@@ -70,6 +70,24 @@ namespace KeysMangroveEco
 	// "honk" (ibis), "kree" (tern), "whistle" (osprey), "quok" (night heron), "flight" (a rookery flight's wings);
 	// Kind is the animal (EKind), Where in game metres, Power about 0..1. False when there is nothing waiting.
 	bool PopSound(FName& What, int32& Kind, FVector& Where, float& Power);
+
+	// ---- the closer look (request R1 of the birdview lane: the chase view in AKeysBoatPawn::UpdateCamera asks this each
+	// frame, and UpdateJumpCam asks CloserFov for the lens). Idling or stopped (under about 3 kn) with the animals of
+	// a mangrove shore or a rookery key in reach, the camera comes in, down and round to the far side of the boat from
+	// them and the lens closes up; it lets go above about 5 kn, when bBusy (a line out, a fish on, a menu), and the
+	// moment the player moves the camera himself (CamYaw, CamPitchOff or CamZoom change under his hand), until she has
+	// been under way again. With no ecosystem, away from mangroves, or not asked this frame: K 0, Dist 1, Ht 1, Yaw 0
+	// and a lens of 88, which leave the chase view exactly as it is.
+	struct FCloser
+	{
+		double K = 0;                          // how far in, 0..1: blend the chase view's look point toward Look by this
+		double Dist = 1, Ht = 1;               // multiply the chase camera's distance and its height by these
+		double Yaw = 0;                        // add to the angle the camera sits at round the boat (H + CamYaw)
+		FVector Look = FVector::ZeroVector;    // what to look at (game metres)
+		float Fov = 88.f;
+	};
+	FCloser CloserLook(double X, double Z, double H, double Speed, bool bBusy, double CamYaw, double CamPitchOff, double CamZoom, double BaseDist, double BaseHt, double Dt);
+	float CloserFov();
 }
 
 // Runs the ecosystem round the boat: plans a mangrove tile's animals as she comes within 900 m (off the game thread,

@@ -10,7 +10,12 @@
 //  - mangrove tree crabs on the roots (they drop off when the boat comes near) and fiddler crabs on the mud the low
 //    tide bares (they go down their burrows)
 // Everything is an instance of one small mesh per kind, shaded by the school fish's material (M_KR_Boid: it beats the
-// tail), made near the camera only: fish to 70-80 m, crabs to 45 m, the big ones to 150 m.
+// tail), made near the camera only: fish to 70-80 m, crabs to 60 m, the big ones to 150 m.
+//
+// From a boat's deck, low and tens of metres off, the water mirrors the sky and nothing under it shows. So what is in
+// it is told at the surface (EmitWaterMarks, drawn into the birds' moving mesh): a school is a dark patch of nervous
+// water with silver flashes on it, a fish under way near the top draws a V of wake behind it, and the splashes of a
+// mullet's jump, a shower of bait and a predator's rush are thrown high enough to catch the eye at 40 m.
 #include "KeysMangroveEcoInt.h"
 #include "KeysGeo.h"
 #include "KeysGeoReal.h"
@@ -31,12 +36,12 @@ namespace KeysMangroveEco
 		// Key: a KeysLife species model ("+": its full creature model), or one of the shapes made here ("*")
 		struct FPoolSpec { const TCHAR* Key; double LenMin, LenMax, Cull; };
 		const FPoolSpec PoolSpecs[NumPools] = {
-			{TEXT("silverside"), .09, .13, 70},      // silverside
-			{TEXT("herring"), .12, .17, 80},         // pilchard
+			{TEXT("silverside"), .11, .16, 70},      // silverside
+			{TEXT("herring"), .14, .20, 80},         // pilchard
 			{TEXT("mangrove"), .14, .24, 80},        // juvenile snapper
 			{TEXT("grunt"), .12, .20, 80},           // juvenile grunt
 			{TEXT("*needle"), .38, .58, 70},         // needlefish
-			{TEXT("bonefish"), .30, .42, 130},       // mullet
+			{TEXT("bonefish"), .40, .55, 130},       // mullet
 			{TEXT("barracuda"), .60, .90, 150},      // barracuda
 			{TEXT("lemonshark"), .85, 1.25, 160},    // juvenile lemon shark
 			{TEXT("nurse"), .95, 1.45, 160},         // nurse shark
@@ -45,8 +50,8 @@ namespace KeysMangroveEco
 			{TEXT("snook"), .55, .85, 150},          // snook
 			{TEXT("jackcrevalle"), .45, .65, 150},   // jack
 			{TEXT("tarpon"), .75, 1.15, 160},        // juvenile tarpon
-			{TEXT("*treecrab"), .075, .095, 45},     // mangrove tree crab
-			{TEXT("*fiddler"), .07, .09, 40},       // fiddler crab
+			{TEXT("*treecrab"), .14, .18, 60},       // mangrove tree crab (drawn several times life, like the kingfisher: at life size it is two pixels from 8 m)
+			{TEXT("*fiddler"), .10, .13, 55},        // fiddler crab
 			{TEXT("*horseshoe"), .42, .55, 60},      // horseshoe crab
 		};
 		const FPoolSpec& SpecOf(int32 Kind) { return PoolSpecs[Kind - Silverside]; }
@@ -91,7 +96,9 @@ namespace KeysMangroveEco
 			{
 				// a crab: a wide shell, eight legs, two claws (a fiddler's one great pale claw)
 				const bool bFid = Key == TEXT("*fiddler");
-				const FLinearColor Shell = Hex(bFid ? 0x4a3c2a : 0x4a4030), Leg = Hex(bFid ? 0x7a5c3a : 0x6a4a34), Claw = Hex(bFid ? 0xe8b070 : 0x8a4030);
+				// (a tree crab is dark olive with rust-red legs and claws, against grey-brown roots; a fiddler is dark, almost
+				// purple, against pale mud, with its one great claw orange)
+				const FLinearColor Shell = Hex(bFid ? 0x2a2230 : 0x2c3020), Leg = Hex(bFid ? 0x5a3a2e : 0xb04a28), Claw = Hex(bFid ? 0xf08a20 : 0xd8502a);
 				M.AddRoundBox(FVector(0, 0, .22), FVector(.62, .9, .3), .1, Shell, FQuat::Identity, 1);
 				for (const double Sd : {-1.0, 1.0})
 					for (int32 l = 0; l < 4; l++)
@@ -218,8 +225,12 @@ namespace KeysMangroveEco
 				F.V = FVector(Away.X * FMath::FRandRange(1.0, 2.6), FMath::FRandRange(2.6, 5.2), Away.Y * FMath::FRandRange(1.0, 2.6));
 				Up++;
 			}
+			// (white water thrown up over the whole school, and where the hunter went through it a boil with a column of spray)
 			if (E.Life)
-				for (int32 k = 0; k < 4; k++) E.Life->Splash(Sc.C.X + FMath::FRandRange(-1.2, 1.2), Sc.C.Y + FMath::FRandRange(-1.2, 1.2), 9, k == 0 ? .9 : .4);
+			{
+				for (int32 k = 0; k < 6; k++) E.Life->Splash(Sc.C.X + FMath::FRandRange(-1.0, 1.0) * (Sc.R + .6), Sc.C.Y + FMath::FRandRange(-1.0, 1.0) * (Sc.R + .6), 12, k < 2 ? 1.2 : .8);
+				E.Life->Splash(From.X, From.Y, 30, 1.6);
+			}
 			E.Sound(TEXT("shower"), Sc.Kind, FVector(Sc.C.X, E.Sea, Sc.C.Y), FMath::Min(1.f, Sc.N / 80.f));
 			FShower& Sh = E.Showers.AddDefaulted_GetRef();
 			Sh.Id = E.NextShower++; Sh.P = Sc.C; Sh.T = E.Now; Sh.Prey = Sc.Kind; Sh.Hunter = Hunter;
@@ -407,8 +418,9 @@ namespace KeysMangroveEco
 				if (Sp > .04) F.Fwd = FMath::Lerp(F.Fwd, F.V / Sp, FMath::Min(1.0, Dt * 9)).GetSafeNormal(.001, F.Fwd);
 				F.Ph += float((7 + Sp * 16) * Dt);
 				F.Flash = float(FMath::Max(0.0, F.Flash - Dt * 3));
-				if (S.Scatter > .4 && FMath::FRand() < Dt * 2) F.Flash = 1;
-				if (bDraw) Put(E, S.Kind, F.P, F.Fwd, F.Flash * .9, F.Len, F.Ph, 7 + Sp * 16, FMath::Min(1.0, .3 + Sp * .5), 0, F.Flash, F.Shade, F.Seed);
+				// (it turns on its side and shows silver: all the time now and then, more when they are frightened)
+				if (FMath::FRand() < Dt * (S.Scatter > .4 ? 2 : .14)) F.Flash = 1;
+				if (bDraw) Put(E, S.Kind, F.P, F.Fwd, F.Flash * .9, F.Len * (F.Air > 0 ? 1.8 : 1), F.Ph, 7 + Sp * 16, FMath::Min(1.0, .3 + Sp * .5), 0, F.Flash, F.Shade, F.Seed);
 			}
 		}
 
@@ -469,6 +481,8 @@ namespace KeysMangroveEco
 				else if (G.State == GRush)
 				{
 					Speed = 6.5;
+					// (its rush tears the surface: spray along its track)
+					if (E.Life && DCam < 120 && FMath::FRand() < Dt * 9) E.Life->Splash(G.C.X, G.C.Y, 5, .9);
 					FSchoolE* Sc = FindSchool(E, G.Prey);
 					if (Sc) G.Aim = Sc->C;
 					Station = G.Aim;
@@ -539,6 +553,7 @@ namespace KeysMangroveEco
 			G.Depth = Depth;
 			const bool bDraw = DCam < K.Cull;
 			const double Gs = GV.Size();
+			G.Spd = Gs;
 			for (int32 i = 0; i < G.M.Num(); i++)
 			{
 				FSwim& M = G.M[i];
@@ -566,17 +581,18 @@ namespace KeysMangroveEco
 				{
 					M.T = FMath::FRandRange(5.0, 40.0) / (DB < 25 && bBoatMoving ? 5 : NearestGroup(E, G.C, 14, Jack) || NearestGroup(E, G.C, 14, Snook) ? 4 : 1);
 					M.Air = 1;
-					M.V = FVector(M.Fwd.X * 2.2, 3.4 + FMath::FRand(), M.Fwd.Z * 2.2);
+					M.V = FVector(M.Fwd.X * 2.4, 4.3 + FMath::FRand(), M.Fwd.Z * 2.4);   // (a metre and more clear of the water)
 					M.P.Y = E.Sea;
+					if (E.Life && DCam < 130) E.Life->Splash(M.P.X, M.P.Z, 6, .6);
 				}
 				// a tarpon rolls: up to the top, its back out, and down
-				if (G.Kind == Tarpon && M.T <= 0) { M.T = FMath::FRandRange(14.0, 40.0) / FeedNow; M.Roll = 1.6; E.Sound(TEXT("roll"), G.Kind, M.P, .5f); if (E.Life && DCam < 110) E.Life->Splash(M.P.X, M.P.Z, 3, .3); }
+				if (G.Kind == Tarpon && M.T <= 0) { M.T = FMath::FRandRange(14.0, 40.0) / FeedNow; M.Roll = 1.6; E.Sound(TEXT("roll"), G.Kind, M.P, .5f); if (E.Life && DCam < 110) E.Life->Splash(M.P.X, M.P.Z, 8, .9); }
 				if (M.Air > 0)
 				{
 					M.V.Y -= 9.8 * Dt;
 					M.P += M.V * Dt;
 					Pitch = FMath::Atan2(M.V.Y, 2.2);
-					if (M.P.Y < E.Sea - .05 && M.V.Y < 0) { M.Air = 0; E.Sound(TEXT("jump"), G.Kind, M.P, .5f); if (E.Life && DCam < 130) E.Life->Splash(M.P.X, M.P.Z, 6, .45); }
+					if (M.P.Y < E.Sea - .05 && M.V.Y < 0) { M.Air = 0; E.Sound(TEXT("jump"), G.Kind, M.P, .5f); if (E.Life && DCam < 130) E.Life->Splash(M.P.X, M.P.Z, 18, 1.5); }   // (it lands flat: a column of white water and a patch of foam left behind)
 				}
 				else
 				{
@@ -659,6 +675,73 @@ namespace KeysMangroveEco
 					const double Wave = FMath::Max(0.0, FMath::Sin(E.Now * 3 + H3 * 40));   // it rears up to wave the big claw
 					const double Yaw = 2 * PI * H3;
 					Put(E, C.Kind, P + FVector(0, Wave * .012, 0), FVector(FMath::Cos(Yaw), Wave * .35, FMath::Sin(Yaw)), 0, FMath::Lerp(K.LenMin, K.LenMax, H2) * (1 - Mine), 0, 0, 0, 0, 0, .85 + .3 * H1, H1);
+				}
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------- what shows at the surface
+	// Written into the birds' moving mesh (rebuilt every frame anyway). Every school awake and every fish near the top
+	// writes the same number of triangles whatever it is doing (a wake with no way on is drawn shut), so the mesh's
+	// layout only changes when one wakes or goes back to sleep.
+	void EmitWaterMarks(FEco& E, FTileE& T)
+	{
+		FSoup& B = E.Live;
+		const FVector2D Cam2(E.Cam.X, E.Cam.Z);
+		auto Tri = [&B](const FVector& P0, const FVector& P1, const FVector& P2, const FLinearColor& C0, const FLinearColor& C1, const FLinearColor& C2)
+		{
+			const int32 I = B.V.Num();
+			B.V.Add(G2U(P0)); B.V.Add(G2U(P1)); B.V.Add(G2U(P2));
+			for (int32 k = 0; k < 3; k++) { B.N.Add(FVector(0, 0, 1)); B.T.Add(I + k); }
+			B.C.Add(C0); B.C.Add(C1); B.C.Add(C2);
+		};
+		auto Surf = [&E](double X, double Z, double Amp) { return KeysGeo::WaveH(X, Z, E.Now, Amp, false); };
+		static const FLinearColor Dark = Hex(0x0e2a33), Edge = Hex(0x2f6670), Silver = Hex(0xf2f8fa), Foam = Hex(0xe4f0f2);
+		// ---- a school: a dark, ragged patch of nervous water, and silver flashes on it
+		for (const FSchoolE& S : T.Schools)
+		{
+			if (!S.bAwake) continue;
+			const bool bShow = FVector2D::DistSquared(S.C, Cam2) < 115.0 * 115.0 && E.Sea - S.Floor > .1;
+			const double Amp = bShow ? KeysGeo::AmpAt(S.C.X, S.C.Y) : 0;
+			const double R = bShow ? S.R * (1 + S.Scatter * 1.3) * 1.2 + .35 : 0;
+			const FVector Mid(S.C.X, bShow ? Surf(S.C.X, S.C.Y, Amp) + .035 : E.Sea, S.C.Y);
+			FVector Rim[12];
+			for (int32 i = 0; i < 12; i++)
+			{
+				const double A = i * PI / 6, Rr = R * (.72 + .4 * EHash(i + 1.0, S.Seed * 1e-6) + .1 * FMath::Sin(E.Now * 1.3 + i * 2.1 + S.Mill));
+				const double X = S.C.X + FMath::Cos(A) * Rr, Z = S.C.Y + FMath::Sin(A) * Rr;
+				Rim[i] = FVector(X, bShow ? Surf(X, Z, Amp) + .03 : E.Sea, Z);
+			}
+			for (int32 i = 0; i < 12; i++) Tri(Mid, Rim[i], Rim[(i + 1) % 12], Dark, Edge, Edge);
+			// (eight places a fish may show its side this third of a second)
+			const double Beat = FMath::FloorToDouble(E.Now * 3.2);
+			for (int32 j = 0; j < 8; j++)
+			{
+				const double H1 = EHash(Beat + j * 7.3, S.Seed * 1e-6 + j), H2 = EHash(Beat * 1.7 + j, S.Seed * 1e-6 + 3.0), H3 = EHash(Beat + j, 5.0 + S.Seed * 1e-6);
+				const bool bOn = bShow && H3 < .3 + S.Scatter * .6;
+				const double A = 2 * PI * H1, Rr = R * .8 * FMath::Sqrt(H2), L = bOn ? .16 + .12 * H2 : 0;
+				const FVector P(S.C.X + FMath::Cos(A) * Rr, Mid.Y + .03, S.C.Y + FMath::Sin(A) * Rr);
+				const FVector Ax(FMath::Cos(A * 3.1) * L, 0, FMath::Sin(A * 3.1) * L), Sd(-Ax.Z * .35, 0, Ax.X * .35);
+				Tri(P - Ax, P + Sd, P + Ax, Silver, Silver, Silver);
+				Tri(P - Ax, P - Sd, P + Ax, Silver, Silver, Silver);
+			}
+		}
+		// ---- a fish under way near the top: a V of wake from its nose, longer the faster it goes
+		for (const FGroup& G : T.Groups)
+		{
+			if (!G.bActive || !(IsHunter(G.Kind) || G.Kind == Mullet || G.Kind == Needlefish)) continue;
+			const double Amp = KeysGeo::AmpAt(G.C.X, G.C.Y);
+			for (const FSwim& M : G.M)
+			{
+				const bool bOn = G.Spd > .35 && M.Air <= 0 && M.P.Y > E.Sea - .75;
+				const double L = bOn ? FMath::Clamp(G.Spd * 1.1, .5, 6.5) * (G.Kind == Needlefish ? .5 : 1) : 0, W = bOn ? .07 + L * .035 : 0;
+				const FVector F2 = FVector(M.Fwd.X, 0, M.Fwd.Z).GetSafeNormal(.001, FVector(1, 0, 0)), Rt(-F2.Z, 0, F2.X);
+				const FVector Nose(M.P.X + F2.X * M.Len * .4, bOn ? Surf(M.P.X, M.P.Z, Amp) + .04 : E.Sea, M.P.Z + F2.Z * M.Len * .4);
+				for (const double Sd : {-1.0, 1.0})
+				{
+					const FVector Tail = Nose - F2 * L + Rt * Sd * L * .36;
+					const FVector Tl(Tail.X, bOn ? Surf(Tail.X, Tail.Z, Amp) + .04 : E.Sea, Tail.Z);
+					Tri(Nose, Tl - Rt * Sd * W, Tl + Rt * Sd * W, Foam, Foam, Foam);
 				}
 			}
 		}

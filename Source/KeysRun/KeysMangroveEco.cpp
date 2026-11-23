@@ -401,7 +401,8 @@ namespace KeysMangroveEco
 			for (int32 n = 0; n < NHere; n++)
 			{
 				const double Hb = EHash(Tp.Z * 1.9 + n * 7.7, Tp.X * .43 + 4.0), An = 2 * PI * EHash(Tp.X + n * 3.1, Tp.Z - n);
-				const uint8 Kind = Hb < .25 ? GreatEgret : Hb < .47 ? Ibis : Hb < .61 ? Cormorant : Hb < .73 ? Pelican : Hb < .81 ? GreatBlue : Hb < .89 ? Spoonbill : Hb < .93 ? Anhinga : Hb < .97 ? LittleBlue : NightHeron;
+				// (white and pink first: from far off a rookery is a key dotted white, with spoonbills among them)
+				const uint8 Kind = Hb < .28 ? GreatEgret : Hb < .52 ? Ibis : Hb < .68 ? Spoonbill : Hb < .77 ? Cormorant : Hb < .86 ? Pelican : Hb < .91 ? GreatBlue : Hb < .94 ? Anhinga : Hb < .97 ? LittleBlue : NightHeron;
 				const FVector At = n == 0 ? Tp : Tp + FVector(FMath::Cos(An) * 1.5, -.32, FMath::Sin(An) * 1.5);
 				None.X = At.X; None.Z = At.Z;
 				FSpot& Sp = Add(Kind, None, At, (FVector2D(Tp.X, Tp.Z) - Rk[R].C).GetSafeNormal(), 1, 60 + n);
@@ -491,6 +492,51 @@ namespace KeysMangroveEco
 		// (and lying along the shore a little short of it, so the chase camera sees it past the boat's bow)
 		const FVector2D Tn(-Out.Y, Out.X), B2 = B - Tn * (Dist * .9);
 		return FString::Printf(TEXT("bow on tp=%.0f,%.0f,%.3f alongside tp=%.0f,%.0f,%.3f"), B.X, B.Y, FMath::Atan2(-(P.X - B.X), -(P.Y - B.Y)), B2.X, B2.Y, FMath::Atan2(-Tn.X, -Tn.Y));
+	}
+
+	// Where to lie to look at a rookery key: off it toward its open water, about 150 m from its middle, in water that
+	// floats every boat in the yard at dead low (the deepest hull grounds at 1.2 m and the tide takes .32 m off the
+	// chart: 1.6 m charted, with the same all round her length). If the open side is too shoal the other sides are
+	// tried, nearest first; if there is none within reach, the deepest water found (said so: bOk false).
+	static const double RookNeed = 1.6;
+	static FString RookSpot(int32 R, bool* bOk = nullptr, double* OutDepth = nullptr)
+	{
+		const FRookery& Rk = Rookeries()[R];
+		const FVector2D O = RookSeaDir(R);
+		const double A0 = FMath::Atan2(O.Y, O.X);
+		auto DepthRound = [](const FVector2D& B)
+		{
+			double D = KeysGeo::DepthAt(B.X, B.Y);
+			for (int32 k = 0; k < 8; k++)
+			{
+				const FVector2D Q = B + FVector2D(FMath::Cos(k * PI / 4), FMath::Sin(k * PI / 4)) * 9;
+				D = FMath::Min(D, KeysGeo::LandH(Q.X, Q.Y) > -.05 || KeysGeoReal::MangroveAt(Q.X, Q.Y) ? 0.0 : KeysGeo::DepthAt(Q.X, Q.Y));
+			}
+			return D;
+		};
+		FVector2D Best = Rk.C + O * (Rk.R + 110);
+		double BestD = -1;
+		bool bFound = false;
+		for (int32 k = 0; k < 16 && !bFound; k++)
+		{
+			// (the open side first, then round it either way)
+			const double A = A0 + ((k + 1) / 2) * (k % 2 ? 1 : -1) * PI / 8;
+			const FVector2D Dir(FMath::Cos(A), FMath::Sin(A));
+			for (double L = Rk.R + 110; L <= Rk.R + 230 && !bFound; L += 15)
+			{
+				const FVector2D B = Rk.C + Dir * L;
+				// (and nothing between her and the key but water)
+				bool bClear = true;
+				for (double M = Rk.R + 12; M < L && bClear; M += 12) { const FVector2D Q = Rk.C + Dir * M; bClear = KeysGeo::LandH(Q.X, Q.Y) < -.05 && !KeysGeoReal::MangroveAt(Q.X, Q.Y); }
+				if (!bClear) continue;
+				const double D = DepthRound(B);
+				if (D > BestD) { BestD = D; Best = B; }
+				bFound = D >= RookNeed;
+			}
+		}
+		if (bOk) *bOk = bFound;
+		if (OutDepth) *OutDepth = BestD;
+		return FString::Printf(TEXT("tp=%.0f,%.0f,%.3f"), Best.X, Best.Y, FMath::Atan2(-(Rk.C.X - Best.X), -(Rk.C.Y - Best.Y)));
 	}
 }
 
@@ -692,13 +738,15 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 		UpdateBirds(S, *T.Value);
 	}
 	S.StillT += S.Dt;
-	if (S.StillT > 1 && FVector::DistSquared(S.StillCam, S.Cam) > 15.0 * 15.0) S.bStillDirty = true;
+	// (the standing birds' dark edges are laid out for where the camera is: again when it has moved a little)
+	if (S.StillT > 1 && FVector::DistSquared(S.StillCam, S.Cam) > 5.0 * 5.0) S.bStillDirty = true;
 	const bool bStill = S.bStillDirty;
 	if (bStill) { S.Still.Reset(); S.bStillDirty = false; S.StillT = 0; S.StillCam = S.Cam; S.StillN = 0; }
 	for (TPair<int64, FTileE*>& T : S.Tiles)
 	{
 		if (FVector2D::Distance(T.Value->C, Cam2) > 1330) continue;
 		EmitBirds(S, *T.Value, false);
+		if (!BirdsBefore() && FVector2D::Distance(T.Value->C, Cam2) < 730) EmitWaterMarks(S, *T.Value);
 		if (bStill) EmitBirds(S, *T.Value, true);
 	}
 	EcoFlushSoup(LiveMesh, S.Live);
@@ -863,15 +911,20 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		for (int32 i = 0; i < Rk.Num(); i++) if (Cn.RookBirds[i] > Cn.RookBirds[Busiest]) Busiest = i;
 		for (int32 i = 0; i < Rk.Num(); i++)
 		{
-			const FVector2D O = RookSeaDir(i);
-			UE_LOG(LogTemp, Log, TEXT("KREco census rookery %d (%s, by %s) at %.0f, %.0f: %d birds%s; look at it from %s"), i, RegionName(Rk[i].Region), *KeysGeo::NearestName(Rk[i].C.X, Rk[i].C.Y), Rk[i].C.X, Rk[i].C.Y, Cn.RookBirds[i],
-				i == Busiest ? TEXT(" (the busiest)") : TEXT(""), *TpFor(Rk[i].C, O, Rk[i].R + 45));
+			bool bDeep = false;
+			double Dp = 0;
+			const FString Spot = RookSpot(i, &bDeep, &Dp);
+			UE_LOG(LogTemp, Log, TEXT("KREco census rookery %d (%s, by %s) at %.0f, %.0f: %d birds%s; look at it from %s (bow on, %.1f m charted%s)"), i, RegionName(Rk[i].Region), *KeysGeo::NearestName(Rk[i].C.X, Rk[i].C.Y), Rk[i].C.X, Rk[i].C.Y, Cn.RookBirds[i],
+				i == Busiest ? TEXT(" (the busiest)") : TEXT(""), *Spot, Dp, bDeep ? TEXT("") : *FString::Printf(TEXT(": the deepest within reach, short of the %.1f m that floats every boat at dead low"), RookNeed));
 		}
 		if (A.Num() > 1)
 			for (int32 r = 0; r < 4; r++)
 				for (int32 k = 0; k < NumKinds; k++)
 					if (Cn.bHave[r][k]) UE_LOG(LogTemp, Log, TEXT("KREco where %s / %s: %.0f, %.0f; %s"), RegionName(r), KindName(k), Cn.Example[r][k].X, Cn.Example[r][k].Y, *TpFor(Cn.Example[r][k], Cn.ExampleOut[r][k], 14));
 	}
+	else if (C0 == TEXT("px")) PxReport(S, GetWorld(), A.Num() > 1 ? TEXT(" ") + A[1] : FString());
+	else if (C0 == TEXT("afloat")) AfloatReport(S, GetWorld(), A.Num() > 1 ? A[1] : FString());
+	else if (C0 == TEXT("closer")) CloserCmd(A.Num() > 1 ? A[1] : FString());
 	else if (C0 == TEXT("fish"))
 	{
 		// where the small fish are, against the tide
