@@ -1,5 +1,5 @@
 diff --git a/Source/KeysRun/KeysReefLife.cpp b/Source/KeysRun/KeysReefLife.cpp
-index 8d8edf5..787433d 100644
+index 8d8edf5..333564d 100644
 --- a/Source/KeysRun/KeysReefLife.cpp
 +++ b/Source/KeysRun/KeysReefLife.cpp
 @@ -31,10 +31,10 @@ namespace KeysReefLife
@@ -146,7 +146,18 @@ index 8d8edf5..787433d 100644
  		}
  
  		void DoPuff(FGroup& G, FAnimal& A, const FSpecies& S)
-@@ -775,6 +804,8 @@ namespace KeysReefLife
+@@ -753,7 +782,9 @@ namespace KeysReefLife
+ 		void Move(FAnimal& A, const FSpecies& S, const FBody& B, FVector Want, double Acc, double Clear, const FVector* Face, double TailAmp, double PecAmp, double Dt)
+ 		{
+ 			const double WSp = Want.Size();
+-			if (WSp > .03 && !A.bFloorOnly)
++			// (only for a swimmer going somewhere: one sinking straight down onto its perch would take the bottom under it for
++			// rock ahead and hang half a metre over it)
++			if (WSp > .03 && !A.bFloorOnly && RlHyp(Want.X, Want.Z) > WSp * .3)
+ 			{
+ 				const FVector Dir = Want / WSp, Sd(-Dir.Z, 0, Dir.X);
+ 				for (int32 q = 0; q < 2; q++)
+@@ -775,6 +806,8 @@ namespace KeysReefLife
  			double Fl;
  			double Need = TopAt(NP.X, NP.Z, &Fl) + Clear;
  			if (A.bFloorOnly) Need = Fl + Clear;
@@ -155,7 +166,7 @@ index 8d8edf5..787433d 100644
  			if (NP.Y < Need)
  			{
  				const double MaxLift = (S.Cruise + 1.2) * Dt + .01;
-@@ -788,7 +819,7 @@ namespace KeysReefLife
+@@ -788,7 +821,7 @@ namespace KeysReefLife
  				else NP.Y = Need;
  				A.V.Y = FMath::Max(0.0, A.V.Y);
  			}
@@ -164,7 +175,7 @@ index 8d8edf5..787433d 100644
  			if (NP.Y > Ceil) { NP.Y = FMath::Max(Ceil, FMath::Min(NP.Y, A.P.Y)); A.V.Y = FMath::Min(0.0, A.V.Y); }
  			A.P = NP;
  			// the body
-@@ -807,7 +838,7 @@ namespace KeysReefLife
+@@ -807,7 +840,7 @@ namespace KeysReefLife
  			A.TailPh = FMath::Fmod(A.TailPh + A.TailFreq * Dt, 2 * PI * 64);
  			A.TailAmp += (TailAmp - A.TailAmp) * FMath::Min(1.0, Dt * 4);
  			A.PecAmp += (PecAmp - A.PecAmp) * FMath::Min(1.0, Dt * 5);
@@ -173,7 +184,7 @@ index 8d8edf5..787433d 100644
  		}
  
  		void StepAnimal(FGroup& G, int32 I, double Dt)
-@@ -816,6 +847,7 @@ namespace KeysReefLife
+@@ -816,6 +849,7 @@ namespace KeysReefLife
  			FAnimal& A = G.M[I];
  			const FBody& B = S.Phases[A.Phase].Body;
  			A.StateT += Dt;
@@ -181,7 +192,7 @@ index 8d8edf5..787433d 100644
  			const bool bSleepNow = SleepTime(S);
  			const double Clear0 = B.HalfH * A.Len + .06;
  			// a swimmer that rows holds its tail still; one that does not beats it all the time
-@@ -879,7 +911,7 @@ namespace KeysReefLife
+@@ -879,7 +913,7 @@ namespace KeysReefLife
  				const double HDist = Hd.Size();
  				if (HDist > .02) Hd /= HDist; else Hd = RlFlat(A.Fwd).GetSafeNormal();
  				// beak-down: the body tipped some 50 degrees onto the rock
@@ -190,7 +201,7 @@ index 8d8edf5..787433d 100644
  				const FVector Ctr = A.Aim - A.PoseDir * (.47 * A.Len);
  				const FVector To = Ctr - A.P;
  				const double D = To.Size();
-@@ -945,6 +977,47 @@ namespace KeysReefLife
+@@ -945,6 +979,47 @@ namespace KeysReefLife
  				}
  				break;
  			}
@@ -238,7 +249,7 @@ index 8d8edf5..787433d 100644
  			case SHop:
  			{
  				const FVector To = A.Aim - A.P;
-@@ -975,6 +1048,16 @@ namespace KeysReefLife
+@@ -975,6 +1050,16 @@ namespace KeysReefLife
  					Move(A, S, B, FVector::ZeroVector, 3, Clear, &FaceV, TailEase, PecEase * .5, Dt);
  					break;
  				}
@@ -255,7 +266,7 @@ index 8d8edf5..787433d 100644
  				switch (G.Role)
  				{
  				case ERole::Hoverer:
-@@ -993,9 +1076,19 @@ namespace KeysReefLife
+@@ -993,9 +1078,20 @@ namespace KeysReefLife
  					// on the bottom, still; it shifts to a new perch now and then, sooner with a diver close
  					double Fl;
  					const double Tp = TopAt(A.P.X, A.P.Z, &Fl);
@@ -264,6 +275,7 @@ index 8d8edf5..787433d 100644
 +					Clear = B.HalfH * A.Len * (1 - 2 * S.Bury) + .01;
 +					Want = FVector(0, ((S.Bury > 0 && Tp <= Fl + .01 ? KeysSea::SeafloorHeightAt(A.P.X, A.P.Z) : Tp) + Clear - A.P.Y) * 3, 0);
  					PecA = 0;
++					if (S.Bury > 0 && Tp > Fl + .05) A.BiteT = 0;   // it lies in sand, not on a coral head: off it goes to find some
 +					if (S.DigEvery > 0 && !bAvoid && A.P.Y < Tp + B.HalfH * A.Len + .05)
 +					{
 +						A.PuffT -= Dt * Feeding(S);
@@ -277,7 +289,7 @@ index 8d8edf5..787433d 100644
  					A.BiteT -= Dt * Act01 * (bAvoid ? 6 : 1);
  					if (A.BiteT <= 0)
  					{
-@@ -1223,6 +1316,13 @@ namespace KeysReefLife
+@@ -1223,6 +1319,13 @@ namespace KeysReefLife
  			for (const FScar& Sc : Scars)
  			{
  				const double Hs = Sc.Size * 50, Al = .85 * FMath::Pow(1 - Sc.Age / Sc.Life, .7);
@@ -291,7 +303,7 @@ index 8d8edf5..787433d 100644
  				Quad(Sc.P, CamRtU * Hs, CamUpU * Hs, FLinearColor(.86f, .84f, .76f, float(Al)), true);
  			}
  			for (const FPuff& Pf : Puffs)
-@@ -1311,9 +1411,9 @@ namespace KeysReefLife
+@@ -1311,9 +1414,9 @@ namespace KeysReefLife
  			for (const FPool& Pl : PoolList) { const int32 N = Pl.Items.Num() * (Pl.bFin ? 2 : 1); Inst += N; Tris += N * Pl.Tris; }
  			for (const TUniquePtr<FGroup>& Gp : Groups) for (const FAnimal& A : Gp->M) if (RlHyp(A.P.X - Centre.X, A.P.Z - Centre.Z) <= 60) Near++;
  			for (const int32 C : SpAlive) SpN += C > 0 ? 1 : 0;
@@ -303,7 +315,7 @@ index 8d8edf5..787433d 100644
  			CpuAcc = 0; CpuN = 0; CpuWorst = 0; StatT = 0;
  		}
  
-@@ -1490,7 +1590,9 @@ namespace KeysReefLife
+@@ -1490,7 +1593,9 @@ namespace KeysReefLife
  				if (!G || !G->M.IsValidIndex(LookIx)) { Log(TEXT("do: nothing is being looked at (reef:look first)")); return; }
  				FAnimal& A = G->M[LookIx];
  				if (W.IsValidIndex(1) && W[1] == TEXT("bite")) { A.PoseT = 0; A.BiteT = 0; }

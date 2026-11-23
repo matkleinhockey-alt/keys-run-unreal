@@ -222,7 +222,7 @@ namespace KeysReefLifeVisitors
 		static void Build(FKeysMesh& M, int32 Phase, int32 Kind)
 		{
 			const bool bMale = Phase == 1;
-			M.Surf = SurfFish;
+			M.Surf = SurfSkin;   // (smooth skin: SurfFish would draw scales on it)
 			if (Kind == 3) { Wing(M, bMale); M.Surf = 0; return; }
 			if (Kind == 0) { Disc(M, -Y0, Y0, 8, 10, bMale); Tail(M, 6, 6); Eyes(M); }
 			else if (Kind == 1) { Disc(M, -W, W, 12, 6, bMale); Tail(M, 3, 4); Eyes(M); }
@@ -321,7 +321,7 @@ namespace KeysReefLifeVisitors
 		}
 		static void Carapace(FKeysMesh& M, const FTurtle& T, int32 Lod)
 		{
-			M.Surf = SurfGelcoat;
+			M.Surf = SurfDefault;   // (matte: under water a wet shell does not shine)
 			if (Lod == 2)
 			{
 				// far: one dome
@@ -380,7 +380,7 @@ namespace KeysReefLifeVisitors
 		}
 		static void Plastron(FKeysMesh& M, const FTurtle& T, int32 Lod)
 		{
-			M.Surf = SurfGelcoat;
+			M.Surf = SurfDefault;   // (matte: under water a wet shell does not shine)
 			const int32 N = Lod == 2 ? 8 : NM;
 			const int32 R0 = M.V.Num();
 			for (int32 Ring = 0; Ring < 2; Ring++)
@@ -539,8 +539,8 @@ namespace KeysReefLifeVisitors
 		static const FTurtle T = []
 		{
 			FTurtle G;
-			G.CL = .70; G.Cx = -.05; G.HW = .275; G.Heart = .06; G.H = .155; G.Hp = .07; G.Costals = 4;
-			G.HeadL = .075; G.HeadW = .047; G.HeadH = .046; G.Block = 0; G.NeckL = .05;
+			G.CL = .70; G.Cx = -.03; G.HW = .275; G.Heart = .06; G.H = .155; G.Hp = .07; G.Costals = 4;
+			G.HeadL = .075; G.HeadW = .047; G.HeadH = .046; G.Block = 0; G.NeckL = .03;
 			G.FlipL = .43; G.FlipC = .06; G.StreakAmt = 1;
 			G.Shell = Hex(0x6a5836); G.Streak = Hex(0xb0965a); G.Seam = Hex(0x2a2318); G.Margin = Hex(0x8c7a4c);
 			G.Skin = Hex(0x4a3c28); G.SkinEdge = Hex(0xd9cc9a); G.Under = Hex(0xe8dfb0); G.Beak = Hex(0x8a7a54);
@@ -553,8 +553,8 @@ namespace KeysReefLifeVisitors
 		static const FTurtle T = []
 		{
 			FTurtle G;
-			G.CL = .66; G.Cx = -.07; G.HW = .262; G.Heart = .16; G.H = .15; G.Hp = .075; G.Costals = 5;
-			G.HeadL = .1; G.HeadW = .076; G.HeadH = .066; G.Block = 1; G.NeckL = .04;
+			G.CL = .66; G.Cx = -.045; G.HW = .262; G.Heart = .16; G.H = .15; G.Hp = .075; G.Costals = 5;
+			G.HeadL = .1; G.HeadW = .076; G.HeadH = .066; G.Block = 1; G.NeckL = .015;
 			G.FlipL = .36; G.FlipC = .064; G.StreakAmt = .45;
 			G.Shell = Hex(0x8c4a26); G.Streak = Hex(0xb8743c); G.Seam = Hex(0x4c2614); G.Margin = Hex(0xc09048);
 			G.Skin = Hex(0x945a2c); G.SkinEdge = Hex(0xe0b860); G.Under = Hex(0xe2c880); G.Beak = Hex(0xc8a258);
@@ -594,7 +594,7 @@ namespace KeysReefLifeVisitors
 		FMix Male; Male.Weight = .4; Male.A = 1;
 		S.Mixes = {Female, Male};
 		// sand: patches by the reef, the grooves between spurs (fore reef), the sand at the reef's foot, seagrass edges
-		S.Depth[0] = .8; S.Depth[1] = 2; S.Depth[2] = 16; S.Depth[3] = 25;
+		S.Depth[0] = 3; S.Depth[1] = 4.5; S.Depth[2] = 16; S.Depth[3] = 25;   // (not on the flats: KeysLife's own stingray lives there)
 		S.Zones = ZSand | ZFore | ZGrass;
 		S.Habit = EHabit::Both;
 		S.GroupsPerHa = 2.2; S.MaxAlive = 5; S.Weight = 3;
