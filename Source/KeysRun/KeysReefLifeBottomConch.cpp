@@ -68,8 +68,9 @@ namespace KeysReefLifeBottomConch
 	// the shell's radius along its axis: U 0 at the front tip (the siphonal canal) .. 1 at the apex of the spire
 	static double ShellR(double U)
 	{
-		static const double Us[] = {0, .08, .2, .35, .5, .6, .66, .72, .8, .88, .95, 1};
-		static const double Rs[] = {.02, .07, .15, .22, .26, .27, .21, .165, .12, .072, .03, .006};
+		// a swollen body whorl, a shoulder, then the spire stepping down whorl by whorl
+		static const double Us[] = {0, .06, .14, .24, .36, .5, .6, .65, .7, .76, .82, .88, .94, 1};
+		static const double Rs[] = {.018, .05, .12, .2, .255, .275, .27, .2, .17, .15, .115, .08, .045, .006};
 		for (int32 i = 0; i + 1 < UE_ARRAY_COUNT(Us); i++)
 			if (U <= Us[i + 1]) return FMath::Lerp(Rs[i], Rs[i + 1], (U - Us[i]) / (Us[i + 1] - Us[i]));
 		return Rs[UE_ARRAY_COUNT(Rs) - 1];
@@ -84,7 +85,7 @@ namespace KeysReefLifeBottomConch
 
 	static const FLinearColor& SandA() { static const FLinearColor C = Hex(0xdcc096); return C; }
 	static const FLinearColor& SandB() { static const FLinearColor C = Hex(0xc4a070); return C; }
-	static const FLinearColor& Film() { static const FLinearColor C = Hex(0x8f7a55); return C; }      // the skin of algae and sand
+	static const FLinearColor& Film() { static const FLinearColor C = Hex(0x7f6a48); return C; }      // the skin of algae and sand
 	static const FLinearColor& Worn() { static const FLinearColor C = Hex(0xeadfc8); return C; }      // knob tips, the spire
 	static const FLinearColor& Pink() { static const FLinearColor C = Hex(0xf2909f); return C; }
 	static const FLinearColor& Rose() { static const FLinearColor C = Hex(0xe0597a); return C; }
@@ -96,18 +97,18 @@ namespace KeysReefLifeBottomConch
 		// underneath: cream, and pink toward the aperture on the right
 		if (S < -.25) return Mix(Hex(0xe9cdb6), Pink(), Sm(Cs * 1.4));
 		FLinearColor C = Lod == 0 ? Mix(SandA(), SandB(), Hash(I, J)) : Mix(SandA(), SandB(), .5);
-		C = Mix(C, Film(), .4 * (.5 + .5 * FMath::Sin(U * 23 + Th * 2)) * Sm((S + .1) / .5));
+		C = Mix(C, Film(), .65 * (.5 + .5 * FMath::Sin(U * 23 + Th * 2)) * Sm((S + .1) / .5));
 		C = Mix(C, Worn(), .22 * Sm((U - .66) / .15));
-		if (FMath::Abs(U - .66) < .01 || FMath::Abs(U - .88) < .01) C = Mix(C, Hex(0x7d6646), .55);   // the seams between the whorls
+		if (FMath::Abs(U - .65) < .01 || FMath::Abs(U - .76) < .01 || FMath::Abs(U - .88) < .01) C = Mix(C, Hex(0x6f5a3e), .6);   // the seams between the whorls
 		C = Mix(C, Worn(), .7 * Knob01);
 		return C;
 	}
 
 	static void BuildShell(FKeysMesh& M, int32 Lod)
 	{
-		static const double U0[] = {0, .08, .2, .28, .35, .43, .5, .6, .66, .72, .8, .88, .95, 1};
-		static const double U1[] = {0, .12, .3, .5, .6, .66, .72, .8, .9, 1};
-		static const double U2[] = {0, .2, .55, .68, 1};
+		static const double U0[] = {0, .06, .14, .24, .36, .5, .6, .65, .7, .76, .82, .88, .94, 1};
+		static const double U1[] = {0, .14, .36, .6, .65, .7, .82, .94, 1};
+		static const double U2[] = {0, .24, .6, .7, 1};
 		const double* Us = Lod == 0 ? U0 : Lod == 1 ? U1 : U2;
 		const int32 NR = Lod == 0 ? UE_ARRAY_COUNT(U0) : Lod == 1 ? UE_ARRAY_COUNT(U1) : UE_ARRAY_COUNT(U2);
 		const int32 NA = Lod == 0 ? 16 : Lod == 1 ? 8 : 5;
@@ -125,9 +126,9 @@ namespace KeysReefLifeBottomConch
 				{
 					const double Back = Sm((FMath::Sin(Th) + .15) / .4);
 					const bool bEven = (a & 1) == 0;   // (near, eight knobs a whorl; mid, four)
-					if (FMath::Abs(U - .6) < .01 && bEven) K = .34 * Back;
-					else if (FMath::Abs(U - .72) < .01 && !bEven) K = .24 * Back;
-					else if (FMath::Abs(U - .8) < .01 && bEven) K = .16 * Back;
+					if (FMath::Abs(U - .6) < .01 && bEven) K = .22 * Back;
+					else if (FMath::Abs(U - .7) < .01 && !bEven) K = .26 * Back;
+					else if (FMath::Abs(U - .82) < .01 && bEven) K = .2 * Back;
 				}
 				P.Add(ShellPt(U, Th, K));
 				C.Add(ShellCol(U, Th, K > 0 ? 1 : 0, r, a, Lod));

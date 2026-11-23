@@ -9,6 +9,8 @@
 //                                     puts the diver that far (default 2.5) from the nearest (or nth nearest) of a
 //                                     kind and aims the mask at it. Bearing 0 (the default) stands the diver on the
 //                                     offshore side looking in along the surge; 90 looks along the reef.
+//   krbottom.ground <species key>     puts the diver where that reef-life species has the most ground within 2 km
+//                                     (its own zones, depths and Where), so that reef:find has something to find.
 //   krbottom.goto <zone> [least] [greatest depth]
 //                                     puts the diver over the nearest bottom of that reef-life zone (sand, seagrass,
 //                                     hardbottom, reeftop, crest, spurtop, patchreef, forereef, deepwall).
@@ -155,6 +157,44 @@ namespace KeysReefLifeBottomAudit
 		UE_LOG(LogTemp, Log, TEXT("KRBottom goto %s: none within 2.5 km in %.1f-%.1f m"), *Args[0], D0, D1);
 	}
 
+	static void CmdGround(const TArray<FString>& Args, UWorld* W)
+	{
+		// where a reef-life species has the most ground: the first place within 2 km where the 25 points of a 100 m
+		// square suit it by 0.6 or more on average (its own zones, depths and Where; reef cover as the framework counts it)
+		AKeysDiver* Dv = W ? AKeysDiver::Get(W) : nullptr;
+		const int32 SpI = Args.Num() ? KeysReefLife::FindSpecies(Args[0]) : -1;
+		if (!Dv || !Dv->IsDiving() || SpI < 0) { UE_LOG(LogTemp, Log, TEXT("KRBottom ground: needs a registered species key, and the diver in the water")); return; }
+		const KeysReefLife::FSpecies& S = KeysReefLife::Registry()[SpI];
+		auto Suit = [&S](double X, double Z)
+		{
+			using namespace KeysReefLife;
+			const FHabitat H = HabitatAt(X, Z);
+			if (!(S.Zones & H.Zone) || H.Depth <= S.Depth[0] || H.Depth >= S.Depth[3]) return 0.0;
+			double V = H.Depth < S.Depth[1] ? (H.Depth - S.Depth[0]) / FMath::Max(1e-6, S.Depth[1] - S.Depth[0]) : H.Depth > S.Depth[2] ? (S.Depth[3] - H.Depth) / FMath::Max(1e-6, S.Depth[3] - S.Depth[2]) : 1.0;
+			if (H.Zone & (ZCrest | ZTop | ZSpur | ZPatch | ZFore | ZWall)) V *= FMath::Clamp(H.Reef * 1.3, 0.0, 1.0);
+			return S.Where ? V * S.Where(X, Z, H) : V;
+		};
+		const FVector At = Where(W);
+		double Best = -1, BX = At.X, BZ = At.Z;
+		for (double Rr = 0; Rr < 2000 && Best < .6; Rr += 30)
+			for (int32 k = 0; k < FMath::Max(1, int32(Rr / 15)) && Best < .6; k++)
+			{
+				const double A = k * 2 * PI / FMath::Max(1, int32(Rr / 15)), X = At.X + FMath::Cos(A) * Rr, Z = At.Z + FMath::Sin(A) * Rr;
+				if (Suit(X, Z) <= 0) continue;
+				double Sum = 0;
+				for (int32 j = -2; j <= 2; j++) for (int32 i = -2; i <= 2; i++) Sum += Suit(X + i * 25, Z + j * 25);
+				if (Sum / 25 > Best) { Best = Sum / 25; BX = X; BZ = Z; }
+			}
+		if (Best < 0) { UE_LOG(LogTemp, Log, TEXT("KRBottom ground %s: no ground for it within 2 km"), *Args[0]); return; }
+		const KeysReefLife::FHabitat H = KeysReefLife::HabitatAt(BX, BZ);
+		Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), BX, BZ));
+		Dv->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), H.Depth - 1.2));
+		Dv->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -Dv->State().Y));
+		UE_LOG(LogTemp, Log, TEXT("KRBottom ground %s: the diver is put at %.0f, %.0f, %.0f m from where it was; mean suitability of the 100 m square there %.2f (zone %s, floor %.1f m, %.0f m off the chain, game zone %s)"), *Args[0], BX, BZ,
+			FMath::Sqrt(FMath::Square(BX - At.X) + FMath::Square(BZ - At.Z)), Best, KeysReefLife::ZoneName(H.Zone), H.Depth, KeysGeo::DZAt(BX, BZ), *KeysGeo::ZoneAt(BX, BZ));
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GGroundCmd(TEXT("krbottom.ground"), TEXT("Keys Run reefbottom audit: put the diver where a reef-life species has the most ground near"), FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CmdGround));
 	static FAutoConsoleCommandWithWorldAndArgs GGotoCmd(TEXT("krbottom.goto"), TEXT("Keys Run reefbottom audit: put the diver over the nearest bottom of a reef-life zone (sand, seagrass, hardbottom, reeftop ...) [least depth] [greatest depth]"), FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CmdGoto));
 	static FAutoConsoleCommandWithWorldAndArgs GReefCmd(TEXT("krbottom.reef"), TEXT("Keys Run reefbottom audit: count what the reef plants near the diver or the camera"), FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CmdReef));
 	static FAutoConsoleCommandWithWorldAndArgs GLookCmd(TEXT("krbottom.look"), TEXT("Keys Run reefbottom audit: put the diver in front of the nearest coral of a kind"), FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CmdLook));
