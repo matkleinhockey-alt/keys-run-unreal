@@ -287,4 +287,9 @@ def cut(polys, built_json, to_game, x0, z0, fnx, fnz, fc, fine_h):
     report['near'] = near[::k, ::k].copy()
     report['out_lines'] = out_lines
     report['ways'] = ways
+    # ---- the canals a boat still cannot leave in the game, opened (canalways.py)
+    import canalways
+    canalways.open_shut(report, polys, land, fill, built_json, to_game, x0, z0, RES, WIDTH, DREDGE_W)
+    for note in report.get('opened', []):
+        print('  ' + note)
     return canal_f, fill_f, depth, report
