@@ -21,6 +21,7 @@ once).
 | `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | merged 2026-11-22 |
 | `birdview` | Mangrove wildlife visible from the boat: bird size and contrast, a closer camera at idle (brief written by the marshal) | `lane/birdview` | `../KeysRun-birdview` | running since 2026-11-23 (background agent) |
 | `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | running since 2026-11-23 (background agent) |
+| `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | running since 2026-11-23 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -42,6 +43,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `diving` | `Source/KeysRun/KeysDive.*`, `KeysDiver.*`, new `Source/KeysRun/KeysScuba*` |
 | `birdview` | `Source/KeysRun/KeysMangroveEco*`, `Source/KeysRun/KeysMangroveLife.*` (after `mangrovelife` merged) |
 | `canalways` | `Content/KeysRun/Geo/p2_canals.txt`, `p3_canals.txt`, `p4_canals.txt`, `Tools/geo/canals.py`, new `Tools/geo/canalways*` |
+| `reefdens` | `Source/KeysRun/KeysReef.*` (while the lane runs), new `Source/KeysRun/KeysReefDen*` |
 
 ## Marshal-only files
 
@@ -230,3 +232,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   worktree is left in place while its Terminal window is open.
 - 2026-11-23: `lane/birdview` created from `main` (this entry), run as a background agent.
 - 2026-11-23: `lane/canalways` created from `main` (this entry), run as a background agent beside `birdview`.
+- 2026-11-23: `lane/reefdens` created from `main` (this entry), run as a background agent beside `birdview` and `canalways`. The user: "create hidden holes then, even if i cant explore them". `birdview` was also given the user's two pelican pictures (white pelican added, brown rebuilt, mixed), and `canalways` the user's rules: ways lead to open water, no cuts through land, no new canals, realistic.
