@@ -488,12 +488,13 @@ namespace KeysMangroveEco
 	// if there is none at Dist that way, further out and round to either side. It says how far off she ends up.
 	static bool BoatSpot(const FVector2D& P, const FVector2D& Out, double Dist, FVector2D& B, double& H)
 	{
-		auto Ok = [](const FVector2D& Q0)
+		const double Room = FMath::Min(7.0, Dist * .55);   // (asked to lie close in, she is allowed less room to swing)
+		auto Ok = [Room](const FVector2D& Q0)
 		{
 			if (KeysGeo::DepthAt(Q0.X, Q0.Y) < 1.1 || KeysGeo::LandH(Q0.X, Q0.Y) > -.05) return false;
 			for (int32 k = 0; k < 6; k++)
 			{
-				const FVector2D Q = Q0 + FVector2D(FMath::Cos(k * PI / 3), FMath::Sin(k * PI / 3)) * 7;
+				const FVector2D Q = Q0 + FVector2D(FMath::Cos(k * PI / 3), FMath::Sin(k * PI / 3)) * Room;
 				if (KeysGeo::LandH(Q.X, Q.Y) > -.05 || KeysGeoReal::MangroveAt(Q.X, Q.Y)) return false;
 			}
 			return true;

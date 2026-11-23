@@ -31,13 +31,13 @@ namespace KeysMangroveEco
 		const FBirdSpec Specs[NumBirds] = {
 			// body leg  neck bill head  span speed flap pitch wade flush draw   body      belly     neck      head      bill      leg       wing      tip
 			{.42, .50, .48, .12, .045, 1.40, 9,   2.4, .55, .45, 30, 700, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xe8b030, 0x1c1c1c, 0xf4f4ee, 0xf0f0e8, 0, false},   // great egret
-			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x5a6a80, 0x6f7a8c, 0x8a8494, 0xe8e8e8, 0xd8a838, 0x5a5648, 0x5f6f84, 0x2c3440, 0, false},   // great blue heron
+			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x44566e, 0x5a6678, 0x7a7486, 0xe8e8e8, 0xd8a030, 0x4a4638, 0x485a70, 0x1c2430, 0, false},   // great blue heron
 			{.30, .32, .30, .08, .035, 1.00, 9,   3.0, .50, .30, 24, 450, 0x3c4a66, 0x3c4a66, 0x5a4660, 0x5a4660, 0x4a5a70, 0x4a5240, 0x3c4a66, 0x2c3850, 0, false},   // little blue heron
 			{.30, .30, .24, .16, .035, .95,  10,  3.6, .35, .22, 22, 500, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf2d8d0, 0xe04a30, 0xdc4a32, 0xf4f4ee, 0x181818, 1, true},    // white ibis
-			{.40, .40, .32, .17, .040, 1.25, 9.5, 3.0, .40, .32, 26, 600, 0xf2a0b4, 0xf4b4c4, 0xf6ecec, 0xe4e6d4, 0x9aa088, 0xc05060, 0xf08aa6, 0xe0607a, 2, true},    // roseate spoonbill
+			{.40, .40, .32, .17, .040, 1.25, 9.5, 3.0, .40, .32, 26, 600, 0xee7896, 0xf090aa, 0xf6e4e6, 0xdfe2cc, 0x8a9078, 0xc03c54, 0xe8608a, 0xd03862, 2, true},    // roseate spoonbill
 			{.42, .07, .28, .07, .040, 1.20, 12,  4.0, 1.0, 0,   20, 400, 0x1c1c1e, 0x242426, 0x1c1c1e, 0x1c1c1e, 0xd09030, 0x141414, 0x26262a, 0x141414, 0, true},    // cormorant
 			{.42, .06, .38, .09, .030, 1.15, 11,  3.5, .90, 0,   20, 400, 0x1a1a1c, 0x1a1a1c, 0x4a3a2a, 0x4a3a2a, 0xd8b040, 0x2a2a20, 0x2c2c30, 0xb8b8b0, 0, true},    // anhinga
-			{.16, .025, .03, .06, .046, .50, 11,  7.0, .90, 0,   14, 200, 0x35639a, 0xf0f0ee, 0xf0f0ee, 0x2c5488, 0x181c20, 0x3a3a3a, 0x2c5488, 0x1c2c44, 0, true},    // belted kingfisher
+			{.16, .025, .03, .06, .046, .50, 11,  7.0, .90, 0,   14, 200, 0x1f4f92, 0xf0f0ee, 0xf0f0ee, 0x1a4484, 0x181c20, 0x3a3a3a, 0x1a4484, 0x12223c, 0, true},    // belted kingfisher
 			{.22, .14, .14, .07, .035, .65,  9,   4.0, .25, .12, 12, 250, 0x3a5a4a, 0x7a4a3a, 0x7a3a2a, 0x24382e, 0x2a2a2a, 0xd8b838, 0x3a5a4a, 0x24382e, 0, false},   // green heron
 			{.30, .22, .14, .08, .050, 1.10, 9,   2.8, .60, .20, 16, 350, 0x27303c, 0xc4cad2, 0xc4cad2, 0x0e1216, 0x1a1a1c, 0xe0c440, 0x66707e, 0x30363e, 0, false},   // night heron
 			{.20, .03, .03, .06, .035, .80,  10,  3.5, .15, 0,   0,  400, 0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0x1a1a1c, 0xf08020, 0x202020, 0xc8ccd0, 0x8a9098, 0, true},    // tern
@@ -101,7 +101,8 @@ namespace KeysMangroveEco
 				}
 				if (!bEdge || Rim <= 0) return;
 				// its dark edge: the same limb a little thicker, behind it, so only its rim shows round it
-				const double E0 = bIs ? R0 + Rim : 0, E1 = bIs ? R1 + Rim : 0;
+				// (no wider than the limb is thick: a neck in a fat black line is a black neck)
+				const double E0 = bIs ? R0 + FMath::Min(Rim, R0 * 1.2 + .004) : 0, E1 = bIs ? R1 + FMath::Min(Rim, R1 * 1.2 + .004) : 0;
 				const FVector Q0 = P0 + Back, Q1 = P1 + Back;
 				for (int32 k = 0; k < 3; k++)
 				{
@@ -840,7 +841,7 @@ namespace KeysMangroveEco
 			if (B.State == BSwim && B.P.Y < E.Sea - .4) continue;
 			// (past 70 m a bird is drawn in half the pieces; its dark edge is two or three pixels wide through the
 			// closer look's lens at whatever distance it stands)
-			Emit(Buf, B, D2 > 70.0 * 70.0, Before() ? 0 : FMath::Clamp(FMath::Sqrt(D2) * (B.Rook >= 0 ? .0008 : .0016), .015, .22), (B.P - E.Cam).GetSafeNormal());   // (on a rookery's green crowns they need less of it)
+			Emit(Buf, B, D2 > 70.0 * 70.0, Before() ? 0 : FMath::Clamp(FMath::Sqrt(D2) * (B.Rook >= 0 ? .0007 : .0013), .015, .2), (B.P - E.Cam).GetSafeNormal());   // (on a rookery's green crowns they need less of it)
 			if (bStillPass) E.StillN++; else E.BirdsMoved++;
 		}
 	}

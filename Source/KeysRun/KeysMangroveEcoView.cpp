@@ -9,6 +9,8 @@
 #include "KeysGeoReal.h"
 #include "KeysBoatPawn.h"
 #include "KeysTrim.h"
+#include "KeysDocks.h"
+#include "KeysData.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/Engine.h"
@@ -23,8 +25,8 @@ namespace KeysMangroveEco
 		{
 			double K = 0;                 // 0 the plain chase view .. 1 right in
 			bool bOn = false, bHeld = false, bOff = false, bHave = false, bHaveLast = false, bBehind = false;
-			double SlowT = 0, PickT = 0, UserT = 1e9, QuietT = 0, A = 0, Sign = 1, Score = 0, Across = 30, Fov = 88, OnT = 0;
-			double LastYaw = 0, LastPitch = 0, LastZoom = 1;
+			double SlowT = 0, PickT = 0, UserT = 1e9, QuietT = 0, Aw = 0, SideDist = 12, A = 0, Sign = 1, Score = 0, Across = 30, Fov = 88, OnT = 0;
+			double LastYaw = 0, LastPitch = 0, LastZoom = 1, LastSp = 0;
 			uint64 Frame = 0;
 			FVector Tgt = FVector::ZeroVector, Look = FVector::ZeroVector;
 			FString What, Want;   // Want (a test's): the kind the look is told to prefer
@@ -68,7 +70,7 @@ namespace KeysMangroveEco
 			{
 				const FVector2D P2(P.X, P.Z);
 				const double D = FVector2D::Distance(P2, Boat);
-				if (D > 95 || D < 3) return;
+				if (D > (Kind == Osprey ? 160 : 95) || D < 3) return;
 				// (what stands on the boat's side of its trees counts for more than what is behind them)
 				const bool bSeen = FVector2D::DotProduct(Out, Boat - P2) > 0;
 				// (the near ones count for much more: a kingfisher 25 m off is worth more than a heron at 60)
@@ -79,7 +81,9 @@ namespace KeysMangroveEco
 				if (FMath::Abs(T.Value->C.X - Boat.X) > 400 || FMath::Abs(T.Value->C.Y - Boat.Y) > 400) continue;
 				for (const FBird& B : T.Value->Birds)
 				{
-					if (B.Rook >= 0 || B.State == BAway || B.State == BFly || B.State == BPatrol || B.State == BHover || B.State == BDive) continue;
+					// (not the ones on the wing: the eye is not dragged about after them. A test may ask for a tern or an osprey.)
+					const bool bAir = B.State == BFly || B.State == BPatrol || B.State == BHover || B.State == BDive;
+					if (B.Rook >= 0 || B.State == BAway || (bAir && (L.Want.IsEmpty() || !FString(KindName(B.Kind)).Contains(L.Want)))) continue;
 					Add(B.P + FVector(0, .5, 0), B.Kind == Kingfisher || B.Kind == GreenHeron || B.Kind == NightHeron ? .8 : 1, B.Kind, B.Out);
 				}
 				for (const FSchoolE& S : T.Value->Schools) if (S.bAwake) Add(FVector(S.C.X, E.Sea, S.C.Y), .35, S.Kind, S.Out);
@@ -89,11 +93,13 @@ namespace KeysMangroveEco
 			}
 			for (int32 i = 0; i < C.Num(); i++)
 			{
-				if (C[i].Kind >= NumBirds && C[i].Kind < TreeCrab) continue;   // (a knot is gathered round a bird or crabs: fish alone do not hold the eye)
+				// (a knot is gathered round a bird or crabs: fish alone do not hold the eye, unless a test asks for them)
+				const bool bAsked = !L.Want.IsEmpty() && FString(KindName(C[i].Kind)).Contains(L.Want);
+				if (C[i].Kind >= NumBirds && C[i].Kind < TreeCrab && !bAsked) continue;
 				double Sc = 0, Wsum = 0;
 				FVector Mid = FVector::ZeroVector;
 				for (const FCand& O : C)
-					if (FVector::DistSquared2D(FVector(O.P.X, O.P.Z, 0), FVector(C[i].P.X, C[i].P.Z, 0)) < 13.0 * 13.0) { Sc += O.W; if (O.Kind < NumBirds || O.Kind >= TreeCrab) { Mid += O.P * O.W; Wsum += O.W; } }
+					if (FVector::DistSquared2D(FVector(O.P.X, O.P.Z, 0), FVector(C[i].P.X, C[i].P.Z, 0)) < 13.0 * 13.0) { Sc += O.W; if (O.Kind < NumBirds || O.Kind >= TreeCrab || (bAsked && O.Kind == C[i].Kind)) { Mid += O.P * O.W; Wsum += O.W; } }
 				if (L.Rook < 0 && L.bOn && FVector::Dist2D(FVector(C[i].P.X, C[i].P.Z, 0), FVector(L.Tgt.X, L.Tgt.Z, 0)) < 8) Sc *= 1.6;   // (it stays on what it has)
 				if (Sc > Best && Wsum > 0) { Best = Sc; BestP = Mid / Wsum; BestRook = -1; BestAcross = 26; BestWhat = KindName(C[i].Kind); }
 			}
@@ -102,7 +108,46 @@ namespace KeysMangroveEco
 			L.Score = Best; L.Tgt = BestP; L.Rook = BestRook; L.Across = BestAcross; L.What = BestWhat;
 		}
 
-		bool Dry(double X, double Z) { return KeysGeo::LandH(X, Z) > -.05 || KeysGeoReal::MangroveAt(X, Z) > 0; }
+		bool Dry(double X, double Z) { return KeysGeo::LandH(X, Z) > -.05 || KeysGeoReal::MangroveAt(X, Z) > 0 || KeysDocks::InFootprint(X, Z, 1.5); }
+
+		// Where the lens stands for what it is on: the far side of the boat from them and round one shoulder, so that
+		// her middle is just outside the frame and the line of sight passes clear of her whole hull (a 43-footer lying
+		// broadside is 13 m of boat 15 m from the lens); over open water, never among trees, on ground or on a dock.
+		// With no such place (a creek, a pond) it stays astern and above, as it was.
+		void Place(FLookIn& L, const AActor* Ctx, double X, double Z, double H, double Base, double BaseDist)
+		{
+			double HalfL = 3.5, HalfB = 1.3;
+			if (const AKeysBoatPawn* Pw = Ctx ? Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(Ctx, 0)) : nullptr) { HalfL = Pw->Spec().Len * .5; HalfB = Pw->Spec().Beam * .5; }
+			const FVector2D Boat(X, Z), T2(L.Tgt.X, L.Tgt.Z), Fwd(-FMath::Sin(H), -FMath::Cos(H));
+			const double D = FMath::Max(4.0, FVector2D::Distance(T2, Boat));
+			const FVector2D ToT = (T2 - Boat) / D;
+			L.SideDist = FMath::Clamp(BaseDist * .5, 9.0, 16.0);
+			// the lens: closes up on what is far, and takes in the whole of a key
+			const double Fit = FMath::RadiansToDegrees(2 * FMath::Atan(L.Across * .5 / (D + L.SideDist * .8)));
+			const double Fov = FMath::Clamp(L.Rook >= 0 ? Fit : FMath::Lerp(46.0, 40.0, FMath::Clamp((D - 25) / 55, 0.0, 1.0)), 34.0, 56.0);
+			const double Off = FMath::Clamp((FMath::DegreesToRadians(Fov * .5) + .04) * (L.SideDist + D) / D, .3, 1.15), Opp = FMath::Atan2(-ToT.X, -ToT.Y);
+			auto Clear = [&](double Aw)
+			{
+				const FVector2D C(X + FMath::Sin(Aw) * L.SideDist, Z + FMath::Cos(Aw) * L.SideDist), M = FMath::Lerp(Boat, C, .6);
+				if (Dry(C.X, C.Y) || Dry(M.X, M.Y)) return false;
+				for (int32 k = -3; k <= 3; k++)
+				{
+					const FVector2D Hp = Boat + Fwd * (HalfL * k / 3.0);
+					if (FMath::PointDistToSegment(FVector(Hp.X, Hp.Y, 0), FVector(C.X, C.Y, 0), FVector(T2.X, T2.Y, 0)) < HalfB + .9) return false;
+				}
+				return true;
+			};
+			L.bBehind = true;
+			for (int32 k = 0; k < 12 && L.bBehind; k++)
+			{
+				const double Sg = k % 2 ? -L.Sign : L.Sign, Aw = Opp + Sg * FMath::Min(Off + (k / 2) * .2, 1.5);
+				if (!Clear(Aw)) continue;
+				L.bBehind = false; L.Aw = Aw; L.Sign = Sg;
+			}
+			L.Fov = Fov + (L.bBehind ? 8 : 0);
+			L.Look = L.bBehind ? FVector(X + ToT.X * D * .7, FMath::Lerp(1.8, L.Tgt.Y, .7), Z + ToT.Y * D * .7) : L.Tgt;
+			(void)Base;
+		}
 	}
 
 	FCloser CloserLook(double X, double Z, double H, double Speed, bool bBusy, double CamYaw, double CamPitchOff, double CamZoom, double BaseDist, double BaseHt, double Dt)
@@ -118,16 +163,17 @@ namespace KeysMangroveEco
 		const double Sp = FMath::Abs(Speed), Base = H + CamYaw;
 		const FVector2D Boat(X, Z);
 		// ---- the player's own hand on the camera (a drag, the wheel, C; cam= in a script): it is his until she has
-		// been under way again. (Above 5 m/s the pawn itself swings the camera back astern: that is not his hand.)
+		// been under way again. (Above 5 m/s the pawn itself swings the camera back astern, after this is asked: that is
+		// not his hand, nor is the change seen on the first frame she is below 5 m/s again.)
 		// (nor is a change while a menu is up, a fish is on or the run is starting: those set the camera themselves)
 		L.UserT += Dt;
 		L.QuietT = bBusy ? 0 : L.QuietT + Dt;
-		if (L.bHaveLast && L.QuietT > .6 && Sp <= 5 && (FMath::Abs(CamYaw - L.LastYaw) > 1e-9 || FMath::Abs(CamPitchOff - L.LastPitch) > 1e-9 || FMath::Abs(CamZoom - L.LastZoom) > 1e-9))
+		if (L.bHaveLast && L.QuietT > .6 && Sp <= 5 && L.LastSp <= 5 && (FMath::Abs(CamYaw - L.LastYaw) > 1e-9 || FMath::Abs(CamPitchOff - L.LastPitch) > 1e-9 || FMath::Abs(CamZoom - L.LastZoom) > 1e-9))
 		{
 			L.UserT = 0;
 			if (!L.bHeld && (L.bOn || L.K > 0 || Sp < ReleaseMs)) { L.bHeld = true; if (L.bOn || L.K > .01) UE_LOG(LogTemp, Log, TEXT("KREco closer look: the player moved the camera (yaw %.2f, pitch %.2f, zoom %.2f): it is his until she has been under way again"), CamYaw, CamPitchOff, CamZoom); }
 		}
-		L.LastYaw = CamYaw; L.LastPitch = CamPitchOff; L.LastZoom = CamZoom; L.bHaveLast = true;
+		L.LastYaw = CamYaw; L.LastPitch = CamPitchOff; L.LastZoom = CamZoom; L.LastSp = Sp; L.bHaveLast = true;
 		if (L.bHeld && Sp > ReleaseMs && L.UserT > 3) L.bHeld = false;
 		L.SlowT = Sp < EngageMs ? L.SlowT + Dt : 0;
 		// ---- what there is to look at, asked about twice a second while she is slow
@@ -136,7 +182,7 @@ namespace KeysMangroveEco
 		{
 			L.PickT -= Dt;
 			if (E->Showers.Num() && E->Showers.Last().Id != L.Shower) { L.Shower = E->Showers.Last().Id; L.PickT = 0; }
-			if (L.PickT <= 0) { L.PickT = L.bOn ? .8 : .4; Pick(*E, Boat, L); }
+			if (L.PickT <= 0) { L.PickT = L.bOn ? .8 : .4; Pick(*E, Boat, L); if (L.bHave) Place(L, Act, X, Z, H, Base, BaseDist); }
 		}
 		const bool bWant = bCan && L.bHave && (L.bOn ? Sp < ReleaseMs : L.SlowT > 1.2);
 		if (bWant != L.bOn)
@@ -150,6 +196,7 @@ namespace KeysMangroveEco
 				const FVector2D ToT = (FVector2D(L.Tgt.X, L.Tgt.Z) - Boat).GetSafeNormal();
 				const double Opp = FMath::Atan2(-ToT.X, -ToT.Y);
 				L.Sign = WrapPi(Base - Opp) >= 0 ? 1 : -1;
+				Place(L, Act, X, Z, H, Base, BaseDist);
 				UE_LOG(LogTemp, Log, TEXT("KREco closer look: engaged at %.0f, %.0f, the boat making %.1f kn: on %s %.0f m off"), X, Z, Sp * 1.944, *L.What, FVector2D::Distance(FVector2D(L.Tgt.X, L.Tgt.Z), Boat));
 			}
 			else
@@ -163,39 +210,9 @@ namespace KeysMangroveEco
 		L.K = FMath::FInterpConstantTo(L.K, L.bOn ? 1.0 : 0.0, Dt, L.bOn ? .55 : 1.4);
 		if (L.K <= 0) { L.Fov = 88; return Out; }   // (the plain chase view, untouched)
 		const double Ks = L.K * L.K * (3 - 2 * L.K);
-		// ---- where the lens goes: the far side of the boat from them, a little round one shoulder so the hull is in the
-		// corner of the frame and not across them; in close and low
-		const FVector2D T2(L.Tgt.X, L.Tgt.Z);
-		const double D = FMath::Max(4.0, FVector2D::Distance(T2, Boat));
-		const FVector2D ToT = (T2 - Boat) / D;
-		// (with no room beside her - a creek, a pond - it stays astern and above, where it was, and only draws in a little)
-		const double SideDist = FMath::Clamp(BaseDist * .5, 9.0, 16.0);
-		const double WantDist = L.bBehind ? BaseDist * .7 : SideDist, WantHt = L.bBehind ? BaseHt * .85 : FMath::Clamp(BaseHt * .4, 2.4, 3.6);
-		if (L.bOn)
-		{
-			// the lens: closes up on what is far, and takes in the whole of a key
-			const double Dl = D + WantDist * .8;
-			const double Fit = FMath::RadiansToDegrees(2 * FMath::Atan(L.Across * .5 / Dl));
-			L.Fov = FMath::Clamp(L.Rook >= 0 ? Fit : FMath::Lerp(46.0, 40.0, FMath::Clamp((D - 25) / 55, 0.0, 1.0)), 34.0, 56.0) + (L.bBehind ? 8 : 0);
-		}
-		// (her middle sits just outside the edge of the frame, so only her near end is in its corner)
-		const double Off = FMath::Clamp((FMath::DegreesToRadians(L.Fov * .5) + .04) * (SideDist + D) / D, .3, 1.15);
-		const double Opp = FMath::Atan2(-ToT.X, -ToT.Y);
-		if (L.bOn)
-		{
-			double Aw = Opp + L.Sign * Off;
-			bool bOk = !Dry(X + FMath::Sin(Aw) * SideDist, Z + FMath::Cos(Aw) * SideDist) && !Dry(X + FMath::Sin(Aw) * SideDist * .6, Z + FMath::Cos(Aw) * SideDist * .6);
-			if (!bOk)
-			{
-				// (trees or ground where the lens would stand: the other shoulder; failing that it stays astern, as it was)
-				const double Ao = Opp - L.Sign * Off;
-				if (!Dry(X + FMath::Sin(Ao) * SideDist, Z + FMath::Cos(Ao) * SideDist) && !Dry(X + FMath::Sin(Ao) * SideDist * .6, Z + FMath::Cos(Ao) * SideDist * .6)) { Aw = Ao; L.Sign = -L.Sign; bOk = true; }
-			}
-			L.bBehind = !bOk;
-			if (!bOk) Aw = Base;
-			L.A += WrapPi(Aw - L.A) * FMath::Min(1.0, Dt * 1.6);
-			L.Look = L.bBehind ? FVector(X + ToT.X * D * .7, FMath::Lerp(1.8, L.Tgt.Y, .7), Z + ToT.Y * D * .7) : L.Tgt;
-		}
+		// ---- the lens eases to where it was last placed (Place: asked again with each look round)
+		if (L.bOn) L.A += WrapPi((L.bBehind ? Base : L.Aw) - L.A) * FMath::Min(1.0, Dt * 1.6);
+		const double WantDist = L.bBehind ? BaseDist * .7 : L.SideDist, WantHt = L.bBehind ? BaseHt * .85 : FMath::Clamp(BaseHt * .4, 2.4, 3.6);
 		Out.K = Ks;
 		Out.Dist = FMath::Lerp(1.0, WantDist / FMath::Max(1.0, BaseDist), Ks);
 		Out.Ht = FMath::Lerp(1.0, WantHt / FMath::Max(.5, BaseHt), Ks);
