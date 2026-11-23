@@ -373,7 +373,7 @@ namespace KeysMangroveEco
 			// a line of brown pelicans gliding low along the edge (more than one at a spot: they are on the wing)
 			if (!S.bRoof && !S.Bank && SHash(S, 25) < .004) Add(Pelican, S, FVector(At(14).X, 2.5, At(14).Y), O, 3 + int32(SHash(S, 54) * 3), 25);
 			// a flock of white pelicans, the winter birds of Florida Bay, loafing and fishing on a bay-side flat
-			if (!S.Bank && SHash(S, 26) < .003 && DZAt(S.X, S.Z) < 0)
+			if (!S.Bank && SHash(S, 26) < .0018 && DZAt(S.X, S.Z) < 0)
 				for (double D = 5; D < 40; D += 2.5)
 				{
 					const FVector2D Q = At(D);

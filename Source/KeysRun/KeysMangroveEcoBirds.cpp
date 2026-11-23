@@ -187,7 +187,7 @@ namespace KeysMangroveEco
 			const bool bStoop = bAir && B.Pitch < -.75;
 			const double Pitch = bAir ? B.Pitch : bSwim ? .06 : .78;   // at rest it sits upright and hunched
 			const FVector A = F * FMath::Cos(Pitch) + Up * FMath::Sin(Pitch), Top = Up * FMath::Cos(Pitch) - F * FMath::Sin(Pitch);
-			const double BodyL = K.Body * S, BodyR = BodyL * .36, LegL = K.Leg * S;
+			const double BodyL = K.Body * S, BodyR = BodyL * .3, LegL = K.Leg * S;
 			const FVector Hip = bAir ? B.P : bSwim ? B.P - Up * BodyR * .45 : B.P + Up * (LegL + BodyL * .34);
 			const FVector Body = Hip + A * BodyL * .12;
 			const FLinearColor BackC = Hex(K.BackC), BellyC = Hex(K.BellyC), NeckC = Hex(K.NeckC), BillC = Hex(K.BillC), TipC = Hex(K.TipC), PouchC = Hex(K.PouchC), CovC = Hex(K.CovertC), FlC = Hex(K.FlightC), LegC = Hex(K.LegC);
