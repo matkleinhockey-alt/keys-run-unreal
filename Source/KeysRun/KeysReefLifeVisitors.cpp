@@ -269,12 +269,11 @@ namespace KeysReefLifeVisitors
 		static FVector ShellP(const FTurtle& T, double U, double V)
 		{
 			const double R = FMath::Min(1.0, Rho(U, V));
-			return FVector(T.Cx + U * T.CL * .5, V * T.HW * (1 + T.Heart * U), T.H * FMath::Pow(FMath::Max(0.0, 1 - FMath::Pow(R, 2.3)), .62));
+			return FVector(T.Cx + U * T.CL * .5, V * T.HW * (1 + T.Heart * U), T.H * FMath::Pow(FMath::Max(0.0, 1 - FMath::Pow(R, 2.2)), .95));
 		}
 		static FVector ShellN(const FTurtle& T, double U, double V)
 		{
-			const double E = .01, K = FMath::Min(1.0, .985 / FMath::Max(1e-6, Rho(U, V)));
-			U *= K; V *= K;   // (the very rim is vertical: take the slope a hair inside it)
+			const double E = .01;
 			FVector N = FVector::CrossProduct(ShellP(T, U + E, V) - ShellP(T, U - E, V), ShellP(T, U, V + E) - ShellP(T, U, V - E)).GetSafeNormal();
 			if (N.IsNearlyZero()) N = FVector(0, 0, 1);
 			return N.Z < 0 ? -N : N;
@@ -310,7 +309,7 @@ namespace KeysReefLifeVisitors
 			for (int32 k = 0; k < N; k++)
 			{
 				const double Lt = (Lod == 0 && (k & 1)) ? .5 * T.StreakAmt : 0;
-				M.AddVert(ShellP(T, Rim[k].X, Rim[k].Y), ShellN(T, Rim[k].X, Rim[k].Y), Blend(Blend(T.Shell, T.Seam, .62), T.Streak, Lt) * float(Sh));
+				M.AddVert(ShellP(T, Rim[k].X, Rim[k].Y), ShellN(T, Rim[k].X, Rim[k].Y), Blend(Blend(T.Shell, T.Seam, .85), T.Streak, Lt) * float(Sh));
 			}
 			if (Mid >= 0)
 			{
@@ -386,7 +385,7 @@ namespace KeysReefLifeVisitors
 			for (int32 Ring = 0; Ring < 2; Ring++)
 				for (int32 k = 0; k < N; k++)
 				{
-					const double A = (k + .5) * 2 * PI / N, Cs = FMath::Cos(A), Sn = FMath::Sin(A), R = Ring ? .8 : 1.0;
+					const double A = (k + .5) * 2 * PI / N, Cs = FMath::Cos(A), Sn = FMath::Sin(A), R = Ring ? .7 : 1.0;
 					const double U = R * Sgn(Cs) * FMath::Pow(FMath::Abs(Cs), 2 / SN), V = R * Sgn(Sn) * FMath::Pow(FMath::Abs(Sn), 2 / SN);
 					FVector P = ShellP(T, U, V);
 					P.Z = Ring ? -T.Hp : 0;
@@ -399,7 +398,7 @@ namespace KeysReefLifeVisitors
 		static void Head(FKeysMesh& M, const FTurtle& T, int32 Lod)
 		{
 			M.Surf = SurfSkin;
-			const int32 NS = Lod == 0 ? 8 : Lod == 1 ? 5 : 3, NA = Lod == 0 ? 10 : Lod == 1 ? 6 : 4;
+			const int32 NS = Lod == 0 ? 7 : Lod == 1 ? 5 : 3, NA = Lod == 0 ? 10 : Lod == 1 ? 6 : 4;
 			const FVector Ctr(.5 - T.HeadL, 0, .012);
 			const double Pw = FMath::Lerp(1.0, .55, T.Block);   // < 1: the section squarer, the head blockier
 			// ---- the neck, from under the front of the shell to the back of the head
@@ -539,10 +538,10 @@ namespace KeysReefLifeVisitors
 		static const FTurtle T = []
 		{
 			FTurtle G;
-			G.CL = .70; G.Cx = -.03; G.HW = .275; G.Heart = .06; G.H = .155; G.Hp = .07; G.Costals = 4;
+			G.CL = .70; G.Cx = -.03; G.HW = .275; G.Heart = .06; G.H = .15; G.Hp = .05; G.Costals = 4;
 			G.HeadL = .075; G.HeadW = .047; G.HeadH = .046; G.Block = 0; G.NeckL = .03;
 			G.FlipL = .43; G.FlipC = .06; G.StreakAmt = 1;
-			G.Shell = Hex(0x6a5836); G.Streak = Hex(0xb0965a); G.Seam = Hex(0x2a2318); G.Margin = Hex(0x8c7a4c);
+			G.Shell = Hex(0x54452a); G.Streak = Hex(0xb89a52); G.Seam = Hex(0x1c170f); G.Margin = Hex(0x7c6a40);
 			G.Skin = Hex(0x4a3c28); G.SkinEdge = Hex(0xd9cc9a); G.Under = Hex(0xe8dfb0); G.Beak = Hex(0x8a7a54);
 			return G;
 		}();
@@ -553,11 +552,11 @@ namespace KeysReefLifeVisitors
 		static const FTurtle T = []
 		{
 			FTurtle G;
-			G.CL = .66; G.Cx = -.045; G.HW = .262; G.Heart = .16; G.H = .15; G.Hp = .075; G.Costals = 5;
+			G.CL = .66; G.Cx = -.045; G.HW = .262; G.Heart = .16; G.H = .15; G.Hp = .055; G.Costals = 5;
 			G.HeadL = .1; G.HeadW = .076; G.HeadH = .066; G.Block = 1; G.NeckL = .015;
 			G.FlipL = .36; G.FlipC = .064; G.StreakAmt = .45;
-			G.Shell = Hex(0x8c4a26); G.Streak = Hex(0xb8743c); G.Seam = Hex(0x4c2614); G.Margin = Hex(0xc09048);
-			G.Skin = Hex(0x945a2c); G.SkinEdge = Hex(0xe0b860); G.Under = Hex(0xe2c880); G.Beak = Hex(0xc8a258);
+			G.Shell = Hex(0x7c3818); G.Streak = Hex(0xb0602c); G.Seam = Hex(0x3a1a0c); G.Margin = Hex(0xb07a38);
+			G.Skin = Hex(0x8a4a22); G.SkinEdge = Hex(0xdcae56); G.Under = Hex(0xe2c880); G.Beak = Hex(0xc8a258);
 			return G;
 		}();
 		return T;
@@ -586,7 +585,7 @@ namespace KeysReefLifeVisitors
 		S.Scientific = TEXT("Hypanus americanus");
 		S.Role = ERole::Sitter;
 		FBody B;
-		B.HalfH = .03; B.HalfW = Ray::W; B.Peak = .3; B.TailLen = .5; B.TailH = .01; B.DorH = 0; B.AnH = 0; B.PecLen = 0; B.PelLen = 0; B.EyeR = 0;
+		B.HalfH = .05; B.HalfW = Ray::W; B.Peak = .3; B.TailLen = .5; B.TailH = .01; B.DorH = 0; B.AnH = 0; B.PecLen = 0; B.PelLen = 0; B.EyeR = 0;
 		// the whole animal is 1 long and its disc 0.49 wide: disc width 0.8 to 1.5 m in females, 0.45 to 0.7 m in males
 		S.Phases = {FPhase{TEXT("female"), .8 / (2 * Ray::W), 1.5 / (2 * Ray::W), B}, FPhase{TEXT("male"), .45 / (2 * Ray::W), .7 / (2 * Ray::W), B}};
 		S.Paint = [](int32 Phase, const FPaint& At) { return PlainPaint(Hex(0x6a6150), Hex(0xf0ece2), At); };
@@ -598,7 +597,7 @@ namespace KeysReefLifeVisitors
 		S.Zones = ZSand | ZFore | ZGrass;
 		S.Habit = EHabit::Both;
 		S.GroupsPerHa = 2.2; S.MaxAlive = 5; S.Weight = 3;
-		S.Shy = 3.6;                       // a slow diver sets it off at about 2 m
+		S.Shy = 1.6;                       // it trusts the sand: a diver drifting in sets it off at about 1 m, one finning past at 1.5 m, one finning straight at it at 4 to 5 m
 		S.Cruise = .5; S.Burst = 3.2; S.Roam = 12; S.Alt[0] = .05; S.Alt[1] = .1; S.Spacing = 2; S.Cull = 60;
 		S.bRows = true;                    // its wings are its limbs; the tail only trails
 		S.BiteEvery = 400;                 // (a Sitter's BiteEvery is how often it shifts to a new place)
