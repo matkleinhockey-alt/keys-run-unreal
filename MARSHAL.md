@@ -18,7 +18,7 @@ once).
 | `lowerkeys` | Map Phase 3 (Lower Keys, then Key Largo; brief written by the marshal) | `lane/lowerkeys` | removed (branch kept) | merged 2026-11-22 |
 | `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | running since 2026-11-22, in the user's "ecosystem" Terminal window |
 | `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | merged 2026-11-22 |
-| `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | running since 2026-11-22 (background agent) |
+| `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | merged 2026-11-22 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -195,3 +195,18 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   "Hawk Channel"). Open from the lane: R6 the real Largo Sound is land in p4 (bake takes enclosed water for land;
   the teleport spot is the ocean shelf), Blackwater Sound cut off; R7 reef names for p1 and p2 and reef crests
   playing as Flats; R8 46 of 195 canals have no 1 m way out to sea (4 in the Upper Keys).
+- 2026-11-22: `diving` merged at the user's word (lane at 43200e4, READY FOR MERGE) with R1-R4: the scuba set worn,
+  scuba rules (3,000 psi; about 65 min resting at the surface, 16 at 30 m), regulator bubbles and sound (played
+  from the diver through `AKeysAudio::Burst`), gauge console, dive light, logbook, cockpit rack and diver-down flag
+  (the diver's own components on the boat's `Boat` mesh: they break if that component is renamed), shop rows at
+  Scuba Steve's, the cylinder gauge on the HUD, and the speargun rebuilt on the user's picture
+  (`KeysScubaSpeargun.*`). Test commands: `own=`, `disown=`, `scubashop=`, `scubamode`; keys G gauge, T light,
+  X swap, 2 scuba or breath. Marshal's runs: real map, two scuba dives (61 and 15 psi used, second from 2,939),
+  a goliath speared on scuba and on a breath, `tpcheck` 48, 0 bad, dock audit 545; classic map, a scuba dive,
+  `tpcheck` 19, 0 bad (the one shot there did not land: nearest fish 11.4 m). Frame times at the reef, Medium:
+  scuba game 17.8 / 17.6, draw 15.5 / 16.1, GPU 25.8 / 23.9; free game 17.2 / 16.6, draw 15.4 / 15.2, GPU 25.5 /
+  26.1: about 3% more game time on scuba, inside the noise of a shared machine. The lane's unexplained 90-120 ms
+  frame turned up in a free dive here too (147.5 ms worst in one free sample), so it is not the scuba set's. Open:
+  R5 (optional flag on `SetUnderwater`), R6 (perf on a quiet machine or packaged), lobster and chart markers with
+  mooring balls not done, the sound never heard, buying on foot and the keys as pressed not tried, a free-diver's
+  save gains three logbook keys in `Counts`.
