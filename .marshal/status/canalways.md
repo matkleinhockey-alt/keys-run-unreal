@@ -1,7 +1,7 @@
 # canalways
 
 Status: READY FOR MERGE
-Updated: 2026-11-23 12:50 EST
+Updated: 2026-11-23 13:05 EST
 Branch: lane/canalways (this file in the last commit)
 
 Evidence is outside the repo in `KeysRun-devkit/lanes/KeysRun-canalways/` (`shots/<tag>/KRScript_NN.png`,
@@ -52,8 +52,8 @@ The user's words, as the marshal passed them on:
 
 - [x] 1. The list - table below. `log_base.log`: "KRCanal 195 canals, 46 with no 1.0 m water out to the open sea"
   (44 `KRCanal shut` lines: two canals share a network with one already listed). The tool's own model of the
-  hull's water finds the same 46. Why each was shut: 20 are ponds on the grid, 9 have a pinched mouth, 14 have a
-  flat outside that plays too shallow, 3 are joined to one of those. None is cut off by a road or bridge and none
+  hull's water finds the same 46. Why each was shut: 17 are ponds on the grid, 9 have a pinched mouth, 15 have a
+  flat outside that plays too shallow, 5 are joined to one of those. None is cut off by a road or bridge and none
   turned out not to be a canal: every one has water to the sea in the real coastline.
 - [x] 2. Every canal has a way out - `log_lane_only2.log` (lane alone) and `log_after3.log` (with R1): "KRCanal
   195 canals, 0 with no 1.0 m water out to the open sea". None left shut. Top-down shots of ten ways:
