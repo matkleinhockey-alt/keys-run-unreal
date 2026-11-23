@@ -16,6 +16,7 @@
 #include "KeysAudio.h"
 #include "KeysLife.h"
 #include "KeysSchools.h"
+#include "KeysReefLife.h"
 #include "KeysOnline.h"
 #include "KeysGeo.h"
 #include "KeysSeafloor.h"
@@ -72,6 +73,7 @@ void AKeysGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	SpawnOnce<AKeysLandmarks>(W);
 	SpawnOnce<AKeysLife>(W);
 	SpawnOnce<AKeysSchools>(W);
+	SpawnOnce<AKeysReefLife>(W);   // reef life: the animals of the reef that are neither boid schools nor spear targets (KeysReefLife.h)
 	SpawnOnce<AKeysTraffic>(W);
 	SpawnOnce<AKeysOnline>(W);
 	SpawnOnce<AKeysEvents>(W);

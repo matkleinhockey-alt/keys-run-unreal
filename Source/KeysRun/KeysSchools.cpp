@@ -33,7 +33,7 @@ namespace
 	constexpr int32 MaxSchools = 72, MaxFish = 5200;
 	// Bait may take this much of the fish budget and no more. A bait ball is 150 to 500 fish, so without a share of its
 	// own twenty of them used the whole budget and nothing else - no snapper, no grunts, no jacks - got a fish.
-	constexpr int32 MaxBaitFish = 3200;
+	constexpr int32 MaxBaitFish = 3020;   // (3200 less the 180 reef-life individuals its first two species may hold: KeysReefLife)
 	// The bubble (Populate) only brings back a school that swam out of it by itself: with the camera moving faster than
 	// this (m/s) the school has simply been left behind, and is let go.
 	constexpr double WrapMaxCamSpeed = 5;
@@ -55,9 +55,9 @@ namespace
 		// key              role           len         n          subs    cruise burst accel spacing diverR  dmin dmax  alt          roam  pred
 		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
 		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
-		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  14, 30,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
-		{TEXT("grunt"),      ERole::Reef,   .22, .3,   16, 36,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
-		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  10, 24,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
+		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  11, 24,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
+		{TEXT("grunt"),      ERole::Reef,   .22, .3,   12, 28,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
+		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  8, 19,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
 		{TEXT("yellowtail"), ERole::Reef,   .34, .42,  8, 18,     1, 2,  .55, 3.0, 2.0, 2.0, 4,    3,   40, 1.4, 4,    10, false},
 		{TEXT("grouper"),    ERole::Hole,   .8, 1.1,   1, 1,      0, 0,  .08, 1.6, 1.0, 1,   2.5,  3,   40, .25, .6,   3, false},
 		{TEXT("redgrouper"), ERole::Hole,   .55, .75,  1, 1,      0, 0,  .08, 1.6, 1.0, 1,   2.5,  3,   40, .2, .5,    3, false},
@@ -140,7 +140,7 @@ namespace
 	// a named reef's own: what, how many times the usual size, and how far up from its spot
 	struct FReefRow { int32 Sp; double NScale, Lift; };
 	const FReefRow ReefRows[] = {
-		{Grunt, 1.6, 0}, {Grunt, 1.4, 0}, {Grunt, 1.2, 0}, {Schoolmaster, 1.6, 0}, {Schoolmaster, 1.3, 0}, {Yellowtail, 1.6, 1}, {Yellowtail, 1.4, 1.5},
+		{Grunt, 1.6, 0}, {Grunt, 1.4, 0}, {Schoolmaster, 1.6, 0}, {Schoolmaster, 1.3, 0}, {Yellowtail, 1.6, 1}, {Yellowtail, 1.4, 1.5},
 		{Lane, 1.3, 0}, {Grouper, 1, 0}, {RedGrouper, 1, 0}, {Barracuda, 1, 1.5}, {Barracuda, 1, 2.5}, {Silverside, 1, 0}, {Bluerunner, 1.2, 0}};
 	constexpr int32 NumReefRows = UE_ARRAY_COUNT(ReefRows);
 	constexpr double ReefReach = 95;            // a reef's own schools live within this of its charted point
