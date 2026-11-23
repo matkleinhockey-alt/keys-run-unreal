@@ -219,6 +219,8 @@ namespace KeysMangroveEco
 		bool bEvArmed = false;
 		// what made a noise this frame, for the audio to take (PopSound); only what is within earshot is kept
 		TArray<FSoundEv> Sounds;
+		// test (kr.eco dummy): birds held still in the air beside the boat, to look a model over
+		TArray<FBird> Dummies;
 		void Sound(const TCHAR* What, int32 Kind, const FVector& Where, float Power = 1)
 		{
 			if (Sounds.Num() < 24 && FVector::DistSquared(Where, Cam) < 250.0 * 250.0) Sounds.Add({FName(What), Kind, Where, Power});

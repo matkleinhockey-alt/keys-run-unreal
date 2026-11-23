@@ -785,6 +785,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 		if (!BirdsBefore() && FVector2D::Distance(T.Value->C, Cam2) < 730) EmitWaterMarks(S, *T.Value);
 		if (bStill) EmitBirds(S, *T.Value, true);
 	}
+	for (const FBird& Dm : S.Dummies) BirdSoup(S.Live, Dm, false, .02);
 	EcoFlushSoup(LiveMesh, S.Live);
 	if (bStill) EcoFlushSoup(StillMesh, S.Still);
 	FlushPools(this, S);
@@ -1002,7 +1003,17 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		if (Name == TEXT("off") || Name.IsEmpty()) { S.bLook = false; if (PC->GetPawn()) PC->SetViewTarget(PC->GetPawn()); return; }
 		FVector P;
 		FVector2D O;
-		if (Name == TEXT("rook"))
+		if (Name == TEXT("dummy"))
+		{
+			// (one of the test's dummies, from its front quarter)
+			const int32 Ix = Num.Num() ? int32(Num[0]) : 0;
+			if (!S.Dummies.IsValidIndex(Ix)) return;
+			if (Num.Num()) Num.RemoveAt(0);
+			const FBird& Dm = S.Dummies[Ix];
+			P = Dm.P + FVector(0, .15, 0); O = FVector2D(FMath::Cos(Dm.Yaw + .75), FMath::Sin(Dm.Yaw + .75));
+			S.LookName = TEXT("-");
+		}
+		else if (Name == TEXT("rook"))
 		{
 			const int32 R = Num.Num() ? int32(Num[0]) : 0;
 			if (!Rookeries().IsValidIndex(R)) return;
@@ -1093,6 +1104,29 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		S.bStillDirty = true;
 		S.EvShots = 9; S.EvShotT = FMath::Max(.3, FMath::Sqrt(BestD) / 9.0 - 1.6); S.EvName = TEXT("fly");
 		UE_LOG(LogTemp, Log, TEXT("KREco test: %d %s %.0f m from the boat take wing and glide past her"), N, KindName(Best->Kind), FMath::Sqrt(BestD));
+	}
+	else if (C0 == TEXT("dummy"))
+	{
+		// test: five pelicans held still 12 m off the boat's port side, 4 m apart, to look the models over: a white one
+		// gliding, a brown one gliding, an adult brown one at rest (bill down), a young brown one at rest (head up),
+		// a white one at rest. kr.eco look dummy <n> <dist> <height> <side> <fov> looks at one. kr.eco dummy off: gone.
+		S.Dummies.Reset();
+		if (A.Num() > 1 && A[1] == TEXT("off")) return;
+		const FVector2D Fw = S.BoatF, Port(Fw.Y, -Fw.X);
+		struct FDef { int32 Kind; uint8 State; double Rank, Y; };
+		const FDef Defs[5] = {{WhitePelican, BPatrol, 0, 2.2}, {Pelican, BPatrol, .5, 2.2}, {Pelican, BPerch, .5, 1.6}, {Pelican, BPerch, .1, 1.6}, {WhitePelican, BPerch, .9, 1.6}};
+		for (int32 i = 0; i < 5; i++)
+		{
+			FBird B;
+			PoseBird(B, Defs[i].Kind);
+			B.State = Defs[i].State; B.Rank = Defs[i].Rank; B.Wing = B.State == BPatrol ? 1 : 0;
+			B.Ph = 2.5 - Defs[i].Rank * 5.25;   // (set wings: in the glide, not the flap)
+			const FVector2D Q = S.Boat + Port * 12 + Fw * (4.0 * (i - 2));
+			B.P = FVector(Q.X, S.Sea + Defs[i].Y, Q.Y);
+			B.Yaw = FMath::Atan2(Fw.Y, Fw.X);
+			S.Dummies.Add(B);
+		}
+		UE_LOG(LogTemp, Log, TEXT("KREco test: five pelican dummies 12 m off the port side"));
 	}
 	else if (C0 == TEXT("jump"))
 	{
