@@ -353,6 +353,52 @@ namespace KeysGeoReal
 		return LoadPhase(Phase);
 	}
 
+	// The ways dredged out of the canals: a pair of daybeacons at the outer end of each one that crosses a flat, green to
+	// port and red to starboard coming in. A way gets its pair when it is 60 m long or more and ends 30 m or more off
+	// the shore, in the open and not in another way (a junction), with no mark within 45 m already (a real channel's, or
+	// the pair of a way that ends on the same spot). Each of the two is a channel of its own by name, so no channel leg
+	// is dredged between them (KeysGeo BuildNavSegs).
+	static void MarkWays()
+	{
+		const int32 Had = GMarks.Num();
+		auto SegDist = [](const FVector2D& P, const FVector2D& A, const FVector2D& B)
+		{
+			const FVector2D V = B - A;
+			const double L2 = V.SizeSquared(), T = L2 > 1e-9 ? FMath::Clamp(FVector2D::DotProduct(P - A, V) / L2, 0.0, 1.0) : 0.0;
+			return (P - (A + V * T)).Size();
+		};
+		for (int32 w = 0; w < GWays.Num(); w++)
+		{
+			const TArray<FVector2D>& P = GWays[w].Pts;
+			if (P.Num() < 2) continue;
+			double Len = 0;
+			for (int32 i = 0; i + 1 < P.Num(); i++) Len += (P[i + 1] - P[i]).Size();
+			const FVector2D E = P.Last();
+			if (Len < 60 || Shore(E.X, E.Y) < 30) continue;
+			FVector2D D = FVector2D::ZeroVector;      // the way's last leg, seaward
+			for (int32 i = P.Num() - 2; i >= 0 && D.IsNearlyZero(); i--) if ((E - P[i]).Size() > 4) D = (E - P[i]).GetSafeNormal();
+			if (D.IsNearlyZero()) continue;
+			bool bSkip = false;
+			for (int32 o = 0; o < GWays.Num() && !bSkip; o++)
+			{
+				const TArray<FVector2D>& Q = GWays[o].Pts;
+				if (o == w || Q.Num() < 2 || (Q.Last() - E).Size() < 20) continue;      // (one that ends here too shares the pair)
+				for (int32 i = 0; i + 1 < Q.Num() && !bSkip; i++) bSkip = SegDist(E, Q[i], Q[i + 1]) < GWays[o].Width / 2;
+			}
+			for (int32 m = 0; m < GMarks.Num() && !bSkip; m++) bSkip = FMath::Square(GMarks[m].X - E.X) + FMath::Square(GMarks[m].Z - E.Y) < 45.0 * 45.0;
+			const FVector2D Stbd(D.Y, -D.X);          // to starboard of a boat coming in
+			const FVector2D R = E + Stbd * (GWays[w].Width / 2 + 2), G = E - Stbd * (GWays[w].Width / 2 + 2);
+			if (bSkip || Shore(R.X, R.Y) < 10 || Shore(G.X, G.Y) < 10) continue;
+			FNavMark MG, MR;
+			MG.X = G.X; MG.Z = G.Y; MG.bRed = false; MG.Num = 1; MG.Name = FString::Printf(TEXT("Canal Way %dG Daybeacon 1"), w);
+			MR.X = R.X; MR.Z = R.Y; MR.bRed = true; MR.Num = 2; MR.Name = FString::Printf(TEXT("Canal Way %dR Daybeacon 2"), w);
+			GMarks.Add(MoveTemp(MG));
+			GMarks.Add(MoveTemp(MR));
+			UE_LOG(LogTemp, Log, TEXT("KRWayMark way %d (%.0f m): green %.1f, %.1f red %.1f, %.1f"), w, Len, G.X, G.Y, R.X, R.Y);
+		}
+		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: %d ways out of the canals, %d of them marked with a pair of daybeacons at the outer end"), GWays.Num(), (GMarks.Num() - Had) / 2);
+	}
+
 	bool LoadAll()
 	{
 		// every phase of the real map, the first one first. A later phase that is missing is left out: the map is then
@@ -374,6 +420,7 @@ namespace KeysGeoReal
 			GGrids.Num(), GNX, GNZ, GX0, GZ0, GX0 + (GNX - 1) * GCell, GZ0 + (GNZ - 1) * GCell, GIslands.Num(), GMarks.Num(),
 			B1 / 1048576.0, (T1 - T0) * 1000, (B2 - B1) / 1048576.0, (T2 - T1) * 1000, (GBytes - B2) / 1048576.0, (FPlatformTime::Seconds() - T2) * 1000);
 		UE_LOG(LogTemp, Log, TEXT("KeysGeoReal: US-1 runs from x %.0f to %.0f; %d sites; the files cover %.1f%% of the map's box"), GRoadX0, GRoadX1, GSites.Num(), 100.0 * Cells / FMath::Max<int64>(1, int64(GNX) * GNZ));
+		MarkWays();
 		return true;
 	}
 
