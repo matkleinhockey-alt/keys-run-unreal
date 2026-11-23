@@ -26,7 +26,7 @@ namespace KeysMangroveEco
 			double K = 0;                 // 0 the plain chase view .. 1 right in
 			bool bOn = false, bHeld = false, bOff = false, bHave = false, bHaveLast = false, bBehind = false;
 			double SlowT = 0, PickT = 0, UserT = 1e9, QuietT = 0, Aw = 0, SideDist = 12, A = 0, Sign = 1, Score = 0, Across = 30, Fov = 88, OnT = 0;
-			double LastYaw = 0, LastPitch = 0, LastZoom = 1, LastSp = 0;
+			double LastYaw = 0, LastPitch = 0, LastZoom = 1, LastSp = 0, TopY = 5;
 			uint64 Frame = 0;
 			FVector Tgt = FVector::ZeroVector, Look = FVector::ZeroVector;
 			FString What, Want;   // Want (a test's): the kind the look is told to prefer
@@ -56,7 +56,7 @@ namespace KeysMangroveEco
 					for (const FBird& B : T.Value->Birds) if (B.Rook == r && B.State != BAway) { N++; Y += B.P.Y; }
 				if (N < 4) continue;
 				const double Sc = 2.0 + N * .02 + (L.Rook == r ? 1 : 0);
-				if (Sc > Best) { Best = Sc; BestP = FVector(Rk[r].C.X, Y / N - .5, Rk[r].C.Y); BestRook = r; BestAcross = Rk[r].R * 2.3; BestWhat = FString::Printf(TEXT("rookery %d (%d birds at home)"), r, N); }
+				if (Sc > Best) { Best = Sc; BestP = FVector(Rk[r].C.X, Y / N - .5, Rk[r].C.Y); BestRook = r; BestAcross = Rk[r].R * 2.0; L.TopY = Y / N - E.Sea; BestWhat = FString::Printf(TEXT("rookery %d (%d birds at home)"), r, N); }
 			}
 			// (bait going up in a shower within sight takes the eye for a few seconds: the birds are coming to it)
 			for (const FShower& Sh : E.Showers)
@@ -89,7 +89,7 @@ namespace KeysMangroveEco
 				for (const FSchoolE& S : T.Value->Schools) if (S.bAwake) Add(FVector(S.C.X, E.Sea, S.C.Y), .35, S.Kind, S.Out);
 				for (const FGroup& G : T.Value->Groups) if (G.bActive && G.Kind != Jelly && G.Kind != NurseShark) Add(FVector(G.C.X, E.Sea, G.C.Y), .3, G.Kind, G.Out);
 				for (const FCrabs& Cr : T.Value->Crabs)
-					if (!Cr.bGone && Cr.Hide < .5 && FVector2D::Distance(Cr.C, Boat) < 16) Add(FVector(Cr.C.X, E.Sea + .4, Cr.C.Y), .6, Cr.Kind, Cr.Out);
+					if (!Cr.bGone && Cr.Hide < .5 && FVector2D::Distance(Cr.C, Boat) < (Cr.Kind == Fiddler ? 30 : 16)) Add(FVector(Cr.C.X, E.Sea + .4, Cr.C.Y), .6, Cr.Kind, Cr.Out);
 			}
 			for (int32 i = 0; i < C.Num(); i++)
 			{
@@ -212,7 +212,10 @@ namespace KeysMangroveEco
 		const double Ks = L.K * L.K * (3 - 2 * L.K);
 		// ---- the lens eases to where it was last placed (Place: asked again with each look round)
 		if (L.bOn) L.A += WrapPi((L.bBehind ? Base : L.Aw) - L.A) * FMath::Min(1.0, Dt * 1.6);
-		const double WantDist = L.bBehind ? BaseDist * .7 : L.SideDist, WantHt = L.bBehind ? BaseHt * .85 : FMath::Clamp(BaseHt * .4, 2.4, 3.6);
+		// (in close and low for what stands at the water's edge. A rookery is looked at from above its crowns: from
+		// below them the near trees hide every bird but the front row.)
+		const double WantDist = L.bBehind ? BaseDist * .7 : L.SideDist;
+		const double WantHt = L.Rook >= 0 ? FMath::Clamp(L.TopY + 8, 10.0, 20.0) : L.bBehind ? BaseHt * .85 : FMath::Clamp(BaseHt * .4, 2.4, 3.6);
 		Out.K = Ks;
 		Out.Dist = FMath::Lerp(1.0, WantDist / FMath::Max(1.0, BaseDist), Ks);
 		Out.Ht = FMath::Lerp(1.0, WantHt / FMath::Max(.5, BaseHt), Ks);
@@ -224,8 +227,19 @@ namespace KeysMangroveEco
 
 	float CloserFov()
 	{
-		const FLookIn& L = GL;
-		if (GFrameCounter > L.Frame + 1 || L.K <= 0) return 88.f;
+		FLookIn& L = GL;
+		if (GFrameCounter > L.Frame + 1)
+		{
+			// (the chase view was not drawn this frame: first person with a line out, the helm, the landing shot. The
+			// closer look is the chase view's own, so it is over; said here, once, for the log.)
+			if (L.bOn)
+			{
+				L.bOn = false; L.K = 0; L.Offs++;
+				UE_LOG(LogTemp, Log, TEXT("KREco closer look: released after %.1f s: the chase view was left (a line out in first person, the helm view or a landing)"), L.OnT);
+			}
+			return 88.f;
+		}
+		if (L.K <= 0) return 88.f;
 		const double Ks = L.K * L.K * (3 - 2 * L.K);
 		return float(FMath::Lerp(88.0, L.Fov, Ks));
 	}

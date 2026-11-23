@@ -696,7 +696,7 @@ namespace KeysMangroveEco
 			B.C.Add(C0); B.C.Add(C1); B.C.Add(C2);
 		};
 		auto Surf = [&E](double X, double Z, double Amp) { return KeysGeo::WaveH(X, Z, E.Now, Amp, false); };
-		static const FLinearColor Dark = Hex(0x0e2a33), Edge = Hex(0x2f6670), Silver = Hex(0xf2f8fa), Foam = Hex(0xe4f0f2);
+		static const FLinearColor Dark = Hex(0x173c46), Edge = Hex(0x3a7a84), Silver = Hex(0xf2f8fa), Foam = Hex(0xe4f0f2);
 		// ---- a school: a dark, ragged patch of nervous water, and silver flashes on it
 		for (const FSchoolE& S : T.Schools)
 		{
@@ -713,15 +713,16 @@ namespace KeysMangroveEco
 				Rim[i] = FVector(X, bShow ? Surf(X, Z, Amp) + .03 : E.Sea, Z);
 			}
 			for (int32 i = 0; i < 12; i++) Tri(Mid, Rim[i], Rim[(i + 1) % 12], Dark, Edge, Edge);
-			// (eight places a fish may show its side this third of a second)
+			// (twelve places a fish may show its silver side this third of a second: each a sliver lying on the water)
 			const double Beat = FMath::FloorToDouble(E.Now * 3.2);
-			for (int32 j = 0; j < 8; j++)
+			for (int32 j = 0; j < 12; j++)
 			{
 				const double H1 = EHash(Beat + j * 7.3, S.Seed * 1e-6 + j), H2 = EHash(Beat * 1.7 + j, S.Seed * 1e-6 + 3.0), H3 = EHash(Beat + j, 5.0 + S.Seed * 1e-6);
-				const bool bOn = bShow && H3 < .3 + S.Scatter * .6;
-				const double A = 2 * PI * H1, Rr = R * .8 * FMath::Sqrt(H2), L = bOn ? .16 + .12 * H2 : 0;
-				const FVector P(S.C.X + FMath::Cos(A) * Rr, Mid.Y + .03, S.C.Y + FMath::Sin(A) * Rr);
-				const FVector Ax(FMath::Cos(A * 3.1) * L, 0, FMath::Sin(A * 3.1) * L), Sd(-Ax.Z * .35, 0, Ax.X * .35);
+				const bool bOn = bShow && H3 < .45 + S.Scatter * .5;
+				const double A = 2 * PI * H1, Rr = R * .85 * FMath::Sqrt(H2), L = bOn ? .22 + .2 * H2 : 0;
+				const double X = S.C.X + FMath::Cos(A) * Rr, Z = S.C.Y + FMath::Sin(A) * Rr;
+				const FVector P(X, bOn ? Surf(X, Z, Amp) + .07 : E.Sea, Z);
+				const FVector Ax(FMath::Cos(A * 3.1) * L, 0, FMath::Sin(A * 3.1) * L), Sd(-Ax.Z * .4, .04, Ax.X * .4);
 				Tri(P - Ax, P + Sd, P + Ax, Silver, Silver, Silver);
 				Tri(P - Ax, P - Sd, P + Ax, Silver, Silver, Silver);
 			}

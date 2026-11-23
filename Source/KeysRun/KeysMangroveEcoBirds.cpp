@@ -31,7 +31,7 @@ namespace KeysMangroveEco
 		const FBirdSpec Specs[NumBirds] = {
 			// body leg  neck bill head  span speed flap pitch wade flush draw   body      belly     neck      head      bill      leg       wing      tip
 			{.42, .50, .48, .12, .045, 1.40, 9,   2.4, .55, .45, 30, 700, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xe8b030, 0x1c1c1c, 0xf4f4ee, 0xf0f0e8, 0, false},   // great egret
-			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x44566e, 0x5a6678, 0x7a7486, 0xe8e8e8, 0xd8a030, 0x4a4638, 0x485a70, 0x1c2430, 0, false},   // great blue heron
+			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x384a64, 0x52607a, 0x6e6a80, 0xe8e8e8, 0xd8a030, 0x4a4638, 0x3c4e68, 0x18202c, 0, false},   // great blue heron
 			{.30, .32, .30, .08, .035, 1.00, 9,   3.0, .50, .30, 24, 450, 0x3c4a66, 0x3c4a66, 0x5a4660, 0x5a4660, 0x4a5a70, 0x4a5240, 0x3c4a66, 0x2c3850, 0, false},   // little blue heron
 			{.30, .30, .24, .16, .035, .95,  10,  3.6, .35, .22, 22, 500, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf2d8d0, 0xe04a30, 0xdc4a32, 0xf4f4ee, 0x181818, 1, true},    // white ibis
 			{.40, .40, .32, .17, .040, 1.25, 9.5, 3.0, .40, .32, 26, 600, 0xee7896, 0xf090aa, 0xf6e4e6, 0xdfe2cc, 0x8a9078, 0xc03c54, 0xe8608a, 0xd03862, 2, true},    // roseate spoonbill
@@ -160,11 +160,11 @@ namespace KeysMangroveEco
 
 		// One bird from its pose. Every bird writes the same number of vertices whatever it is doing (a folded wing is
 		// drawn shut, not left out), so a mesh's layout only changes when a bird joins or leaves it.
-		void Emit(FSoup& Buf, const FBird& B, bool bFar, double Rim, const FVector& Away)
+		void Emit(FSoup& Buf, const FBird& B, bool bFar, double Rim, double MinR, const FVector& Away)
 		{
 			const FBirdSpec& K = Specs[B.Kind];
 			FPen Pen{Buf};
-			Pen.Rim = Rim; Pen.MinR = Rim * .25; Pen.Back = Away * (K.Body * B.Sz * 1.15 + .05);
+			Pen.Rim = Rim; Pen.MinR = MinR; Pen.Back = Away * (K.Body * B.Sz * 1.15 + .05);
 			const double S = B.Sz;
 			const FVector F(FMath::Cos(B.Yaw), 0, FMath::Sin(B.Yaw)), Up(0, 1, 0), Rt(-F.Z, 0, F.X);
 			const bool bAir = B.State == BFly || B.State == BHover || B.State == BDive || B.State == BPatrol, bSwim = B.State == BSwim;
@@ -315,7 +315,7 @@ namespace KeysMangroveEco
 
 	double BirdScale(int32 Kind) { return Kind >= 0 && Kind < NumBirds ? ScaleOf(Kind) : 1; }
 	bool BirdsBefore() { return Before(); }
-	void BirdSoup(FSoup& Buf, const FBird& B, bool bFar, double Rim) { Emit(Buf, B, bFar, Rim, FVector::ZeroVector); }
+	void BirdSoup(FSoup& Buf, const FBird& B, bool bFar, double Rim) { Emit(Buf, B, bFar, Rim, Rim * .25, FVector::ZeroVector); }
 	void PoseBird(FBird& B, int32 Kind)
 	{
 		B = FBird();
@@ -417,7 +417,7 @@ namespace KeysMangroveEco
 					StartFly(B, Far, BAway, 4);
 					B.FlyT = -i * .45;   // (each a moment after the one before)
 				}
-				E.bStillDirty = true;
+				E.bStillSoon = true;
 				E.Sound(TEXT("flight"), Go[0]->Kind, Go[0]->P, FMath::Min(1.f, N / 6.f));
 				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d leaves for the flats (%d of its %d day birds were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
 			}
@@ -432,7 +432,7 @@ namespace KeysMangroveEco
 					StartFly(B, B.Perch, RestState(E, B), 3);
 					B.FlyT = -i * .45;
 				}
-				E.bStillDirty = true;
+				E.bStillSoon = true;
 				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d comes in to roost (%d of its %d day birds were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
 			}
 		}
@@ -447,6 +447,19 @@ namespace KeysMangroveEco
 		{
 			FBird& B = T.Birds[bi];
 			const FBirdSpec& K = Specs[B.Kind];
+			// (a bird that changes what it is doing wants the still mesh laid out again: at once if it is near enough
+			// to be watched, within a second if it is far off - a rookery's comings and goings would lay it out every frame)
+			struct FDirty
+			{
+				FEco& Ec; const FBird& Bd; bool bWas;
+				FDirty(FEco& InE, const FBird& InB) : Ec(InE), Bd(InB), bWas(InE.bStillDirty) { Ec.bStillDirty = false; }
+				~FDirty()
+				{
+					const bool bMine = Ec.bStillDirty;
+					Ec.bStillDirty = bWas;
+					if (bMine) { if (FVector::DistSquared(Bd.P, Ec.Cam) < 90.0 * 90.0) Ec.bStillDirty = true; else Ec.bStillSoon = true; }
+				}
+			} DirtyScope(E, B);
 			FVector2D P2(B.P.X, B.P.Z);
 			if (FVector2D::DistSquared(P2, Cam2) > 600.0 * 600.0)
 			{
@@ -827,7 +840,7 @@ namespace KeysMangroveEco
 	{
 		const FVector2D Cam2(E.Cam.X, E.Cam.Z);
 		FSoup& Buf = bStillPass ? E.Still : E.Live;
-		for (const FBird& B : T.Birds)
+		for (FBird& B : T.Birds)
 		{
 			// (its snag stands whether the bird is on it or not)
 			if (bStillPass && !Before() && (B.Kind == Cormorant || B.Kind == Anhinga) && B.Rook < 0)
@@ -835,14 +848,22 @@ namespace KeysMangroveEco
 				const double Ds = FVector2D::Distance(FVector2D(B.Perch.X, B.Perch.Z), Cam2);
 				if (Ds < 320) EmitSnag(Buf, E, B, FMath::Clamp(Ds * .0016, .015, .22));
 			}
-			if (B.State == BAway || B.bStill != bStillPass || (B.State == BFly && B.FlyT < 0 && B.Next != BAway && B.From.Y > 15)) continue;
+			if (bStillPass) B.bInStill = false;
+			if (B.State == BAway || (B.State == BFly && B.FlyT < 0 && B.Next != BAway && B.From.Y > 15)) continue;
+			// the still mesh holds whoever stood still when it was last laid out; the moving mesh holds everyone else,
+			// and with them a bird that has come to rest since (till the still mesh is laid out again)
+			if (bStillPass ? !B.bStill : (B.bStill && B.bInStill)) continue;
 			const double D2 = FVector2D::DistSquared(FVector2D(B.P.X, B.P.Z), Cam2);
 			if (D2 > FMath::Square(Specs[B.Kind].Draw)) continue;
 			if (B.State == BSwim && B.P.Y < E.Sea - .4) continue;
-			// (past 70 m a bird is drawn in half the pieces; its dark edge is two or three pixels wide through the
-			// closer look's lens at whatever distance it stands)
-			Emit(Buf, B, D2 > 70.0 * 70.0, Before() ? 0 : FMath::Clamp(FMath::Sqrt(D2) * (B.Rook >= 0 ? .0007 : .0013), .015, .2), (B.P - E.Cam).GetSafeNormal());   // (on a rookery's green crowns they need less of it)
-			if (bStillPass) E.StillN++; else E.BirdsMoved++;
+			// (past 70 m a bird is drawn in half the pieces. Its dark edge is two pixels or so wide through the closer
+			// look's lens at whatever distance it stands, less on a rookery's green crowns; a bird on the wing has none:
+			// it is seen against the sky or the trees, and a rookery's flights are many.)
+			const double D = FMath::Sqrt(D2);
+			const bool bAir = B.State == BFly || B.State == BHover || B.State == BDive || B.State == BPatrol;
+			const double Rim = Before() || bAir ? 0 : FMath::Clamp(D * (B.Rook >= 0 ? .0007 : .0013), .015, .2);
+			Emit(Buf, B, D2 > 70.0 * 70.0, Rim, Before() ? 0 : FMath::Clamp(D * .00035, .004, .06), (B.P - E.Cam).GetSafeNormal());
+			if (bStillPass) { B.bInStill = true; E.StillN++; } else E.BirdsMoved++;
 		}
 	}
 }

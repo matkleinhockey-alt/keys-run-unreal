@@ -764,9 +764,9 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 	}
 	S.StillT += S.Dt;
 	// (the standing birds' dark edges are laid out for where the camera is: again when it has moved a little)
-	if (S.StillT > 1 && FVector::DistSquared(S.StillCam, S.Cam) > 5.0 * 5.0) S.bStillDirty = true;
+	if (S.StillT > 1 && (S.bStillSoon || FVector::DistSquared(S.StillCam, S.Cam) > 5.0 * 5.0)) S.bStillDirty = true;
 	const bool bStill = S.bStillDirty;
-	if (bStill) { S.Still.Reset(); S.bStillDirty = false; S.StillT = 0; S.StillCam = S.Cam; S.StillN = 0; }
+	if (bStill) { S.Still.Reset(); S.bStillDirty = false; S.bStillSoon = false; S.StillT = 0; S.StillCam = S.Cam; S.StillN = 0; }
 	for (TPair<int64, FTileE*>& T : S.Tiles)
 	{
 		if (FVector2D::Distance(T.Value->C, Cam2) > 1330) continue;
