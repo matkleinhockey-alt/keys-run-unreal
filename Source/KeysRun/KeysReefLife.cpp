@@ -742,7 +742,7 @@ namespace KeysReefLife
 			{
 				if (Puffs.Num() >= 96) Puffs.RemoveAt(0);
 				const FVector Vv = -A.Fwd * (.05 + .12 * G.Rng.FRand()) + FVector(G.Rng.FRandRange(-.07f, .07f), G.Rng.FRandRange(-.12f, .02f), G.Rng.FRandRange(-.07f, .07f));
-				Puffs.Add({At, Vv, (.05 + .05 * G.Rng.FRand()) * (A.Len / .3), 0, G.Rng.FRandRange(2.2f, 3.4f)});
+				Puffs.Add({At, Vv, (.025 + .03 * G.Rng.FRand()) * (A.Len / .3), 0, G.Rng.FRandRange(2.2f, 3.4f)});
 			}
 			PuffN++;
 			Log(FString::Printf(TEXT("puff: %s let go a cloud of white sand at %.1f, %.1f, %.1f (%.1f m above the bottom, %.1f m from the camera)"), *Who(G, A), At.X, At.Y, At.Z, At.Y - TopAt(At.X, At.Z), (At - Cam).Size()));
@@ -916,7 +916,7 @@ namespace KeysReefLife
 			{
 				const FVector To = A.Aim - A.P;
 				const double D = To.Size();
-				A.bFloorOnly = D < 1.0;
+				A.bFloorOnly = RlHyp(To.X, To.Z) < 1.3;   // the last of the way it sinks down beside the head, not onto it
 				Want = D > 1e-3 ? To / D * FMath::Min(S.Cruise * 1.2, D * 2 + .03) : FVector::ZeroVector;
 				Move(A, S, B, Want, 1.5, A.bFloorOnly ? B.HalfH * A.Len + .015 : Clear0, D < .5 ? &A.PoseDir : nullptr, TailEase, PecEase * .6, Dt);
 				if (!bSleepNow) { A.State = SRove; A.StateT = 0; A.bFloorOnly = false; }
@@ -1225,8 +1225,8 @@ namespace KeysReefLife
 			}
 			for (const FPuff& Pf : Puffs)
 			{
-				const double K = Pf.Age / Pf.Life, Hs = Pf.Size * (1 + 4.5 * K) * 50;
-				Quad(Pf.P, CamRtU * Hs, CamUpU * Hs, FLinearColor(.9f, .87f, .78f, float(.5 * (1 - K) * FMath::Min(1.0, Pf.Age * 8))), true);
+				const double K = Pf.Age / Pf.Life, Hs = Pf.Size * (1 + 3.5 * K) * 50;
+				Quad(Pf.P, CamRtU * Hs, CamUpU * Hs, FLinearColor(.9f, .87f, .78f, float(.38 * (1 - K) * FMath::Min(1.0, Pf.Age * 8))), true);
 			}
 			for (TUniquePtr<FGroup>& Gp : Groups)
 			{
@@ -1265,10 +1265,10 @@ namespace KeysReefLife
 			D->DebugCmd(TEXT("look"), FString::Printf(TEXT("%.4f,%.4f"), FMath::Atan2(-Dir.X, -Dir.Z), FMath::Asin(FMath::Clamp(Dir.Y, -1.0, 1.0))));
 		}
 
-		void Tick(double Dt)
+		void Tick(double Dt, double RealDt)
 		{
 			const double T0 = FPlatformTime::Seconds();
-			if (bChunkLastFrame) { FrameAfterChunkWorst = FMath::Max(FrameAfterChunkWorst, Dt * 1000); bChunkLastFrame = false; }
+			if (bChunkLastFrame) { if (NowT > 20) FrameAfterChunkWorst = FMath::Max(FrameAfterChunkWorst, RealDt * 1000); bChunkLastFrame = false; }   // (the first seconds are the world loading)
 			ReadWorld(Dt);
 			TilesThisFrame = 0;
 			bBuiltMesh = false;
@@ -1473,7 +1473,8 @@ namespace KeysReefLife
 				// abeam of it, on the side with the more open water
 				const FVector Sd(-A.Fwd.Z, 0, A.Fwd.X);
 				const FVector P1 = A.P + Sd * LookDist, P2 = A.P - Sd * LookDist;
-				const FVector At = TopAt(P1.X, P1.Z) <= TopAt(P2.X, P2.Z) ? P1 : P2;
+				const bool bFlip = W.Contains(TEXT("flip"));   // 'flip': the other side (for the light)
+				const FVector At = (TopAt(P1.X, P1.Z) <= TopAt(P2.X, P2.Z)) != bFlip ? P1 : P2;
 				D->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), At.X, At.Z));
 				D->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15)));
 				D->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15)));
@@ -1600,7 +1601,7 @@ void AKeysReefLife::EndPlay(const EEndPlayReason::Type Reason)
 void AKeysReefLife::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (Impl) Impl->Tick(FMath::Min(double(DeltaSeconds), .1));
+	if (Impl) Impl->Tick(FMath::Min(double(DeltaSeconds), .1), DeltaSeconds);
 }
 
 void AKeysReefLife::DebugCmd(const FString& Cmd) { if (Impl) Impl->Cmd(Cmd); }
