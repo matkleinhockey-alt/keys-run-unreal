@@ -19,6 +19,7 @@ once).
 | `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | merged 2026-11-22 |
 | `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | merged 2026-11-22 |
 | `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | merged 2026-11-22 |
+| `birdview` | Mangrove wildlife visible from the boat: bird size and contrast, a closer camera at idle (brief written by the marshal) | `lane/birdview` | `../KeysRun-birdview` | running since 2026-11-23 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -38,6 +39,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `mangrovelife` | `Source/KeysRun/KeysMangroveLife.*`, `Source/KeysRun/KeysMangrove.cpp`, new `Source/KeysRun/KeysMangroveEco*` |
 | `water2` | `Source/KeysRun/KeysSeafloor.*`, `KeysSea.*`, `KeysOcean.*`, `KeysSchools.*` |
 | `diving` | `Source/KeysRun/KeysDive.*`, `KeysDiver.*`, new `Source/KeysRun/KeysScuba*` |
+| `birdview` | `Source/KeysRun/KeysMangroveEco*`, `Source/KeysRun/KeysMangroveLife.*` (after `mangrovelife` merged) |
 
 ## Marshal-only files
 
@@ -224,3 +226,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   bought), R4 (8 of 13 bird kinds shown only by the test camera: birds are small in the chase view), sparse
   oysters, cormorants that seem to sit in mid-air, manatee haunts outside the Middle Keys not visited. The lane's
   worktree is left in place while its Terminal window is open.
+- 2026-11-23: `lane/birdview` created from `main` (this entry), run as a background agent.
