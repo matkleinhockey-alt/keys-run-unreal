@@ -22,6 +22,7 @@ once).
 | `birdview` | Mangrove wildlife visible from the boat: bird size and contrast, a closer camera at idle (brief written by the marshal) | `lane/birdview` | `../KeysRun-birdview` | running since 2026-11-23 (background agent) |
 | `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | running since 2026-11-23 (background agent) |
 | `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | running since 2026-11-23 (background agent) |
+| `reefparrot` | Reef ecosystem, template lane: the reef-life framework, the stoplight parrotfish end to end, and the recipe later lanes follow (brief written by the marshal) | `lane/reefparrot` | `../KeysRun-reefparrot` | running since 2026-11-23 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -44,6 +45,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `birdview` | `Source/KeysRun/KeysMangroveEco*`, `Source/KeysRun/KeysMangroveLife.*` (after `mangrovelife` merged) |
 | `canalways` | `Content/KeysRun/Geo/p2_canals.txt`, `p3_canals.txt`, `p4_canals.txt`, `Tools/geo/canals.py`, new `Tools/geo/canalways*` |
 | `reefdens` | `Source/KeysRun/KeysReef.*` (while the lane runs), new `Source/KeysRun/KeysReefDen*` |
+| `reefparrot` | new `Source/KeysRun/KeysReefLife*` (the framework becomes marshal-only once merged; each later reef lane owns its own `KeysReefLife<Group>.cpp`) |
 
 ## Marshal-only files
 
@@ -233,3 +235,13 @@ Lanes never edit these. They ask with the `marshal-request` skill.
 - 2026-11-23: `lane/birdview` created from `main` (this entry), run as a background agent.
 - 2026-11-23: `lane/canalways` created from `main` (this entry), run as a background agent beside `birdview`.
 - 2026-11-23: `lane/reefdens` created from `main` (this entry), run as a background agent beside `birdview` and `canalways`. The user: "create hidden holes then, even if i cant explore them". `birdview` was also given the user's two pelican pictures (white pelican added, brown rebuilt, mixed), and `canalways` the user's rules: ways lead to open water, no cuts through land, no new canals, realistic.
+- 2026-11-23: reef ecosystem. The user approved a roster of real Florida Keys reef species (survey and roster
+  in the marshal's session; clownfish, giant clams and table corals left out as not of the region; Atlantic
+  halibut, black marlin, southern flounder and the Abyssal Garden's kelp flagged as unrealistic). Order of work,
+  at the user's word: `lane/reefparrot` first (created from `main` at this entry: framework, stoplight parrotfish,
+  recipe), merged, and only then the other reef lanes: reef fish (tangs, damsels, wrasses, butterflyfish, grunts),
+  pairs and visitors (angelfish, turtles, rays, reef shark), invertebrates and sessile life (urchins, stars,
+  anemones, worms, conch, new corals), behaviour links (cleaning stations, territories, night), audio, and the
+  unrealistic species. Budget: schooling fish stay at 5,200 in 72 schools within 140 m; reef-life individuals
+  under 900 within 60 m; larger animals 24 groups; static reef life 3,000 pieces within 110 m; den residents 30
+  animating within 25 m. Ten Artlist models (option A) approved, waiting for credits on 2026-12-13.
