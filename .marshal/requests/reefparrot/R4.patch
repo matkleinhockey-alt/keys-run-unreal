@@ -1,14 +1,18 @@
 diff --git a/Source/KeysRun/KeysSchools.cpp b/Source/KeysRun/KeysSchools.cpp
-index b91e3d6..7fb4a68 100644
+index b91e3d6..bd10aaa 100644
 --- a/Source/KeysRun/KeysSchools.cpp
 +++ b/Source/KeysRun/KeysSchools.cpp
-@@ -55,9 +55,9 @@ namespace
+@@ -53,11 +53,11 @@ namespace
+ 	enum ESp { Silverside, Herring, Schoolmaster, Grunt, Lane, Yellowtail, Grouper, RedGrouper, Barracuda, Bonefish, Permit, Bluerunner, Jack, Blacktip, Bullshark, NumSpec };
+ 	const FSpec Specs[NumSpec] = {
  		// key              role           len         n          subs    cruise burst accel spacing diverR  dmin dmax  alt          roam  pred
- 		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
- 		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
+-		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
+-		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
 -		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  14, 30,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
 -		{TEXT("grunt"),      ERole::Reef,   .22, .3,   16, 36,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
 -		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  10, 24,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
++		{TEXT("silverside"), ERole::Bait,   .09, .12,  300, 485,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
++		{TEXT("herring"),    ERole::Bait,   .17, .22,  130, 205,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
 +		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  11, 24,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
 +		{TEXT("grunt"),      ERole::Reef,   .22, .3,   12, 28,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
 +		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  8, 19,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},

@@ -1,7 +1,7 @@
 # reefparrot
 
 Status: IN PROGRESS
-Updated: 2026-11-23 (start)
+Updated: 2026-11-23 12:40 (interim)
 Branch: lane/reefparrot at de43a9a
 
 The design in this lane's brief is the marshal's reading of what the user asked for, not the user's own words.
@@ -19,7 +19,8 @@ Anything this lane had to guess is listed under "Guesses".
 - [ ] 9 the recipe - not started
 
 ## In progress
-- first full build of the worktree; reading the hub code
+- framework, stoplight parrotfish and blue tang build and run (runs t1, t2 under KeysRun-devkit/lanes/KeysRun-reefparrot); perf A/B, night, roles, other reefs and the classic map still to run
+- requests R1-R4 written as patches in .marshal/requests/reefparrot/ (R4 is a trial, not yet measured)
 
 ## Requests for the marshal
 - none yet

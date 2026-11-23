@@ -60,7 +60,7 @@ namespace KeysReefLifeTang
 		S.Depth[0] = 1; S.Depth[1] = 2; S.Depth[2] = 12; S.Depth[3] = 18;
 		S.Zones = ZTop | ZSpur | ZPatch | ZFore;
 		S.Habit = EHabit::Day;
-		S.GroupsPerHa = 3; S.MaxAlive = 110; S.Weight = 1;
+		S.GroupsPerHa = 2; S.MaxAlive = 110; S.Weight = 1;
 		S.Shy = 1.5;
 		S.Cruise = .45; S.Burst = 2.4; S.Roam = 20; S.Alt[0] = .2; S.Alt[1] = .8; S.Spacing = 2.2; S.Cull = 60;
 		S.bRows = true;

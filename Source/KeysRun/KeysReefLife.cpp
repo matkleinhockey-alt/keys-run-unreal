@@ -301,7 +301,8 @@ namespace KeysReefLife
 					Sd.Sp = s; Sd.A = FMath::Clamp(Mx->A, 0, S.Phases.Num() - 1); Sd.B = Mx->B < S.Phases.Num() ? Mx->B : -1;
 					Sd.NA = Mx->AMin + FMath::FloorToInt32(KeysSea::HashCell(KeyHash, CX, CZ, k * 8 + 3) * (Mx->AMax - Mx->AMin + 1));
 					Sd.NB = Sd.B >= 0 ? Mx->BMin + FMath::FloorToInt32(KeysSea::HashCell(KeyHash, CX, CZ, k * 8 + 4) * (Mx->BMax - Mx->BMin + 1)) : 0;
-					Sd.Home = FVector(Pt[k].X, H.FloorY, Pt[k].Y);
+					// (every species reads the same sixteen points: each stands a few metres off its point, its own way)
+					Sd.Home = FVector(Pt[k].X + (KeysSea::HashCell(KeyHash, CX, CZ, k * 8 + 6) - .5) * 6, H.FloorY, Pt[k].Y + (KeysSea::HashCell(KeyHash, CX, CZ, k * 8 + 7) - .5) * 6);
 					Sd.Zone = H.Zone; Sd.Depth = H.Depth; Sd.Reef = H.Reef;
 					Sd.Seed = uint32(KeysSea::HashCell(KeyHash, CX, CZ, k * 8 + 5) * 4294967295.0);
 					Out.Add(Sd);
