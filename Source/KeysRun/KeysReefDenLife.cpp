@@ -99,8 +99,37 @@ namespace KeysReefDen
 		// squarer. Crest: the back's own ridge, as a part of H (a moray's fin).
 		struct FSta { double X, Z, W, H; };
 		using FPaint = TFunctionRef<FLinearColor(double, double, const FVector&)>;
-		void Loft(FKeysMesh& M, const TArray<FSta>& S, int32 Sides, FPaint Paint, double Pw = 2, double Crest = 0)
+		void Loft(FKeysMesh& M, const TArray<FSta>& S, int32 Sides, FPaint Paint, double Pw = 2, double Crest = 0, bool bOpen = false)
 		{
+			if (bOpen)
+			{
+				// (a length of body that meets its neighbours end to end: no caps, so no ring of shade where they join)
+				TArray<FVector> Po;
+				TArray<FLinearColor> Co;
+				for (const FSta& St : S)
+					for (int32 u = 0; u < Sides; u++)
+					{
+						const double Ang = 2 * PI * u / Sides;
+						double Z = St.H * SgnPow(FMath::Cos(Ang), 2 / Pw);
+						if (Crest > 0) { if (u == 0) Z += Crest * St.H; else if (u * 2 == Sides) Z -= Crest * .5 * St.H; }
+						const FVector Q(St.X, St.W * SgnPow(FMath::Sin(Ang), 2 / Pw), St.Z + Z);
+						Po.Add(Q);
+						Co.Add(Paint(0, Ang > PI ? 2 * PI - Ang : Ang, Q));
+					}
+				const int32 Base = M.V.Num();
+				for (int32 i = 0; i < Po.Num(); i++)
+				{
+					const FSta& St = S[i / Sides];
+					M.AddVert(Po[i], FVector(0, Po[i].Y / FMath::Max(1e-6, St.W * St.W), (Po[i].Z - St.Z) / FMath::Max(1e-6, St.H * St.H)).GetSafeNormal(.0001, FVector(0, 0, 1)), Co[i]);
+				}
+				for (int32 v = 0; v + 1 < S.Num(); v++)
+					for (int32 u = 0; u < Sides; u++)
+					{
+						const int32 a = Base + v * Sides + u, b = Base + v * Sides + (u + 1) % Sides, c = Base + (v + 1) * Sides + (u + 1) % Sides, d = Base + (v + 1) * Sides + u;
+						M.T.Append({a, b, c, a, c, d});
+					}
+				return;
+			}
 			const int32 NV = S.Num() + 2;
 			TArray<FVector> P;
 			TArray<FLinearColor> Col;
@@ -253,7 +282,7 @@ namespace KeysReefDen
 			M.Surf = SurfSkin;
 			const TArray<FSta> S = {{-.5, 0, .5, .5}, {-.3, 0, .5, .5}, {-.1, 0, .5, .5}, {.1, 0, .5, .5}, {.3, 0, .5, .5}, {.5, 0, .5, .5}};
 			// (painted at the size of a real body: a unit here is some 8 cm across and 14 long)
-			Loft(M, S, 12, [&](double, double Ang, const FVector& P) { return MorayPaint(bSpot, FVector(P.X * .14, P.Y * .06, P.Z * .09), Ang, .13); }, 2, .38);
+			Loft(M, S, 12, [&](double, double Ang, const FVector& P) { return MorayPaint(bSpot, FVector(P.X * .14, P.Y * .06, P.Z * .09), Ang, .13); }, 2, .38, true);
 		}
 
 		// Caribbean spiny lobster, at 1 m long in the body (it is scaled to 25 - 45 cm): the carapace with its two
@@ -328,22 +357,23 @@ namespace KeysReefDen
 		{
 			// pale blue-green with a sheen, brown mottling on the back
 			const double N = Noise3(P * 40.0, 4.4), N2 = Noise3(P * 110.0, 8.8);
-			FLinearColor C = FMath::Lerp(Hex(0x8cc4b4), Hex(0x5f9a92), float(Smooth(N, .35, .7)));
-			C = FMath::Lerp(C, Hex(0x7a6a52), float(Smooth(N2, .62, .8) * .45));
-			return FMath::Lerp(C, Hex(0xd9e4d2), float(Smooth(Ang, 2.0, 2.9)));
+			FLinearColor C = FMath::Lerp(Hex(0x7fd0c4), Hex(0x4fa8a4), float(Smooth(N, .35, .7)));
+			C = FMath::Lerp(C, Hex(0x8a6a4a), float(Smooth(N2, .66, .8) * .5));
+			return FMath::Lerp(C, Hex(0xdcecdc), float(Smooth(Ang, 2.0, 2.9)));
 		}
 		void BuildOctoBody(FKeysMesh& M)
 		{
 			M.Surf = SurfSkin;
-			const TArray<FSta> S = {{-.16, .055, .03, .03}, {-.12, .06, .05, .048}, {-.06, .055, .056, .052}, {-.01, .04, .045, .04}, {.03, .035, .05, .034}, {.07, .025, .04, .026}};
+			// the mantle, a sac that stands up and back from the head; the head between the eyes; the crown the arms spring from
+			const TArray<FSta> S = {{-.17, .1, .028, .03}, {-.13, .1, .05, .052}, {-.07, .085, .058, .06}, {-.02, .06, .046, .046}, {.02, .04, .044, .034}, {.055, .028, .05, .028}, {.085, .02, .04, .02}};
 			Loft(M, S, 12, [&](double, double Ang, const FVector& P) { return OctoPaint(P, Ang); });
 			M.Surf = SurfEye;
 			for (const double Sd : {-1.0, 1.0})
 			{
 				M.Surf = SurfSkin;
-				Ball(M, FVector(.035, Sd * .034, .066), FVector(.02, .017, .02), Hex(0x86b8aa), 8);
+				Ball(M, FVector(.02, Sd * .036, .07), FVector(.02, .016, .02), Hex(0x72c0b4), 8);
 				M.Surf = SurfEye;
-				Ball(M, FVector(.04, Sd * .047, .07), FVector(.011, .006, .012), Hex(0xd9c080), 6, FVector(0, Sd, 0), Hex(0x0c0c0a), .5);
+				Ball(M, FVector(.024, Sd * .049, .074), FVector(.012, .006, .011), Hex(0xe0cf90), 6, FVector(0, Sd, 0), Hex(0x0c0c0a), .45);
 			}
 		}
 		void BuildOctoArm(FKeysMesh& M)
@@ -363,7 +393,7 @@ namespace KeysReefDen
 					Q = FVector(.7 + FMath::Sin(A) * Rr, .05 * FMath::Sin(3.5), Rr - FMath::Cos(A) * Rr);
 				}
 				Pts.Add(Q);
-				R.Add(FMath::Lerp(.032, .006, FMath::Pow(T, .8)));
+				R.Add(FMath::Lerp(.04, .007, FMath::Pow(T, .8)));
 			}
 			Sweep(M, Pts, R, 7, [&](double T, double Ang, const FVector& P)
 			{
@@ -750,7 +780,7 @@ namespace KeysReefDen
 				const double Taper = i > Md.NSeg - 4 ? FMath::Lerp(1.0, .35, double(i - (Md.NSeg - 4)) / 3.5) : 1;
 				const double Sh = bHome ? ShadeAt(H.D, Mid) : 1;
 				if (bHome && InsideOf(H.D, Mid) > H.D.Deep + Md.SegL) break;   // lost in the rock: not worth an instance
-				Put(L, bG ? PGMSeg : PSMSeg, Mid, Face(A - B), FVector((A - B).Size() * 1.18, Md.Wd * Taper, Md.Ht * Taper), Sh);
+				Put(L, bG ? PGMSeg : PSMSeg, Mid, Face(A - B), FVector((A - B).Size() * 1.12, Md.Wd * Taper, Md.Ht * Taper), Sh);
 			}
 		}
 
@@ -1128,17 +1158,17 @@ namespace KeysReefDen
 			Put(L, POctoBody, Me.P, Face(Me.Fwd, Up3()), FVector(S * 1.15, S * 1.15 * Breathe, S * 1.15 * Breathe), Sh);
 			// arms: by day one or two trail out over the sill and the rest are coiled inside; out in the open all eight
 			// lie spread round it, and wider when it has pounced
-			const double ArmL = .42 * S;
+			const double ArmL = .46 * S;
 			const FVector Side = FVector::CrossProduct(Up3(), Me.Fwd).GetSafeNormal(.0001, D.Right);
 			for (int32 a = 0; a < 8; a++)
 			{
 				double Yaw, Len = ArmL, Curl;
 				if (!bOutside)
 				{
-					if (a >= 2 && H.Out > .5) continue;
-					if (H.Out < .25) continue;
-					Yaw = (a ? .5 : -.25) + .12 * FMath::Sin(H.T * .5 + a);
-					Len = ArmL * (.75 + .25 * H.Out);
+					// three trail out over the sill, feeling about; the other five lie coiled back beside it in the dark
+					const bool bFront = a < 3;
+					Yaw = bFront ? (a - 1) * .55 + .14 * FMath::Sin(H.T * .5 + a * 1.7) : (a - 5.0) * .5 + PI + .05 * FMath::Sin(H.T * .4 + a);
+					Len = ArmL * (bFront ? (.45 + .5 * H.Out) * (.85 + .15 * FMath::Sin(H.T * .35 + a * 2.3)) : .55);
 					Curl = .35 * FMath::Sin(H.T * .7 + a * 2);
 				}
 				else
@@ -1593,8 +1623,13 @@ namespace KeysReefDen
 				if (H.State == 0 && H.Out < .3 && H.D.Res != NurseShark && H.D.Res != Lobster) continue;   // drawn back out of sight
 				L.Found.Add(H.D.Res);
 				const FString Line = FString::Printf(TEXT("%s - %s, %.0f m"), ResName(H.D.Res), *ReefNameAt(H.D.Mouth.X, H.D.Mouth.Z), FMath::Max(1.0, -H.Where.Y));
-				if (AKeysBoatPawn* Pw = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(L.Reef, 0))) Pw->ShowMsg(Line, 4.5);
-				UE_LOG(LogTemp, Log, TEXT("KRDen found: %s (first of its kind this session; %d of %d kinds found)"), *Line, L.Found.Num(), NumRes - 2);
+				// the first of its kind ever (the boat's own counts are kept with the save: den.found.<kind>), else only
+				// the first this session, which is not worth a line on the screen
+				const FString Key = FString::Printf(TEXT("den.found.%s"), ResKey(H.D.Res));
+				AKeysBoatPawn* Pw = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(L.Reef, 0));
+				const bool bKnown = Pw && Pw->CountOf(*Key) > 0;
+				if (Pw && !bKnown) { Pw->ShowMsg(Line, 4.5); Pw->AddCount(*Key, 1); }
+				UE_LOG(LogTemp, Log, TEXT("KRDen found: %s (%s; %d of %d kinds found this session)"), *Line, bKnown ? TEXT("seen before: no line") : TEXT("the first of its kind: a line on the screen"), L.Found.Num(), NumRes - 2);
 				break;
 			}
 		}
