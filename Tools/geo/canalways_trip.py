@@ -181,26 +181,37 @@ def read(log, files):
     if not rows:
         print('no KRSound lines')
         return 1
-    t0 = rows[0][0] - 6.0          # (fish:sound is given at second 6)
+    # the legs, as the log shows them (the log's clock
+    # is the wall's, the script's is the game's, and they drift apart when frames run long, so the legs are told apart
+    # by the teleport that starts each one)
+    legs, cur = [], []
+    for r in rows:
+        if cur and math.dist((r[1], r[2]), (cur[-1][1], cur[-1][2])) > 12:      # (a teleport: the next leg's start)
+            legs.append(cur)
+            cur = []
+        cur.append(r)
+    legs.append(cur)
+    legs = [g for g in legs if max(q[5] for q in g) >= 1.5 and len(g) >= 8]
     bad = 0
-    for canal, name, a, b in plan:
+    if len(legs) != len(plan):
+        print('the log shows %d legs, the plan has %d' % (len(legs), len(plan)))
+        bad += 1
+    for (canal, name, a, b), seg in zip(plan, legs):
         pts = trips[canal]['pts']
         s_arr = arc(pts)
-        seg = [r for r in rows if a + 1 <= r[0] - t0 <= b]
-        if not seg:
-            print('canal %d %s: no lines' % (canal, name))
-            bad += 1
-            continue
         ag = sum(1 for r in seg if r[4] == 'aground')
         on = [nearest_s(pts, s_arr, (r[1], r[2])) for r in seg]
         stray = max([d for d, sv in on if 1 < sv < s_arr[-1] - 1] or [0.0])
-        last = seg[-1]
-        want = pts[-1] if name.startswith('out') else pts[0]
+        first, last = seg[0], seg[-1]
+        frm, want = (pts[0], pts[-1]) if name.startswith('out') else (pts[-1], pts[0])
         vmax = max(r[5] for r in seg)
-        print('canal %d %-16s %3.0f s  %s  least water %.2f m (tide %s held)  fastest %.1f m/s (%.1f kn)  strayed %.1f m at most  ended %.0f m from the end of the line, at %.0f, %.0f (%s)'
-              % (canal, name + ':', b - a, 'AGROUND on %d lines' % ag if ag else 'no aground', min(r[3] for r in seg), 'low', vmax, vmax / .5144, stray,
-                 math.dist((last[1], last[2]), want), last[1], last[2], last[6]))
-        bad += 1 if ag else 0
+        print('canal %d %-16s %3.0f s under way  %s  least water %.2f m (low tide held, %+.2f m)  fastest %.1f m/s (%.1f kn)  strayed %.1f m at most  from %.0f, %.0f (%.0f m from the start of the line) to %.0f, %.0f (%.0f m from its end; %s)'
+              % (canal, name + ':', last[0] - first[0], 'AGROUND on %d lines' % ag if ag else 'no aground', min(r[3] for r in seg), -0.32, vmax, vmax / .5144, stray,
+                 first[1], first[2], math.dist((first[1], first[2]), frm), last[1], last[2], math.dist((last[1], last[2]), want), last[6]))
+        bad += 1 if ag or math.dist((first[1], first[2]), frm) > 40 or math.dist((last[1], last[2]), want) > 60 else 0
+    tot = sum(1 for r in rows if r[4] == 'aground')
+    print('%d KRSound lines in the run, %d of them aground' % (len(rows), tot))
+    bad += 1 if tot else 0
     return 1 if bad else 0
 
 
