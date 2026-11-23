@@ -8,14 +8,14 @@
 //     the edge; tail green with a bronze streak through the middle, its lobes drawn out a little in big fish;
 //     beak blue-green. Males and females look alike (no separate colour phases). Deep, heavy body (about a third
 //     of the length), blunt steep head, big scales. Swims with its pectoral fins.
-//     Small groups (2-5) and lone fish on the reef crest, the back reef and patch reefs, 1 to 15 m, most at 2 to
+//     Small groups (2-4) and lone fish on the reef crest, the back reef and patch reefs, 1 to 15 m, most at 2 to
 //     8; the young grow up among mangrove roots. Scrapes algae off dead coral rock by day and passes white sand;
 //     at night it goes back to the same shelter in the reef. Wary: keeps well off a diver.
 //   Midnight parrotfish, Scarus coelestinus, 50-75 cm. Deep navy blue to blue-black all over, the middle of each
 //     scale a little brighter; bright blue patches on the head with no scales on them: a band over the forehead
 //     between the eyes, the cheek below the eye, the chin; fins navy with a bright blue edge; beak blue-green.
 //     No separate colour phases. Same shape as the rainbow, tail square with slightly longer corners.
-//     Roving groups of 3-8 (often with blue tangs and surgeonfish) over the reef top, spurs and the fore reef, 3
+//     Roving groups of 3-6 (often with blue tangs and surgeonfish) over the reef top, spurs and the fore reef, 3
 //     to 20 m, grazing rock and the edges of sand channels by day; sleeps in the reef at night.
 //   Both are far bigger than a stoplight parrotfish (20-45 cm). Taking either is prohibited in Florida: they are
 //   neither catchable nor spear targets (they are in none of KeysLife's or KeysData's tables).
@@ -124,13 +124,13 @@ namespace KeysReefLifeFishParrots
 		Graze(S);
 		S.Phases = {FPhase{TEXT("adult"), .50, .90, ScarusBody()}};
 		S.Paint = [](int32, const FPaint& At) { return PaintRainbow(At); };
-		FMix Group; Group.Weight = .7; Group.A = 0; Group.AMin = 2; Group.AMax = 5;
+		FMix Group; Group.Weight = .7; Group.A = 0; Group.AMin = 2; Group.AMax = 4;
 		FMix Lone; Lone.Weight = .3; Lone.A = 0; Lone.AMin = 1; Lone.AMax = 1;
 		S.Mixes = {Group, Lone};
 		// reef crest, reef top (the back reef), spur tops and patch reefs, 1 to 15 m, most between 2 and 8
 		S.Depth[0] = 1; S.Depth[1] = 2; S.Depth[2] = 8; S.Depth[3] = 15;
 		S.Zones = ZCrest | ZTop | ZSpur | ZPatch;
-		S.GroupsPerHa = 3.5; S.MaxAlive = 12; S.Weight = 2;
+		S.GroupsPerHa = 2.5; S.MaxAlive = 10; S.Weight = 2;
 		S.Shy = 3.5;
 		S.Cruise = .5; S.Burst = 3.2; S.Roam = 24; S.Alt[0] = .4; S.Alt[1] = 1.4; S.Spacing = 3;
 		S.BiteSound = [](int32, TArray<FKeysBurst>& Out, FString& What) { Scrape(.6f, Out, What); };
@@ -149,13 +149,13 @@ namespace KeysReefLifeFishParrots
 		B.HalfH = .175; B.TailFork = .09; B.EyeR = .018;
 		S.Phases = {FPhase{TEXT("adult"), .50, .75, B}};
 		S.Paint = [](int32, const FPaint& At) { return PaintMidnight(At); };
-		FMix Group; Group.Weight = .8; Group.A = 0; Group.AMin = 3; Group.AMax = 8;
+		FMix Group; Group.Weight = .8; Group.A = 0; Group.AMin = 3; Group.AMax = 6;
 		FMix Few; Few.Weight = .2; Few.A = 0; Few.AMin = 1; Few.AMax = 2;
 		S.Mixes = {Group, Few};
 		// reef top, spurs, the fore reef and patch reefs, 3 to 20 m
 		S.Depth[0] = 2; S.Depth[1] = 4; S.Depth[2] = 15; S.Depth[3] = 22;
 		S.Zones = ZTop | ZSpur | ZFore | ZPatch;
-		S.GroupsPerHa = 3; S.MaxAlive = 16; S.Weight = 2;
+		S.GroupsPerHa = 5; S.MaxAlive = 16; S.Weight = 2;
 		S.Shy = 2.5;
 		S.Cruise = .55; S.Burst = 3; S.Roam = 28; S.Alt[0] = .4; S.Alt[1] = 1.5; S.Spacing = 3;
 		S.BiteSound = [](int32, TArray<FKeysBurst>& Out, FString& What) { Scrape(.68f, Out, What); };
