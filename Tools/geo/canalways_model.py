@@ -99,12 +99,14 @@ class World:
                     name = name[:at]
             ch.setdefault(name, []).append((num, x, z))
         segs = []
+        self.nav_names = []
         for name in ch:
             m = sorted(ch[name], key=lambda q: q[0])
             for a, b in zip(m, m[1:]):
                 if (b[1] - a[1]) ** 2 + (b[2] - a[2]) ** 2 > 420.0 ** 2:
                     continue
                 segs.append((a[1], a[2], b[1], b[2]))
+                self.nav_names.append(name)
         return segs
 
     def chain_z(self, X):

@@ -3,7 +3,7 @@
 The game's test scripts cannot steer by what the boat sees: they set a heading and a throttle at given seconds. So a
 trip is laid out ahead of time along the lines the bake made, from a point inside the canal to open water, and the
 heading is set again twice a second for where the boat should be by then (speeds measured in the game: throttle 0.05
-is idle, 2.7 m/s; 0.165 is 15 kn).
+is idle, 2.5 m/s; 0.165 is 15 kn).
 
   python canalways_trip.py script <route.json> [<route.json> ...]    -> the script for shoot.sh (each canal: out at
                                                                         idle, out at 15 kn, back in at idle)
@@ -19,8 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import canalways as CW
 import canalways_model as M
 
-IDLE = (0.05, 2.7, 2.6)      # throttle, metres a second once she is moving, seconds lost getting under way
-FAST = (0.165, 7.7, 3.0)     # 15 kn
+IDLE = (0.05, 2.5, 2.6)      # throttle, metres a second once she is moving, seconds lost getting under way
+FAST = (0.165, 8.0, 3.0)     # 15 kn
 BACK = 45.0                  # the trip starts this far inside the canal
 OUT = 90.0                   # and ends this far past the end of the way, if the water allows
 
@@ -69,22 +69,36 @@ def trip(route_json):
     route = [tuple(p) for p in R['route']]
     rs = arc(route)
     lines = sorted([[tuple(p) for p in ln] for ln in R['new_canal'] + R['new_way']], key=lambda ln: nearest_s(route, rs, ln[0])[1])
-    # inside the canal: back along its centre line from where the route leaves it
-    cs = arc(centre)
-    s0 = nearest_s(centre, cs, route[0])[1]
-    sb = s0 - BACK if s0 - BACK >= 0 and (s0 >= cs[-1] - s0 or s0 + BACK > cs[-1]) else min(float(cs[-1]), s0 + BACK)
-    n = max(2, int(abs(sb - s0) / 5))
-    pts = [at(centre, cs, sb + (s0 - sb) * q / n) for q in range(n + 1)]
+    depth, shore = depth_fn()
     # the route as far as the first new line, then the new lines end to end
     first_s = nearest_s(route, rs, lines[0][0])[1] if lines else float(rs[-1])
-    pts += [p for p, s in zip(route, rs) if s < first_s]
+    chain = [p for p, s in zip(route, rs) if s < first_s]
     for ln in lines:
         # (each line overlaps the one before: take it up from the point nearest where the boat is by then)
+        if not chain:
+            chain += ln
+            continue
         ls = arc(ln)
-        s_on = nearest_s(ln, ls, pts[-1])[1]
-        pts += [p for p, s in zip(ln, ls) if s > s_on + 2.5]
+        s_on = nearest_s(ln, ls, chain[-1])[1]
+        chain += [p for p, s in zip(ln, ls) if s > s_on + 2.5]
+    # inside the canal: straight back from where the route starts, as far as the canal's own water goes that way (a
+    # script cannot feel its way round a bend); failing that, back along the canal's centre line
+    cs_ = arc(chain)
+    a0, b0 = chain[0], at(chain, cs_, 12)
+    d0 = ((b0[0] - a0[0]) / math.dist(a0, b0), (b0[1] - a0[1]) / math.dist(a0, b0))
+    back = 0.0
+    while back < BACK and depth(a0[0] - d0[0] * (back + 12), a0[1] - d0[1] * (back + 12)) >= 1.7:
+        back += 5
+    if back >= 20:
+        pts = [(a0[0] - d0[0] * back, a0[1] - d0[1] * back)]
+    else:
+        cs = arc(centre)
+        s0 = nearest_s(centre, cs, route[0])[1]
+        sb = s0 - BACK if s0 - BACK >= 0 and (s0 >= cs[-1] - s0 or s0 + BACK > cs[-1]) else min(float(cs[-1]), s0 + BACK)
+        n = max(2, int(abs(sb - s0) / 5))
+        pts = [at(centre, cs, sb + (s0 - sb) * q / n) for q in range(n + 1)]
+    pts += chain
     # on into open water, straight, as far as it is deep
-    depth, shore = depth_fn()
     a, b = pts[-2], pts[-1]
     q = len(pts) - 2
     while math.dist(a, b) < 12 and q > 0:
@@ -111,15 +125,20 @@ def leg(t, pts, thr, v, lag, tag):
     s_arr = arc(pts)
     total = float(s_arr[-1])
     h0 = heading(pts[0], at(pts, s_arr, 8))
-    steps = [(t, 'tp=%.1f,%.1f,%.4f' % (pts[0][0], pts[0][1], h0)), (t + 2, 'throttle=%g' % thr)]
+    steps = [(t, 'tp=%.0f,%.0f,%.3f' % (pts[0][0], pts[0][1], h0)), (t + 2, 'throttle=%g' % thr)]
     dur = lag + total / v
     k = 0.0
+    last = None
     while k <= dur:
         s = v * max(0.0, k - lag)
         a = at(pts, s_arr, s)
         b = at(pts, s_arr, s + 8)
         if math.dist(a, b) > .5:
-            steps.append((t + 2 + k, 'heading=%.4f' % heading(a, b)))
+            hd = heading(a, b)
+            # (set again every 2 s on a straight: left alone the bow wanders; a long script is cut short by the game)
+            if last is None or abs(hd - last[0]) > .01 or k - last[1] >= 2:
+                steps.append((t + 2 + k, 'heading=%.3f' % hd))
+                last = (hd, k)
         k += .5
     steps.append((t + 2 + dur, 'throttle=0'))
     return steps, t + 2 + dur + 6
@@ -141,7 +160,7 @@ def script(files):
             t = t1
     steps.append((t + 1, 'quit'))
     steps.sort(key=lambda q: q[0])
-    return ';'.join('%.2f:%s' % (a, b) for a, b in steps), plan
+    return ';'.join('%g:%s' % (round(a, 1), b) for a, b in steps), plan
 
 
 def read(log, files):
@@ -173,7 +192,8 @@ def read(log, files):
             bad += 1
             continue
         ag = sum(1 for r in seg if r[4] == 'aground')
-        stray = max(nearest_s(pts, s_arr, (r[1], r[2]))[0] for r in seg)
+        on = [nearest_s(pts, s_arr, (r[1], r[2])) for r in seg]
+        stray = max([d for d, sv in on if 1 < sv < s_arr[-1] - 1] or [0.0])
         last = seg[-1]
         want = pts[-1] if name.startswith('out') else pts[0]
         vmax = max(r[5] for r in seg)

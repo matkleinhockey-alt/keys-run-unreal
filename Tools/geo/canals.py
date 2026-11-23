@@ -333,8 +333,8 @@ def main(argv):
             print(r.stdout[-2000:], r.stderr[-4000:])
             return 1
         for ln in r.stdout.splitlines():
-            if ln.startswith('  canal ') or ln.startswith('  ways out') or ln.startswith('  canals:'):
-                print(ln.strip())
+            if ln.startswith('  canal ') or ln.startswith('  ways out') or ln.startswith('  canals:') or ln.startswith('    line '):
+                print(ln.rstrip()[2:])
         new, old = os.path.join(scratch, name), os.path.join(geo, name)
         same = os.path.exists(old) and filecmp.cmp(new, old, shallow=False)
         n_lines = sum(1 for _ in open(new))

@@ -9,8 +9,10 @@ KeysSea::LogCanalWays: a flood through the water the hull reads, see canalways_m
 - the route follows the real water (the coastline at 2.5 m, which still has the canal's real mouth) from the canal to
   the nearest water that is joined to the open sea, along a marked channel where one is near;
 - where the route lies on the grid's land it becomes a canal line (WIDTH across, seawalled by the game): the real
-  mouth, cut back open. Real land is only ever crossed for a few metres (LAND_MAX), never by a street, never through
-  mangrove, never across US-1; a canal with no such route is left shut and reported as not a canal;
+  mouth, cut back open. Land that is land in life is never cut: the route keeps to real water and, where an inlet is
+  narrower than the raster, to the shoreline's own cells, and such a stretch is checked against the coastline drawn
+  at 0.5 m (water must join its two ends); US-1's roadbed is never crossed. A canal with no such route has no
+  opening in life and is left shut, and reported;
 - where it lies on the grid's water it becomes a way ("w" line, DREDGE_W across), straightened wherever a straight
   line stays in clear water.
 
@@ -30,9 +32,9 @@ GEO = os.environ.get('CANALWAYS_GEO') or os.path.normpath(os.path.join(os.path.d
 MIN_D = 1.0          # the water a boat needs (the game's test)
 SEA_D = 1.5          # a way ends in water this deep that is joined to the open sea
 REACH = 1400.0       # how far from a canal the game's test looks
-LAND_C, FILL_C, BANK_C, SHORE_C, NAV_C = 40.0, 6.0, 4.0, 2.0, .4   # cost of a 2.5 m step: real land, a filled-in canal, water within 10 m of land, within 25 m, a marked channel
-LAND_MAX = 15.0      # metres of real land a route may cross in all
-ROAD_OFF = 5.0       # land this near a street is never cut
+FILL_C, BANK_C, SHORE_C, NAV_C = 6.0, 4.0, 2.0, .4   # cost of a 2.5 m step: a filled-in canal or the shoreline's own cells, water within 10 m of land, within 25 m, a marked channel
+FINE = .5            # metres a cell when the coastline is drawn again to see whether a narrow inlet is water in life
+NEAR_RUN = 6.0       # ... and how far from the route that water may lie
 US1_OFF = 14.0       # nor the roadbed of US-1
 CUT_S = 3.0          # the route is a canal line where the grid's shore distance is under this, a way elsewhere
 CUT_PAD = 8.0
@@ -157,12 +159,8 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         cost = np.where(ol < 10, BANK_C, np.where(ol < 25, SHORE_C, 1.0))
         cost = np.where(_sample(W.navdist, W, X, Z) <= M.NAV_HALF_W, cost * NAV_C, cost)
         cost = np.where((fl & ~ld) | eg, FILL_C, cost)
-        # real land: dear, and never by a street, in mangrove or on US-1's roadbed
-        mi = np.clip(np.round((X - W.x0) / c).astype(int), 0, W.nx - 1); mj = np.clip(np.round((Z - W.z0) / c).astype(int), 0, W.nz - 1)
-        by_road = ndimage.distance_transform_edt(~street[b0:b1, a0:a1]) * res < ROAD_OFF
-        no = ld & (by_road | (W.mang[mj, mi] >= 200))
-        cost = np.where(ld, LAND_C, cost)
-        cost = np.where(no, -1.0, cost)
+        # real land is never cut; nor a stretch of shoreline cells found to be a neck of land, not an inlet (below)
+        cost = np.where(ld | blocked[b0:b1, a0:a1], -1.0, cost)
         us1 = (np.abs(Z - W.chain_z(X)) <= US1_OFF) & (gS < 6)
         cost = np.where(us1, -1.0, cost)
         # from: the centre lines of the canals this one is joined to already
@@ -181,11 +179,52 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         cand = np.where(target, cum, np.inf)
         e = np.unravel_index(int(np.argmin(cand)), cand.shape)
         if not np.isfinite(cand[e]):
-            return None, 'no route that keeps off streets, mangrove and US-1'
+            return None, 'it has no opening in the real coastline (no water leads from it to the sea)'
         path = np.array(mcp.traceback(e))
-        on_land = ld[path[:, 0], path[:, 1]]
-        land_m = float(on_land.sum() * res)
-        return [(float(x0 + (a0 + q) * res), float(z0 + (b0 + p) * res)) for p, q in path], land_m
+        # where the route runs on the shoreline's own cells, look closer: is there water there in life?
+        pl = land[b0:b1, a0:a1][path[:, 0], path[:, 1]]
+        i = 0
+        while i < len(path):
+            if not pl[i]:
+                i += 1
+                continue
+            j = i
+            while j + 1 < len(path) and pl[j + 1]:
+                j += 1
+            if not water_in_life(path[max(0, i - 1):j + 2] + np.array([b0, a0])):
+                blocked[path[i:j + 1, 0] + b0, path[i:j + 1, 1] + a0] = True
+                return 'again', 0.0
+            i = j + 1
+        return [(float(x0 + (a0 + q) * res), float(z0 + (b0 + p) * res)) for p, q in path], 0.0
+
+    blocked = np.zeros((h, w), bool)
+    pb = np.array([p.bounds for p in polys]) if len(polys) else np.zeros((0, 4))
+
+    def water_in_life(cells):
+        """cells: a run of raster cells (row, col), water at both ends and the shoreline's own cells between. True if the
+        real coastline, drawn at FINE metres, has water joining the two ends within a few metres of the run: an inlet
+        narrower than the raster. False for a neck of land the two shores merely come close across."""
+        X = x0 + cells[:, 1] * res; Z = z0 + cells[:, 0] * res
+        m = 10.0
+        fx0, fz0, fx1, fz1 = X.min() - m, Z.min() - m, X.max() + m, Z.max() + m
+        fw, fh = int((fx1 - fx0) / FINE) + 1, int((fz1 - fz0) / FINE) + 1
+        im = Image.new('L', (fw, fh), 0)
+        d = ImageDraw.Draw(im)
+        for n in np.nonzero((pb[:, 0] <= fx1) & (pb[:, 2] >= fx0) & (pb[:, 1] <= fz1) & (pb[:, 3] >= fz0))[0]:
+            p = polys[n]
+            d.polygon([((x - fx0) / FINE, (z - fz0) / FINE) for x, z in p.exterior.coords], fill=1)
+            for hole in p.interiors:
+                d.polygon([((x - fx0) / FINE, (z - fz0) / FINE) for x, z in hole.coords], fill=0)
+        wat = ndimage.binary_dilation(~np.array(im, dtype=bool), structure=np.ones((3, 3)))
+        cor = Image.new('L', (fw, fh), 0)
+        ImageDraw.Draw(cor).line([((x - fx0) / FINE, (z - fz0) / FINE) for x, z in zip(X, Z)], fill=1, width=int(2 * NEAR_RUN / FINE))
+        lab_f, _ = ndimage.label(wat & np.array(cor, dtype=bool), structure=np.ones((3, 3)))
+        r = int(res / FINE)
+
+        def at_end(q):
+            a, b = int((X[q] - fx0) / FINE), int((Z[q] - fz0) / FINE)
+            return set(np.unique(lab_f[max(0, b - r):b + r + 1, max(0, a - r):a + r + 1])) - {0}
+        return bool(at_end(0) & at_end(len(cells) - 1))
 
     off_land = ndimage.distance_transform_edt(~land).astype(np.float32) * res      # metres from real land
 
@@ -239,6 +278,62 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
             i = j + 1
         return new_c, new_w
 
+    def seg_d(p, a, b):
+        vx, vz = b[0] - a[0], b[1] - a[1]
+        l2 = vx * vx + vz * vz
+        t = min(1.0, max(0.0, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / l2)) if l2 > 1e-9 else 0.0
+        return float(np.hypot(p[0] - a[0] - vx * t, p[1] - a[1] - vz * t))
+
+    def line_d(p, pts):
+        return min(seg_d(p, a, b) for a, b in zip(pts, pts[1:]))
+
+    def describe(k, path, new_c, new_w, own, lab, org5):
+        """a line of text for each line added for canal k: where the route leads and what in the real data it follows"""
+        out = []
+        e = path[-1]
+        # where it leads
+        into = [q for q, (cw, cp) in enumerate(canals) if q != k and line_d(e, cp) < cw / 2 + 6]
+        inway = [q for q, (ww, wp) in enumerate(ways) if line_d(e, wp) < ww / 2]
+        nd = float(_sample(W.navdist, W, np.array([e[0]]), np.array([e[1]]))[0])
+        dep = float(_sample(Dn, W, np.array([e[0]]), np.array([e[1]]))[0])
+        sh = float(_sample(W.S, W, np.array([e[0]]), np.array([e[1]]))[0])
+        if into:
+            cp = canals[into[0]][1]
+            leads = 'into canal %d (middle %.0f, %.0f), which is open: the two are joined in life and share its mouth' % (into[0], cp[len(cp) // 2][0], cp[len(cp) // 2][1])
+        elif nd <= M.NAV_HALF_W:
+            n = int(np.argmin([seg_d(e, (a, b), (cc, dd)) for a, b, cc, dd in W.nav]))
+            leads = 'into the marked channel %s, %.1f m deep there' % (W.nav_names[n], dep)
+        elif inway:
+            leads = 'into a way already dredged (way %d), which runs on to the open sea' % inway[0]
+        else:
+            leads = 'to open water %.1f m deep, %.0f m off the shore, joined to the open sea by %.1f m or more' % (dep, sh, MIN_D)
+        # the canal centre lines this canal already reaches: land near those is its own bank
+        ownc = [cp for q, (cw, cp) in enumerate(canals) if q == k or lab[min(lab.shape[0] - 1, max(0, int(round((cp[len(cp) // 2][1] - org5[1]) / (c / 2))))),
+                                                                         min(lab.shape[1] - 1, max(0, int(round((cp[len(cp) // 2][0] - org5[0]) / (c / 2)))))] in own] + list(new_c)
+        for ln in new_c:
+            out.append('  line (canal line, %.0f m, %.0f, %.0f to %.0f, %.0f): the real mouth - water in life in the coastline, which the 10 m grid has as land; leads %s'
+                       % (_length(ln), ln[0][0], ln[0][1], ln[-1][0], ln[-1][1], leads))
+        for ln in new_w:
+            n = max(2, int(_length(ln) / 2.5))
+            sa = np.concatenate([[0], np.cumsum([np.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(ln, ln[1:])])])
+            sp = np.linspace(0, sa[-1], n)
+            X = np.interp(sp, sa, [q[0] for q in ln]); Z = np.interp(sp, sa, [q[1] for q in ln])
+            in_nav = float((_sample(W.navdist, W, X, Z) <= M.NAV_HALF_W).mean())
+            tight = float((_sample(W.S, W, X, Z) < 12.5).mean())
+            what = ('a charted channel: it runs along the marked channel for %.0f%% of its length' % (in_nav * 100) if in_nav > .5
+                    else 'a grid pinch: water in life, so narrow on the 10 m grid that it plays too shallow' if tight > .5
+                    else 'the shortest clear line across the flat (no channel is charted there)')
+            ii = np.clip(np.round((X - x0) / res).astype(int), 0, w - 1); jj = np.clip(np.round((Z - z0) / res).astype(int), 0, h - 1)
+            ol = off_land[jj, ii].astype(float)
+            away = np.array([min(line_d((x, z), cp) for cp in ownc) > 40 for x, z in zip(X, Z)]) if ownc else np.ones(n, bool)
+            near = ''
+            if away.any() and ol[away].min() < 30:
+                q = int(np.argmin(np.where(away, ol, 1e9)))
+                near = '; PASSES %.0f m FROM LAND that is not its canal\'s bank, at %.0f, %.0f' % (ol[q], X[q], Z[q])
+            out.append('  line (way, %.0f m, %.0f, %.0f to %.0f, %.0f): %s; leads %s%s'
+                       % (_length(ln), ln[0][0], ln[0][1], ln[-1][0], ln[-1][1], what, leads, near))
+        return out
+
     n_open = n_left = 0
     shut0 = [k for k in range(n_base) if not flood(k)[0]]
     done = set()
@@ -249,16 +344,14 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         pts = canals[k][1]
         mid = pts[len(pts) // 2]
         path, land_m = plan(k, sub, lab, sea, own, org5, D5)
-        if path is None:
-            notes.append('canal %d (middle %.0f, %.0f) left shut: %s' % (k, mid[0], mid[1], land_m))
+        tries = 0
+        while path == 'again' and tries < 40:
+            path, land_m = plan(k, sub, lab, sea, own, org5, D5)
+            tries += 1
+        if path is None or path == 'again':
+            notes.append('canal %d (middle %.0f, %.0f) left shut: %s' % (k, mid[0], mid[1], land_m if path is None else 'no water leads from it to the sea in the real coastline'))
             if DEBUG_DIR:
                 _preview(f'{DEBUG_DIR}/c{k:03d}_{mid[0]:.0f}_{mid[1]:.0f}_none.png', W, Dn, land, fill, street, x0, z0, res, sub, canals, ways, n_base, n_ways0, pts, edge)
-            n_left += 1
-            continue
-        if land_m > LAND_MAX:
-            if DEBUG_DIR:
-                _preview(f'{DEBUG_DIR}/c{k:03d}_{mid[0]:.0f}_{mid[1]:.0f}_shut.png', W, Dn, land, fill, street, x0, z0, res, sub, canals, ways, n_base, n_ways0, path, edge)
-            notes.append('canal %d (middle %.0f, %.0f) left shut: its nearest way to the sea crosses %.0f m of real land (not a canal with a mouth)' % (k, mid[0], mid[1], land_m))
             n_left += 1
             continue
         # the part of the route still inside the water the canal reaches is not dredged again
@@ -277,6 +370,7 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
                else 'a pinched mouth (so narrow on the grid that the shore rule shoals it)' if (gS < 12.5).mean() > .5
                else 'the flat outside is too shallow')
         new_c, new_w = lines_of(path[first:])
+        described = describe(k, path, new_c, new_w, own, lab, org5)
         canals += [(width, p) for p in new_c]
         ways += [(way_w, p) for p in new_w]
         rsub = window(mid[0], mid[1], REACH + 100)
@@ -286,6 +380,7 @@ def open_shut(rpt, polys, land, fill, built_json, to_game, x0, z0, res, width, w
         notes.append('canal %d (middle %.0f, %.0f) was shut: %s; the nearest %.1f m water joined to the sea was %.0f m off. Opened%s: %.0f m to %.0f, %.0f; %.0f m of it over real land; %d canal line%s (%.0f m), %d way%s (%.0f m)'
                      % (k, mid[0], mid[1], why, MIN_D, _length([tuple(q) for q in gap]), '' if ok else ' BUT STILL SHUT IN THE MODEL', _length(path[first:]), end[0], end[1], land_m,
                         len(new_c), '' if len(new_c) == 1 else 's', sum(_length(p) for p in new_c), len(new_w), '' if len(new_w) == 1 else 's', sum(_length(p) for p in new_w)))
+        notes += described
         n_open += 1
         done.add(k)
         for q in shut0:
