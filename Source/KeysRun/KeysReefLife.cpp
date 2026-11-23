@@ -154,7 +154,7 @@ namespace KeysReefLife
 		double LookDist = 1.6, LookT = 0;
 		// ---- statistics
 		double CpuAcc = 0, CpuWorst = 0, ChunkWorstMs = 0, FrameAfterChunkWorst = 0, StatT = 0;
-		int32 CpuN = 0, Bites = 0, Crunches = 0, PuffN = 0, Flees = 0, Chases = 0, Sleeps = 0, ChunksDealt = 0;
+		int32 CpuN = 0, Wakes = 0, Bites = 0, Crunches = 0, PuffN = 0, Flees = 0, Chases = 0, Sleeps = 0, ChunksDealt = 0;
 		bool bChunkLastFrame = false;
 
 		const FSpecies& Sp(int32 I) const { return (*Reg)[I]; }
@@ -925,7 +925,7 @@ namespace KeysReefLife
 				{
 					A.State = SSleep; A.StateT = 0; A.V = FVector::ZeroVector;
 					Sleeps++;
-					Log(FString::Printf(TEXT("sleep: %s tucked in at %.1f, %.1f, %.1f because the feeding clock reads %s (night from %s); effect: lying still against the reef%s"), *Who(G, A), A.P.X, A.P.Y, A.P.Z,
+					if ((A.P - Cam).Size() < 25) Log(FString::Printf(TEXT("sleep: %s tucked in at %.1f, %.1f, %.1f because the feeding clock reads %s (night from %s); effect: lying still against the reef%s"), *Who(G, A), A.P.X, A.P.Y, A.P.Z,
 						*KeysFeed::ClockText(Hour), *KeysFeed::ClockText(Dusk), S.bCocoon ? TEXT(", spinning its mucus cocoon") : TEXT("")));
 				}
 				break;
@@ -939,7 +939,8 @@ namespace KeysReefLife
 				{
 					A.State = SRove; A.StateT = 0; A.bFloorOnly = false;
 					A.V = FVector(0, .3, 0);
-					Log(FString::Printf(TEXT("wake: %s left its sleeping place because the feeding clock reads %s (day from %s); effect: out over the reef again%s"), *Who(G, A), *KeysFeed::ClockText(Hour), *KeysFeed::ClockText(Dawn),
+					Wakes++;
+					if ((A.P - Cam).Size() < 25) Log(FString::Printf(TEXT("wake: %s left its sleeping place because the feeding clock reads %s (day from %s); effect: out over the reef again%s"), *Who(G, A), *KeysFeed::ClockText(Hour), *KeysFeed::ClockText(Dawn),
 						S.bCocoon ? TEXT(", the cocoon left behind") : TEXT("")));
 				}
 				break;
@@ -1243,7 +1244,8 @@ namespace KeysReefLife
 						if (!Ay.Normalize()) Ay = CamUpU;
 						Quad(A.P, Ax * (A.Len * 64), Ay * (A.Len * 100 * (B.HalfH + .12)), FLinearColor(.72f, .9f, .95f, float(.5 * A.Cocoon)), false);
 					}
-					if (bPins) Quad(A.P + FVector(0, .3, 0), CamRtU * 9, CamUpU * 9, A.Phase ? FLinearColor(1, .1f, .9f, 1) : FLinearColor(1, .9f, .1f, 1), true);
+					const double PinR = FMath::Max(9.0, (RlG2U(A.P) - CamU).Size() * .008);
+					if (bPins) Quad(A.P + FVector(0, .3, 0), CamRtU * PinR, CamUpU * PinR, A.Phase ? FLinearColor(1, .1f, .9f, 1) : FLinearColor(1, .9f, .1f, 1), true);
 				}
 			}
 			if (!Vx.Num() && !bFxDrawn) return;
@@ -1309,9 +1311,9 @@ namespace KeysReefLife
 			for (const FPool& Pl : PoolList) { const int32 N = Pl.Items.Num() * (Pl.bFin ? 2 : 1); Inst += N; Tris += N * Pl.Tris; }
 			for (const TUniquePtr<FGroup>& Gp : Groups) for (const FAnimal& A : Gp->M) if (RlHyp(A.P.X - Centre.X, A.P.Z - Centre.Z) <= 60) Near++;
 			for (const int32 C : SpAlive) SpN += C > 0 ? 1 : 0;
-			Log(FString::Printf(TEXT("stats: %d species alive of %d registered, %d groups, %d individuals (%d within 60 m; cap %.0f units, %.0f used, %d groups refused by the cap, %d by a species' own cap), %d instances, %d triangles, cpu %.3f ms a frame avg (worst %.2f), %d chunks held, worst chunk %.2f ms, worst frame after a chunk %.1f ms; %d bites, %d crunches played, %d puffs, %d flees, %d chases, %d gone to sleep; clock %s, %s; centre %.0f, %.0f"),
+			Log(FString::Printf(TEXT("stats: %d species alive of %d registered, %d groups, %d individuals (%d within 60 m; cap %.0f units, %.0f used, %d groups refused by the cap, %d by a species' own cap), %d instances, %d triangles, cpu %.3f ms a frame avg (worst %.2f), %d chunks held, worst chunk %.2f ms, worst frame after a chunk %.1f ms; %d bites, %d crunches played, %d puffs, %d flees, %d chases, %d gone to sleep, %d woken (sleep and wake are logged one by one within 25 m of the camera); clock %s, %s; centre %.0f, %.0f"),
 				SpN, Reg->Num(), Groups.Num(), AliveCount(), Near, BudgetUnits, Units, RefusedCap, RefusedSp, Inst, Tris, CpuN ? CpuAcc / CpuN : 0.0, CpuWorst, Chunks.Num(), ChunkWorstMs, FrameAfterChunkWorst,
-				Bites, Crunches, PuffN, Flees, Chases, Sleeps, *KeysFeed::ClockText(Hour), bOff ? TEXT("OFF") : TEXT("on"), Centre.X, Centre.Z));
+				Bites, Crunches, PuffN, Flees, Chases, Sleeps, Wakes, *KeysFeed::ClockText(Hour), bOff ? TEXT("OFF") : TEXT("on"), Centre.X, Centre.Z));
 			CpuAcc = 0; CpuN = 0; CpuWorst = 0; StatT = 0;
 		}
 
@@ -1475,7 +1477,8 @@ namespace KeysReefLife
 				const FVector Sd(-A.Fwd.Z, 0, A.Fwd.X);
 				const FVector P1 = A.P + Sd * LookDist, P2 = A.P - Sd * LookDist;
 				const bool bFlip = W.Contains(TEXT("flip"));   // 'flip': the other side (for the light)
-				const FVector At = (TopAt(P1.X, P1.Z) <= TopAt(P2.X, P2.Z)) != bFlip ? P1 : P2;
+				FVector At = (TopAt(P1.X, P1.Z) <= TopAt(P2.X, P2.Z)) != bFlip ? P1 : P2;
+				if (TopAt(At.X, At.Z) > A.P.Y - .25) At = At == P1 ? P2 : P1;   // (not from inside a coral head)
 				D->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), At.X, At.Z));
 				D->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15)));
 				D->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15)));

@@ -1,18 +1,23 @@
 diff --git a/Source/KeysRun/KeysSchools.cpp b/Source/KeysRun/KeysSchools.cpp
-index b91e3d6..bd10aaa 100644
+index b91e3d6..15c6b37 100644
 --- a/Source/KeysRun/KeysSchools.cpp
 +++ b/Source/KeysRun/KeysSchools.cpp
-@@ -53,11 +53,11 @@ namespace
- 	enum ESp { Silverside, Herring, Schoolmaster, Grunt, Lane, Yellowtail, Grouper, RedGrouper, Barracuda, Bonefish, Permit, Bluerunner, Jack, Blacktip, Bullshark, NumSpec };
- 	const FSpec Specs[NumSpec] = {
+@@ -33,7 +33,7 @@ namespace
+ 	constexpr int32 MaxSchools = 72, MaxFish = 5200;
+ 	// Bait may take this much of the fish budget and no more. A bait ball is 150 to 500 fish, so without a share of its
+ 	// own twenty of them used the whole budget and nothing else - no snapper, no grunts, no jacks - got a fish.
+-	constexpr int32 MaxBaitFish = 3200;
++	constexpr int32 MaxBaitFish = 3020;   // (3200 less the 180 reef-life individuals its first two species may hold: KeysReefLife)
+ 	// The bubble (Populate) only brings back a school that swam out of it by itself: with the camera moving faster than
+ 	// this (m/s) the school has simply been left behind, and is let go.
+ 	constexpr double WrapMaxCamSpeed = 5;
+@@ -55,9 +55,9 @@ namespace
  		// key              role           len         n          subs    cruise burst accel spacing diverR  dmin dmax  alt          roam  pred
--		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
--		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
+ 		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
+ 		{TEXT("herring"),    ERole::Bait,   .17, .22,  140, 220,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
 -		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  14, 30,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
 -		{TEXT("grunt"),      ERole::Reef,   .22, .3,   16, 36,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
 -		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  10, 24,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
-+		{TEXT("silverside"), ERole::Bait,   .09, .12,  300, 485,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
-+		{TEXT("herring"),    ERole::Bait,   .17, .22,  130, 205,  4, 6,  .62, 2.7, 3.0, 2.0, 5,    3,   3000, 1.5, 4,    28, false},
 +		{TEXT("schoolmaster"), ERole::Reef, .32, .45,  11, 24,    2, 3,  .22, 2.2, 1.6, 1.7, 3.5,  2,   30, .5, 2.0,   5, false},
 +		{TEXT("grunt"),      ERole::Reef,   .22, .3,   12, 28,    2, 4,  .16, 1.7, 1.6, 1.6, 3.5,  1.6, 30, .4, 1.6,   5, false},
 +		{TEXT("lanesnapper"), ERole::Reef,  .26, .34,  8, 19,    2, 3,  .3,  2.4, 1.6, 1.7, 3.5,  2,   35, .5, 2.0,   6, false},
