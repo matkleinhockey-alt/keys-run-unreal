@@ -52,7 +52,7 @@ namespace KeysMangroveEco
 		uint8 Kind = 0, State = BStand, Next = BStand;
 		int16 Rook = -1;
 		int32 Leader = -1;
-		bool bStill = false, bCarry = false, bHasSite = false, bWasStill = false, bInStill = false;   // bInStill: drawn in the still mesh as it was last laid out
+		bool bStill = false, bCarry = false, bHasSite = false, bWasStill = false, bInStill = false, bLine = false;   // bInStill: drawn in the still mesh as it was last laid out
 		FVector P = FVector::ZeroVector, Home = FVector::ZeroVector, Perch = FVector::ZeroVector, From = FVector::ZeroVector, To = FVector::ZeroVector;
 		FVector2D Out = FVector2D(1, 0), Off = FVector2D::ZeroVector;
 		double Yaw = 0, T = 0, Ph = 0, FlyT = 0, FlyDur = 1, Arc = 2, Sz = 1.25, Neck = 0, Wing = 0, Pitch = 0, Peck = 0;
@@ -236,6 +236,7 @@ namespace KeysMangroveEco
 	bool BirdsBefore();
 	void BirdSoup(FSoup& Buf, const FBird& B, bool bFar, double Rim);
 	void PoseBird(FBird& B, int32 Kind);
+	void FlyPast(FBird& B, const FVector& To, double Delay);
 	// ---- KeysMangroveEcoView.cpp
 	void CloserCmd(const FString& Arg);
 	void PxReport(FEco& E, UWorld* World, const FString& Tag);

@@ -20,7 +20,7 @@ namespace KeysMangroveEco
 	enum EKind : uint8
 	{
 		// birds
-		GreatEgret, GreatBlue, LittleBlue, Ibis, Spoonbill, Cormorant, Anhinga, Kingfisher, GreenHeron, NightHeron, Tern, Osprey, Pelican,
+		GreatEgret, GreatBlue, LittleBlue, Ibis, Spoonbill, Cormorant, Anhinga, Kingfisher, GreenHeron, NightHeron, Tern, Osprey, Pelican, WhitePelican,   // (Pelican: the brown pelican)
 		// under the roots
 		Silverside, Pilchard, Snapper, Grunt, Needlefish, Mullet, Barracuda, LemonShark, NurseShark, Stingray, Jelly, Snook, Jack, Tarpon,
 		// on the roots and the mud
@@ -29,7 +29,7 @@ namespace KeysMangroveEco
 		Manatee, PelicanRoost,
 		NumKinds
 	};
-	constexpr int32 NumBirds = Pelican + 1;
+	constexpr int32 NumBirds = WhitePelican + 1;
 	const TCHAR* KindName(int32 Kind);
 	// 0 Lower Keys, 1 Middle Keys, 2 Upper Keys, 3 Key Largo (by which phase of the map the chain line is in at that x)
 	int32 RegionAt(double X);

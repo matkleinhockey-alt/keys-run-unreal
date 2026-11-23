@@ -158,25 +158,48 @@ namespace KeysMangroveLife
 
 	void Pelican(FTownBatch& B, const FVector& Feet, double Yaw, double Sz, int32 Pose)
 	{
+		// Built on the user's picture of an adult brown pelican standing on a piling: pale yellow crown, white neck, the
+		// long bill held down against the breast (grey at the base, orange-pink toward the tip, a dark grey pouch under
+		// it), silver grey-brown back and folded wings, dark belly, short dark legs, the wingtips and the short tail
+		// hanging below its perch. They are mixed as they are in life: about one in five is a young bird (brown head
+		// and neck, pale belly) and one in seven a white pelican (white all over, black wingtips, orange bill and legs).
 		const FVector F(FMath::Cos(Yaw), 0, FMath::Sin(Yaw)), Up(0, 1, 0), Rt(-F.Z, 0, F.X);
-		const FLinearColor Leg = KeysTownPaint::Hex(0x2a2a2c), Neck = KeysTownPaint::Hex(Pose ? 0x6a4630 : 0xf2efe4), Bill = KeysTownPaint::Hex(0xd9b45e), Pouch = KeysTownPaint::Hex(0x7a5c48);
-		// she sits low: a heavy grey-brown body tipped up at the breast, the wings folded dark along it
-		const FVector Body = Feet + Up * .2 * Sz - F * .04 * Sz;
-		for (const double Sd : {-1.0, 1.0}) Limb(B, Body + Rt * .06 * Sd * Sz, Feet + Rt * .05 * Sd * Sz + F * .03 * Sz, .014 * Sz, Leg);
-		B.Ball(Body.X + F.X * .07 * Sz, Body.Y + .05 * Sz, Body.Z + F.Z * .07 * Sz, .17 * Sz, 0xb4aca0, .8, 6);            // breast
-		B.Ball(Body.X - F.X * .1 * Sz, Body.Y + .02 * Sz, Body.Z - F.Z * .1 * Sz, .16 * Sz, 0x9a9288, .7, 6);             // back and rump
+		const double Hh = LHash(Feet.X * .37 + 3.0, Feet.Z * .53);
+		const bool bWhite = Hh < .14, bYoung = !bWhite && Hh < .34;
+		const double S2 = Sz * (bWhite ? 1.12 : .92 + .16 * LHash(Feet.Z * .7, Feet.X * .3 + 1.0));
+		const uint32 BackC = bWhite ? 0xf4f3ee : bYoung ? 0x6c5c4a : 0x80858c, BellyC = bWhite ? 0xf2eedc : bYoung ? 0xe2dccc : 0x231e1b, WingC = bWhite ? 0xf4f3ee : bYoung ? 0x64543f : 0x767b82;
+		const uint32 NeckC = bWhite ? 0xf4f3ee : bYoung ? 0x64523f : 0xf0eee6, CrownC = bWhite ? 0xf4f3ee : bYoung ? 0x64523f : 0xf0d470;
+		const FLinearColor Leg = KeysTownPaint::Hex(bWhite ? 0xee7c3c : 0x222226), Neck = KeysTownPaint::Hex(NeckC), BillBase = KeysTownPaint::Hex(bWhite ? 0xee9a28 : 0x7c7c80),
+			BillTip = KeysTownPaint::Hex(bWhite ? 0xe06a24 : 0xe07850), Pouch = KeysTownPaint::Hex(bWhite ? 0xf2a820 : 0x34363a), Tips = KeysTownPaint::Hex(bWhite ? 0x101012 : 0x302c28);
+		// it sits upright and hunched: a heavy body tipped up at the breast, the wings folded along it
+		const FVector Body = Feet + Up * .2 * S2 - F * .04 * S2;
 		for (const double Sd : {-1.0, 1.0})
-			Limb(B, Body + Rt * .13 * Sd * Sz + F * .1 * Sz + Up * .08 * Sz, Body + Rt * .1 * Sd * Sz - F * .36 * Sz - Up * .02 * Sz, .055 * Sz, KeysTownPaint::Hex(0x6b645c));   // folded wings
+		{
+			const FVector Ft = Feet + Rt * .06 * Sd * S2 + F * .03 * S2;
+			Limb(B, Body + Rt * .06 * Sd * S2, Ft, .016 * S2, Leg);
+			B.Tri3(Ft, Ft + F * .12 * S2 + Rt * .05 * S2, Ft + F * .12 * S2 - Rt * .05 * S2, Up, Leg);   // the webbed foot
+		}
+		B.Ball(Body.X + F.X * .07 * S2, Body.Y + .05 * S2, Body.Z + F.Z * .07 * S2, .17 * S2, BellyC, .85, 6);           // breast and belly
+		B.Ball(Body.X - F.X * .09 * S2, Body.Y + .07 * S2, Body.Z - F.Z * .09 * S2, .165 * S2, BackC, .75, 6);           // back and rump
+		for (const double Sd : {-1.0, 1.0})
+		{
+			// the folded wing down the flank, its dark tip crossing the tail and hanging below the perch
+			const FVector W0 = Body + Rt * .14 * Sd * S2 + F * .1 * S2 + Up * .1 * S2, W1 = Body + Rt * .1 * Sd * S2 - F * .26 * S2 - Up * .06 * S2;
+			Limb(B, W0, W1, .06 * S2, KeysTownPaint::Hex(WingC));
+			Limb(B, W1, W1 - F * .14 * S2 - Up * .12 * S2 - Rt * .04 * Sd * S2, .035 * S2, Tips);
+		}
+		Limb(B, Body - F * .2 * S2 - Up * .02 * S2, Body - F * .3 * S2 - Up * .14 * S2, .05 * S2, KeysTownPaint::Hex(bWhite ? 0xf4f3ee : 0x443f3a));   // the short tail
 		// the neck folds back in an S and the head rests between the shoulders, the long bill laid down the breast
-		const FVector Sh = Body + F * .13 * Sz + Up * .13 * Sz;
-		const FVector Bend = Sh + Up * (Pose ? .24 : .16) * Sz - F * .07 * Sz;
-		const FVector Head = Bend + Up * (Pose ? .16 : .1) * Sz + F * .07 * Sz;
-		Limb(B, Sh, Bend, .05 * Sz, Neck);
-		Limb(B, Bend, Head, .04 * Sz, Neck);
-		B.Ball(Head.X, Head.Y, Head.Z, .062 * Sz, 0xf6e9a8, .9, 5);                                                         // the yellow-washed crown
-		const FVector Tip = Head + F * (Pose ? .36 : .2) * Sz - Up * (Pose ? .1 : .3) * Sz;
-		Limb(B, Head + F * .03 * Sz, Tip, .02 * Sz, Bill);
-		Limb(B, Head + F * .03 * Sz - Up * .035 * Sz, Tip - Up * .012 * Sz, .03 * Sz, Pouch);                                // the pouch slung under it
+		const FVector Sh = Body + F * .13 * S2 + Up * .13 * S2;
+		const FVector Bend = Sh + Up * (Pose ? .24 : .17) * S2 - F * .07 * S2;
+		const FVector Head = Bend + Up * (Pose ? .16 : .1) * S2 + F * .07 * S2;
+		Limb(B, Sh, Bend, .052 * S2, Neck);
+		Limb(B, Bend, Head, .042 * S2, Neck);
+		B.Ball(Head.X, Head.Y, Head.Z, .064 * S2, CrownC, .9, 5);
+		const FVector Tip = Head + F * (Pose ? .38 : .2) * S2 - Up * (Pose ? .12 : .34) * S2, Mid = FMath::Lerp(Head + F * .03 * S2, Tip, .5);
+		Limb(B, Head + F * .03 * S2, Mid, .024 * S2, BillBase);
+		Limb(B, Mid, Tip, .018 * S2, BillTip);
+		Limb(B, Head + F * .03 * S2 - Up * .04 * S2, Tip - Up * .012 * S2, .034 * S2, Pouch);                                // the pouch slung under it
 	}
 
 	int32 Snag(FTownBatch& B, double X, double Y0, double Z, double Seed, int32 N)
