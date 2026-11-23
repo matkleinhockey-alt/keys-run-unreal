@@ -280,4 +280,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   what is already there), `reefbottom` (queen conch, giant Caribbean anemone, purple sea fans, the audit of the
   reef itself), and `reefdens` resumed (morays, octopus, spiny lobster, stone crab). `reeflinks`, `reefaudio`
   and `reefreal` are held back. `birdview` was stopped by the user and is not restarted.
-- 2026-11-23: `lane/reeffish`, `lane/reefvisitors` and `lane/reefbottom` created from `main` (this entry), run as background agents; `reefdens` resumed.
+- 2026-11-23: `lane/reeffish`, `lane/reefvisitors` and `lane/reefbottom` created from `main` (this entry), run as background agents. `reefdens` could not be resumed (stopped by the user; its work is committed on its branch at 1be066d): a new agent only at the user's word.
