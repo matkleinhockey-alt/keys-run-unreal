@@ -20,9 +20,9 @@ once).
 | `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | merged 2026-11-22 |
 | `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | merged 2026-11-22 |
 | `birdview` | Mangrove wildlife visible from the boat: bird size and contrast, a closer camera at idle (brief written by the marshal) | `lane/birdview` | `../KeysRun-birdview` | running since 2026-11-23 (background agent) |
-| `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | running since 2026-11-23 (background agent) |
+| `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | merged 2026-11-23 |
 | `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | running since 2026-11-23 (background agent) |
-| `reefparrot` | Reef ecosystem, template lane: the reef-life framework, the stoplight parrotfish end to end, and the recipe later lanes follow (brief written by the marshal) | `lane/reefparrot` | `../KeysRun-reefparrot` | running since 2026-11-23 (background agent) |
+| `reefparrot` | Reef ecosystem, template lane: the reef-life framework, the stoplight parrotfish end to end, and the recipe later lanes follow (brief written by the marshal) | `lane/reefparrot` | `../KeysRun-reefparrot` | merged 2026-11-23 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -245,3 +245,32 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   unrealistic species. Budget: schooling fish stay at 5,200 in 72 schools within 140 m; reef-life individuals
   under 900 within 60 m; larger animals 24 groups; static reef life 3,000 pieces within 110 m; den residents 30
   animating within 25 m. Ten Artlist models (option A) approved, waiting for credits on 2026-12-13.
+- 2026-11-23: `canalways` merged (lane at 220b011, READY FOR MERGE) with R1 (45 pairs of daybeacons at the outer
+  ends of ways across flats, `KeysGeoReal::MarkWays`). All 195 canals now have 1.0 m of water out to the open sea
+  (`fish:canals`: 0 shut, was 46); 195 canal lines before and after, ways out 202 -> 255, 4,981 m of new dredged
+  water, none through land that is land in the coastline data; `canals.py` reproduces the three `_canals.txt`
+  files, Layton's cut included. Houses 8,375 -> 8,368, docks 545. Open: R2 (make `canals.py` the last step of
+  `bake_p3.sh` and the `geo-bake` skill); two Key Largo inlets (canals 183 and 179) may be creeks in life.
+- 2026-11-23: `reefparrot` merged EARLY at the user's word ("merge reefparrot"; lane at 44c2e1f, status IN
+  PROGRESS, no criterion ticked by the lane, stopped by the user) with R1-R4: `AKeysReefLife` (registry, chunks
+  near the camera, instanced, cap 900 units), stoplight parrotfish (both phases, grazing, sand puffs, crunch
+  through `AKeysAudio::Burst`, first-sight toast "Protected in Florida: look, don't spear") and blue tang; the
+  generic parrotfish retired from `KeysLife`'s reef table; `MaxBaitFish` 3200 -> 3020 and the reef schools thinned
+  to pay for it. The recipe is installed as the `reef-creature` skill. `KeysReefLife.h/.cpp` and
+  `KeysReefLifeBody.cpp` are now marshal-only; each reef lane owns its own `KeysReefLife<Group>*.cpp`.
+  Marshal's runs (both merges together): real map 33.3 ms at an old and a new canal and at the reef from the
+  boat (game 9.7-10.9, draw 6.7-7.8, GPU 22.8-25.7); diving at the reef game 18.5, draw 17.2, GPU 22.4, worst
+  49 ms; 60-66 reef-life animals alive, 0.06-0.07 ms a frame; a goliath speared; `tpcheck` 48, 0 bad; dock audit
+  545. Classic map: reef life runs there too (88 animals), `tpcheck` 19, 0 bad, reef frame 34.3 ms (34.9 before).
+  NOT verified by lane or marshal: night sleep and cocoon, the male's chase, counts by depth band, the perf A/B
+  against `main`, the recipe's proof. Species keys are `stoplightparrot` and `bluetang`.
+- 2026-11-23: the user's priority list for the reef (Florida Keys reef tract only): stoplight, rainbow and
+  midnight parrotfish; queen, French and gray angelfish; green and spotted moray; Caribbean reef octopus; stone
+  crab, spiny lobster, queen conch; blue tang, sergeant major, yellowtail snapper, hogfish, goliath grouper,
+  great barracuda, tarpon; nurse shark, southern stingray; loggerhead and green turtles; lionfish as an
+  invasive; no clownfish; elkhorn, staghorn and brain coral, purple sea fans, barrel sponges, giant Caribbean
+  anemones, turtle grass beds, mangrove roots near shore. Lanes chosen for it: `reeffish` (parrotfish kinds,
+  angelfish, sergeant major), `reefvisitors` (southern stingray, loggerhead and green turtle, and the audit of
+  what is already there), `reefbottom` (queen conch, giant Caribbean anemone, purple sea fans, the audit of the
+  reef itself), and `reefdens` resumed (morays, octopus, spiny lobster, stone crab). `reeflinks`, `reefaudio`
+  and `reefreal` are held back. `birdview` was stopped by the user and is not restarted.
