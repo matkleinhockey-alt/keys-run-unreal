@@ -337,7 +337,7 @@ namespace KeysMangroveEco
 				}
 				E.bStillDirty = true;
 				E.Sound(TEXT("flight"), Go[0]->Kind, Go[0]->P, FMath::Min(1.f, N / 6.f));
-				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d leaves for the flats (%d of %d were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
+				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d leaves for the flats (%d of its %d day birds were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
 			}
 			else if (Come.Num())
 			{
@@ -350,7 +350,7 @@ namespace KeysMangroveEco
 					StartFly(B, B.Perch, RestState(E, B), 3);
 					B.FlyT = -i * .45;
 				}
-				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d comes in to roost (%d of %d were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
+				UE_LOG(LogTemp, Log, TEXT("KREco rookery %d (%s) at %.0f, %.0f, %s: a flight of %d comes in to roost (%d of its %d day birds were at home)"), r, RegionName(Rk[r].Region), Rk[r].C.X, Rk[r].C.Y, PhaseWord(E), N, Home, All);
 			}
 		}
 	}
@@ -656,6 +656,7 @@ namespace KeysMangroveEco
 								B.Yaw = FMath::Atan2(Sc->C.Y - B.P.Z, Sc->C.X - B.P.X);
 								B.State = BStrike; B.Next = BStand; B.T = .9;
 								B.Strikes++;
+								E.StrikeId++; E.StrikeAt = B.P + FVector(0, .5, 0); E.StrikeDir = FVector2D(-FMath::Sin(B.Yaw), FMath::Cos(B.Yaw));
 								E.Sound(TEXT("strike"), B.Kind, B.P, .3f);
 								if (FMath::FRand() < .2) E.Sound(B.Kind == Ibis ? TEXT("honk") : TEXT("croak"), B.Kind, B.P, .6f);
 								Sc->Scatter = FMath::Max(Sc->Scatter, .55);

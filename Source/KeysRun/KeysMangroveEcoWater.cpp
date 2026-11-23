@@ -91,7 +91,7 @@ namespace KeysMangroveEco
 			{
 				// a crab: a wide shell, eight legs, two claws (a fiddler's one great pale claw)
 				const bool bFid = Key == TEXT("*fiddler");
-				const FLinearColor Shell = Hex(bFid ? 0x8a7a5a : 0x4a4030), Leg = Hex(bFid ? 0xb8a070 : 0x6a4a34), Claw = Hex(bFid ? 0xf2d9a8 : 0x8a4030);
+				const FLinearColor Shell = Hex(bFid ? 0x4a3c2a : 0x4a4030), Leg = Hex(bFid ? 0x7a5c3a : 0x6a4a34), Claw = Hex(bFid ? 0xe8b070 : 0x8a4030);
 				M.AddRoundBox(FVector(0, 0, .22), FVector(.62, .9, .3), .1, Shell, FQuat::Identity, 1);
 				for (const double Sd : {-1.0, 1.0})
 					for (int32 l = 0; l < 4; l++)
@@ -211,11 +211,11 @@ namespace KeysMangroveEco
 			int32 Up = 0;
 			for (FFishE& F : Sc.Fish)
 			{
-				if (Up >= 34 || FMath::FRand() > .3) continue;
+				if (Up >= 48 || FMath::FRand() > .5) continue;
 				const FVector2D Away = (FVector2D(F.P.X, F.P.Z) - From).GetSafeNormal() + FVector2D(FMath::FRandRange(-.6, .6), FMath::FRandRange(-.6, .6));
 				F.Air = 1;
 				F.P.Y = E.Sea + .02;
-				F.V = FVector(Away.X * FMath::FRandRange(1.0, 2.6), FMath::FRandRange(2.0, 4.2), Away.Y * FMath::FRandRange(1.0, 2.6));
+				F.V = FVector(Away.X * FMath::FRandRange(1.0, 2.6), FMath::FRandRange(2.6, 5.2), Away.Y * FMath::FRandRange(1.0, 2.6));
 				Up++;
 			}
 			if (E.Life)
@@ -656,9 +656,9 @@ namespace KeysMangroveEco
 					if (Mine >= 1) continue;
 					const double Step = .05 * FMath::Sin(E.Now * .7 + H3 * 30);
 					const FVector P(C.C.X + FMath::Cos(A) * R + Step, C.FloorY + .008 - Mine * .05, C.C.Y + FMath::Sin(A) * R);
-					const double Wave = FMath::Max(0.0, FMath::Sin(E.Now * 3 + H3 * 40)) * .5;   // the big claw goes up and down
+					const double Wave = FMath::Max(0.0, FMath::Sin(E.Now * 3 + H3 * 40));   // it rears up to wave the big claw
 					const double Yaw = 2 * PI * H3;
-					Put(E, C.Kind, P, FVector(FMath::Cos(Yaw), 0, FMath::Sin(Yaw)), Wave, FMath::Lerp(K.LenMin, K.LenMax, H2) * (1 - Mine), 0, 0, 0, 0, 0, .85 + .3 * H1, H1);
+					Put(E, C.Kind, P + FVector(0, Wave * .012, 0), FVector(FMath::Cos(Yaw), Wave * .35, FMath::Sin(Yaw)), 0, FMath::Lerp(K.LenMin, K.LenMax, H2) * (1 - Mine), 0, 0, 0, 0, 0, .85 + .3 * H1, H1);
 				}
 			}
 		}

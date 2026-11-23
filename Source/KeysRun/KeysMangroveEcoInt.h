@@ -206,6 +206,11 @@ namespace KeysMangroveEco
 		FVector2D LookDir = FVector2D(1, 0);
 		double LookDist = 6, LookH = 1.2, LookSide = 0;
 		bool bLook = false;
+		// the last wader's strike (for the test camera), and the stills the test camera takes of an event by itself
+		FVector StrikeAt = FVector::ZeroVector;
+		FVector2D StrikeDir = FVector2D(1, 0);
+		int32 StrikeId = 0, LookEvent = 0, LookShots = 0;
+		double LookShotT = 0;
 		// what made a noise this frame, for the audio to take (PopSound); only what is within earshot is kept
 		TArray<FSoundEv> Sounds;
 		void Sound(const TCHAR* What, int32 Kind, const FVector& Where, float Power = 1)

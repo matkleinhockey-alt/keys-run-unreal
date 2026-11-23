@@ -41,6 +41,8 @@
 #include "Async/Async.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/CommandLine.h"
+#include "Misc/Paths.h"
+#include "UnrealClient.h"
 
 namespace KeysMangroveEco
 {
@@ -740,8 +742,9 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 			for (TPair<int64, FTileE*>& T : S.Tiles)
 				for (FBird& B : T.Value->Birds)
 					if (FVector2D::Distance(FVector2D(B.P.X, B.P.Z), Cam2) < 600) { if (B.Kind == NightHeron) NightH++; else Day++; }
-			S.LinkN[LinkNight]++;
-			if (S.Phase == 0) { UE_LOG(LogTemp, Log, TEXT("KREco link night: hour %.1f, dark: %d day birds within 600 m go to roost in the crowns, %d night herons leave their roots to hunt the edge"), S.Hour, Day, NightH); }
+			S.LinkN[LinkNight] += Day + NightH ? 1 : 0;
+			if (!(Day + NightH)) {}
+			else if (S.Phase == 0) { UE_LOG(LogTemp, Log, TEXT("KREco link night: hour %.1f, dark: %d day birds within 600 m go to roost in the crowns, %d night herons leave their roots to hunt the edge"), S.Hour, Day, NightH); }
 			else { UE_LOG(LogTemp, Log, TEXT("KREco link night: hour %.1f, light: %d day birds leave their roosts for the shallows, %d night herons go back to roost"), S.Hour, Day, NightH); }
 		}
 		S.LastPhase = S.Phase;
@@ -779,7 +782,26 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 	{
 		FVector P;
 		FVector2D O;
-		if (S.LookName == TEXT("shower")) { if (S.Showers.Num()) { S.LookAt = FVector(S.Showers.Last().P.X, S.Sea + .2, S.Showers.Last().P.Y); S.LookDir = Outward(S.LookAt.X, S.LookAt.Z); } }
+		if (S.LookName == TEXT("shower") || S.LookName == TEXT("strike"))
+		{
+			// held where the next one happens, and it takes its own stills of it (a shower is over in a second)
+			const bool bShower = S.LookName == TEXT("shower");
+			const int32 Id = bShower ? (S.Showers.Num() ? S.Showers.Last().Id : 0) : S.StrikeId;
+			if (Id == 0) S.LookEvent = 0;   // (the last shower has been forgotten: the next is new)
+			else if (Id != S.LookEvent)
+			{
+				S.LookEvent = Id;
+				if (bShower) { S.LookAt = FVector(S.Showers.Last().P.X, S.Sea + .25, S.Showers.Last().P.Y); S.LookDir = Outward(S.LookAt.X, S.LookAt.Z); }
+				else { S.LookAt = S.StrikeAt; S.LookDir = S.StrikeDir; }
+				S.LookShots = bShower ? 4 : 3; S.LookShotT = bShower ? .12 : .3;
+			}
+			if (S.LookShots > 0 && (S.LookShotT -= S.Dt) <= 0)
+			{
+				static int32 Shot = 0;
+				FScreenshotRequest::RequestScreenshot(FPaths::ScreenShotDir() / FString::Printf(TEXT("KREco_%s_%02d.png"), *S.LookName, Shot++), false, false);
+				S.LookShots--; S.LookShotT = .22;
+			}
+		}
 		else if (EcoNearest(S, S.LookName, S.LookAt, P, O) && FVector::Dist(P, S.LookAt) < 60) { S.LookAt = FMath::Lerp(S.LookAt, P, FMath::Min(1.0, S.Dt * 4)); }
 		const FVector2D Sdw(-S.LookDir.Y, S.LookDir.X);
 		FVector Eye = S.LookAt + FVector(S.LookDir.X * S.LookDist + Sdw.X * S.LookSide, S.LookH, S.LookDir.Y * S.LookDist + Sdw.Y * S.LookSide);
@@ -888,7 +910,13 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			S.LookName = TEXT("-");
 			if (!Num.Num()) Num = {Rookeries()[R].R + 50, 9};
 		}
-		else if (Name == TEXT("shower")) { P = FVector(S.Boat.X, 0, S.Boat.Y); O = FVector2D(1, 0); S.LookName = Name; }   // (wherever the bait next goes up)
+		else if (Name == TEXT("shower") || Name == TEXT("strike"))
+		{
+			// (wherever the bait next goes up, or a wader next strikes)
+			P = FVector(S.Boat.X, 3, S.Boat.Y); O = FVector2D(1, 0); S.LookName = Name;
+			S.LookEvent = Name == TEXT("shower") ? (S.Showers.Num() ? S.Showers.Last().Id : 0) : S.StrikeId;
+			S.LookShots = 0;
+		}
 		else
 		{
 			if (!EcoNearest(S, Name, FVector(S.Boat.X, 0, S.Boat.Y), P, O)) { UE_LOG(LogTemp, Log, TEXT("KREco look %s: none in the tiles planned round the boat"), *Name); return; }
