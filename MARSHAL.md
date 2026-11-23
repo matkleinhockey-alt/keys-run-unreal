@@ -16,7 +16,7 @@ once).
 | `upperkeys` | Map Phase 2 (Upper Keys) | `lane/upperkeys` | `../KeysRun-upperkeys` | merged 2026-11-21 |
 | `docks` | Lifts and docks (P4, brief written by the marshal) | `lane/docks` | `../KeysRun-docks` | merged 2026-11-21 |
 | `lowerkeys` | Map Phase 3 (Lower Keys, then Key Largo; brief written by the marshal) | `lane/lowerkeys` | removed (branch kept) | merged 2026-11-22 |
-| `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | running since 2026-11-22, in the user's "ecosystem" Terminal window |
+| `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | merged 2026-11-22 |
 | `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | merged 2026-11-22 |
 | `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | merged 2026-11-22 |
 
@@ -210,3 +210,17 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   R5 (optional flag on `SetUnderwater`), R6 (perf on a quiet machine or packaged), lobster and chart markers with
   mooring balls not done, the sound never heard, buying on foot and the keys as pressed not tried, a free-diver's
   save gains three logbook keys in `Counts`.
+- 2026-11-22: `mangrovelife` merged at the user's word (lane at fa7efff, READY FOR MERGE) with R1 (`PickSpecies`
+  weighted by `KeysMangroveEco::PickBoost`, first bite by `BiteScale`, `eco:<command>` in scripts) and R3 (Creek
+  school density .8 -> .4 in `KeysSchools.cpp`). Birds that stalk, strike, flush and roost, twelve rookery keys
+  (three in each part of the chain; the busiest is rookery 7 at 10891, -4804 with 154 birds), schools under the
+  roots that go out on the ebb and back on the flood, predators, crabs, all by tile near the boat. Marshal's runs:
+  real map 33.3 ms off Boot Key, at rookery 7, off the Saddlebunch Keys and off Key Largo (game 8.9-11.0, draw
+  5.9-7.7, GPU 25-29; the ecosystem's own cost 0.13-0.19 ms a frame); at tide -1 0 of 23 schools under the roots,
+  at +1 they go back; wader strikes logged in all four parts; `tpcheck` 48, 0 bad; dock audit 545. One mangrove
+  tile frame of 68 ms after a teleport (the lane's limit was 50) and 400 ms on the second frame of start-up.
+  Classic map: no ecosystem built, `tpcheck` 19, 0 bad, reef frame 34.9 ms (34.1 after water2). The lane's
+  rookery-7 bookmark `tp=11030,-4734,1.102` puts the boat aground. Open: R2 sound (`PopSound` not polled, nothing
+  bought), R4 (8 of 13 bird kinds shown only by the test camera: birds are small in the chase view), sparse
+  oysters, cormorants that seem to sit in mid-air, manatee haunts outside the Middle Keys not visited. The lane's
+  worktree is left in place while its Terminal window is open.
