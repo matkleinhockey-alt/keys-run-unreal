@@ -929,7 +929,7 @@ namespace KeysReefDen
 								L.Links[0]++;
 								if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link hunt: the %s noses into the rock at %.1f, %.1f, %.1f (stop %d of %d, %.1f m from its hole) while the grouper waits over it (cause: they hunt together); effect: the small fish near bolt"),
 									ResName(D.Res), Me.P.X, Me.P.Y, Me.P.Z, Me.Step + 1, NStops, FVector::Dist(Me.P, D.Mouth));
-								KeysReefLife::Alarm(Me.P, 3.5, FString::Printf(TEXT("a %s hunting through the rock with a grouper waiting over it"), ResName(D.Res)));
+								KeysReefLife::Alarm(Me.P, 5.0, FString::Printf(TEXT("a %s hunting through the rock with a grouper waiting over it"), ResName(D.Res)));
 							}
 						}
 					}

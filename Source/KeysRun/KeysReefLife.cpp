@@ -178,6 +178,9 @@ namespace KeysReefLife
 		double CrunchGate = 0;
 		// ---- the test camera (reef:look)
 		int32 LookGroup = -1, LookIx = 0;
+		bool bLookEggs = false;
+		FString PendLook;
+		double PendT = 0, PendTick = 0;
 		double LookDist = 1.6, LookT = 0;
 		// ---- statistics
 		double CpuAcc = 0, CpuWorst = 0, ChunkWorstMs = 0, FrameAfterChunkWorst = 0, StatT = 0;
@@ -1883,7 +1886,7 @@ namespace KeysReefLife
 			if (LookT > 0) return;
 			LookT = .25;
 			const FAnimal& A = G->M[LookIx];
-			const FVector Eye(DiverP.X, DiverP.Y + .15, DiverP.Z), Dir = (A.P - Eye).GetSafeNormal();
+			const FVector Eye(DiverP.X, DiverP.Y + .15, DiverP.Z), Dir = ((bLookEggs ? G->Home : A.P) - Eye).GetSafeNormal();
 			D->DebugCmd(TEXT("look"), FString::Printf(TEXT("%.4f,%.4f"), FMath::Atan2(-Dir.X, -Dir.Z), FMath::Asin(FMath::Clamp(Dir.Y, -1.0, 1.0))));
 		}
 
@@ -1914,6 +1917,7 @@ namespace KeysReefLife
 				WritePools();
 				SightT -= Dt;
 				if (SightT <= 0) { SightT = .5; FirstSights(); }
+				if (PendT > 0) { PendT -= Dt; if ((PendTick -= Dt) <= 0) { PendTick = .5; Cmd(PendLook); } }
 				LookCam(Dt);
 				DrawFx(Dt);
 			}
@@ -2087,10 +2091,11 @@ namespace KeysReefLife
 			}
 			else if (C == TEXT("look"))
 			{
-				if (W.IsValidIndex(1) && W[1] == TEXT("off")) { if (FGroup* G = FindGroup(LookGroup)) G->bPosed = false; LookGroup = -1; Log(TEXT("look off")); return; }
+				if (W.IsValidIndex(1) && W[1] == TEXT("off")) { if (FGroup* G = FindGroup(LookGroup)) G->bPosed = false; LookGroup = -1; PendT = 0; Log(TEXT("look off")); return; }
 				AKeysDiver* D = AKeysDiver::Get(Act);
 				if (!D || !D->IsDiving()) { Log(TEXT("look: the diver is not in the water (dive first)")); return; }
 				FGroup* G = nullptr; int32 Ix = 0;
+				bLookEggs = false;
 				// (reeflinks) look @clean | @wait | @nip | @rest | @den | @chase | @eggs: the nearest animal doing that now, looked at
 				// as it is (nothing it is doing is stopped for the camera)
 				const bool bLink = W.IsValidIndex(1) && W[1].StartsWith(TEXT("@"));
@@ -2108,7 +2113,15 @@ namespace KeysReefLife
 							const double Dd = (Q.P - Centre).SizeSquared();
 							if (bOk && Dd < Best) { Best = Dd; G = Gp.Get(); Ix = i; }
 						}
-					if (!G) { Log(FString::Printf(TEXT("look %s: nothing near is doing that now"), *W[1])); return; }
+					if (!G)
+					{
+						// (asked again every half second for 40 s: what it waits for happens often but briefly)
+						if (PendT <= 0) Log(FString::Printf(TEXT("look %s: nothing near is doing that now; trying for 40 s"), *W[1]));
+						if (PendT <= 0) { PendLook = In; PendT = 40; }
+						return;
+					}
+					PendT = 0;
+					bLookEggs = W[1] == TEXT("@eggs");
 				}
 				else
 				{
@@ -2131,12 +2144,14 @@ namespace KeysReefLife
 				const bool bFlip = W.Contains(TEXT("flip"));   // 'flip': the other side (for the light)
 				FVector At = (TopAt(P1.X, P1.Z) <= TopAt(P2.X, P2.Z)) != bFlip ? P1 : P2;
 				if (TopAt(At.X, At.Z) > A.P.Y - .25) At = At == P1 ? P2 : P1;   // (not from inside a coral head)
+				if (bLookEggs) { At = G->Home + Sd * 1.1; At.Y = G->Home.Y; }
 				if (A.Spot == 1 && A.DenId) At = A.DenMouth + A.DenAxis * LookDist + FVector(-A.DenAxis.Z, 0, A.DenAxis.X) * (LookDist * .25);   // (in a den: from out in front of its opening)
 				// (from above for what lies on a head or in the sand: the egg patch, a resting turtle)
 				const double Up = bLink && (W[1] == TEXT("@eggs") || W[1] == TEXT("@rest") || W[1] == TEXT("@den")) ? .55 : 0;
 				D->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), At.X, At.Z));
-				D->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15 + Up)));
-				D->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15 + Up)));
+				const double EyeY = bLookEggs ? G->Home.Y + .75 : A.P.Y + Up;
+				D->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -(EyeY - .15)));
+				D->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -(EyeY - .15)));
 				Log(FString::Printf(TEXT("look (test camera): the diver is put %.1f m abeam of %s, %.2f m long, at %.1f, %.1f, %.1f, and its group does not shy from the diver until 'look off'"), LookDist, *Who(*G, A), A.Len, A.P.X, A.P.Y, A.P.Z));
 			}
 			else if (C == TEXT("do"))
@@ -2149,7 +2164,7 @@ namespace KeysReefLife
 				else if (W.IsValidIndex(1) && W[1] == TEXT("breath")) { A.PoseT = 0; A.AirT = 0; }
 				else if (W.IsValidIndex(1) && W[1] == TEXT("lift")) { A.PoseT = 0; G->bPosed = false; Scare(*G, LookIx, A.P - A.Fwd * 1.5, TEXT("the test hook asked (reef:do lift)")); }
 				else if (W.IsValidIndex(1) && W[1] == TEXT("clean")) { A.PoseT = 0; A.Load = A.LoadMax + 1; A.SeekT = 0; }     // due for a cleaning now: where it goes is the game's rule
-				else if (W.IsValidIndex(1) && W[1] == TEXT("rest")) { A.PoseT = 0; A.FedT = A.RestAt + 1; A.SeekT = 0; }       // due for a rest now (by day, with air enough)
+				else if (W.IsValidIndex(1) && W[1] == TEXT("rest")) { A.PoseT = 0; A.FedT = A.RestAt + 1; A.SeekT = 0; A.AirT = FMath::Max(A.AirT, 150.0); }       // due for a rest now (by day, with air enough)
 				Log(FString::Printf(TEXT("do %s (test hook): asked of %s"), W.IsValidIndex(1) ? *W[1] : TEXT("?"), *Who(*G, A)));
 			}
 			else if (C == TEXT("rival"))
