@@ -58,8 +58,8 @@ namespace KeysMangroveEco
 	{
 		static const TCHAR* Names[NumKinds] = {TEXT("great egret"), TEXT("great blue heron"), TEXT("little blue heron"), TEXT("white ibis"), TEXT("roseate spoonbill"),
 			TEXT("cormorant"), TEXT("anhinga"), TEXT("belted kingfisher"), TEXT("green heron"), TEXT("night heron"), TEXT("tern"), TEXT("osprey"), TEXT("brown pelican"), TEXT("white pelican"),
-			TEXT("silverside"), TEXT("pilchard"), TEXT("juvenile snapper"), TEXT("juvenile grunt"), TEXT("needlefish"), TEXT("mullet"), TEXT("barracuda"), TEXT("lemon shark"),
-			TEXT("nurse shark"), TEXT("stingray"), TEXT("upside-down jellyfish"), TEXT("snook"), TEXT("jack"), TEXT("tarpon"), TEXT("tree crab"), TEXT("fiddler crab"),
+			TEXT("silverside"), TEXT("pilchard"), TEXT("juvenile snapper"), TEXT("juvenile grunt"), TEXT("juvenile schoolmaster"), TEXT("juvenile lane snapper"), TEXT("sergeant major"), TEXT("needlefish"), TEXT("mullet"), TEXT("barracuda"), TEXT("lemon shark"),
+			TEXT("nurse shark"), TEXT("stingray"), TEXT("upside-down jellyfish"), TEXT("snook"), TEXT("jack"), TEXT("tarpon"), TEXT("gray snapper"), TEXT("tree crab"), TEXT("fiddler crab"),
 			TEXT("horseshoe crab"), TEXT("manatee haunt"), TEXT("pelican roost")};
 		return Kind >= 0 && Kind < NumKinds ? Names[Kind] : TEXT("?");
 	}
@@ -253,10 +253,12 @@ namespace KeysMangroveEco
 		using namespace KeysGeo;
 		TArray<FSite> Sites;
 		TArray<FVector> Tops;
-		SitesOfTile(Key, Sites, Tops);
+		const bool bRL = RootLife();
+		SitesOfTile(Key, Sites, Tops, bRL);
 		Out.Key = Key;
 		Out.C = FVector2D(int32(Key >> 32) * 600.0 + 300, int32(uint32(Key)) * 600.0 + 300);
-		Out.Sites = Sites.Num();
+		Out.Sites = 0;
+		for (const FSite& S : Sites) Out.Sites += S.bThird ? 1 : 0;
 		auto Add = [&Out](uint8 Kind, const FSite& S, const FVector& P, const FVector2D& O, int32 N, double Salt) -> FSpot&
 		{
 			FSpot& Sp = Out.Spots.AddDefaulted_GetRef();
@@ -271,9 +273,16 @@ namespace KeysMangroveEco
 			auto At = [&](double D) { return FVector2D(S.X + O.X * D, S.Z + O.Y * D); };
 			const FVector2D W4 = At(S.Bank ? 4.5 : 4.0);
 			if (LandH(W4.X, W4.Y) > -.05) continue;   // (a tree whose water side is not water: nothing lives off it)
+			if (bRL)
+			{
+				// (the root life: the fish in the roots by its own rules, and the tree's roots carry growth)
+				Out.Trees.Add(S);
+				PlanRootLife(S, O, Add);
+				if (!S.bThird) continue;
+			}
 			const double D4 = DepthAt(W4.X, W4.Y), D8 = DepthAt(At(8).X, At(8).Y);
 			// ---- small fish under the roots
-			if (SHash(S, 1) < (S.Bank ? .5 : .3))
+			if (!bRL && SHash(S, 1) < (S.Bank ? .5 : .3))
 			{
 				const double Hk = SHash(S, 2);
 				const uint8 Kind = Hk < .42 ? Silverside : Hk < .62 ? Pilchard : Hk < .84 ? Snapper : Grunt;
@@ -363,7 +372,7 @@ namespace KeysMangroveEco
 			if (bOpen && !S.Bank && SHash(S, 14) < .016) Add(Stingray, S, FVector(At(8).X, 0, At(8).Y), O, 1, 14);
 			if (SHash(S, 15) < .22 && D6 > .5 && D6 < 1.6 && bOpen && Enclosed(W6.X, W6.Y) >= 7) Add(Jelly, S, FVector(W6.X, 0, W6.Y), O, 5 + int32(SHash(S, 50) * 8), 15);
 			// ---- what hunts the small fish
-			if (SHash(S, 16) < (S.Bank ? .12 : .045)) Add(Snook, S, FVector(At(S.Bank ? 3 : 3.2).X, 0, At(S.Bank ? 3 : 3.2).Y), O, 2 + int32(SHash(S, 51) * 3), 16);
+			if (!bRL && SHash(S, 16) < (S.Bank ? .12 : .045)) Add(Snook, S, FVector(At(S.Bank ? 3 : 3.2).X, 0, At(S.Bank ? 3 : 3.2).Y), O, 2 + int32(SHash(S, 51) * 3), 16);
 			if (bOpen && SHash(S, 17) < .02 && Deep(.7, 46, Dq)) Add(Jack, S, FVector(Dq.X, 0, Dq.Y), O, 3 + int32(SHash(S, 52) * 4), 17);
 			if (bOpen && SHash(S, 18) < (S.Bank ? .03 : .012) && Deep(.9, 50, Dq)) Add(Tarpon, S, FVector(Dq.X, 0, Dq.Y), O, 2 + int32(SHash(S, 53) * 2), 18);
 			// ---- over it all
@@ -464,7 +473,7 @@ namespace KeysMangroveEco
 	double BiteScale(double X, double Z)
 	{
 		if (!GEco || !GEco->State()) return 1;
-		const int32 N = BaitNear(*GEco->State(), FVector2D(X, Z), 22);
+		const int32 N = BaitNear(*GEco->State(), FVector2D(X, Z), 22) / (RootLife() ? 4 : 1);   // (the root life's schools are some four times as thick: the bite keeps its old pace)
 		return N >= 120 ? .6 : N >= 40 ? .8 : 1;
 	}
 
@@ -496,6 +505,20 @@ namespace KeysMangroveEco
 				if (S.bPost) { C->PilingN++; if (C->Pilings[Reg].Num() < 40) { C->Pilings[Reg].Add(FVector2D(S.P.X, S.P.Z)); C->PilingOut[Reg].Add(S.Out); } }
 				if (S.Kind == WhitePelican && S.Rook < 0 && C->Flocks[Reg].Num() < 40) { C->Flocks[Reg].Add(FVector2D(S.P.X, S.P.Z)); C->FlockOut[Reg].Add(S.Out); }
 				if (S.Rook >= 0) C->RookBirds[S.Rook] += S.N;
+				if (S.Kind == Snook || S.Kind == GraySnapper)
+				{
+					// (root life) the region's best root wall: deep water off it at the top of the tide, fish lying in it
+					const FSite& W = S.Site;
+					const FVector2D O = W.Bank ? W.In : Outward(W.X, W.Z);
+					const double D3 = KeysGeo::DepthAt(W.X + O.X * 3, W.Z + O.Y * 3), D6 = KeysGeo::DepthAt(W.X + O.X * 6, W.Z + O.Y * 6);
+					// (and a crowded edge: trees standing close along it, schools and fish lying in it)
+					int32 Crowd = 0;
+					for (const FSite& T2 : P.Trees) Crowd += FMath::Square(T2.X - W.X) + FMath::Square(T2.Z - W.Z) < 15.0 * 15.0 ? 1 : 0;
+					for (const FSpot& S2 : P.Spots) Crowd += S2.Kind >= Silverside && S2.Kind <= GraySnapper && FMath::Square(S2.P.X - W.X) + FMath::Square(S2.P.Z - W.Z) < 15.0 * 15.0 ? 2 : 0;
+					// (a creek bank or a channel edge with a metre and more of water at high tide, and a crowd: that comes first)
+					const double Sc = .5 * FMath::Min(D3, 1.6) + .3 * FMath::Min(D6, 2.0) + (W.Bank ? 1.5 : 0) + .1 * EHash(W.X, W.Z) + .25 * FMath::Min(Crowd, 60);
+					if (D3 > .7 && D6 > .9 && Crowd >= 8 && KeysGeo::LandH(W.X + O.X * 3, W.Z + O.Y * 3) < -.05 && Sc > C->WallScore[Reg]) { C->WallScore[Reg] = Sc; C->Wall[Reg] = FVector2D(W.X, W.Z); C->WallOut[Reg] = O; }
+				}
 				else if (!C->bHave[Reg][S.Kind]) { C->bHave[Reg][S.Kind] = true; C->Example[Reg][S.Kind] = FVector2D(S.P.X, S.P.Z); C->ExampleOut[Reg][S.Kind] = S.Out; }
 			}
 		}
@@ -603,6 +626,16 @@ static bool EcoNearest(FEco& S, const FString& Name, const FVector& Near, FVecto
 		for (FSchoolE& Sc : T.Value->Schools) Try(Sc.Kind, FVector(Sc.C.X, Sc.bAwake ? Sc.Y : S.Sea - .2, Sc.C.Y), Sc.Out);
 		for (FGroup& G : T.Value->Groups) Try(G.Kind, G.M.Num() ? FVector(G.C.X, G.M[0].P.Y, G.C.Y) : FVector(G.C.X, S.Sea - .3, G.C.Y), G.Out);
 		for (FCrabs& Cr : T.Value->Crabs) Try(Cr.Kind, Cr.Kind == TreeCrab ? RootPoint(Cr.Site, 0, .3) : FVector(Cr.C.X, Cr.FloorY, Cr.C.Y), Cr.Out);
+	}
+	// (root life) what grows on the roots near the camera, by its own names
+	for (int32 G = 0; G < NumGrow; G++)
+	{
+		if (!FString(GrowName(G)).Contains(Name)) continue;
+		for (int32 i = 0; i < S.GrowP[G].Num(); i++)
+		{
+			const double D = FVector::DistSquared2D(FVector(S.GrowP[G][i].X, S.GrowP[G][i].Z, 0), FVector(Near.X, Near.Z, 0));
+			if (D < Best) { Best = D; OutP = S.GrowP[G][i]; OutDir = S.GrowO[G][i]; }
+		}
 	}
 	return Best < 1e17;
 }
@@ -715,6 +748,8 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 	if (const AKeysDiver* Dv = AKeysDiver::Get(this); Dv && Dv->IsDiving()) { S.bDiver = true; S.Diver = FVector(Dv->State().X, Dv->State().Y, Dv->State().Z); }
 	S.Sea = KeysOcean::SeaLevel();
 	S.Tide = KeysGeo::TideLevel();
+	if (S.Dt > 0) S.TideRate = FMath::Lerp(S.TideRate, (S.Tide - S.TideWas) / S.Dt, FMath::Min(1.0, S.Dt * .5));
+	S.TideWas = S.Tide;
 	S.Hour = KeysFeed::HourNow(this);
 	S.Phase = S.Hour < 5.25 || S.Hour >= 19.75 ? 0 : S.Hour < 7.75 ? 1 : S.Hour < 17.5 ? 2 : 3;
 	S.Night = S.Phase == 0 ? 1 : 0;
@@ -730,7 +765,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 		{
 			const double Ts = FPlatformTime::Seconds();
 			FTileE* T = new FTileE();
-			T->Key = P->Key; T->C = P->C; T->Roosts = P->Roosts; T->Wade = P->Wade;
+			T->Key = P->Key; T->C = P->C; T->Roosts = P->Roosts; T->Wade = P->Wade; T->Trees = MoveTemp(P->Trees);
 			T->RoostUsed.Init(false, T->Roosts.Num());
 			FMemory::Memcpy(T->Count, P->Count, sizeof(T->Count));
 			SpawnBirds(S, *T, *P);
@@ -738,6 +773,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 			for (const FSpot& Sp : P->Spots) if (Sp.Kind == Manatee) { T->Haunts.Add(Sp); T->Armed.Add(true); }
 			S.Tiles.Add(P->Key, T);
 			S.bStillDirty = true;
+			S.bGrowForce = true;
 			if (S.bScript) UE_LOG(LogTemp, Log, TEXT("KREco tile at %.0f, %.0f planned: %d trees, %d birds, %d schools, %d others; set up in %.1f ms"), T->C.X, T->C.Y, P->Sites, T->Birds.Num(), T->Schools.Num(), T->Groups.Num() + T->Crabs.Num(), (FPlatformTime::Seconds() - Ts) * 1000);
 		}
 		delete P;
@@ -760,7 +796,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 			S.Job = Async(EAsyncExecution::ThreadPool, [Best] { FPlan* P = new FPlan(); PlanTile(Best, *P); return P; });
 		}
 		for (auto It = S.Tiles.CreateIterator(); It; ++It)
-			if (FVector2D::Distance(It.Value()->C, S.Boat) > 1300) { delete It.Value(); It.RemoveCurrent(); S.bStillDirty = true; }
+			if (FVector2D::Distance(It.Value()->C, S.Boat) > 1300) { delete It.Value(); It.RemoveCurrent(); S.bStillDirty = true; S.bGrowForce = true; }
 	}
 	if (S.bCensusJob && S.CensusJob.IsReady())
 	{
@@ -774,6 +810,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 	S.Live.Reset();
 	for (FPoolE& P : S.Pools) { P.Xf.Reset(); P.Data.Reset(); }
 	S.BirdsDrawn = S.BirdsMoved = S.FishDrawn = S.SchoolsAwake = 0;
+	S.FishCap = S.FishThinned = 0;
 	const FVector2D Cam2(S.Cam.X, S.Cam.Z);
 	TickRookeries(S);
 	for (TPair<int64, FTileE*>& T : S.Tiles)
@@ -798,6 +835,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 	EcoFlushSoup(LiveMesh, S.Live);
 	if (bStill) EcoFlushSoup(StillMesh, S.Still);
 	FlushPools(this, S);
+	UpdateGrowth(this, S);
 
 	// ---- the links that are told once when they turn
 	for (int32 i = S.Showers.Num() - 1; i >= 0; i--)
@@ -908,12 +946,29 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 				S.LookShots--; S.LookShotT = .22;
 			}
 		}
-		else if (EcoNearest(S, S.LookName, S.LookAt, P, O) && FVector::Dist(P, S.LookAt) < 60) { S.LookAt = FMath::Lerp(S.LookAt, P, FMath::Min(1.0, S.Dt * 4)); }
+		else if (!S.LookName.StartsWith(TEXT("#")) && EcoNearest(S, S.LookName, S.LookAt, P, O) && FVector::Dist(P, S.LookAt) < 60) { S.LookAt = FMath::Lerp(S.LookAt, P, FMath::Min(1.0, S.Dt * 4)); }
 		const FVector2D Sdw(-S.LookDir.Y, S.LookDir.X);
 		FVector Eye = S.LookAt + FVector(S.LookDir.X * S.LookDist + Sdw.X * S.LookSide, S.LookH, S.LookDir.Y * S.LookDist + Sdw.Y * S.LookSide);
-		if (Wet(Eye.X, Eye.Z)) Eye.Y = FMath::Max(Eye.Y, FloorAt(Eye.X, Eye.Z) + .12);   // (never under the bottom)
-		if (S.LookH < 0 && S.LookAt.Y < S.Sea) Eye.Y = FMath::Min(Eye.Y, S.Sea - .06);   // (asked for from under the surface: it stays under)
-		S.LookCam->SetActorLocationAndRotation(KeysGeo::ToUE(Eye.X, Eye.Y, Eye.Z), (KeysGeo::ToUE(S.LookAt.X, S.LookAt.Y, S.LookAt.Z) - KeysGeo::ToUE(Eye.X, Eye.Y, Eye.Z)).Rotation());
+		FVector Aim = S.LookAt;
+		if (RootLife())
+		{
+			// (never under the bottom, never in a root; asked for from under the surface it stays under, in water deep
+			// enough to hold it, and in thin water it looks along rather than down; the spot is chosen once and kept)
+			if (!S.bLookEyeSet || FVector::DistSquared(S.LookEyeFor, S.LookAt) > .5 * .5)
+			{
+				S.LookEye = SafeEye(S, Eye, S.LookAt, S.LookH < 0 || (S.LookAt.Y < S.Sea && S.LookH < .2), S.LookAim);
+				S.LookAimOff = S.LookAim - S.LookAt;
+				S.LookEyeFor = S.LookAt; S.bLookEyeSet = true;
+			}
+			Eye = S.LookEye + (S.LookAt - S.LookEyeFor);
+			Aim = S.LookAt + S.LookAimOff;
+		}
+		else
+		{
+			if (Wet(Eye.X, Eye.Z)) Eye.Y = FMath::Max(Eye.Y, FloorAt(Eye.X, Eye.Z) + .12);   // (never under the bottom)
+			if (S.LookH < 0 && S.LookAt.Y < S.Sea) Eye.Y = FMath::Min(Eye.Y, S.Sea - .06);   // (asked for from under the surface: it stays under)
+		}
+		S.LookCam->SetActorLocationAndRotation(KeysGeo::ToUE(Eye.X, Eye.Y, Eye.Z), (KeysGeo::ToUE(Aim.X, Aim.Y, Aim.Z) - KeysGeo::ToUE(Eye.X, Eye.Y, Eye.Z)).Rotation());
 	}
 	S.CpuAcc += (FPlatformTime::Seconds() - T0) * 1000;
 	S.CpuN++;
@@ -947,6 +1002,14 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		UE_LOG(LogTemp, Log, TEXT("KREco near (within 600 m of the camera at %.0f, %.0f, %s, by %s; %s, tide %.2f, hour %.1f):%s"), S.Cam.X, S.Cam.Z, RegionName(RegionAt(S.Cam.X)), *KeysGeo::NearestName(S.Cam.X, S.Cam.Z), PhaseWord(S), S.Tide, S.Hour, *Who);
 		UE_LOG(LogTemp, Log, TEXT("KREco drawn: %d birds (%d moving), %d + %d bird triangles in 2 meshes; %d instances in %d instanced meshes, %d triangles; %d of %d schools awake with %d fish; %d tiles planned; cpu %.2f ms a frame"),
 			S.StillN + S.BirdsMoved, S.BirdsMoved, S.Live.T.Num() / 3, S.Still.T.Num() / 3, PoolInst, PoolsOn, PoolTris, Awake, Sch, Fish, S.Tiles.Num(), S.CpuN ? S.CpuAcc / S.CpuN : 0);
+		if (RootLife())
+		{
+			int32 GI = 0;
+			FString Who2;
+			for (int32 G = 0; G < NumGrow; G++) { GI += S.GrowN[G]; Who2 += FString::Printf(TEXT(" %s %d,"), GrowName(G), S.GrowN[G]); }
+			UE_LOG(LogTemp, Log, TEXT("KRRoot stats: growth %d instances on %d roots of %d trees within 26 m (%d triangles, laid out in %.2f ms when the camera last moved 7 m):%s fish moved and drawn %d (%d left still by distance)"),
+				GI, S.GrowRoots, S.GrowTrees, S.GrowTris, S.GrowMs, *Who2, S.FishCap, S.FishThinned);
+		}
 		S.CpuAcc = 0; S.CpuN = 0;
 	}
 	else if (C0 == TEXT("census"))
@@ -977,6 +1040,8 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		}
 		// (the pelicans' places a boat can lie nearest to: three pilings and three flocks of white pelicans a region)
 		UE_LOG(LogTemp, Log, TEXT("KREco census pelicans: %d brown pelicans on pilings map-wide"), Cn.PilingN);
+		for (int32 r = 0; r < 4; r++)
+			if (Cn.WallScore[r] >= 0) UE_LOG(LogTemp, Log, TEXT("KREco where %s / root wall: %.0f, %.0f; %s (eco:gowall %d)"), RegionName(r), Cn.Wall[r].X, Cn.Wall[r].Y, *TpFor(Cn.Wall[r], Cn.WallOut[r], 14), r);
 		if (A.Num() > 1)
 			for (int32 r = 0; r < 4; r++)
 				for (int32 w = 0; w < 2; w++)
@@ -1053,6 +1118,16 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			S.LookName = TEXT("-");
 			if (!Num.Num()) Num = {Rookeries()[R].R + 50, 9};
 		}
+		else if (Name == TEXT("roots"))
+		{
+			// (root life) the best root wall near the boat, seen along it from its open-water side, under the surface
+			FVector At;
+			FVector2D Ou, Tn;
+			if (!FindWall(S, S.Boat, 160, At, Ou, Tn, true)) return;
+			P = At; O = (Ou * FMath::Cos(.75) + Tn * FMath::Sin(.75)).GetSafeNormal();
+			S.LookName = TEXT("#roots");
+			while (Num.Num() < 4) Num.Add(Num.Num() == 0 ? 3.8 : Num.Num() == 3 ? 72 : 0);
+		}
 		else if (Name == TEXT("shower") || Name == TEXT("strike"))
 		{
 			// (wherever the bait next goes up, or a wader next strikes)
@@ -1066,6 +1141,7 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			S.LookName = Name;
 		}
 		S.LookAt = P; S.LookDir = O;
+		S.bLookEyeSet = false;
 		S.LookDist = Num.Num() > 0 ? Num[0] : 6; S.LookH = Num.Num() > 1 ? Num[1] : 1.2; S.LookSide = Num.Num() > 2 ? Num[2] : 0;
 		if (!S.LookCam.IsValid()) S.LookCam = GetWorld()->SpawnActor<ACameraActor>();
 		if (ACameraActor* LkCam = Cast<ACameraActor>(S.LookCam.Get()))
@@ -1076,6 +1152,40 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		}
 		S.bLook = true;
 		UE_LOG(LogTemp, Log, TEXT("KREco look %s: at %.0f, %.1f, %.0f (%.0f m from the boat), camera %.1f m off and %.1f m up"), *Name, P.X, P.Y, P.Z, FVector2D::Distance(FVector2D(P.X, P.Z), S.Boat), S.LookDist, S.LookH);
+	}
+	else if (C0 == TEXT("dive"))
+	{
+		// (root life) dive roots [dist]: the diver put off the best root wall near her, looking along it, and held there
+		AKeysDiver* Dv = AKeysDiver::Get(this);
+		if (!Dv || !Dv->IsDiving()) { UE_LOG(LogTemp, Log, TEXT("KREco dive: not diving")); return; }
+		FVector At;
+		FVector2D Ou, Tn;
+		if (!FindWall(S, S.bDiver ? FVector2D(S.Diver.X, S.Diver.Z) : S.Boat, 160, At, Ou, Tn, true)) return;
+		const double Dist = A.Num() > 2 && A[2].IsNumeric() ? FCString::Atod(*A[2]) : 3.4;
+		const FVector2D Dir = (Ou * FMath::Cos(.75) + Tn * FMath::Sin(.75)).GetSafeNormal();
+		FVector Aim;
+		const FVector Eye = SafeEye(S, At + FVector(Dir.X * Dist, 0, Dir.Y * Dist), At, true, Aim);
+		Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), Eye.X, Eye.Z));
+		Dv->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -Eye.Y + .1));
+		Dv->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -Eye.Y + .1));
+		const FVector D = Aim - Eye;
+		const double Yaw = FMath::Atan2(-D.X, -D.Z), Pitch = FMath::Atan2(D.Y, FMath::Max(.1, FVector2D(D.X, D.Z).Size()));
+		Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%.3f,%.3f"), Yaw, Pitch));
+		UE_LOG(LogTemp, Log, TEXT("KREco dive roots: the diver at %.1f, %.2f, %.1f looking at %.1f, %.2f, %.1f (dv:look=%.3f,%.3f), %.1f m of water there"), Eye.X, Eye.Y, Eye.Z, At.X, At.Y, At.Z, Yaw, Pitch, S.Sea - FloorAt(Eye.X, Eye.Z));
+	}
+	else if (C0 == TEXT("gowall") && A.Num() > 1)
+	{
+		// (root life) gowall <region 0-3>: the boat put off that region's best root wall (from the census)
+		if (!S.Census) { UE_LOG(LogTemp, Log, TEXT("KREco gowall: the census is still counting")); return; }
+		const int32 R = FMath::Clamp(FCString::Atoi(*A[1]), 0, 3);
+		AKeysBoatPawn* Pw = Cast<AKeysBoatPawn>(UGameplayStatics::GetPlayerPawn(this, 0));
+		FVector2D B;
+		double Hd;
+		if (!Pw || S.Census->WallScore[R] < 0) { UE_LOG(LogTemp, Log, TEXT("KREco gowall %s: none"), RegionName(R)); return; }
+		const bool bOk = BoatSpot(S.Census->Wall[R], S.Census->WallOut[R], 12, B, Hd);
+		Pw->DebugPlace(B.X, B.Y, Hd);
+		UE_LOG(LogTemp, Log, TEXT("KREco gowall %s: the root wall at %.0f, %.0f, by %s; the boat put at tp=%.0f,%.0f,%.3f (%.0f m off, %.1f m charted%s)"), RegionName(R), S.Census->Wall[R].X, S.Census->Wall[R].Y,
+			*KeysGeo::NearestName(S.Census->Wall[R].X, S.Census->Wall[R].Y), B.X, B.Y, Hd, FVector2D::Distance(B, S.Census->Wall[R]), KeysGeo::DepthAt(B.X, B.Y), bOk ? TEXT("") : TEXT(": no good water"));
 	}
 	else if (C0 == TEXT("rook"))
 	{
