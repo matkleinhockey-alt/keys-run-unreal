@@ -28,6 +28,9 @@ once).
 | `reefbottom` | Queen conch, giant Caribbean anemone, purple sea fans, audit of the reef itself (brief written by the marshal) | `lane/reefbottom` | `../KeysRun-reefbottom` | merged 2026-11-24 |
 | `reefaudio` | Sound for the reef and the mangroves, synthesised (brief written by the marshal) | `lane/reefaudio` | `../KeysRun-reefaudio` | merged 2026-11-24 |
 | `reefreal` | Realism clean-up: halibut out, gulf flounder, no kelp, audit; black marlin stays at the user's word (brief written by the marshal) | `lane/reefreal` | `../KeysRun-reefreal` | merged 2026-11-24 |
+| `rootlife` | Under the mangrove roots: thick schools, growth on the roots, snook and snapper in view (brief written by the marshal) | `lane/rootlife` | `../KeysRun-rootlife` | running since 2026-11-24 (background agent) |
+| `reeflinks` | Reef behaviour links and the reef lanes' loose ends (brief written by the marshal) | `lane/reeflinks` | `../KeysRun-reeflinks` | running since 2026-11-24 (background agent) |
+| `baitballs` | More bait balls in deep water, worked by big fish (brief written by the marshal) | `lane/baitballs` | `../KeysRun-baitballs` | running since 2026-11-24 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -56,6 +59,9 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `reefbottom` | new `Source/KeysRun/KeysReefLifeBottom*.cpp` |
 | `reefaudio` | new `Source/KeysRun/KeysReefAudio*` |
 | `reefreal` | `Source/KeysRun/KeysGarden.*` |
+| `rootlife` | `Source/KeysRun/KeysMangrove.cpp`, `KeysMangroveLife.*`, `KeysMangroveEco*` |
+| `reeflinks` | `Source/KeysRun/KeysReefLife*` (framework and species, while the lane runs), `KeysReefDen*` |
+| `baitballs` | `Source/KeysRun/KeysSchools.*` (while the lane runs), new `Source/KeysRun/KeysBait*` |
 
 ## Marshal-only files
 
@@ -348,3 +354,5 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   still the old model; sounds only ever played by test command (ibis, night heron, green heron, osprey, tarpon
   roll, crab drop); the garden's drama; the audit's doubtful species (`.marshal/requests/reefreal/audit.md`).
   `reeflinks` is the only lane not yet opened; then the release.
+- 2026-11-24: Sombrero Reef is a teleport destination from the outset; pushed to GitHub at the user's word; "v1.44" on the main menu and a release build packaged in `Saved/Release58` (self-contained, `-package -archive`), then HELD at the user's word ("Wait before you do thqt"): nothing published. The marshal's screenshots under the mangrove roots were weak; the user asked for thicker schools, growth on the roots and snook and snapper in view: `lane/rootlife`. `lane/reeflinks` opened beside it (the last lane before the release). Both created from `main` (this entry).
+- 2026-11-24: the user: "can you do more baitballs but with bigger fish in the deep water": `lane/baitballs` created from `main` (this entry). The user switched the session to Opus 5.5 ("keep working in opus 5.5"): commits now end with `Co-Authored-By: Claude Opus 5.5`.
