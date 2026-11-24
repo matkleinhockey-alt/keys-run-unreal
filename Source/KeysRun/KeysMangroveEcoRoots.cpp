@@ -431,12 +431,12 @@ namespace KeysMangroveEco
 		const FVector2D Tan(-O.Y, O.X);
 		auto Hash = [&S](double Salt) { return SHash(S, Salt); };
 		// ---- the schools in the roots: one tree in two or three on a creek bank, fewer on a flat
-		if (Hash(101) < .4 * Rich)
+		if (Hash(101) < (S.Bank ? .5 : .4 * Rich))
 		{
 			const double Hk = Hash(102);
 			const uint8 Kind = Hk < .34 ? Silverside : Hk < .52 ? Pilchard : Hk < .66 ? Snapper : Hk < .8 ? Grunt : Hk < .9 ? Schoolmaster : LaneSnapper;
 			const double Big = .6 + .4 * Rich + .3 * Hash(103);
-			const int32 N = int32((Kind == Silverside ? 120 : Kind == Pilchard ? 80 : Kind == Snapper || Kind == Grunt ? 34 : 26) * Big);
+			const int32 N = int32((Kind == Silverside ? 140 : Kind == Pilchard ? 90 : Kind == Snapper || Kind == Grunt ? 34 : 26) * Big);
 			FSpot& Sp = Add(Kind, S, FVector(Home.X, 0, Home.Y), O, N, 101);
 			Sp.Depth = float(Dh);
 			if (S.Bank)
@@ -568,8 +568,11 @@ namespace KeysMangroveEco
 		if (bUnder)
 		{
 			const double Fl = FloorAt(Eye.X, Eye.Z);
-			const double Lo = Fl + .1, Hi = E.Sea - FMath::Clamp((E.Sea - Fl) * .5, .1, .6);
-			Eye.Y = Lo <= Hi ? FMath::Clamp(Eye.Y, Lo, Hi) : (Fl + E.Sea) * .5;
+			// (the underwater view needs the eye well under: within about 0.9 m of the top of the tide the surface cuts the
+			// picture in two. A subject that high, at the top of the tide, is taken that way, level with it)
+			const double Lo = Fl + .1, Hi = E.Sea - FMath::Min(1.1, FMath::Max(.12, E.Sea - Fl - .15));
+			if (At.Y > Hi + .3) Eye.Y = FMath::Clamp(At.Y - .05, FMath::Min(Lo, E.Sea - .12), E.Sea - .12);
+			else Eye.Y = Lo <= Hi ? FMath::Clamp(Eye.Y, Lo, Hi) : (Fl + E.Sea) * .5;
 		}
 		else if (Wet(Eye.X, Eye.Z)) Eye.Y = FMath::Max(Eye.Y, E.Sea + .12);
 		else Eye.Y = FMath::Max(Eye.Y, KeysGeo::LandH(Eye.X, Eye.Z) + .3);
@@ -581,10 +584,10 @@ namespace KeysMangroveEco
 			if (bUnder) { const double Fl = FloorAt(Eye.X, Eye.Z); Eye.Y = FMath::Clamp(Eye.Y, FMath::Min(Fl + .1, E.Sea - .07), E.Sea - .07); }
 		}
 		// in thin water it looks along, not down into the mud
-		if (bUnder && E.Sea - FloorAt(Eye.X, Eye.Z) < .7)
+		if (bUnder)
 		{
-			const double H = FVector2D::Distance(FVector2D(Eye.X, Eye.Z), A2);
-			OutAim.Y = FMath::Clamp(OutAim.Y, Eye.Y - H * .12, Eye.Y + H * .12);
+			const double H = FVector2D::Distance(FVector2D(Eye.X, Eye.Z), A2), K = E.Sea - FloorAt(Eye.X, Eye.Z) < .7 ? .12 : .35;
+			OutAim.Y = FMath::Clamp(OutAim.Y, Eye.Y - H * K, Eye.Y + H * K);
 		}
 		return Eye;
 	}

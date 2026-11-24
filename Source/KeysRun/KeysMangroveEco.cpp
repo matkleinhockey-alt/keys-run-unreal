@@ -511,7 +511,11 @@ namespace KeysMangroveEco
 					const FSite& W = S.Site;
 					const FVector2D O = W.Bank ? W.In : Outward(W.X, W.Z);
 					const double D3 = KeysGeo::DepthAt(W.X + O.X * 3, W.Z + O.Y * 3), D6 = KeysGeo::DepthAt(W.X + O.X * 6, W.Z + O.Y * 6);
-					const double Sc = FMath::Min(D3, 1.6) + .5 * FMath::Min(D6, 2.0) + (W.Bank ? .5 : 0) + .1 * EHash(W.X, W.Z);
+					// (and a crowded edge: trees standing close along it, schools and fish lying in it)
+					int32 Crowd = 0;
+					for (const FSite& T2 : P.Trees) Crowd += FMath::Square(T2.X - W.X) + FMath::Square(T2.Z - W.Z) < 15.0 * 15.0 ? 1 : 0;
+					for (const FSpot& S2 : P.Spots) Crowd += S2.Kind >= Silverside && S2.Kind <= GraySnapper && FMath::Square(S2.P.X - W.X) + FMath::Square(S2.P.Z - W.Z) < 15.0 * 15.0 ? 2 : 0;
+					const double Sc = FMath::Min(D3, 1.6) + .5 * FMath::Min(D6, 2.0) + (W.Bank ? .5 : 0) + .1 * EHash(W.X, W.Z) + .12 * FMath::Min(Crowd, 40);
 					if (D3 > .6 && D6 > .9 && KeysGeo::LandH(W.X + O.X * 3, W.Z + O.Y * 3) < -.05 && Sc > C->WallScore[Reg]) { C->WallScore[Reg] = Sc; C->Wall[Reg] = FVector2D(W.X, W.Z); C->WallOut[Reg] = O; }
 				}
 				else if (!C->bHave[Reg][S.Kind]) { C->bHave[Reg][S.Kind] = true; C->Example[Reg][S.Kind] = FVector2D(S.P.X, S.P.Z); C->ExampleOut[Reg][S.Kind] = S.Out; }
