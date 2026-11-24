@@ -306,3 +306,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   hoverers not tied to heads or wrecks, the ray is not half buried, a turtle is not drawn in the last metre
   under the surface, no turtles resting under ledges, the recipe's section 7 is a placeholder and its other
   faults (fish R9, bottom R4), staghorn as thick fingers, turtle grass on Sombrero's crest (bottom R3).
+- 2026-11-24: `birdview` restarted at the user's word ("restart birdview") with a new background agent in the same worktree, beside `reefdens`.
