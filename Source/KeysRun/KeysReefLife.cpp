@@ -580,7 +580,7 @@ namespace KeysReefLife
 			C->SetupAttachment(Act->Root);
 			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			C->NumCustomDataFloats = 8;   // tail phase, its rate, when, amplitude, body bend, flash, shade, seed (M_KR_Boid)
-			C->SetCastShadow(Kind <= 1);
+			C->SetCastShadow(Kind == 0);   // only the nearest level of detail throws a shadow (marshal, 2026-11-24: dive GPU)
 			C->SetMaterial(0, Act->MID);
 			C->SetCullDistances(0, int32(S.Cull * 100));
 			C->bAffectDistanceFieldLighting = false;

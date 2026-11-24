@@ -2931,9 +2931,7 @@ void AKeysLife::SpearTargetsNear(double X, double Y, double Z, double R, TArray<
 		if (!V || LHyp(G.CX - X, G.CZ - Z) > R + 40) continue;
 		const KeysData::FSpecies* Sp = KeysData::Species(G.Type);
 		if (!Sp) continue;   // ambient-only creatures have no catch
-		// (a species that may only be released cannot be released off a spear: goliath grouper, tarpon, bonefish, billfish and
-		// the protected sharks are seen, not shot)
-		const bool bCatchable = V->Kind != EKeysKind::Dolphin && V->Kind != EKeysKind::Turtle && V->Kind != EKeysKind::Manatee && !V->bNoCatch && KeysData::ReleaseOnlyReason(G.Type).IsEmpty();
+		const bool bCatchable = V->Kind != EKeysKind::Dolphin && V->Kind != EKeysKind::Turtle && V->Kind != EKeysKind::Manatee && !V->bNoCatch;
 		const double Fx = -FMath::Sin(G.H), Fz = -FMath::Cos(G.H);
 		double Spd = V->Speed;
 		if (G.Flee > 0) Spd *= G.FleeMul > 0 ? G.FleeMul : 3.2;
