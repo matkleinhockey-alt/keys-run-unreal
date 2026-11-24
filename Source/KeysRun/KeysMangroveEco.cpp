@@ -1002,7 +1002,7 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			int32 GI = 0;
 			FString Who2;
 			for (int32 G = 0; G < NumGrow; G++) { GI += S.GrowN[G]; Who2 += FString::Printf(TEXT(" %s %d,"), GrowName(G), S.GrowN[G]); }
-			UE_LOG(LogTemp, Log, TEXT("KRRoot stats: growth %d instances on %d roots of %d trees (%d triangles, laid out in %.2f ms when the camera last moved 7 m):%s fish moved and drawn %d (%d left still by distance)"),
+			UE_LOG(LogTemp, Log, TEXT("KRRoot stats: growth %d instances on %d roots of %d trees within 30 m (%d triangles, laid out in %.2f ms when the camera last moved 7 m):%s fish moved and drawn %d (%d left still by distance)"),
 				GI, S.GrowRoots, S.GrowTrees, S.GrowTris, S.GrowMs, *Who2, S.FishCap, S.FishThinned);
 		}
 		S.CpuAcc = 0; S.CpuN = 0;
@@ -1162,7 +1162,7 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		const FVector Eye = SafeEye(S, At + FVector(Dir.X * Dist, 0, Dir.Y * Dist), At, true, Aim);
 		Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), Eye.X, Eye.Z));
 		Dv->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -Eye.Y + .1));
-		Dv->DebugCmd(TEXT("hover"), FString());
+		Dv->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -Eye.Y + .1));
 		const FVector D = Aim - Eye;
 		const double Yaw = FMath::Atan2(-D.X, -D.Z), Pitch = FMath::Atan2(D.Y, FMath::Max(.1, FVector2D(D.X, D.Z).Size()));
 		Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%.3f,%.3f"), Yaw, Pitch));

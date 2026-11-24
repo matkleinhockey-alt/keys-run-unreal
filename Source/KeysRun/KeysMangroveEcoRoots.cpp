@@ -109,39 +109,39 @@ namespace KeysMangroveEco
 			if (G == GBarnacle)
 			{
 				// a crust of little grey-white cones: a rough pale sleeve, speckled dark where the shells' mouths are
-				Sleeve(M, 5, 8, [&](double U, double A) { return 1.32 + .12 * Noise(U, A, 2.3); },
-					[&](double U, double A, double R) { return RHash(U * 13 + Sd, A * 7) < .3 ? RHex(0x6e6a5e) : FMath::Lerp(RHex(0xbcb6a4), RHex(0xe4e0d2), float(RHash(A * 3, U * 11))); });
+				Sleeve(M, 4, 7, [&](double U, double A) { return 1.16 + .07 * Noise(U, A, 2.3); },
+					[&](double U, double A, double R) { return RHash(U * 13 + Sd, A * 7) < .35 ? RHex(0x5e5a50) : FMath::Lerp(RHex(0x9a9484), RHex(0xbab4a4), float(RHash(A * 3, U * 11))); });
 			}
 			else if (G == GOyster)
 			{
 				// a cluster of mangrove oysters and flat tree oysters: grey shells standing off the root at all angles,
 				// their lips pale and their insides purple-black
-				for (int32 k = 0; k < 7; k++)
+				for (int32 k = 0; k < 6; k++)
 				{
-					const double A = 2 * PI * (k + .4 * RHash(k, 1.0)) / 7, X = (RHash(k, 2.0) - .5) * 2.4, Tilt = (RHash(k, 3.0) - .5) * 1.1;
+					const double A = 2 * PI * (k + .4 * RHash(k, 1.0)) / 6, X = (RHash(k, 2.0) - .5) * 2.4, Tilt = (RHash(k, 3.0) - .5) * 1.1;
 					const FVector Out = Rad(A, 1);
 					const FVector Long = (Out * FMath::Cos(Tilt) + FVector(FMath::Sin(Tilt), 0, 0)).GetSafeNormal();
 					const FVector Side = FVector::CrossProduct(Long, FVector(1, 0, 0)).GetSafeNormal(.01, FVector(0, 0, 1));
 					const FVector Thin = FVector::CrossProduct(Long, Side).GetSafeNormal();
 					const double L = 1.5 + .9 * RHash(k, 4.0);
 					const uint32 Shell = k % 3 == 0 ? 0x5c4e56 : k % 3 == 1 ? 0x8f8878 : 0x9e9684;
-					Blob(M, FVector(X, 0, 0) + Out * (1.0 + L * .55), Long * L * .6, Side * L * .42, Thin * .32, 6, 3,
+					Blob(M, FVector(X, 0, 0) + Out * (1.0 + L * .55), Long * L * .6, Side * L * .42, Thin * .32, 5, 2,
 						[Shell](double T) { return FMath::Lerp(RHex(Shell) * .75f, RHex(0xc8c2b2), float(FMath::Square(T))); });
 				}
-				Sleeve(M, 3, 6, [&](double U, double A) { return 1.25 + .1 * Noise(U, A, 1.4); }, [](double, double, double) { return RHex(0x7a7468); });
+				Sleeve(M, 2, 6, [&](double U, double A) { return 1.15 + .1 * Noise(U, A, 1.4); }, [](double, double, double) { return RHex(0x7a7468); });
 			}
 			else if (G == GSpongeRed || G == GSpongeOrange)
 			{
 				// fire sponge: a thick, lumpy, brilliant crust that swallows the root, darker in its folds, with a few raised
 				// vents (oscula)
-				const FLinearColor Hi = RHex(G == GSpongeRed ? 0xd8301c : 0xf07a22), Lo = RHex(G == GSpongeRed ? 0x7a1810 : 0x9a4410);
-				Sleeve(M, 7, 10, [&](double U, double A) { return 2.0 + .55 * Noise(U, A, 1.0) + .25 * Noise(U * 1.7, A * 1.3, 2.2); },
-					[&](double U, double A, double R) { return FMath::Lerp(Lo, Hi, float(FMath::Clamp((R - 1.4) / 1.3, 0.0, 1.0))); });
-				for (int32 k = 0; k < 3; k++)
+				const FLinearColor Hi = RHex(G == GSpongeRed ? 0xb8301e : 0xd8641e), Lo = RHex(G == GSpongeRed ? 0x6a1a12 : 0x8a4012);
+				Sleeve(M, 5, 8, [&](double U, double A) { return 1.5 + .28 * Noise(U, A, 1.0) + .12 * Noise(U * 1.7, A * 1.3, 2.2); },
+					[&](double U, double A, double R) { return FMath::Lerp(Lo, Hi, float(FMath::Clamp((R - 1.2) / .6, 0.0, 1.0))); });
+				for (int32 k = 0; k < 2; k++)
 				{
 					const double A = 2 * PI * RHash(k, Sd), X = (RHash(k + 3.0, Sd) - .5) * .5;
 					const FVector Out = Rad(A, 1);
-					Blob(M, FVector(X, 0, 0) + Out * 2.6, Out * .55, Rad(A + PI / 2, .38), FVector(.38, 0, 0), 6, 2,
+					Blob(M, FVector(X, 0, 0) + Out * 1.75, Out * .4, Rad(A + PI / 2, .26), FVector(.26, 0, 0), 5, 2,
 						[Hi, Lo](double T) { return T > .9 ? Lo * .5f : Hi; });
 				}
 			}
@@ -150,21 +150,21 @@ namespace KeysMangroveEco
 				// colonial tunicates: a bunch of little translucent bottles standing out of the root, each with a pale ring at
 				// its mouth
 				const FLinearColor Body = RHex(G == GTunicPurple ? 0x6c3c96 : 0x3a58b8), Tip = RHex(G == GTunicPurple ? 0xc4a0e4 : 0xa4c4f4);
-				for (int32 k = 0; k < 9; k++)
+				for (int32 k = 0; k < 7; k++)
 				{
-					const double A = 2 * PI * RHash(k, Sd + 1) , X = (RHash(k, Sd + 2) - .5) * 2.6;
+					const double A = 2 * PI * RHash(k, Sd + 1) , X = (RHash(k, Sd + 2) - .5) * 2.0;
 					const FVector Out = Rad(A, 1), Side = Rad(A + PI / 2, 1), Ax(1, 0, 0);
-					const double H = 1.0 + .8 * RHash(k, Sd + 3);
-					Blob(M, FVector(X, 0, 0) + Out * (.9 + H * .55), Out * H * .6, Side * .42, Ax * .42, 6, 3, [Body, Tip](double T) { return T > .82 ? Tip : FMath::Lerp(Body * .7f, Body, float(T)); });
+					const double H = .6 + .5 * RHash(k, Sd + 3);
+					Blob(M, FVector(X, 0, 0) + Out * (.95 + H * .5), Out * H * .5, Side * .24, Ax * .24, 5, 2, [Body, Tip](double T) { return T > .82 ? Tip : FMath::Lerp(Body * .7f, Body, float(T)); });
 				}
 			}
 			else if (G == GAlgae)
 			{
 				// a green fuzz: a mat on the root and fine blades standing out of it
-				Sleeve(M, 4, 7, [&](double U, double A) { return 1.25 + .1 * Noise(U, A, 1.7); }, [](double, double, double) { return RHex(0x3c5e26); });
-				for (int32 k = 0; k < 26; k++)
+				Sleeve(M, 3, 7, [&](double U, double A) { return 1.15 + .08 * Noise(U, A, 1.7); }, [](double, double, double) { return RHex(0x3c5e26); });
+				for (int32 k = 0; k < 22; k++)
 				{
-					const double A = 2 * PI * RHash(k, 11.0), X = RHash(k, 12.0) - .5, L = 1.4 + 1.8 * RHash(k, 13.0), W = .05;
+					const double A = 2 * PI * RHash(k, 11.0), X = RHash(k, 12.0) - .5, L = .7 + 1.0 * RHash(k, 13.0), W = .04;
 					const FVector B0 = FVector(X, 0, 0) + Rad(A, 1.2), Tip = FVector(X + (RHash(k, 14.0) - .5) * .3, 0, 0) + Rad(A + (RHash(k, 15.0) - .5) * .6, 1.2 + L);
 					const FVector Sd2 = FVector(W, 0, 0);
 					const FLinearColor Cb = RHex(0x4a7a2a), Ct = RHex(0x8ab84c);
@@ -179,13 +179,13 @@ namespace KeysMangroveEco
 				// an anemone on the root (Aiptasia, Bartholomea): a tan column and a ring of pale tentacles tipped lilac,
 				// standing out of the root's side (+Y)
 				const FLinearColor Col = RHex(0x8a7a5c), Ten = RHex(0xd8ceb0), TipC = RHex(0xb48cd0);
-				Blob(M, FVector(0, 1.9, 0), FVector(0, 1.1, 0), FVector(.75, 0, 0), FVector(0, 0, .75), 7, 3, [Col](double T) { return FMath::Lerp(Col * .7f, Col, float(T)); });
-				for (int32 k = 0; k < 16; k++)
+				Blob(M, FVector(0, 1.9, 0), FVector(0, 1.1, 0), FVector(.75, 0, 0), FVector(0, 0, .75), 6, 2, [Col](double T) { return FMath::Lerp(Col * .7f, Col, float(T)); });
+				for (int32 k = 0; k < 11; k++)
 				{
-					const double A = 2 * PI * k / 16 + .2 * RHash(k, 21.0), L = 1.6 + .9 * RHash(k, 22.0);
+					const double A = 2 * PI * k / 11 + .2 * RHash(k, 21.0), L = 1.6 + .9 * RHash(k, 22.0);
 					const FVector Base(FMath::Cos(A) * .6, 2.9, FMath::Sin(A) * .6), Dir = FVector(FMath::Cos(A) * .8, .75 + .3 * RHash(k, 23.0), FMath::Sin(A) * .8).GetSafeNormal();
 					const FVector S1 = FVector::CrossProduct(Dir, FVector(0, 1, 0)).GetSafeNormal(.01, FVector(1, 0, 0)), S2 = FVector::CrossProduct(Dir, S1).GetSafeNormal();
-					Blob(M, Base + Dir * L * .5, Dir * L * .5, S1 * .13, S2 * .13, 4, 2, [Ten, TipC](double T) { return T > .75 ? TipC : Ten; });
+					Blob(M, Base + Dir * L * .5, Dir * L * .5, S1 * .15, S2 * .15, 3, 2, [Ten, TipC](double T) { return T > .75 ? TipC : Ten; });
 				}
 			}
 			M.SyncKinds();
@@ -258,13 +258,13 @@ namespace KeysMangroveEco
 				C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 				C->SetCastShadow(false);
 				C->SetMaterial(0, AKeysWorld::VertexColorMaterial());
-				C->SetCullDistances(2600, 3400);
+				C->SetCullDistances(2000, 2600);
 				C->bAffectDistanceFieldLighting = false;
 				C->RegisterComponent();
 				A->GrowPools.Add(C);
 				Tri += FString::Printf(TEXT(" %s %d,"), GrowName(G), GGrowTris[G]);
 			}
-			UE_LOG(LogTemp, Log, TEXT("KRRoot growth meshes (triangles):%s made in %.1f ms; drawn to 34 m"), *Tri, (FPlatformTime::Seconds() - T0) * 1000);
+			UE_LOG(LogTemp, Log, TEXT("KRRoot growth meshes (triangles):%s made in %.1f ms; drawn to 26 m"), *Tri, (FPlatformTime::Seconds() - T0) * 1000);
 			return true;
 		}
 
@@ -274,8 +274,8 @@ namespace KeysMangroveEco
 			const FVector2D W(S.X + O.X * 2.5, S.Z + O.Y * 2.5);
 			const double D = KeysGeo::DepthAt(W.X, W.Y);
 			if (KeysGeo::LandH(W.X, W.Y) > -.05 || D < .12) return 0;
-			if (S.Bank) return .9;
-			return D > 1.0 ? .75 : D > .5 ? .55 : .32;
+			if (S.Bank) return .5;
+			return D > 1.0 ? .42 : D > .5 ? .3 : .18;
 		}
 
 		// what grows on one tree's roots, into Out (per kind); Live: the tide's height now (a piece in the air is left
@@ -296,8 +296,9 @@ namespace KeysMangroveEco
 				const double Y1 = FMath::Min(Hi.Y, HighW), Y0 = FMath::Max(Lo.Y, Floor);
 				if (Y1 - Y0 < .04) continue;
 				const FVector Dir = (Hi - Lo).GetSafeNormal();
-				const double Sin = FMath::Max(.15, Dir.Y), L = (Y1 - Y0) / Sin;
-				const FVector Top = Lo + Dir * ((Y1 - Lo.Y) / Sin);
+				const double T0 = (Y0 - Lo.Y) / (Hi.Y - Lo.Y), T1 = (Y1 - Lo.Y) / (Hi.Y - Lo.Y);
+				const double L = (Hi - Lo).Size() * (T1 - T0);
+				const FVector Top = FMath::Lerp(Lo, Hi, T1);
 				NRoot++;
 				// the way out from the root: away from the trunk, level
 				const FVector2D Away = Norm2(FVector2D(Top.X - S.X, Top.Z - S.Z), FVector2D(1, 0));
@@ -311,12 +312,12 @@ namespace KeysMangroveEco
 					// the anemones below the low-tide line, where the roots never dry
 					int32 G;
 					double Len;
-					if (Y > HighW - .2) { G = H2 < .85 ? GBarnacle : GOyster; Len = .14 + .14 * H3; }
-					else if (Y > LowW + .06) { G = H2 < .62 ? GOyster : H2 < .8 ? GBarnacle : GAlgae; Len = .12 + .12 * H3; }
+					if (Y > HighW - .2) { G = H2 < .85 ? GBarnacle : GOyster; Len = .08 + .12 * H3; }
+					else if (Y > LowW + .06) { G = H2 < .6 ? GOyster : H2 < .78 ? GBarnacle : GAlgae; Len = .1 + .1 * H3; }
 					else
 					{
-						G = H2 < .2 ? GSpongeRed : H2 < .38 ? GSpongeOrange : H2 < .52 ? GTunicPurple : H2 < .62 ? GTunicBlue : H2 < .88 ? GAlgae : H2 < .94 + .03 * Bias ? GAnemone : GOyster;
-						Len = .14 + .2 * H3;
+						G = H2 < .13 ? GSpongeRed : H2 < .26 ? GSpongeOrange : H2 < .36 ? GTunicPurple : H2 < .43 ? GTunicBlue : H2 < .82 ? GAlgae : H2 < .86 + .03 * Bias ? GAnemone : GOyster;
+						Len = .1 + .14 * H3;
 					}
 					if (H1 < Cov)
 					{
@@ -330,13 +331,13 @@ namespace KeysMangroveEco
 						Up = Up.RotateAngleAxis(FMath::RadiansToDegrees(Roll), Dir);
 						const FVector Xu = D2U(-Dir), Yu = D2U(Up);
 						const FRotator R = FRotationMatrix::MakeFromXY(Xu, Yu).Rotator();
-						const double Sc = Rr * (IsSleeve(G) ? 1 : (.9 + .35 * H3));
+						const double Sc = Rr * (IsSleeve(G) ? 1 : G == GAnemone ? .5 + .15 * H3 : G == GOyster ? .65 + .2 * H3 : .9 + .25 * H3);
 						Out[G].Add(FTransform(R, G2U(Mid), IsSleeve(G) ? FVector(Lp, Sc, Sc) : FVector(Sc)));
 						if (OutP[G].Num() < 400) { OutP[G].Add(Mid); OutO[G].Add(Norm2(FVector2D(Up.X, Up.Z), Away)); }
 						T += Lp;
 					}
 					else T += Len * .7;
-					T += (.01 + .08 * H2) / FMath::Max(.3, Cov);
+					T += (.04 + .12 * H2) / FMath::Max(.3, Cov);
 				}
 			}
 			return NRoot;
@@ -362,7 +363,7 @@ namespace KeysMangroveEco
 		if (!bHigh)
 		{
 			// the trees within reach, nearest first, to a budget
-			constexpr double Reach = 44;
+			constexpr double Reach = 30;
 			const FVector2D C(E.Cam.X, E.Cam.Z);
 			TArray<TPair<double, const FSite*>> Near;
 			for (const TPair<int64, FTileE*>& T : E.Tiles)
@@ -386,7 +387,7 @@ namespace KeysMangroveEco
 				E.GrowTrees++;
 				Total = 0;
 				for (int32 G = 0; G < NumGrow; G++) Total += Out[G].Num();
-				if (Total > 7000) break;
+				if (Total > 2400) break;
 			}
 		}
 		E.GrowTris = 0;
@@ -404,7 +405,7 @@ namespace KeysMangroveEco
 		{
 			FString Who;
 			for (int32 G = 0; G < NumGrow; G++) Who += FString::Printf(TEXT(" %s %d,"), GrowName(G), E.GrowN[G]);
-			UE_LOG(LogTemp, Log, TEXT("KRRoot growth at %.0f, %.0f: %d roots of %d trees within 44 m:%s %d triangles; laid out in %.2f ms"), E.Cam.X, E.Cam.Z, E.GrowRoots, E.GrowTrees, *Who, E.GrowTris, E.GrowMs);
+			UE_LOG(LogTemp, Log, TEXT("KRRoot growth at %.0f, %.0f: %d roots of %d trees within 30 m:%s %d triangles; laid out in %.2f ms"), E.Cam.X, E.Cam.Z, E.GrowRoots, E.GrowTrees, *Who, E.GrowTris, E.GrowMs);
 		}
 	}
 
@@ -430,12 +431,12 @@ namespace KeysMangroveEco
 		const FVector2D Tan(-O.Y, O.X);
 		auto Hash = [&S](double Salt) { return SHash(S, Salt); };
 		// ---- the schools in the roots: one tree in two or three on a creek bank, fewer on a flat
-		if (Hash(101) < .62 * Rich)
+		if (Hash(101) < .4 * Rich)
 		{
 			const double Hk = Hash(102);
 			const uint8 Kind = Hk < .34 ? Silverside : Hk < .52 ? Pilchard : Hk < .66 ? Snapper : Hk < .8 ? Grunt : Hk < .9 ? Schoolmaster : LaneSnapper;
 			const double Big = .6 + .4 * Rich + .3 * Hash(103);
-			const int32 N = int32((Kind == Silverside ? 170 : Kind == Pilchard ? 110 : Kind == Snapper || Kind == Grunt ? 46 : 34) * Big);
+			const int32 N = int32((Kind == Silverside ? 120 : Kind == Pilchard ? 80 : Kind == Snapper || Kind == Grunt ? 34 : 26) * Big);
 			FSpot& Sp = Add(Kind, S, FVector(Home.X, 0, Home.Y), O, N, 101);
 			Sp.Depth = float(Dh);
 			if (S.Bank)
@@ -567,7 +568,7 @@ namespace KeysMangroveEco
 		if (bUnder)
 		{
 			const double Fl = FloorAt(Eye.X, Eye.Z);
-			const double Lo = Fl + .1, Hi = E.Sea - .07;
+			const double Lo = Fl + .1, Hi = E.Sea - FMath::Clamp((E.Sea - Fl) * .4, .1, .4);
 			Eye.Y = Lo <= Hi ? FMath::Clamp(Eye.Y, Lo, Hi) : (Fl + E.Sea) * .5;
 		}
 		else if (Wet(Eye.X, Eye.Z)) Eye.Y = FMath::Max(Eye.Y, E.Sea + .12);

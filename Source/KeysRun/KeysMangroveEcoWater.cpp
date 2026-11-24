@@ -415,8 +415,10 @@ namespace KeysMangroveEco
 			if (Lg > .05) S.C += ToG / Lg * FMath::Min(Lg, 1.3 * Dt);
 			S.bOut = FVector2D::DistSquared(S.C, S.Home) > 4;
 			const bool bWasAwake = S.bAwake;
-			if (!S.bAwake && DCam < 105) S.bAwake = true;
-			else if (S.bAwake && DCam > 130) { S.bAwake = false; S.Fish.Empty(); }
+			// (root life: awake nearer, the schools being thicker; the boat's surface marks still show to 80 m)
+			const double WakeIn = bRL ? 80 : 105, WakeOut = bRL ? 95 : 130;
+			if (!S.bAwake && DCam < WakeIn) S.bAwake = true;
+			else if (S.bAwake && DCam > WakeOut) { S.bAwake = false; S.Fish.Empty(); }
 			if (!S.bAwake) continue;
 			S.Floor = FloorAt(S.C.X, S.C.Y);
 			const double Depth = FMath::Max(.06, E.Sea - S.Floor), Thick = bRL ? FMath::Clamp(Depth * .38, .03, .6) : FMath::Clamp(Depth * .36, .03, .4);
@@ -449,13 +451,13 @@ namespace KeysMangroveEco
 			S.Mill += Dt * (bRL && S.bHang ? .035 : .22 + S.Scatter * .6) * ((S.Seed & 1) ? 1 : -1);
 			const double Cm = FMath::Cos(S.Mill), Sm = FMath::Sin(S.Mill), Spread = S.R * (1 + S.Scatter * 1.6);
 			const bool bDraw = DCam < K.Cull + 10;
-			// (root life) how many of its fish are moved and drawn: all within 18 m of the camera, a tenth at 70 m (from the
+			// (root life) how many of its fish are moved and drawn: all within 14 m of the camera, one in sixteen at 55 m, none past 60 (from the
 			// deck nothing under the water shows that far off; under it the water hides it); the rest wait where they are
 			int32 Live = S.Fish.Num();
 			if (bRL)
 			{
-				const double Kd = DCam < 18 ? 1 : FMath::Lerp(1.0, .1, FMath::Clamp((DCam - 18) / 52, 0.0, 1.0));
-				Live = bDraw ? FMath::Clamp(int32(S.Fish.Num() * Kd + .5), FMath::Min(S.Fish.Num(), 6), S.Fish.Num()) : 0;
+				const double Kd = DCam < 14 ? 1 : FMath::Lerp(1.0, .06, FMath::Clamp((DCam - 14) / 41, 0.0, 1.0));
+				Live = bDraw && DCam < 60 ? FMath::Clamp(int32(S.Fish.Num() * Kd + .5), FMath::Min(S.Fish.Num(), 4), S.Fish.Num()) : 0;
 				E.FishCap += Live; E.FishThinned += S.Fish.Num() - Live;
 			}
 			const double La = S.R * (S.bBank ? 2.3 : 2.0) * (1 + S.Scatter * 1.2), Lb = S.R * .8 * (1 + S.Scatter * 1.2);
