@@ -53,8 +53,11 @@ namespace KeysData
 		S(TEXT("gag"), TEXT("Gag Grouper"), 6, 45, .9, 7, 0x6f6a60, false, TEXT("Gags hang over ledges and wrecks; the big ones are almost always males."));
 		S(TEXT("redgrouper"), TEXT("Red Grouper"), 5, 30, .85, 7, 0x9a5a46, false, TEXT("Red groupers dig out holes in the bottom that other reef fish move into."));
 		// the web game's later species (content/species.ts): flatfish, the reef's schooling snappers and jacks, the wreck giants, more pelagics
-		S(TEXT("flounder"), TEXT("Southern Flounder"), 1, 12, 0.4, 18, 0x6b5f4a, false, TEXT("Both eyes end up on one side: a flounder starts life upright and one eye migrates across its skull as it settles onto the bottom."));
-		S(TEXT("sole"), TEXT("Hogchoker Sole"), 0.4, 4, 0.3, 22, 0x5e5444, false, TEXT("A true sole, and small enough that it earned its name from hogs choking on the ones thrown to them: the rough scales catch in the throat."));
+		// the gulf flounder (Paralichthys albigutta) is the Keys' flounder; the southern flounder's range stops north of them. Same key, for the saves.
+		S(TEXT("flounder"), TEXT("Gulf Flounder"), 0.5, 6, 0.4, 18, 0x7a6a50, false, TEXT("Three dark eye-spots in a triangle on its back tell a gulf flounder from its cousins. It starts life upright; one eye migrates across its skull as it settles onto the sand."));
+		// (a hogchoker is an American sole, family Achiridae, not a true sole; it grows to about 8 in and a few ounces, not 4 lb)
+		S(TEXT("sole"), TEXT("Hogchoker"), 0.1, 0.5, 0.3, 22, 0x5e5444, false, TEXT("An American sole no longer than your hand. It earned its name from hogs choking on the ones thrown to them: the rough scales catch in the throat."));
+		// retired: a cold-water fish of the North Atlantic that never comes near the Keys. Kept (bRetired, below) for old saves only.
 		S(TEXT("halibut"), TEXT("Atlantic Halibut"), 3, 400, 1.5, 9, 0x4a4a44, false, TEXT("The largest flatfish in the world, and it hunts like one: it will leave the bottom entirely and run down a fish in open water."));
 		S(TEXT("mako"), TEXT("Shortfin Mako"), 80, 600, 1.7, 5, 0x1f4f86, false, TEXT("Makos have been clocked at over 40 mph and will jump clear of the water when hooked."));
 		S(TEXT("warsaw"), TEXT("Warsaw Grouper"), 60, 440, 1.55, 3.5, 0x3b332e, false, TEXT("Warsaw grouper live past fifty years and almost never leave the deep ledges they settle on."));
@@ -66,9 +69,10 @@ namespace KeysData
 		S(TEXT("vermilion"), TEXT("Vermilion Snapper"), 1, 7, 0.35, 16, 0xb8402e, false, TEXT("Called the beeliner. They stack up in big schools just off the reef drop."));
 		S(TEXT("lookdown"), TEXT("Lookdown"), 0.5, 4, 0.35, 20, 0xc3d2dc, false, TEXT("A living mirror  -  flat as a plate, with a face that looks permanently unimpressed."));
 		S(TEXT("palometa"), TEXT("Palometa"), 0.5, 3, 0.4, 22, 0xd7d2bd, false, TEXT("The long black fin streamers trail behind it like ribbons in the surf."));
-		S(TEXT("spanishmack"), TEXT("Spanish Mackerel"), 1, 9, 0.55, 14, 0x44739a, false, TEXT("Golden spots and no bars is how you tell a Spanish from a cero. They slash through bait schools at speed."));
+		S(TEXT("spanishmack"), TEXT("Spanish Mackerel"), 1, 9, 0.55, 14, 0x44739a, false, TEXT("Golden spots and no stripe down the side is how you tell a Spanish from a cero. They slash through bait schools at speed."));
 		S(TEXT("bigeye"), TEXT("Bigeye Tuna"), 30, 300, 1.2, 7, 0x24405f, false, TEXT("That enormous eye is for hunting in deep, dark water  -  bigeye feed far below the other tunas."));
 		S(TEXT("skipjack"), TEXT("Skipjack Tuna"), 4, 30, 0.8, 11, 0x2b4160, false, TEXT("The striped belly is unique among tunas. Skipjack school in the thousands and churn the surface when they feed."));
+		M[TEXT("halibut")].bRetired = true;
 		return M;
 	}
 
@@ -77,7 +81,15 @@ namespace KeysData
 	const TArray<FString>& SpeciesKeys()
 	{
 		static TArray<FString> K;
-		if (!K.Num()) AllSpecies().GetKeys(K);
+		if (!K.Num()) for (const TPair<FString, FSpecies>& P : AllSpecies()) if (!P.Value.bRetired) K.Add(P.Key);
+		return K;
+	}
+
+	const TArray<FString>& RetiredKeys()
+	{
+		static TArray<FString> K;
+		static bool bDone = false;
+		if (!bDone) { bDone = true; for (const TPair<FString, FSpecies>& P : AllSpecies()) if (P.Value.bRetired) K.Add(P.Key); }
 		return K;
 	}
 
@@ -87,16 +99,25 @@ namespace KeysData
 		static TMap<FString, FRow> T;
 		if (!T.Num())
 		{
-			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(Name, FRow(Rows)); };
+			// Gone: the weight of rows since taken out of the table (the halibut's). It is spread over the rows left in
+			// proportion, so the table's total and every other fish's share against the others stay what they were.
+			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows, double Gone = 0)
+			{
+				FRow Rw(Rows);
+				double Sum = 0;
+				for (const FZoneRow& R : Rw) Sum += R.W;
+				if (Gone > 0 && Sum > 0) for (FZoneRow& R : Rw) R.W *= (Sum + Gone) / Sum;
+				T.Add(Name, MoveTemp(Rw));
+			};
 			Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.5}, {TEXT("snook"), 5}, {TEXT("redfish"), 3}, {TEXT("tarpon"), 2}, {TEXT("mangrove"), 4}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}});
 			Z(TEXT("Flats"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.2}, {TEXT("bonefish"), 11}, {TEXT("permit"), 2}, {TEXT("barracuda"), 3}, {TEXT("tarpon"), 1}, {TEXT("ladyfish"), 2}, {TEXT("lemonshark"), 0.8}, {TEXT("blacktip"), 1}, {TEXT("palometa"), 1.5}});
 			// the real map's bay-side flats: the grass banks behind the keys fish like the backcountry, not like the ocean flats
 			Z(TEXT("Bay Flats"), {{TEXT("flounder"), 2}, {TEXT("redfish"), 8}, {TEXT("trout"), 6}, {TEXT("snook"), 3}, {TEXT("bonefish"), 2.5}, {TEXT("tarpon"), 1.5}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("lemonshark"), 0.8}, {TEXT("blacktip"), 1}, {TEXT("barracuda"), 1.2}});
 			Z(TEXT("Backcountry"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.6}, {TEXT("snook"), 4}, {TEXT("redfish"), 4}, {TEXT("trout"), 5}, {TEXT("tarpon"), 2}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("tripletail"), 0.8}, {TEXT("bullshark"), 0.6}});
 			Z(TEXT("Bridge"), {{TEXT("flounder"), 1.5}, {TEXT("tarpon"), 11}, {TEXT("mangrove"), 4}, {TEXT("snook"), 2}, {TEXT("sheepshead"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("goliath"), 0.6}, {TEXT("bullshark"), 0.6}, {TEXT("lookdown"), 2}, {TEXT("bluerunner"), 2.5}});
-			Z(TEXT("Hawk Channel"), {{TEXT("halibut"), 0.4}, {TEXT("mangrove"), 4}, {TEXT("yellowtail"), 3}, {TEXT("mutton"), 2}, {TEXT("redgrouper"), 1.2}, {TEXT("gag"), 0.8}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("jackcrevalle"), 1.5}, {TEXT("graytrigger"), 1.5}, {TEXT("bluerunner"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("spanishmack"), 2.5}, {TEXT("lookdown"), 1}, {TEXT("tarpon"), 0.5}, {TEXT("amberjack"), 0.5}, {TEXT("kingfish"), 1.2}, {TEXT("blacktip"), 0.3}});
+			Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("yellowtail"), 3}, {TEXT("mutton"), 2}, {TEXT("redgrouper"), 1.2}, {TEXT("gag"), 0.8}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("jackcrevalle"), 1.5}, {TEXT("graytrigger"), 1.5}, {TEXT("bluerunner"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("spanishmack"), 2.5}, {TEXT("lookdown"), 1}, {TEXT("tarpon"), 0.5}, {TEXT("amberjack"), 0.5}, {TEXT("kingfish"), 1.2}, {TEXT("blacktip"), 0.3}}, 0.4);
 			Z(TEXT("Reef"), {{TEXT("cubera"), 0.6}, {TEXT("yellowtail"), 5}, {TEXT("mutton"), 3}, {TEXT("hogfish"), 3}, {TEXT("grouper"), 2.5}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2.5}, {TEXT("kingfish"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("goliath"), 0.5}, {TEXT("amberjack"), 0.8}, {TEXT("cobia"), 0.6}, {TEXT("lemonshark"), 0.25}, {TEXT("schoolmaster"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("vermilion"), 2.5}, {TEXT("bluerunner"), 2.5}, {TEXT("spanishmack"), 1.5}});
-			Z(TEXT("Offshore"), {{TEXT("halibut"), 1}, {TEXT("mako"), 0.8}, {TEXT("tigershark"), 0.35}, {TEXT("mahi"), 6}, {TEXT("blackfin"), 4}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 2}, {TEXT("marlin"), 1.3}, {TEXT("blackmarlin"), 0.6}, {TEXT("swordfish"), 1.1}, {TEXT("yellowfin"), 0.8}, {TEXT("albacore"), 0.3}, {TEXT("bluefin"), 0.4}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("cobia"), 0.5}, {TEXT("hammerhead"), 0.5}, {TEXT("skipjack"), 3}, {TEXT("bigeye"), 0.7}});
+			Z(TEXT("Offshore"), {{TEXT("mako"), 0.8}, {TEXT("tigershark"), 0.35}, {TEXT("mahi"), 6}, {TEXT("blackfin"), 4}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 2}, {TEXT("marlin"), 1.3}, {TEXT("blackmarlin"), 0.6}, {TEXT("swordfish"), 1.1}, {TEXT("yellowfin"), 0.8}, {TEXT("albacore"), 0.3}, {TEXT("bluefin"), 0.4}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("cobia"), 0.5}, {TEXT("hammerhead"), 0.5}, {TEXT("skipjack"), 3}, {TEXT("bigeye"), 0.7}}, 1);
 		}
 		const FRow* R = T.Find(Zone);
 		return R ? *R : T[TEXT("Hawk Channel")];
@@ -175,6 +196,71 @@ namespace KeysData
 		const TArray<FBoatSpec>& B = Boats();
 		for (int32 i = 0; i < B.Num(); i++) if (B[i].Id == Id) return i;
 		return -1;
+	}
+
+	double LengthInches(const FString& Key, double WeightLb)
+	{
+		// inches = K x the cube root of the pounds. The old card used 11.7 for every fish (KeysMesh::FishLength x 1.1),
+		// which is a bass or a snapper: right for the groupers and tunas, a foot or more short for anything long. Each K
+		// is fitted to a typical fish (noted: inches at pounds). The black marlin is left on the old figure, as it was.
+		static const TMap<FString, double> K = {
+			{TEXT("bonefish"), 13.0},      // 26 in at 8 lb
+			{TEXT("permit"), 11.8},        // 32 in at 20 lb
+			{TEXT("tarpon"), 14.6},        // 68 in at 100 lb
+			{TEXT("barracuda"), 16.4},     // 45 in at 20 lb
+			{TEXT("snook"), 14.6},         // 36 in at 15 lb
+			{TEXT("redfish"), 13.0},       // 28 in at 10 lb
+			{TEXT("trout"), 14.0},         // 20 in at 3 lb
+			{TEXT("mangrove"), 12.5},      // 18 in at 3 lb
+			{TEXT("yellowtail"), 13.9},    // 20 in at 3 lb
+			{TEXT("mutton"), 12.5},        // 27 in at 10 lb
+			{TEXT("hogfish"), 11.0},       // 22 in at 8 lb
+			{TEXT("grouper"), 12.3},       // 42 in at 40 lb
+			{TEXT("mahi"), 14.7},          // 40 in at 20 lb
+			{TEXT("blackfin"), 11.1},      // 30 in at 20 lb
+			{TEXT("wahoo"), 16.3},         // 60 in at 50 lb
+			{TEXT("sailfish"), 22.8},      // 84 in at 50 lb, bill and all
+			{TEXT("yellowfin"), 12.3},     // 57 in at 100 lb
+			{TEXT("bluefin"), 12.1},       // 96 in at 500 lb
+			{TEXT("albacore"), 11.7},      // 40 in at 40 lb
+			{TEXT("cobia"), 14.0},         // 48 in at 40 lb
+			{TEXT("amberjack"), 13.0},     // 48 in at 50 lb
+			{TEXT("kingfish"), 15.5},      // 48 in at 30 lb
+			{TEXT("cero"), 15.8},          // 27 in at 5 lb
+			{TEXT("jackcrevalle"), 12.5},  // 34 in at 20 lb
+			{TEXT("ladyfish"), 15.9},      // 20 in at 2 lb
+			{TEXT("sheepshead"), 10.5},    // 18 in at 5 lb
+			{TEXT("pompano"), 11.1},       // 16 in at 3 lb
+			{TEXT("tripletail"), 10.9},    // 27 in at 15 lb
+			{TEXT("lionfish"), 13.0},      // 13 in at 1 lb
+			{TEXT("goliath"), 11.6},       // 78 in at 300 lb
+			{TEXT("graytrigger"), 10.5},   // 18 in at 5 lb
+			{TEXT("blacktip"), 15.3},      // 60 in at 60 lb
+			{TEXT("bullshark"), 14.3},     // 90 in at 250 lb
+			{TEXT("lemonshark"), 16.4},    // 96 in at 200 lb
+			{TEXT("hammerhead"), 17.9},    // 132 in at 400 lb
+			{TEXT("marlin"), 17.7},        // 130 in at 400 lb, bill and all
+			{TEXT("swordfish"), 18.8},     // 110 in at 200 lb, sword and all
+			{TEXT("gag"), 12.5},           // 34 in at 20 lb
+			{TEXT("redgrouper"), 12.1},    // 26 in at 10 lb
+			{TEXT("flounder"), 13.5},      // 17 in at 2 lb
+			{TEXT("sole"), 11.5},          // 6 in at 0.15 lb
+			{TEXT("mako"), 14.3},          // 96 in at 300 lb
+			{TEXT("warsaw"), 11.3},        // 66 in at 200 lb
+			{TEXT("cubera"), 11.8},        // 55 in at 100 lb
+			{TEXT("tigershark"), 16.6},    // 132 in at 500 lb
+			{TEXT("bluerunner"), 12.7},    // 16 in at 2 lb
+			{TEXT("schoolmaster"), 11.9},  // 15 in at 2 lb
+			{TEXT("lanesnapper"), 12.0},   // 12 in at 1 lb
+			{TEXT("vermilion"), 12.7},     // 16 in at 2 lb
+			{TEXT("lookdown"), 11.0},      // 11 in at 1 lb
+			{TEXT("palometa"), 13.0},      // 13 in at 1 lb
+			{TEXT("spanishmack"), 15.3},   // 22 in at 3 lb
+			{TEXT("bigeye"), 11.7},        // 62 in at 150 lb
+			{TEXT("skipjack"), 11.6},      // 25 in at 10 lb
+		};
+		const double* Kp = K.Find(Key);
+		return (Kp ? *Kp : 11.7) * FMath::Pow(FMath::Max(.05, WeightLb), 1.0 / 3.0);
 	}
 
 	bool IsSounder(const FString& Key)

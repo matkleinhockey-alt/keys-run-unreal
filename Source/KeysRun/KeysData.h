@@ -13,6 +13,9 @@ namespace KeysData
 		FLinearColor Color;
 		bool bJump;
 		FString Fact;
+		// taken out of the game (it does not live in the Keys): in no zone table and not in SpeciesKeys(), so it can no
+		// longer be hooked, seen or listed. The row stays so that an old save's catches, records and mounts keep their name.
+		bool bRetired = false;
 	};
 
 	struct FBoatSpec
@@ -47,14 +50,19 @@ namespace KeysData
 	};
 
 	const FSpecies* Species(const FString& Key);
-	// every species key, in the JS SPECIES order
+	// every species key in the game today, in the JS SPECIES order (retired species left out)
 	const TArray<FString>& SpeciesKeys();
+	// the species taken out of the game: Species() still knows them, for old saves
+	const TArray<FString>& RetiredKeys();
 	const TArray<FZoneRow>& ZoneTable(const FString& Zone);
 	const TArray<FBoatSpec>& Boats();
 	int32 BoatIndexOf(const FString& Id);   // -1 if unknown
 	// the hull you start in and can never lose (sim/economy.ts STARTER_BOAT)
 	inline const TCHAR* StarterBoat() { return TEXT("grady"); }
 
+	// how long a fish of that species and weight is, nose to tail, in inches: each species by its own build (a
+	// barracuda is a rod, a permit a plate), fitted to published length-weight figures
+	double LengthInches(const FString& Key, double WeightLb);
 	bool IsSounder(const FString& Key);
 	bool IsBillfish(const FString& Key);
 	// catch-and-release only; empty if it can be kept

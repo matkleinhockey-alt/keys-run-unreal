@@ -1562,7 +1562,10 @@ void AKeysHUD::DrawBoard(AKeysBoatPawn* P)
 		Text(TEXT("No save slot available."), X + 32 * U, Yy, 1.f, Dim);
 		return;
 	}
-	const TArray<FString>& Keys = KeysData::SpeciesKeys();
+	TArray<FString> Keys = KeysData::SpeciesKeys();
+	// a species since taken out of the game is listed only for a player whose save holds one, under its old name
+	const int32 Live = Keys.Num();
+	for (const FString& K : KeysData::RetiredKeys()) if (Sv->SpeciesBest.Contains(K)) Keys.Add(K);
 	auto SpName = [](const FString& K) { const KeysData::FSpecies* S = KeysData::Species(K); return S ? S->Name : K; };
 	if (bBig)
 	{
@@ -1585,16 +1588,18 @@ void AKeysHUD::DrawBoard(AKeysBoatPawn* P)
 	else
 	{
 		int32 Mine = 0;
-		for (const FString& K : Keys) if (Sv->SpeciesBest.Contains(K)) Mine++;
-		Text(FString::Printf(TEXT("You have caught %d of %d species."), Mine, Keys.Num()), X + 32 * U, Yy, .9f, Teal);
+		for (int32 i = 0; i < Live; i++) if (Sv->SpeciesBest.Contains(Keys[i])) Mine++;
+		Text(FString::Printf(TEXT("You have caught %d of %d species."), Mine, Live), X + 32 * U, Yy, .9f, Teal);
 		Yy += 40 * U;
 		const int32 PerCol = (Keys.Num() + 1) / 2;
 		for (int32 i = 0; i < Keys.Num(); i++)
 		{
-			const float CX = X + 32 * U + (i / PerCol) * (W * .5f - 16 * U), CY = Yy + (i % PerCol) * 31 * U;
+			// (the rows are fitted to the panel: at 31 U apiece the last six of each column ran off its foot, under the hint line)
+			const float RowH = FMath::Min(31 * U, (Y + H - 56 * U - Yy) / PerCol);
+			const float CX = X + 32 * U + (i / PerCol) * (W * .5f - 16 * U), CY = Yy + (i % PerCol) * RowH;
 			const double* Best = Sv->SpeciesBest.Find(Keys[i]);
 			const FLinearColor Col = Best ? Gold : Dim;
-			Text(SpName(Keys[i]), CX, CY, .8f, Col);
+			Text(i < Live ? SpName(Keys[i]) : SpName(Keys[i]) + TEXT(" (retired)"), CX, CY, .8f, Col);
 			Text(Best ? FString::Printf(TEXT("%.1f lb"), *Best) : FString(TEXT("-")), CX + 300 * U, CY, .8f, Col);
 			Text(KeysFeed::ShortBest(Keys[i]), CX + 376 * U, CY + 3 * U, .6f, Dim);   // when it feeds best
 		}

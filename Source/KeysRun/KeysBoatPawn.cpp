@@ -901,6 +901,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 				ToggleAshore();
 			}
 		}
+		else if (Cmd.StartsWith(TEXT("board="))) { bBoardOpen = true; BoardTab = FCString::Atoi(*Cmd.Mid(6)); }   // board=1: the leaderboard, open on that tab (0 biggest fish, 1 species records), for a shot
 		else if (Cmd == TEXT("board")) { if (IsAshore()) ToggleAshore(); }
 		else if (Cmd.StartsWith(TEXT("walk=")))
 		{
@@ -3202,7 +3203,7 @@ void AKeysBoatPawn::Land()
 	CardName = S.Name;
 	CardWeight = Weight;
 	CardPts = Pts;
-	CardInches = FMath::RoundToInt(FishLen * 1.1 * 39.37);
+	CardInches = FMath::RoundToInt(KeysData::LengthInches(Key, Weight));   // by the species' own build (was FishLen x 1.1 for every fish)
 	CardFact = S.Fact + TEXT("  ") + KeysFeed::BestTimes(Key);
 	CardBonus = Bonus;
 	CardZone = ZoneDesc(Zone) + TEXT(" - ") + NearestName(FX, FZ);

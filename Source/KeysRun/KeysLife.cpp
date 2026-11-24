@@ -24,7 +24,7 @@ using KeysData::FZoneRow;
 
 // ---------------------------------------------------------------- species looks (JS VIS / SHAPE tables)
 enum class EKeysKind : uint8 { Fish, Tuna, Shark, Ray, Turtle, Manatee, Dolphin };
-enum class EKeysPat : uint8 { None, Bars, Dots, Gspots, Lbars, Line, Mottle, Spot, Spots, Wbars, Yline, Ystripe };
+enum class EKeysPat : uint8 { None, Bars, Dots, Gspots, Lbars, Line, Mottle, Spot, Spots, Wbars, Yline, Ystripe, Ocelli };
 enum class EKeysAct : uint8 { None, Tail, Roll, Breathe, Porpoise, Bust, Glide, Blow, Root };
 enum class EKeysTail : uint8 { Fork, Lunate, Truncate, Round, Lyre, Hetero, Flukes };
 enum class EKeysFin : uint8 { Tri, Sickle, Long, Sail, Spiny, Round, Filament, Trail };
@@ -158,8 +158,9 @@ namespace
 	{ FKeysVis& V = Add(TEXT("pilotwhale")); V.Kind = EKeysKind::Dolphin; V.Len = 6; V.H = 1.05; V.W = .95; V.Back = LHex(0x2a2a2c); V.Belly = LHex(0x3a3a3c); V.Fin = V.Back; V.Finlet = V.Fin; V.Level = 0; V.Speed = 2.4; V.SMin = 5; V.SMax = 14; V.Spread = 6; V.DMin = 12; V.DMax = 100000; V.Act = EKeysAct::Blow; }
 	{ FKeysVis& V = Add(TEXT("humpback")); V.Kind = EKeysKind::Dolphin; V.Len = 15; V.H = 2.6; V.W = 2.1; V.Back = LHex(0x1c2430); V.Belly = LHex(0x8f97a0); V.Fin = V.Back; V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 0; V.Speed = 1.8; V.SMin = 1; V.SMax = 2; V.Spread = 10; V.DMin = 25; V.DMax = 100000; V.Act = EKeysAct::Blow; }
 	// the web game's later creatures (content/creatures.ts VIS)
-	{ FKeysVis& V = Add(TEXT("flounder")); V.Kind = EKeysKind::Fish; V.Len = 0.5; V.H = 0.3; V.W = 0.055; V.Back = LHex(0x6b5f4a); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x5e5342); V.Finlet = V.Fin; V.Pattern = EKeysPat::Spot; V.Level = 2; V.Speed = 0.45; V.SMin = 1; V.SMax = 2; V.Spread = 2.2; V.DMin = 0.5; V.DMax = 14; V.bFlat = true; }
-	{ FKeysVis& V = Add(TEXT("sole")); V.Kind = EKeysKind::Fish; V.Len = 0.26; V.H = 0.17; V.W = 0.03; V.Back = LHex(0x5e5444); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x4e4639); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.38; V.SMin = 1; V.SMax = 3; V.Spread = 1.8; V.DMin = 0.5; V.DMax = 18; V.bFlat = true; }
+	// (the gulf flounder: 25-45 cm, sandy brown, three ocellated spots; LifeBodyColor paints a flatfish by its sides)
+	{ FKeysVis& V = Add(TEXT("flounder")); V.Kind = EKeysKind::Fish; V.Len = 0.38; V.H = 0.23; V.W = 0.042; V.Back = LHex(0x7a6a50); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x6a5c46); V.Finlet = V.Fin; V.Pattern = EKeysPat::Ocelli; V.Level = 2; V.Speed = 0.45; V.SMin = 1; V.SMax = 2; V.Spread = 2.2; V.DMin = 0.5; V.DMax = 14; V.bFlat = true; }
+	{ FKeysVis& V = Add(TEXT("sole")); V.Kind = EKeysKind::Fish; V.Len = 0.15; V.H = 0.1; V.W = 0.018; V.Back = LHex(0x5e5444); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x4e4639); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.38; V.SMin = 1; V.SMax = 3; V.Spread = 1.8; V.DMin = 0.5; V.DMax = 18; V.bFlat = true; }
 	{ FKeysVis& V = Add(TEXT("halibut")); V.Kind = EKeysKind::Fish; V.Len = 1.25; V.H = 0.72; V.W = 0.13; V.Back = LHex(0x4a4a44); V.Belly = LHex(0xf0ece2); V.Fin = LHex(0x3e3e39); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.6; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 18; V.DMax = 240; V.bFlat = true; }
 	{ FKeysVis& V = Add(TEXT("bluerunner")); V.Kind = EKeysKind::Fish; V.Len = 0.5; V.H = 0.15; V.W = 0.09; V.Back = LHex(0x43707d); V.Belly = LHex(0xeef2f2); V.Fin = LHex(0xcdb94e); V.Finlet = V.Fin; V.Level = 1; V.Speed = 2; V.SMin = 12; V.SMax = 26; V.Spread = 4.2; V.DMin = 1.5; V.DMax = 120; }
 	{ FKeysVis& V = Add(TEXT("schoolmaster")); V.Kind = EKeysKind::Fish; V.Len = 0.45; V.H = 0.16; V.W = 0.09; V.Back = LHex(0x8a7347); V.Belly = LHex(0xe8dcc0); V.Fin = LHex(0xe0ac3c); V.Finlet = V.Fin; V.Pattern = EKeysPat::Bars; V.Level = 1; V.Speed = 1.1; V.SMin = 8; V.SMax = 18; V.Spread = 3; V.DMin = 1.5; V.DMax = 30; }
@@ -244,7 +245,8 @@ namespace
 	{ FKeysShape& S = Add(TEXT("dolphin")); S.Peak = 0.38; S.Nose = 0.7; S.Ped = 0.14; S.Tail = EKeysTail::Flukes; S.TL = 0.2; S.TH = 1; S.Pec = 0.2; S.Dor.Add({0.42, 0.55, 0.7, EKeysFin::Sickle}); S.Hump = 0.18; }
 	{ FKeysShape& S = Add(TEXT("pilotwhale")); S.Peak = .3; S.Nose = .5; S.Ped = .16; S.Tail = EKeysTail::Flukes; S.TL = .22; S.TH = 1.1; S.Pec = .16; S.Dor.Add({.28, .4, .4, EKeysFin::Sickle}); S.Hump = .5; }
 	{ FKeysShape& S = Add(TEXT("humpback")); S.Peak = .3; S.Nose = .6; S.Ped = .2; S.Tail = EKeysTail::Flukes; S.TL = .26; S.TH = 1.15; S.Pec = .34; S.Dor.Add({.56, .63, .15, EKeysFin::Round}); S.bWings = true; S.Hump = .18; }
-	// and their shapes (SHAPE); sole and halibut borrow the flounder's
+	// and their shapes (SHAPE); sole and halibut borrow the flounder's (the halibut is retired: in no zone's table, so
+	// never spawned; its look and shape stay for the mounted ones in old saves)
 	{ FKeysShape& S = Add(TEXT("flounder")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
 	{ FKeysShape& S = Add(TEXT("sole")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
 	{ FKeysShape& S = Add(TEXT("halibut")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
@@ -310,7 +312,15 @@ namespace
 		static TMap<FString, TArray<FZoneRow>> T;
 		if (!T.Num())
 		{
-			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(FString(Name), TArray<FZoneRow>(Rows)); };
+			// Gone: the weight of rows since taken out (the halibut's), spread over the rest in proportion, as in KeysData's ZoneTable
+			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows, double Gone = 0)
+			{
+				TArray<FZoneRow> Rw(Rows);
+				double Sum = 0;
+				for (const FZoneRow& R : Rw) Sum += R.W;
+				if (Gone > 0 && Sum > 0) for (FZoneRow& R : Rw) R.W *= (Sum + Gone) / Sum;
+				T.Add(FString(Name), MoveTemp(Rw));
+			};
 		Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.6}, {TEXT("snook"), 3}, {TEXT("redfish"), 2.5}, {TEXT("tarpon"), 1.5}, {TEXT("manatee"), 1}, {TEXT("mangrove"), 3.5}, {TEXT("ladyfish"), 2.5}, {TEXT("trout"), 1.5}, {TEXT("jackcrevalle"), 1}});
 		Z(TEXT("Flats"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.2}, {TEXT("sawfish"), 0.012}, {TEXT("bonefish"), 5}, {TEXT("permit"), 2.2}, {TEXT("stingray"), 3}, {TEXT("redfish"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("blacktip"), 1.5}, {TEXT("lemonshark"), 1}, {TEXT("eagleray"), 1}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.2}, {TEXT("palometa"), 3}, {TEXT("bluerunner"), 2}, {TEXT("manatee"), 0.7}});
 		Z(TEXT("Backcountry"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.8}, {TEXT("sawfish"), 0.01}, {TEXT("redfish"), 4}, {TEXT("snook"), 3}, {TEXT("trout"), 3}, {TEXT("mangrove"), 2.5}, {TEXT("tarpon"), 2}, {TEXT("bonefish"), 1.5}, {TEXT("permit"), 1}, {TEXT("barracuda"), 1.2}, {TEXT("manatee"), 1.2}, {TEXT("stingray"), 2.2}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.5}, {TEXT("tripletail"), 0.6}, {TEXT("dolphin"), 1.5}});
@@ -321,7 +331,7 @@ namespace
 		// tables (content/creatures.ts), which the Reef zone hands off to by depth (LifeHabitat) so the wall feels different
 		Z(TEXT("ReefWall"), {{TEXT("cubera"), .7}, {TEXT("tigershark"), .12}, {TEXT("grouper"), 3}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("yellowtail"), 4}, {TEXT("mutton"), 2.5}, {TEXT("amberjack"), 2}, {TEXT("kingfish"), 1.5}, {TEXT("cero"), 1.5}, {TEXT("nurse"), 1}, {TEXT("goliath"), .6}, {TEXT("graytrigger"), 1.2}, {TEXT("lionfish"), 1}, {TEXT("hammerhead"), .8}, {TEXT("bullshark"), .5}, {TEXT("cobia"), 1}, {TEXT("dolphin"), 1.3}, {TEXT("vermilion"), 5}, {TEXT("bluerunner"), 3}, {TEXT("schoolmaster"), 2}});
 		Z(TEXT("DeepWall"), {{TEXT("warsaw"), 1}, {TEXT("cubera"), .6}, {TEXT("mako"), .3}, {TEXT("giantmanta"), .04}, {TEXT("tigershark"), .2}, {TEXT("grouper"), 3.5}, {TEXT("gag"), 2.5}, {TEXT("redgrouper"), 2}, {TEXT("amberjack"), 3}, {TEXT("kingfish"), 2}, {TEXT("cobia"), 1.5}, {TEXT("goliath"), 1.3}, {TEXT("nurse"), 1.5}, {TEXT("hammerhead"), .7}, {TEXT("bullshark"), .5}, {TEXT("mutton"), 1.4}, {TEXT("yellowtail"), 1}, {TEXT("cero"), 1}, {TEXT("dolphin"), 1}, {TEXT("vermilion"), 3.5}, {TEXT("bluerunner"), 1.5}});
-		Z(TEXT("Offshore"), {{TEXT("halibut"), 1.1}, {TEXT("mako"), 0.5}, {TEXT("mola"), 0.03}, {TEXT("greatwhite"), 0.025}, {TEXT("whaleshark"), 0.04}, {TEXT("giantmanta"), 0.04}, {TEXT("tigershark"), 0.14}, {TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2.5}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), 0.12}, {TEXT("humpback"), 0.02}, {TEXT("skipjack"), 4}, {TEXT("bigeye"), 0.7}});
+		Z(TEXT("Offshore"), {{TEXT("mako"), 0.5}, {TEXT("mola"), 0.03}, {TEXT("greatwhite"), 0.025}, {TEXT("whaleshark"), 0.04}, {TEXT("giantmanta"), 0.04}, {TEXT("tigershark"), 0.14}, {TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2.5}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), 0.12}, {TEXT("humpback"), 0.02}, {TEXT("skipjack"), 4}, {TEXT("bigeye"), 0.7}}, 1.1);
 		}
 		const TArray<FZoneRow>* R = T.Find(Zone);
 		return R ? *R : T[TEXT("Hawk Channel")];
@@ -502,11 +512,17 @@ namespace
 		}
 	};
 
+	// which flank (the sign of the body's local x) a flatfish lies with upward: the one a landed fish shows on the deck
+	// and on its catch card, and (rolled -90 degrees in AKeysLife's update) the one it shows swimming
+	constexpr double FlatEyedSide = -1;
 	// JS bodyColor (2215): countershading plus each species' markings, v normalized to the body (-1..1)
 	FLinearColor LifeBodyColor(const FKeysVis& V, const FVector& v)
 	{
 		FLinearColor C = LMix(V.Belly, V.Back, LClamp((v.Y + .35) / .9, 0, 1));
 		const double Hs = LHash2(v.X * 9.1 + v.Z * 3.3, v.Y * 7.7 + v.Z * 5.1);
+		// a flatfish is coloured by its sides, not its back and belly: the eyed side (the one it lies with upward) in
+		// its sand colour from fin to fin, the blind side white
+		if (V.bFlat) C = v.X * FlatEyedSide > 0 ? V.Back : V.Belly;
 		if ((V.Kind == EKeysKind::Fish || V.Kind == EKeysKind::Tuna) && v.Z > -.6 && v.Z < -.545 && FMath::Abs(v.Y) < .62) C *= .78f;
 		if (V.Kind == EKeysKind::Shark && v.Z > -.55 && v.Z < -.35 && FMath::Abs(v.Y) < .35 && FMath::Sin(v.Z * 95) > .75) C *= .6f;
 		switch (V.Pattern)
@@ -514,6 +530,21 @@ namespace
 		case EKeysPat::Line: if (FMath::Abs(v.Y) < .08) C = LHex(0x26241d); break;
 		case EKeysPat::Yline: if (FMath::Abs(v.Y - .05) < .14) C = V.Fin; break;
 		case EKeysPat::Spot: if (v.Z > .62 && FMath::Abs(v.Y - .12) < .2) C = LHex(0x111111); break;
+		case EKeysPat::Ocelli:
+			// the gulf flounder's three eye-spots, on the eyed side only: one above and one below the lateral line at
+			// mid-body and one on the line toward the tail, each a dark centre in a pale ring; faint mottling between
+			if (v.X * FlatEyedSide > 0)
+			{
+				if (Hs > .7) C *= .86f;
+				static const double At[3][2] = {{.02, .42}, {.02, -.42}, {.46, 0}};   // along the body (tail +), across it
+				for (const double* O : At)
+				{
+					const double D = FMath::Sqrt(FMath::Square((v.Z - O[0]) * 1.7) + FMath::Square(v.Y - O[1]));
+					if (D < .13) C = LHex(0x1c1712);
+					else if (D < .2) C = LMix(V.Back, LHex(0xd8ccb0), .7);
+				}
+			}
+			break;
 		case EKeysPat::Spots: if (Hs > .8 && v.Y > -.2) C *= .6f; break;
 		case EKeysPat::Mottle: if (Hs > .6) C *= .75f; break;
 		case EKeysPat::Bars: if (FMath::Sin(v.Z * 14) > .55 && v.Y > -.3) C *= .55f; break;
@@ -2584,7 +2615,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 			if (G.Glide > 0) { Y = Surf + .45 + FMath::Sin(T * 3 + M.Ph) * .12; Pitch = .05; }
 			if (V->bFlap) Roll = FMath::Sin(T * 2.2 + M.Ph) * .28;
 			else if (V->Kind == EKeysKind::Ray) Roll = FMath::Sin(T * 1.5 + M.Ph) * .05;
-			else if (V->bFlat) Roll = PI / 2 + FMath::Sin(T * 1.1 + M.Ph) * .04;   // a flatfish lies over on one side (creatures.ts flat)
+			else if (V->bFlat) Roll = -PI / 2 + FMath::Sin(T * 1.1 + M.Ph) * .04;   // a flatfish lies over on one side (creatures.ts flat), its eyed flank (FlatEyedSide) upward
 			M.Yaw = G.H + FMath::Sin(T * Wf + M.Ph) * (G.Glide > 0 ? 0 : Wa);
 			M.WX = Mx; M.WY = Y; M.WZ = Mz; M.Pitch = Pitch; M.Roll = Roll;
 			M.Sz = V->Len * M.S;
