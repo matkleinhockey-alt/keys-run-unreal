@@ -1,0 +1,20 @@
+diff --git a/Source/KeysRun/KeysAudio.cpp b/Source/KeysRun/KeysAudio.cpp
+index 82e0b3b..4d57381 100644
+--- a/Source/KeysRun/KeysAudio.cpp
++++ b/Source/KeysRun/KeysAudio.cpp
+@@ -724,14 +724,7 @@ void AKeysAudio::SetUnderwater(bool bUnder, double Depth, double AirFrac, bool b
+ 		B.Gain = float(Rand(.04, .09) * UwLevel); B.Att = .004f; B.Dur = .09f;
+ 		Burst(B);
+ 	}
+-	// the reef crackling (snapping shrimp)
+-	if (FMath::FRand() < Dt * 2.2)
+-	{
+-		FKeysBurst B;
+-		B.Filter = KeysDSP::EFilter::Bandpass; B.Freq = float(Rand(3200, 6500)); B.Q = float(Rand(4, 9));
+-		B.Gain = float(Rand(.01, .03) * UwLevel); B.Att = .002f; B.Dur = .05f;
+-		Burst(B);
+-	}
++	// (the reef's crackle is KeysReefAudio's now: it follows the reef, the depth and the hour)
+ 	// heartbeat: 62 bpm at full air racing to 150 near blackout
+ 	const double Air = FMath::Clamp(AirFrac, 0.0, 1.0);
+ 	if (bHolding && Air < .97)
