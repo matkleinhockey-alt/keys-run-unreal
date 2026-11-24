@@ -172,7 +172,10 @@ namespace KeysReefLifeBottomAudit
 			if (!(S.Zones & H.Zone) || H.Depth <= S.Depth[0] || H.Depth >= S.Depth[3]) return 0.0;
 			double V = H.Depth < S.Depth[1] ? (H.Depth - S.Depth[0]) / FMath::Max(1e-6, S.Depth[1] - S.Depth[0]) : H.Depth > S.Depth[2] ? (S.Depth[3] - H.Depth) / FMath::Max(1e-6, S.Depth[3] - S.Depth[2]) : 1.0;
 			if (H.Zone & (ZCrest | ZTop | ZSpur | ZPatch | ZFore | ZWall)) V *= FMath::Clamp(H.Reef * 1.3, 0.0, 1.0);
-			return S.Where ? V * S.Where(X, Z, H) : V;
+#if defined(KEYS_REEFLIFE_BOTTOM_HOOKS)
+			if (S.Where) V *= S.Where(X, Z, H);   // (the species' own say: only with the bottom-animal hooks, request reefbottom R1)
+#endif
+			return V;
 		};
 		const FVector At = Where(W);
 		double Best = -1, BX = At.X, BZ = At.Z;

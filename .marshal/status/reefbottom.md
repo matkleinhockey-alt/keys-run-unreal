@@ -181,4 +181,10 @@ a dark flat-sided block in shallow water (`rb_r2/52`, left), which looks like a 
 
 - `KeysReefLifeBottomAudit.cpp` repeats KeysReef's two species tables (order, sizes) for its report; if reefdens
   reorders them the report mislabels, nothing else.
-- The unpatched build of this branch was run on both maps: `log_rb_plain.log`, `log_rb_plain_classic.log`.
+- The unpatched build of this branch was run on both maps: `log_rb_plain.log`, `log_rb_plain_classic.log`
+  (registry 2 species, `tpcheck` 48 and 19, 0 bad).
+- After the last run with R1 applied, one line of `KeysReefLifeBottomAudit.cpp` (`krbottom.ground`'s use of
+  `FSpecies::Where`) was put behind the R1 macro, because the unpatched build did not compile without it. The
+  unpatched build was rebuilt and run after that; the R1-applied build was NOT rebuilt after it.
+- My first unpatched build failed and my script went on to launch the game anyway, which sat on a rebuild prompt
+  and held the game lock for about five minutes (23:13 to 23:18) until I killed that process, my own.
