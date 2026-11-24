@@ -19,15 +19,15 @@ once).
 | `mangrovelife` | Mangrove ecosystem (brief written by the marshal) | `lane/mangrovelife` | `../KeysRun-mangrovelife` | merged 2026-11-22 |
 | `water2` | Water, seafloor and schools over the whole map (brief written by the marshal) | `lane/water2` | `../KeysRun-water2` | merged 2026-11-22 |
 | `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | merged 2026-11-22 |
-| `birdview` | Mangrove wildlife visible from the boat: bird size and contrast, a closer camera at idle (brief written by the marshal) | `lane/birdview` | `../KeysRun-birdview` | running since 2026-11-23 (background agent) |
+| `birdview` | Mangrove wildlife visible from the boat: bird size and contrast, a closer camera at idle (brief written by the marshal) | `lane/birdview` | `../KeysRun-birdview` | merged 2026-11-24 |
 | `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | merged 2026-11-23 |
 | `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | merged 2026-11-24 |
 | `reefparrot` | Reef ecosystem, template lane: the reef-life framework, the stoplight parrotfish end to end, and the recipe later lanes follow (brief written by the marshal) | `lane/reefparrot` | `../KeysRun-reefparrot` | merged 2026-11-23 |
 | `reeffish` | Rainbow and midnight parrotfish, queen, French and gray angelfish, sergeant major (brief written by the marshal) | `lane/reeffish` | `../KeysRun-reeffish` | merged 2026-11-24 |
 | `reefvisitors` | Southern stingray, green and loggerhead turtles, audit of the fish already there (brief written by the marshal) | `lane/reefvisitors` | `../KeysRun-reefvisitors` | merged 2026-11-24 |
 | `reefbottom` | Queen conch, giant Caribbean anemone, purple sea fans, audit of the reef itself (brief written by the marshal) | `lane/reefbottom` | `../KeysRun-reefbottom` | merged 2026-11-24 |
-| `reefaudio` | Sound for the reef and the mangroves, synthesised (brief written by the marshal) | `lane/reefaudio` | `../KeysRun-reefaudio` | running since 2026-11-24 (background agent) |
-| `reefreal` | Realism clean-up: halibut out, gulf flounder, no kelp, audit; black marlin stays at the user's word (brief written by the marshal) | `lane/reefreal` | `../KeysRun-reefreal` | running since 2026-11-24 (background agent) |
+| `reefaudio` | Sound for the reef and the mangroves, synthesised (brief written by the marshal) | `lane/reefaudio` | `../KeysRun-reefaudio` | merged 2026-11-24 |
+| `reefreal` | Realism clean-up: halibut out, gulf flounder, no kelp, audit; black marlin stays at the user's word (brief written by the marshal) | `lane/reefreal` | `../KeysRun-reefreal` | merged 2026-11-24 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -325,3 +325,26 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   and plate dens show a pale floor from above, wreck gaps, the nurse shark thin and stiff, the green moray
   hanging from the roof and stick-straight at night, the octopus's whole head showing by day, the grouper and
   moray hunt never seen, no logbook page, patch reefs have no dens. `reeflinks` can open now.
+- 2026-11-24: on `main`, no drag clicker while the angler is winding (`KeysAudio.cpp`; the user: "an annoying
+  clicking sound when fishing, when reeling ... its not the line spooling"): the marshal's reading of the cause,
+  not confirmed by ear.
+- 2026-11-24: `reefaudio` (8c8d4d5, READY), `birdview` (76e5dd6, IN PROGRESS by its own status) and `reefreal`
+  (d347888, READY) merged together at the user's word ("Integrate"). Applied: reefaudio R1-R3 and R5 (schools,
+  chases, dolphin groups and the lobster flick call `KeysReefAudio::Heard`); birdview R1 (the closer look near
+  mangroves at idle, `KeysBoatPawn`) and R4 (town pelicans use `KeysMangroveLife::Pelican`; `-KRTownPelicanOld`
+  puts the old ones back; not looked at in a town); reefreal R1-R4 (Atlantic halibut retired with `bRetired`,
+  old saves keep it; gulf flounder; `KeysData::LengthInches` for the catch card; hogchoker and Spanish mackerel
+  text; a `board=N` test command). NOT applied: reefaudio R4 (the hub's flat crackle stays), birdview R2. The
+  black marlin is untouched, at the user's word. In the game: the reef's snapping-shrimp bed and animal sounds
+  (own synth, `-KRNoReefAudio` off switch), mangrove calls and splashes; American white pelicans in flocks on
+  bay-side flats, brown pelicans on pilings, the two mixed; birds larger and darker-edged; the Abyssal Garden's
+  kelp replaced by sea whips, black coral, sea fans and sponges on rock ledges (the lane judges it less
+  dramatic than the kelp). Marshal's runs: real map `tpcheck` 48, 0 bad, dock audit 545, a pompano speared (card
+  "3.5 lb | 17 in"), no halibut in any `picks` line, 18 reef-audio sounds played in one run; classic map
+  `tpcheck` 19, 0 bad. Frame times, Medium: idle on the mangrove flat with the closer look 34.8 ms (GPU 34.5,
+  over the editor's 33.3 cap: the low view through the roots); reef from the boat 33.3 (GPU 31.1); a dive now
+  runs uncapped in the editor at 22.6 ms (game 18.4, GPU 22.0), 23.6 on the classic map. Nobody has listened to
+  any sound. Open: the brown pelican reads pale grey in morning sun; osprey not shown near; open-water pelicans
+  still the old model; sounds only ever played by test command (ibis, night heron, green heron, osprey, tarpon
+  roll, crab drop); the garden's drama; the audit's doubtful species (`.marshal/requests/reefreal/audit.md`).
+  `reeflinks` is the only lane not yet opened; then the release.
