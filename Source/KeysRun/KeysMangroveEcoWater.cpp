@@ -451,13 +451,13 @@ namespace KeysMangroveEco
 			S.Mill += Dt * (bRL && S.bHang ? .035 : .22 + S.Scatter * .6) * ((S.Seed & 1) ? 1 : -1);
 			const double Cm = FMath::Cos(S.Mill), Sm = FMath::Sin(S.Mill), Spread = S.R * (1 + S.Scatter * 1.6);
 			const bool bDraw = DCam < K.Cull + 10;
-			// (root life) how many of its fish are moved and drawn: all within 14 m of the camera, one in sixteen at 55 m, none past 60 (from the
+			// (root life) how many of its fish are moved and drawn: all within 10 m of the camera, one in twenty at 45 m, none past 50 (from the
 			// deck nothing under the water shows that far off; under it the water hides it); the rest wait where they are
 			int32 Live = S.Fish.Num();
 			if (bRL)
 			{
-				const double Kd = DCam < 14 ? 1 : FMath::Lerp(1.0, .06, FMath::Clamp((DCam - 14) / 41, 0.0, 1.0));
-				Live = bDraw && DCam < 60 ? FMath::Clamp(int32(S.Fish.Num() * Kd + .5), FMath::Min(S.Fish.Num(), 4), S.Fish.Num()) : 0;
+				const double Kd = DCam < 10 ? 1 : FMath::Lerp(1.0, .05, FMath::Clamp((DCam - 10) / 35, 0.0, 1.0));
+				Live = bDraw && DCam < 50 ? FMath::Clamp(int32(S.Fish.Num() * Kd + .5), FMath::Min(S.Fish.Num(), 4), S.Fish.Num()) : 0;
 				E.FishCap += Live; E.FishThinned += S.Fish.Num() - Live;
 			}
 			const double La = S.R * (S.bBank ? 2.3 : 2.0) * (1 + S.Scatter * 1.2), Lb = S.R * .8 * (1 + S.Scatter * 1.2);

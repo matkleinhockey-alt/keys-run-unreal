@@ -258,13 +258,13 @@ namespace KeysMangroveEco
 				C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 				C->SetCastShadow(false);
 				C->SetMaterial(0, AKeysWorld::VertexColorMaterial());
-				C->SetCullDistances(2000, 2600);
+				C->SetCullDistances(1800, 2400);
 				C->bAffectDistanceFieldLighting = false;
 				C->RegisterComponent();
 				A->GrowPools.Add(C);
 				Tri += FString::Printf(TEXT(" %s %d,"), GrowName(G), GGrowTris[G]);
 			}
-			UE_LOG(LogTemp, Log, TEXT("KRRoot growth meshes (triangles):%s made in %.1f ms; drawn to 26 m"), *Tri, (FPlatformTime::Seconds() - T0) * 1000);
+			UE_LOG(LogTemp, Log, TEXT("KRRoot growth meshes (triangles):%s made in %.1f ms; drawn to 24 m"), *Tri, (FPlatformTime::Seconds() - T0) * 1000);
 			return true;
 		}
 
@@ -363,7 +363,7 @@ namespace KeysMangroveEco
 		if (!bHigh)
 		{
 			// the trees within reach, nearest first, to a budget
-			constexpr double Reach = 30;
+			constexpr double Reach = 26;
 			const FVector2D C(E.Cam.X, E.Cam.Z);
 			TArray<TPair<double, const FSite*>> Near;
 			for (const TPair<int64, FTileE*>& T : E.Tiles)
@@ -387,7 +387,7 @@ namespace KeysMangroveEco
 				E.GrowTrees++;
 				Total = 0;
 				for (int32 G = 0; G < NumGrow; G++) Total += Out[G].Num();
-				if (Total > 2400) break;
+				if (Total > 1700) break;
 			}
 		}
 		E.GrowTris = 0;
@@ -405,7 +405,7 @@ namespace KeysMangroveEco
 		{
 			FString Who;
 			for (int32 G = 0; G < NumGrow; G++) Who += FString::Printf(TEXT(" %s %d,"), GrowName(G), E.GrowN[G]);
-			UE_LOG(LogTemp, Log, TEXT("KRRoot growth at %.0f, %.0f: %d roots of %d trees within 30 m:%s %d triangles; laid out in %.2f ms"), E.Cam.X, E.Cam.Z, E.GrowRoots, E.GrowTrees, *Who, E.GrowTris, E.GrowMs);
+			UE_LOG(LogTemp, Log, TEXT("KRRoot growth at %.0f, %.0f: %d roots of %d trees within 26 m:%s %d triangles; laid out in %.2f ms"), E.Cam.X, E.Cam.Z, E.GrowRoots, E.GrowTrees, *Who, E.GrowTris, E.GrowMs);
 		}
 	}
 
