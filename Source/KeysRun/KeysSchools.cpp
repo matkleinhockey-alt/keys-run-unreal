@@ -1267,7 +1267,7 @@ void AKeysSchools::SurfaceSigns(double Dt)
 			if (S.Work > .3 && S.Center.Y > SurfY - 3 - S.Radius && S.Rng.FRand() < Dt * 2.5 * S.Work)
 			{
 				const double A = S.Rng.FRandRange(0, 2 * PI), Rr = S.Radius * FMath::Sqrt(S.Rng.FRand());
-				SplashAt(S.Center.X + FMath::Cos(A) * Rr, S.Center.Z + FMath::Sin(A) * Rr, 4, .35);
+				SplashAt(S.Center.X + FMath::Cos(A) * Rr, S.Center.Z + FMath::Sin(A) * Rr, 6, .5);
 			}
 		}
 		else if (Specs[S.Sp].Role == ERole::Worker && S.HuntLeft > 0 && S.SplashT <= 0)
@@ -1575,7 +1575,7 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 	if (Sc.Role == ERole::Hole && F.Alarm > .3) Acc.Y = FMath::Min(Acc.Y, -.5);   // a grouper backs down into its hole
 	// out of the water: bait in a worked ball near the surface showers out of it as the tuna come through; a flying fish
 	// pushed near the top takes off and glides away a few feet over the water
-	if (Sc.Role == ERole::Bait && S.Site && F.Alarm > .55 && S.InAir < 14)
+	if (Sc.Role == ERole::Bait && S.Site && F.Alarm > .55 && S.InAir < (S.bBall ? 30 : 14))
 	{
 		const double Under = SurfY - F.P.Y;
 		FVector Out = Flat(F.FleeDir.IsNearlyZero() ? F.Fwd : F.FleeDir).GetSafeNormal();
@@ -1589,7 +1589,7 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 			SplashAt(F.P.X, F.P.Z, 3, .25);
 			return;
 		}
-		if (S.bBall && S.Work > .5 && Under < 1.4 + F.Len && S.Rng.FRand() < Dt * .8 * F.Alarm)
+		if (S.bBall && S.Work > .5 && Under < 1.4 + F.Len && S.Rng.FRand() < Dt * 1.6 * F.Alarm)
 		{
 			F.V = Out * S.Rng.FRandRange(1.0, 2.5) + FVector(0, S.Rng.FRandRange(2.5, 4.0), 0);
 			F.bGlide = false;
@@ -2116,7 +2116,7 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 			return;
 		}
 		FSchool* S = Find(LastPut);
-		if (!S || !S->bBall)
+		if (!S || !S->bBall || (S->Center - Eye).Size() > 400)
 		{
 			S = nullptr;
 			double BD = 400;
