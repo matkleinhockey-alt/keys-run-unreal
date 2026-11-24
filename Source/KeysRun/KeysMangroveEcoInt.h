@@ -28,6 +28,7 @@ namespace KeysMangroveEco
 		FSite Site;
 		float Depth = .4f;
 		uint32 Seed = 0;
+		bool bPost = false;   // a brown pelican's perch is an old piling standing in the water (drawn with it)
 	};
 	struct FPlan
 	{
@@ -52,7 +53,7 @@ namespace KeysMangroveEco
 		uint8 Kind = 0, State = BStand, Next = BStand;
 		int16 Rook = -1;
 		int32 Leader = -1;
-		bool bStill = false, bCarry = false, bHasSite = false, bWasStill = false, bInStill = false, bLine = false;   // bInStill: drawn in the still mesh as it was last laid out
+		bool bStill = false, bCarry = false, bHasSite = false, bWasStill = false, bInStill = false, bLine = false, bPost = false;   // bInStill: drawn in the still mesh as it was last laid out
 		FVector P = FVector::ZeroVector, Home = FVector::ZeroVector, Perch = FVector::ZeroVector, From = FVector::ZeroVector, To = FVector::ZeroVector;
 		FVector2D Out = FVector2D(1, 0), Off = FVector2D::ZeroVector;
 		double Yaw = 0, T = 0, Ph = 0, FlyT = 0, FlyDur = 1, Arc = 2, Sz = 1.25, Neck = 0, Wing = 0, Pitch = 0, Peck = 0;

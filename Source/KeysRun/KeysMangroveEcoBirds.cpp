@@ -170,10 +170,16 @@ namespace KeysMangroveEco
 		// The white one here is the American white pelican, the photograph's near twin and the one that winters in
 		// Florida Bay: it has no pink face. A young brown pelican is brown-headed and pale-bellied.
 		struct FPelSpec { double Body, Span, Bill, Leg; uint32 BackC, BellyC, NeckC, CrownC, BillC, TipC, PouchC, CovertC, FlightC, LegC, TailC; bool bWhiteInner; };
-		const FPelSpec PelBrown = {.56, 2.15, .32, .11, 0x80858c, 0x231e1b, 0xf0eee6, 0xf0d470, 0x7c7c80, 0xe07850, 0x34363a, 0x858a90, 0x302c28, 0x222226, 0x443f3a, false};
-		const FPelSpec PelYoung = {.54, 2.10, .31, .11, 0x6c5c4a, 0xe2dccc, 0x64523f, 0x64523f, 0x807a6e, 0x94846a, 0x52483f, 0x6c5c4a, 0x40372e, 0x343030, 0x52463a, false};
+		// (the brown pelican's silver-grey and brown are set dark: in the game's full sun 0x5a5e66 washed out to white
+		// and its dark flight feathers to tan)
+		const FPelSpec PelBrown = {.56, 2.15, .32, .085, 0x42454b, 0x1a1614, 0xf0eee6, 0xf0d470, 0x6c6c72, 0xe07850, 0x2a2c30, 0x45484f, 0x15120f, 0x1c1c20, 0x262320, false};
+		const FPelSpec PelYoung = {.54, 2.10, .31, .085, 0x4c3e30, 0xdcd4c2, 0x483a2c, 0x483a2c, 0x777165, 0x8c7c62, 0x4a4038, 0x4e4032, 0x221c16, 0x2c2828, 0x33291f, false};
 		const FPelSpec PelWhite = {.66, 2.75, .40, .13, 0xf6f5f0, 0xf4eedc, 0xf6f5f0, 0xf6f5f0, 0xee9a28, 0xd8401e, 0xf2a820, 0xf6f5f0, 0x101012, 0xee7c3c, 0xf6f5f0, true};
-		const FPelSpec& PelOf(const FBird& B) { return B.Kind == WhitePelican ? PelWhite : B.Rank < .22 ? PelYoung : PelBrown; }
+		// "mix them up": about one in four of the followers in a flock of white pelicans on a flat is a brown pelican
+		// loafing with them, as they do in life on the bay's sandbars. It keeps with the flock (it is one of its
+		// birds) but is drawn as a brown pelican, and does not dip its bill with the whites.
+		bool BrownAmongWhites(const FBird& B) { return B.Kind == WhitePelican && B.Leader >= 0 && B.Rook < 0 && EHash(B.Seed * 1e-6, 9.0) < .26; }
+		const FPelSpec& PelOf(const FBird& B) { return B.Kind == WhitePelican && !BrownAmongWhites(B) ? PelWhite : B.Rank < .22 ? PelYoung : PelBrown; }
 
 		void EmitPelican(FSoup& Buf, const FBird& B, bool bFar, double Rim, double MinR, const FVector& Away)
 		{
@@ -188,10 +194,16 @@ namespace KeysMangroveEco
 			const double Pitch = bAir ? B.Pitch : bSwim ? .06 : .78;   // at rest it sits upright and hunched
 			const FVector A = F * FMath::Cos(Pitch) + Up * FMath::Sin(Pitch), Top = Up * FMath::Cos(Pitch) - F * FMath::Sin(Pitch);
 			const double BodyL = K.Body * S, BodyR = BodyL * .3, LegL = K.Leg * S;
-			const FVector Hip = bAir ? B.P : bSwim ? B.P - Up * BodyR * .45 : B.P + Up * (LegL + BodyL * .34);
+			const FVector Hip = bAir ? B.P : bSwim ? B.P - Up * BodyR * .45 : B.P + Up * (LegL + BodyL * .3);
 			const FVector Body = Hip + A * BodyL * .12;
-			const FLinearColor BackC = Hex(K.BackC), BellyC = Hex(K.BellyC), NeckC = Hex(K.NeckC), BillC = Hex(K.BillC), TipC = Hex(K.TipC), PouchC = Hex(K.PouchC), CovC = Hex(K.CovertC), FlC = Hex(K.FlightC), LegC = Hex(K.LegC);
-			Pen.Egg(Body, A, Rt, Top, BodyL, BodyR * .95, BodyR, BackC, BellyC, bFar ? 4 : 6);
+			// (no two quite alike: a brown pelican's back and wings a little lighter or darker, a white one's bill and
+			// pouch a little yellower or more orange)
+			const float Tone = float(.86 + .28 * EHash(B.Seed * 1e-6, 5.0));
+			const bool bWh = K.bWhiteInner;
+			auto Tn = [&](FLinearColor C) { if (!bWh) { C.R *= Tone; C.G *= Tone; C.B *= Tone; } return C; };
+			const FLinearColor BackC = Tn(Hex(K.BackC)), BellyC = Hex(K.BellyC), NeckC = Hex(K.NeckC), BillC = bWh ? FMath::Lerp(Hex(K.BillC), Hex(0xf4b838), (Tone - .86f) * 2.2f) : Hex(K.BillC), TipC = Hex(K.TipC),
+				PouchC = bWh ? FMath::Lerp(Hex(K.PouchC), Hex(0xf08a20), (1.14f - Tone) * 2.2f) : Hex(K.PouchC), CovC = Tn(Hex(K.CovertC)), FlC = Hex(K.FlightC), LegC = Hex(K.LegC);
+			Pen.Egg(Body, A, Rt, Top, BodyL * 1.3, BodyR * .9, BodyR * .85, BackC, BellyC, bFar ? 4 : 6);   // (a long, heavy body, not a ball)
 			// ---- the neck and head: tucked back on the shoulders in the air, upright with the bill down the breast at
 			// rest, up and forward on the water, out straight in a plunge, down in the water when it dips for a fish
 			const FVector Sh = Body + A * BodyL * .40 + Top * BodyR * .2;
@@ -244,7 +256,7 @@ namespace KeysMangroveEco
 				}
 				else if (!bSwim)
 				{
-					HipS = Hip - Up * BodyL * .3 + Rt * BodyR * .4 * Sd;
+					HipS = Hip - Up * BodyL * .26 + Rt * BodyR * .4 * Sd;
 					Foot = B.P + Rt * .075 * S * Sd;
 					W0 = Foot + F * .15 * S + Rt * .07 * S; W1 = Foot + F * .15 * S - Rt * .07 * S;
 				}
@@ -258,7 +270,7 @@ namespace KeysMangroveEco
 			const double Cyc = FMath::Fmod(B.Ph * .8 + B.Rank * 4.2, 4.2);
 			const bool bFlap = Cyc < 1.3 || (B.State == BFly && B.FlyT < 1.5) || B.State == BHover;
 			const double Th = bStoop ? .25 : bFlap ? FMath::Sin(B.Ph * 2 * PI * B.FlapHz) * .55 + .1 : .09 + .03 * FMath::Sin(B.Ph * 1.1);
-			const double Sweep = bStoop ? .7 : 0, Half = K.Span * .5 * S * W, C0 = BodyL * .62 * (W > 0 ? 1 : 0), C1 = BodyL * .5 * (W > 0 ? 1 : 0);
+			const double Sweep = bStoop ? .7 : 0, Half = K.Span * .5 * S * W, C0 = BodyL * .95 * (W > 0 ? 1 : 0), C1 = BodyL * .8 * (W > 0 ? 1 : 0);   // (broad wings: a chord near the body's own length)
 			for (const double Sd : {-1.0, 1.0})
 			{
 				const FVector J = Body + A * BodyL * .2 + Top * BodyR * .62 + Rt * BodyR * .55 * Sd * (W > 0 ? 1 : 0);
@@ -282,9 +294,10 @@ namespace KeysMangroveEco
 				for (int32 f = 0; f < 5; f++)
 				{
 					const double U = f / 4.0;
-					const FVector Base = FMath::Lerp(HL, HT, U), Step = (HT - HL) * .085;
-					const FVector Dir = (O2 * (1 - .3 * U) - A * (.1 + .85 * U) + Top * (bFlap || bStoop ? 0 : .12 * (1 - U))).GetSafeNormal(.001, O2);
-					Pen.Tri(Base - Step, Base + Step, Base + Dir * Half * .25 * (1 - .15 * U), Nn, FlC);
+					// (broad feathers that touch at their roots and part toward their tips, not spikes)
+					const FVector Base = FMath::Lerp(HL, HT, U), Step = (HT - HL) * .125;
+					const FVector Dir = (O2 * (1 - .3 * U) - A * (.1 + .85 * U) + Top * (bFlap || bStoop ? 0 : .08 * (1 - U))).GetSafeNormal(.001, O2);
+					Pen.Tri(Base - Step, Base + Step, Base + Dir * Half * .2 * (1 - .15 * U), Nn, FlC);
 				}
 				// shut, at rest and on the water: laid along the flank, its dark tip crossing the tail and hanging below it
 				const double Fo = bAir ? 0 : 1;
@@ -410,6 +423,20 @@ namespace KeysMangroveEco
 			Pen.Prism(Top + FVector(0, -.5, 0), Top + FVector(0, -.2, 0) - Along * .45 + FVector(B.Out.X, 0, B.Out.Y) * .25, .04, .02, Wood);
 		}
 
+		// The piling a brown pelican sits on (the user's second picture: an adult hunched on a weathered wooden piling):
+		// an old post standing in the water off the roots, grey with weather, darker where the tide wets it.
+		void EmitPiling(FSoup& Buf, const FEco& E, const FBird& B, double Rim)
+		{
+			FPen Pen{Buf};
+			Pen.MinR = Rim * .3;
+			const FVector Top = B.Perch - FVector(0, .02, 0);
+			const double Foot = FMath::Min(FloorAt(Top.X, Top.Z), E.Sea - .4);
+			const double Lean = (EHash(B.Seed * 1e-6, 7.0) - .5) * .22;
+			const FVector Wet(Top.X + B.Out.Y * Lean * .7, E.Sea + .45, Top.Z - B.Out.X * Lean * .7);
+			Pen.Prism(FVector(Top.X + B.Out.Y * Lean, Foot, Top.Z - B.Out.X * Lean), Wet, .17, .165, Hex(0x3e3830));
+			Pen.Prism(Wet, Top, .165, .15, Hex(0x8c8478));
+		}
+
 		// where its feet are: on the bottom, but never so deep that the water is over its knees (it keeps to the shallow side)
 		double FeetY(const FEco& E, const FBird& B, double X, double Z) { return FMath::Max(FloorAt(X, Z), E.Sea - Specs[B.Kind].Leg * B.Sz * .7); }
 		// can a wader of that leg stand there now?
@@ -496,7 +523,7 @@ namespace KeysMangroveEco
 			for (int32 i = 0; i < Sp.N; i++)
 			{
 				FBird& B = T.Birds.AddDefaulted_GetRef();
-				B.Kind = Sp.Kind; B.Rook = Sp.Rook; B.Out = Sp.Out; B.Site = Sp.Site; B.bHasSite = Sp.Rook < 0;
+				B.Kind = Sp.Kind; B.Rook = Sp.Rook; B.Out = Sp.Out; B.Site = Sp.Site; B.bHasSite = Sp.Rook < 0; B.bPost = Sp.bPost;
 				B.Seed = Sp.Seed + i * 7919;
 				const double R1 = EHash(B.Seed * 1e-6, 1.0 + i), R2 = EHash(B.Seed * 1e-6, 2.0 + i);
 				B.Sz = ScaleOf(B.Kind) * (B.Kind >= Pelican ? .9 + .2 * R1 : .96 + .08 * R1);   // (pelicans differ more, one from the next)
@@ -916,7 +943,7 @@ namespace KeysMangroveEco
 						const double D = FVector2D::Distance(FVector2D(Want.X, Want.Z), P2);
 						if (Ld.State == BAway) continue;
 						// (white pelicans fish together: when the first dips its bill the rest do, a moment after)
-						if (B.Kind == WhitePelican && Ld.State == BStrike && D < 14) { B.State = BStrike; B.Next = BStand; B.T = .9 + .3 * B.Rank; E.bStillDirty = true; continue; }
+						if (B.Kind == WhitePelican && !BrownAmongWhites(B) && Ld.State == BStrike && D < 14) { B.State = BStrike; B.Next = BStand; B.T = .9 + .3 * B.Rank; E.bStillDirty = true; continue; }
 						if (B.Kind == WhitePelican && D <= 14 && D < 2.5 && FMath::FRand() > .12) continue;
 						if (D > 14) { StartFly(B, FVector(Want.X, FeetY(E, B, Want.X, Want.Z), Want.Z), BStand, 2.2); B.FlyT = -FMath::FRandRange(.2, 1.2); E.bStillDirty = true; }
 						else if (D > 1.2 || FMath::FRand() < .5) { B.To = Want + FVector(FMath::FRandRange(-1.0, 1.0), 0, FMath::FRandRange(-1.0, 1.0)); B.State = BWalk; E.bStillDirty = true; }
@@ -1030,6 +1057,11 @@ namespace KeysMangroveEco
 			{
 				const double Ds = FVector2D::Distance(FVector2D(B.Perch.X, B.Perch.Z), Cam2);
 				if (Ds < 320) EmitSnag(Buf, E, B, FMath::Clamp(Ds * .0016, .015, .22));
+			}
+			if (bStillPass && B.bPost)
+			{
+				const double Ds = FVector2D::Distance(FVector2D(B.Perch.X, B.Perch.Z), Cam2);
+				if (Ds < 500) EmitPiling(Buf, E, B, FMath::Clamp(Ds * .0016, .015, .22));
 			}
 			if (bStillPass) B.bInStill = false;
 			if (B.State == BAway || (B.State == BFly && B.FlyT < 0 && B.Next != BAway && B.From.Y > 15)) continue;

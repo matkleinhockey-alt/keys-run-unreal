@@ -1,0 +1,26 @@
+diff --git a/Source/KeysRun/KeysTownKit.cpp b/Source/KeysRun/KeysTownKit.cpp
+index 588e4d6..2e9040c 100644
+--- a/Source/KeysRun/KeysTownKit.cpp
++++ b/Source/KeysRun/KeysTownKit.cpp
+@@ -2,6 +2,7 @@
+ #include "KeysKit.h"
+ #include "KeysMesh.h"
+ #include "KeysLife.h"
++#include "KeysMangroveLife.h"
+ 
+ // The town style kit (see KeysTownKit.h). Every piece builds in the three.js town frame (x = u, y up, z = -v, meters)
+ // through FTownBatch, which maps it into the component's UE frame and winds each face from the normal it is given.
+@@ -1059,6 +1060,13 @@ TArray<TArray<FVector2D>> KitFishOutline(int32 Kind)
+ 
+ void Pelican(FTownBatch& B, const FVector& Feet, const FVector& Facing, double Cock, FKitDice& D)
+ {
++	// the town's pelicans are the mangrove's (built on the user's pictures: adults, a few brown young ones and a few
++	// white pelicans among them), life size; one with its head cocked far round is one with its head up
++	if (!FParse::Param(FCommandLine::Get(), TEXT("KRTownPelicanOld")))
++	{
++		KeysMangroveLife::Pelican(B, Feet, FMath::Atan2(Facing.Z, Facing.X), 1.0 + .08 * D.F(), FMath::Abs(Cock) > .28 ? 1 : 0);
++		return;
++	}
+ 	const FVector F = FVector(Facing.X, 0, Facing.Z).GetSafeNormal(), Sd = FVector::CrossProduct(Up3, F);
+ 	const FLinearColor Body = Mix(Hx(0x6f6a62), Hx(0x8a8378), D.F()), Wing = Mul(Body, .75), Belly = Mul(Body, .9);
+ 	const FLinearColor White = Hx(0xf2eee2), Crown = Hx(0xe9cf72), Nape = Hx(0x6b3f26), BillC = Hx(0x9a8f78), Pouch = Hx(0x4a4a44), Leg = Hx(0x2a2a28);

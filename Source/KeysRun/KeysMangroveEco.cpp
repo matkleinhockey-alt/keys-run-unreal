@@ -370,11 +370,18 @@ namespace KeysMangroveEco
 			if (!S.bRoof && SHash(S, 19) < .014) Add(Tern, S, FVector(At(12).X, 7, At(12).Y), O, 1, 19);
 			if (!S.bRoof && SHash(S, 20) < .0045) Add(Osprey, S, FVector(At(30).X, 28, At(30).Y), O, 1, 20);
 			if (!S.Bank && SHash(S, 21) < .007 && RookAt(S.X, S.Z) < 0) Add(Pelican, S, S.Top, O, 1, 21);
+			// a brown pelican hunched on an old piling standing in the water off the roots (the user's second picture)
+			if (!S.Bank && bOpen && SHash(S, 27) < .006 && RookAt(S.X, S.Z) < 0)
+			{
+				const FVector2D Q = At(9 + 6 * SHash(S, 56));
+				const double Dp = DepthAt(Q.X, Q.Y);
+				if (LandH(Q.X, Q.Y) < -.05 && !KeysGeoReal::MangroveAt(Q.X, Q.Y) && Dp > .3 && Dp < 3) Add(Pelican, S, FVector(Q.X, 1.5 + .5 * SHash(S, 57), Q.Y), O, 1, 27).bPost = true;
+			}
 			// a line of brown pelicans gliding low along the edge (more than one at a spot: they are on the wing)
 			if (!S.bRoof && !S.Bank && SHash(S, 25) < .004) Add(Pelican, S, FVector(At(14).X, 2.5, At(14).Y), O, 3 + int32(SHash(S, 54) * 3), 25);
 			// a flock of white pelicans, the winter birds of Florida Bay, loafing and fishing on a bay-side flat
 			if (!S.Bank && SHash(S, 26) < .0018 && DZAt(S.X, S.Z) < 0)
-				for (double D = 5; D < 40; D += 2.5)
+				for (double D = 40; D >= 5; D -= 2.5)   // (the outer part of the flat, toward the water a boat can lie in)
 				{
 					const FVector2D Q = At(D);
 					if (KeysGeoReal::MangroveAt(Q.X, Q.Y) || LandH(Q.X, Q.Y) > -.05 || DepthAt(Q.X, Q.Y) > .4) continue;
@@ -785,7 +792,7 @@ void AKeysMangroveEco::Tick(float DeltaSeconds)
 		if (!BirdsBefore() && FVector2D::Distance(T.Value->C, Cam2) < 730) EmitWaterMarks(S, *T.Value);
 		if (bStill) EmitBirds(S, *T.Value, true);
 	}
-	for (const FBird& Dm : S.Dummies) BirdSoup(S.Live, Dm, false, .02);
+	for (const FBird& Dm : S.Dummies) BirdSoup(S.Live, Dm, false, 0);   // (no dark edge: it is laid out for one camera, and these are looked at from all round)
 	EcoFlushSoup(LiveMesh, S.Live);
 	if (bStill) EcoFlushSoup(StillMesh, S.Still);
 	FlushPools(this, S);
@@ -1010,7 +1017,10 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			if (!S.Dummies.IsValidIndex(Ix)) return;
 			if (Num.Num()) Num.RemoveAt(0);
 			const FBird& Dm = S.Dummies[Ix];
-			P = Dm.P + FVector(0, .15, 0); O = FVector2D(FMath::Cos(Dm.Yaw + .75), FMath::Sin(Dm.Yaw + .75));
+			// (a fifth number is the quarter it is seen from, radians off its bow: .75 by default, the other bow if negative)
+			const double Qt = Num.Num() > 4 ? Num[4] : .75;
+			if (Num.Num() > 4) Num.SetNum(4);
+			P = Dm.P + FVector(0, Dm.State == BPatrol ? .1 : .75, 0); O = FVector2D(FMath::Cos(Dm.Yaw + Qt), FMath::Sin(Dm.Yaw + Qt));
 			S.LookName = TEXT("-");
 		}
 		else if (Name == TEXT("rook"))
@@ -1113,14 +1123,16 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		S.Dummies.Reset();
 		if (A.Num() > 1 && A[1] == TEXT("off")) return;
 		const FVector2D Fw = S.BoatF, Port(Fw.Y, -Fw.X);
+		// (and a sixth: a white one with its wings up in the beat, as in the user's photograph)
 		struct FDef { int32 Kind; uint8 State; double Rank, Y; };
-		const FDef Defs[5] = {{WhitePelican, BPatrol, 0, 2.2}, {Pelican, BPatrol, .5, 2.2}, {Pelican, BPerch, .5, 1.6}, {Pelican, BPerch, .1, 1.6}, {WhitePelican, BPerch, .9, 1.6}};
-		for (int32 i = 0; i < 5; i++)
+		const FDef Defs[6] = {{WhitePelican, BPatrol, 0, 2.2}, {Pelican, BPatrol, .5, 2.2}, {Pelican, BPerch, .5, 1.6}, {Pelican, BPerch, .1, 1.6}, {WhitePelican, BPerch, .9, 1.6}, {WhitePelican, BPatrol, 0, 2.2}};
+		for (int32 i = 0; i < 6; i++)
 		{
 			FBird B;
 			PoseBird(B, Defs[i].Kind);
 			B.State = Defs[i].State; B.Rank = Defs[i].Rank; B.Wing = B.State == BPatrol ? 1 : 0;
 			B.Ph = 2.5 - Defs[i].Rank * 5.25;   // (set wings: in the glide, not the flap)
+			if (i == 5) B.Ph = .25 / B.FlapHz;   // (the top of the beat)
 			const FVector2D Q = S.Boat + Port * 12 + Fw * (4.0 * (i - 2));
 			B.P = FVector(Q.X, S.Sea + Defs[i].Y, Q.Y);
 			B.Yaw = FMath::Atan2(Fw.Y, Fw.X);
@@ -1177,7 +1189,25 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 				UE_LOG(LogTemp, Log, TEXT("KREco goto %s: at %.0f, %.0f; the boat put at tp=%.0f,%.0f,%.3f, %.0f m off, in %.1f m charted"), KindName(Ht.Kind), Ht.P.X, Ht.P.Y, B.X, B.Y, Hd, FVector2D::Distance(B, Ht.P), KeysGeo::DepthAt(B.X, B.Y));
 				return;
 			}
-			UE_LOG(LogTemp, Log, TEXT("KREco goto %s: none of %d in the tiles planned round the boat has water for her within %.0f m"), *A[1], Hits.Num(), Dist + 9);
+			// (none that near: the one she can lie nearest to, and say how far off that is)
+			double BestD = 1e9, BestH = 0;
+			FVector2D BestB(0, 0);
+			const FHit* BestHit = nullptr;
+			for (const FHit& Ht : Hits)
+			{
+				FVector2D B;
+				double Hd;
+				if (!Pw || !BoatSpot(Ht.P, Ht.O, Dist, B, Hd) || FVector2D::Distance(B, Ht.P) >= BestD) continue;
+				BestD = FVector2D::Distance(B, Ht.P); BestB = B; BestH = Hd; BestHit = &Ht;
+			}
+			if (BestHit)
+			{
+				Pw->DebugPlace(BestB.X, BestB.Y, BestH);
+				CloserCmd(FString(TEXT("want ")) + KindName(BestHit->Kind));
+				UE_LOG(LogTemp, Log, TEXT("KREco goto %s: at %.0f, %.0f; no water for her within %.0f m: the boat put at tp=%.0f,%.0f,%.3f, %.0f m off, in %.1f m charted"), KindName(BestHit->Kind), BestHit->P.X, BestHit->P.Y, Dist + 9, BestB.X, BestB.Y, BestH, BestD, KeysGeo::DepthAt(BestB.X, BestB.Y));
+				return;
+			}
+			UE_LOG(LogTemp, Log, TEXT("KREco goto %s: none of %d in the tiles planned round the boat has water for her within reach"), *A[1], Hits.Num());
 			return;
 		}
 		for (int32 i = 0; i < FMath::Min(C0 == TEXT("find1") ? 1 : 4, Hits.Num()); i++)
