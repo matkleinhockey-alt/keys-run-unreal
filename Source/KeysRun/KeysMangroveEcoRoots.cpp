@@ -46,7 +46,7 @@ namespace KeysMangroveEco
 		return G >= 0 && G < NumGrow ? N[G] : TEXT("?");
 	}
 	// a sleeve is laid along the root (scaled to the piece's length along X); a cluster stands on it (scaled evenly)
-	static bool IsSleeve(int32 G) { return G == GBarnacle || G == GSpongeRed || G == GSpongeOrange || G == GAlgae; }
+	static bool IsSleeve(int32 G) { return G == GBarnacle; }
 
 	namespace
 	{
@@ -106,68 +106,65 @@ namespace KeysMangroveEco
 			M.Surf = G == GBarnacle || G == GOyster ? SurfConcrete : SurfCloth;
 			const double Sd = G * 7.31;
 			auto Noise = [Sd](double U, double A, double F) { return FMath::Sin(U * 9 * F + A * 3 + Sd) * FMath::Cos(A * 2 * F + U * 5 + Sd * 1.7); };
+			// (every piece is small and sits on one side of the root, +Y, its foot on the bark at about one root radius: the
+			// crust is built of many of them, scattered round and along the root, with bark showing between)
 			if (G == GBarnacle)
 			{
-				// a crust of little grey-white cones: a rough pale sleeve, speckled dark where the shells' mouths are
-				Sleeve(M, 4, 7, [&](double U, double A) { return 1.16 + .07 * Noise(U, A, 2.3); },
-					[&](double U, double A, double R) { return RHash(U * 13 + Sd, A * 7) < .35 ? RHex(0x5e5a50) : FMath::Lerp(RHex(0x9a9484), RHex(0xbab4a4), float(RHash(A * 3, U * 11))); });
+				// barnacles: a thin, pale, rough band, speckled dark where the shells' mouths are
+				Sleeve(M, 2, 7, [&](double U, double A) { return 1.1 + .06 * Noise(U, A, 2.3); },
+					[&](double U, double A, double R) { return RHash(U * 13 + Sd, A * 7) < .35 ? RHex(0x5e5a50) : FMath::Lerp(RHex(0xa8a292), RHex(0xc8c2b2), float(RHash(A * 3, U * 11))); });
 			}
 			else if (G == GOyster)
 			{
-				// a cluster of mangrove oysters and flat tree oysters: grey shells standing off the root at all angles,
-				// their lips pale and their insides purple-black
-				for (int32 k = 0; k < 6; k++)
+				// a small clump of mangrove and flat tree oysters: three shells standing off the bark at odd angles, pale lips,
+				// purple-black insides showing on the flat ones
+				for (int32 k = 0; k < 3; k++)
 				{
-					const double A = 2 * PI * (k + .4 * RHash(k, 1.0)) / 6, X = (RHash(k, 2.0) - .5) * 2.4, Tilt = (RHash(k, 3.0) - .5) * 1.1;
+					const double A = PI / 2 + (RHash(k, 1.0) - .5) * 2.2, X = (RHash(k, 2.0) - .5) * 1.4, Tilt = (RHash(k, 3.0) - .5) * 1.2;
 					const FVector Out = Rad(A, 1);
 					const FVector Long = (Out * FMath::Cos(Tilt) + FVector(FMath::Sin(Tilt), 0, 0)).GetSafeNormal();
 					const FVector Side = FVector::CrossProduct(Long, FVector(1, 0, 0)).GetSafeNormal(.01, FVector(0, 0, 1));
 					const FVector Thin = FVector::CrossProduct(Long, Side).GetSafeNormal();
-					const double L = 1.5 + .9 * RHash(k, 4.0);
-					const uint32 Shell = k % 3 == 0 ? 0x5c4e56 : k % 3 == 1 ? 0x8f8878 : 0x9e9684;
-					Blob(M, FVector(X, 0, 0) + Out * (1.0 + L * .55), Long * L * .6, Side * L * .42, Thin * .32, 5, 2,
+					const double Ls = .9 + .7 * RHash(k, 4.0);
+					const uint32 Shell = k == 0 ? 0x5c4e56 : k == 1 ? 0x8f8878 : 0x9e9684;
+					Blob(M, FVector(X, 0, 0) + Out * (.9 + Ls * .5), Long * Ls * .55, Side * Ls * .4, Thin * .25, 5, 2,
 						[Shell](double T) { return FMath::Lerp(RHex(Shell) * .75f, RHex(0xc8c2b2), float(FMath::Square(T))); });
 				}
-				Sleeve(M, 2, 6, [&](double U, double A) { return 1.15 + .1 * Noise(U, A, 1.4); }, [](double, double, double) { return RHex(0x7a7468); });
 			}
 			else if (G == GSpongeRed || G == GSpongeOrange)
 			{
-				// fire sponge: a thick, lumpy, brilliant crust that swallows the root, darker in its folds, with a few raised
-				// vents (oscula)
+				// fire sponge: a few soft irregular lobes grown together on the bark, darker in the folds, one raised vent
 				const FLinearColor Hi = RHex(G == GSpongeRed ? 0xb8301e : 0xd8641e), Lo = RHex(G == GSpongeRed ? 0x6a1a12 : 0x8a4012);
-				Sleeve(M, 5, 8, [&](double U, double A) { return 1.5 + .28 * Noise(U, A, 1.0) + .12 * Noise(U * 1.7, A * 1.3, 2.2); },
-					[&](double U, double A, double R) { return FMath::Lerp(Lo, Hi, float(FMath::Clamp((R - 1.2) / .6, 0.0, 1.0))); });
-				for (int32 k = 0; k < 2; k++)
+				for (int32 k = 0; k < 3; k++)
 				{
-					const double A = 2 * PI * RHash(k, Sd), X = (RHash(k + 3.0, Sd) - .5) * .5;
+					const double A = PI / 2 + (RHash(k, Sd) - .5) * 1.8, X = (RHash(k + 3.0, Sd) - .5) * 1.5, Rr = .45 + .4 * RHash(k + 5.0, Sd);
 					const FVector Out = Rad(A, 1);
-					Blob(M, FVector(X, 0, 0) + Out * 1.75, Out * .4, Rad(A + PI / 2, .26), FVector(.26, 0, 0), 5, 2,
-						[Hi, Lo](double T) { return T > .9 ? Lo * .5f : Hi; });
+					Blob(M, FVector(X, 0, 0) + Out * (.85 + Rr * .5), Out * Rr * .8, Rad(A + PI / 2, Rr), FVector(Rr * 1.2, 0, 0), 5, 2,
+						[Hi, Lo](double T) { return FMath::Lerp(Lo, Hi, float(FMath::Clamp(T * 1.6 - .3, 0.0, 1.0))); });
 				}
+				Blob(M, FVector(.1, 0, 0) + Rad(PI / 2, 1.75), Rad(PI / 2, .35), Rad(PI, .2), FVector(.2, 0, 0), 4, 2, [Hi, Lo](double T) { return T > .85 ? Lo * .4f : Hi; });
 			}
 			else if (G == GTunicPurple || G == GTunicBlue)
 			{
-				// colonial tunicates: a bunch of little translucent bottles standing out of the root, each with a pale ring at
-				// its mouth
+				// colonial tunicates: a little bunch of beads standing out of the bark, each with a pale ring at its mouth
 				const FLinearColor Body = RHex(G == GTunicPurple ? 0x6c3c96 : 0x3a58b8), Tip = RHex(G == GTunicPurple ? 0xc4a0e4 : 0xa4c4f4);
-				for (int32 k = 0; k < 7; k++)
+				for (int32 k = 0; k < 5; k++)
 				{
-					const double A = 2 * PI * RHash(k, Sd + 1) , X = (RHash(k, Sd + 2) - .5) * 2.0;
+					const double A = PI / 2 + (RHash(k, Sd + 1) - .5) * 1.8, X = (RHash(k, Sd + 2) - .5) * 1.2;
 					const FVector Out = Rad(A, 1), Side = Rad(A + PI / 2, 1), Ax(1, 0, 0);
-					const double H = .6 + .5 * RHash(k, Sd + 3);
-					Blob(M, FVector(X, 0, 0) + Out * (.95 + H * .5), Out * H * .5, Side * .24, Ax * .24, 5, 2, [Body, Tip](double T) { return T > .82 ? Tip : FMath::Lerp(Body * .7f, Body, float(T)); });
+					const double H = .45 + .35 * RHash(k, Sd + 3);
+					Blob(M, FVector(X, 0, 0) + Out * (.9 + H * .5), Out * H * .5, Side * .22, Ax * .22, 4, 2, [Body, Tip](double T) { return T > .8 ? Tip : FMath::Lerp(Body * .7f, Body, float(T)); });
 				}
 			}
 			else if (G == GAlgae)
 			{
-				// a green fuzz: a mat on the root and fine blades standing out of it
-				Sleeve(M, 3, 7, [&](double U, double A) { return 1.15 + .08 * Noise(U, A, 1.7); }, [](double, double, double) { return RHex(0x3c5e26); });
-				for (int32 k = 0; k < 22; k++)
+				// a tuft of fine green blades
+				for (int32 k = 0; k < 8; k++)
 				{
-					const double A = 2 * PI * RHash(k, 11.0), X = RHash(k, 12.0) - .5, L = .7 + 1.0 * RHash(k, 13.0), W = .04;
-					const FVector B0 = FVector(X, 0, 0) + Rad(A, 1.2), Tip = FVector(X + (RHash(k, 14.0) - .5) * .3, 0, 0) + Rad(A + (RHash(k, 15.0) - .5) * .6, 1.2 + L);
+					const double A = PI / 2 + (RHash(k, 11.0) - .5) * 1.6, X = (RHash(k, 12.0) - .5) * .8, Ls = .6 + .9 * RHash(k, 13.0), W = .05;
+					const FVector B0 = FVector(X, 0, 0) + Rad(A, .95), Tip = FVector(X + (RHash(k, 14.0) - .5) * .5, 0, 0) + Rad(A + (RHash(k, 15.0) - .5) * .7, 1.0 + Ls);
 					const FVector Sd2 = FVector(W, 0, 0);
-					const FLinearColor Cb = RHex(0x4a7a2a), Ct = RHex(0x8ab84c);
+					const FLinearColor Cb = RHex(0x3c6a26), Ct = RHex(0x8ab84c);
 					const FVector Nn = FVector::CrossProduct(Tip - B0, Sd2).GetSafeNormal();
 					const int32 I0 = M.AddVert(B0 - Sd2, Nn, Cb), I1 = M.AddVert(B0 + Sd2, Nn, Cb), I2 = M.AddVert(Tip, Nn, Ct);
 					const int32 J0 = M.AddVert(B0 - Sd2, -Nn, Cb), J1 = M.AddVert(B0 + Sd2, -Nn, Cb), J2 = M.AddVert(Tip, -Nn, Ct);
@@ -176,16 +173,15 @@ namespace KeysMangroveEco
 			}
 			else
 			{
-				// an anemone on the root (Aiptasia, Bartholomea): a tan column and a ring of pale tentacles tipped lilac,
-				// standing out of the root's side (+Y)
+				// an anemone on the root (Aiptasia, Bartholomea): a tan column and a ring of pale tentacles tipped lilac
 				const FLinearColor Col = RHex(0x8a7a5c), Ten = RHex(0xd8ceb0), TipC = RHex(0xb48cd0);
-				Blob(M, FVector(0, 1.9, 0), FVector(0, 1.1, 0), FVector(.75, 0, 0), FVector(0, 0, .75), 6, 2, [Col](double T) { return FMath::Lerp(Col * .7f, Col, float(T)); });
-				for (int32 k = 0; k < 11; k++)
+				Blob(M, FVector(0, 1.7, 0), FVector(0, .8, 0), FVector(.55, 0, 0), FVector(0, 0, .55), 5, 2, [Col](double T) { return FMath::Lerp(Col * .7f, Col, float(T)); });
+				for (int32 k = 0; k < 8; k++)
 				{
-					const double A = 2 * PI * k / 11 + .2 * RHash(k, 21.0), L = 1.6 + .9 * RHash(k, 22.0);
-					const FVector Base(FMath::Cos(A) * .6, 2.9, FMath::Sin(A) * .6), Dir = FVector(FMath::Cos(A) * .8, .75 + .3 * RHash(k, 23.0), FMath::Sin(A) * .8).GetSafeNormal();
+					const double A = 2 * PI * k / 8 + .2 * RHash(k, 21.0), Ls = 1.1 + .7 * RHash(k, 22.0);
+					const FVector Base(FMath::Cos(A) * .45, 2.4, FMath::Sin(A) * .45), Dir = FVector(FMath::Cos(A) * .8, .75 + .3 * RHash(k, 23.0), FMath::Sin(A) * .8).GetSafeNormal();
 					const FVector S1 = FVector::CrossProduct(Dir, FVector(0, 1, 0)).GetSafeNormal(.01, FVector(1, 0, 0)), S2 = FVector::CrossProduct(Dir, S1).GetSafeNormal();
-					Blob(M, Base + Dir * L * .5, Dir * L * .5, S1 * .15, S2 * .15, 3, 2, [Ten, TipC](double T) { return T > .75 ? TipC : Ten; });
+					Blob(M, Base + Dir * Ls * .5, Dir * Ls * .5, S1 * .12, S2 * .12, 3, 2, [Ten, TipC](double T) { return T > .75 ? TipC : Ten; });
 				}
 			}
 			M.SyncKinds();
@@ -302,42 +298,42 @@ namespace KeysMangroveEco
 				NRoot++;
 				// the way out from the root: away from the trunk, level
 				const FVector2D Away = Norm2(FVector2D(Top.X - S.X, Top.Z - S.Z), FVector2D(1, 0));
-				double T = .02 + .05 * RHash(S.X * .37 + i, S.Z * .53);
-				for (int32 n = 0; n < 24 && T < L; n++)
+				double T = .01 + .04 * RHash(S.X * .37 + i, S.Z * .53);
+				const FVector UpOut = [&] { FVector U = FVector::CrossProduct(Dir, FVector(Away.Y, 0, -Away.X)).GetSafeNormal(.001, FVector(Away.X, 0, Away.Y)); return FVector::DotProduct(U, FVector(Away.X, 0, Away.Y)) < 0 ? -U : U; }();
+				for (int32 n = 0; n < 48 && T < L; n++)
 				{
 					const double H1 = RHash(S.X * 1.13 + i * 3.7 + n * .91, S.Z * .77 - n * 1.3), H2 = RHash(S.Z * 1.31 + n * 2.3, S.X * .59 + i * 1.7), H3 = RHash(H1 * 91 + i, H2 * 37 + n);
-					const FVector C0 = Top - Dir * T;
-					const double Y = C0.Y;
-					// the band: barnacles at the top of the tide, oysters through the middle, sponges, tunicates, algae and
-					// the anemones below the low-tide line, where the roots never dry
-					int32 G;
-					double Len;
-					if (Y > HighW - .2) { G = H2 < .85 ? GBarnacle : GOyster; Len = .08 + .12 * H3; }
-					else if (Y > LowW + .06) { G = H2 < .6 ? GOyster : H2 < .78 ? GBarnacle : GAlgae; Len = .1 + .1 * H3; }
-					else
+					const double Y = (Top - Dir * T).Y;
+					// how thick it is here: thin at the top of the tide, thickening toward the bottom, where the roots never dry
+					const double Deep = FMath::Clamp((LowW + .06 - Y) / .6, 0.0, 1.0);
+					const int32 Here = Y < LowW + .06 && H3 < .25 + .5 * Deep ? 2 : 1;   // (two pieces round the root at once, lower down)
+					for (int32 h = 0; h < Here; h++)
 					{
-						G = H2 < .13 ? GSpongeRed : H2 < .26 ? GSpongeOrange : H2 < .36 ? GTunicPurple : H2 < .43 ? GTunicBlue : H2 < .82 ? GAlgae : H2 < .86 + .03 * Bias ? GAnemone : GOyster;
-						Len = .1 + .14 * H3;
-					}
-					if (H1 < Cov)
-					{
+						const double Hh = h ? RHash(H2 * 53 + n, H1 * 29 + i) : H2, Hr = h ? RHash(H3 * 71 + n, H1 * 13) : H3;
+						// the band: barnacles at the top of the tide, oysters through the middle, sponges, tunicates, algae and
+						// the anemones below the low-tide line
+						int32 G;
+						double Pc = Cov;
+						if (Y > HighW - .2) { G = Hh < .8 ? GBarnacle : GOyster; Pc = Cov * 1.3; }
+						else if (Y > LowW + .06) { G = Hh < .62 ? GOyster : Hh < .78 ? GBarnacle : GAlgae; Pc = Cov * 1.1; }
+						else
+						{
+							G = Hh < .14 ? GSpongeRed : Hh < .28 ? GSpongeOrange : Hh < .4 ? GTunicPurple : Hh < .48 ? GTunicBlue : Hh < .82 ? GAlgae : Hh < .86 + .03 * Bias ? GAnemone : GOyster;
+							Pc = Cov * (.7 + .8 * Deep);
+						}
+						if ((h ? RHash(H1 * 17 + n, H3 * 41) : H1) >= Pc) continue;
 						const double Rr = Sg.R;
-						const double Lp = FMath::Min(Len, L - T + .02);
+						const double Lp = G == GBarnacle ? .04 + .06 * Hr : 0;
 						const FVector Mid = Top - Dir * (T + Lp * .5);
-						// (round the root: toward the open water as often as not, else anywhere)
-						const double Roll = H3 < .5 ? 0 : (H3 - .5) * 4 * PI;
-						FVector Up = FVector::CrossProduct(Dir, FVector(Away.Y, 0, -Away.X)).GetSafeNormal(.001, FVector(Away.X, 0, Away.Y));
-						if (FVector::DotProduct(Up, FVector(Away.X, 0, Away.Y)) < 0) Up = -Up;
-						Up = Up.RotateAngleAxis(FMath::RadiansToDegrees(Roll), Dir);
-						const FVector Xu = D2U(-Dir), Yu = D2U(Up);
-						const FRotator R = FRotationMatrix::MakeFromXY(Xu, Yu).Rotator();
-						const double Sc = Rr * (IsSleeve(G) ? 1 : G == GAnemone ? .5 + .15 * H3 : G == GOyster ? .65 + .2 * H3 : .9 + .25 * H3);
+						// (round the root: toward the open water as often as not, anywhere else the rest)
+						const double Roll = h ? PI * (.7 + .6 * Hr) + (Hh - .5) : Hr < .45 ? (Hr - .22) * 2.5 : (Hr - .45) * 2 * PI / .55;
+						const FVector Up = UpOut.RotateAngleAxis(FMath::RadiansToDegrees(Roll), Dir);
+						const FRotator R = FRotationMatrix::MakeFromXY(D2U(-Dir), D2U(Up)).Rotator();
+						const double Sc = Rr * (IsSleeve(G) ? 1 : G == GAnemone ? .45 + .2 * Hr : (.6 + .55 * Hr) * (.85 + .3 * Deep));
 						Out[G].Add(FTransform(R, G2U(Mid), IsSleeve(G) ? FVector(Lp, Sc, Sc) : FVector(Sc)));
 						if (OutP[G].Num() < 400) { OutP[G].Add(Mid); OutO[G].Add(Norm2(FVector2D(Up.X, Up.Z), Away)); }
-						T += Lp;
 					}
-					else T += Len * .7;
-					T += (.04 + .12 * H2) / FMath::Max(.3, Cov);
+					T += .03 + .06 * H2;
 				}
 			}
 			return NRoot;
@@ -387,7 +383,7 @@ namespace KeysMangroveEco
 				E.GrowTrees++;
 				Total = 0;
 				for (int32 G = 0; G < NumGrow; G++) Total += Out[G].Num();
-				if (Total > 1700) break;
+				if (Total > 3600) break;
 			}
 		}
 		E.GrowTris = 0;
@@ -506,9 +502,10 @@ namespace KeysMangroveEco
 				if (D < .55 || D6 < .6) continue;
 				double Sc = FMath::Min(D, 1.6) + FMath::Min(D6, 1.8) * .5 + (S.Bank ? .6 : 0) - Dn * .004;
 				// (life about it)
-				for (const FSchoolE& Sc2 : T.Value->Schools) if (FVector2D::DistSquared(Sc2.Home, FVector2D(S.X, S.Z)) < 64) Sc += .5;
+				for (const FSchoolE& Sc2 : T.Value->Schools) if (FVector2D::DistSquared(Sc2.Home, FVector2D(S.X, S.Z)) < 100) Sc += .5;
 				for (const FGroup& G : T.Value->Groups)
-					if ((G.Kind == Snook || G.Kind == GraySnapper) && FVector2D::DistSquared(G.Home, FVector2D(S.X, S.Z)) < 100) Sc += 1.0;
+					if ((G.Kind == Snook || G.Kind == GraySnapper) && FVector2D::DistSquared(G.Home, FVector2D(S.X, S.Z)) < 100) Sc += 2.5;
+				for (const FSite& S2 : T.Value->Trees) Sc += FMath::Square(S2.X - S.X) + FMath::Square(S2.Z - S.Z) < 64 ? .12 : 0;
 				if (Sc > Best) { Best = Sc; BestS = &S; BestO = O; }
 			}
 		}
