@@ -26,6 +26,8 @@ once).
 | `reeffish` | Rainbow and midnight parrotfish, queen, French and gray angelfish, sergeant major (brief written by the marshal) | `lane/reeffish` | `../KeysRun-reeffish` | merged 2026-11-24 |
 | `reefvisitors` | Southern stingray, green and loggerhead turtles, audit of the fish already there (brief written by the marshal) | `lane/reefvisitors` | `../KeysRun-reefvisitors` | merged 2026-11-24 |
 | `reefbottom` | Queen conch, giant Caribbean anemone, purple sea fans, audit of the reef itself (brief written by the marshal) | `lane/reefbottom` | `../KeysRun-reefbottom` | merged 2026-11-24 |
+| `reefaudio` | Sound for the reef and the mangroves, synthesised (brief written by the marshal) | `lane/reefaudio` | `../KeysRun-reefaudio` | running since 2026-11-24 (background agent) |
+| `reefreal` | Realism clean-up: halibut out, gulf flounder, no kelp, audit; black marlin stays at the user's word (brief written by the marshal) | `lane/reefreal` | `../KeysRun-reefreal` | running since 2026-11-24 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -52,6 +54,8 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `reeffish` | new `Source/KeysRun/KeysReefLifeFish*.cpp` |
 | `reefvisitors` | new `Source/KeysRun/KeysReefLifeVisitors*.cpp` |
 | `reefbottom` | new `Source/KeysRun/KeysReefLifeBottom*.cpp` |
+| `reefaudio` | new `Source/KeysRun/KeysReefAudio*` |
+| `reefreal` | `Source/KeysRun/KeysGarden.*` |
 
 ## Marshal-only files
 
@@ -307,3 +311,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   under the surface, no turtles resting under ledges, the recipe's section 7 is a placeholder and its other
   faults (fish R9, bottom R4), staghorn as thick fingers, turtle grass on Sombrero's crest (bottom R3).
 - 2026-11-24: `birdview` restarted at the user's word ("restart birdview") with a new background agent in the same worktree, beside `reefdens`.
+- 2026-11-24: the user played a local packaged build (`Saved/StagedBuilds/Mac`, not a release): "everything looks great". Next, at the user's word: behaviour links (`reeflinks`, opens once `reefdens` is merged), reef sounds (`reefaudio`), a realism clean-up that keeps the black marlin (`reefreal`), then a proper release. `lane/reefaudio` and `lane/reefreal` created from `main` (this entry).
