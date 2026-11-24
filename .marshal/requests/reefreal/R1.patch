@@ -1,0 +1,175 @@
+--- a/Source/KeysRun/KeysData.h
++++ b/Source/KeysRun/KeysData.h
+@@ -13,6 +13,9 @@
+ 		FLinearColor Color;
+ 		bool bJump;
+ 		FString Fact;
++		// taken out of the game (it does not live in the Keys): in no zone table and not in SpeciesKeys(), so it can no
++		// longer be hooked, seen or listed. The row stays so that an old save's catches, records and mounts keep their name.
++		bool bRetired = false;
+ 	};
+ 
+ 	struct FBoatSpec
+@@ -47,8 +50,10 @@
+ 	};
+ 
+ 	const FSpecies* Species(const FString& Key);
+-	// every species key, in the JS SPECIES order
++	// every species key in the game today, in the JS SPECIES order (retired species left out)
+ 	const TArray<FString>& SpeciesKeys();
++	// the species taken out of the game: Species() still knows them, for old saves
++	const TArray<FString>& RetiredKeys();
+ 	const TArray<FZoneRow>& ZoneTable(const FString& Zone);
+ 	const TArray<FBoatSpec>& Boats();
+ 	int32 BoatIndexOf(const FString& Id);   // -1 if unknown
+--- a/Source/KeysRun/KeysData.cpp
++++ b/Source/KeysRun/KeysData.cpp
+@@ -55,6 +55,7 @@
+ 		// the web game's later species (content/species.ts): flatfish, the reef's schooling snappers and jacks, the wreck giants, more pelagics
+ 		S(TEXT("flounder"), TEXT("Southern Flounder"), 1, 12, 0.4, 18, 0x6b5f4a, false, TEXT("Both eyes end up on one side: a flounder starts life upright and one eye migrates across its skull as it settles onto the bottom."));
+ 		S(TEXT("sole"), TEXT("Hogchoker Sole"), 0.4, 4, 0.3, 22, 0x5e5444, false, TEXT("A true sole, and small enough that it earned its name from hogs choking on the ones thrown to them: the rough scales catch in the throat."));
++		// retired: a cold-water fish of the North Atlantic that never comes near the Keys. Kept (bRetired, below) for old saves only.
+ 		S(TEXT("halibut"), TEXT("Atlantic Halibut"), 3, 400, 1.5, 9, 0x4a4a44, false, TEXT("The largest flatfish in the world, and it hunts like one: it will leave the bottom entirely and run down a fish in open water."));
+ 		S(TEXT("mako"), TEXT("Shortfin Mako"), 80, 600, 1.7, 5, 0x1f4f86, false, TEXT("Makos have been clocked at over 40 mph and will jump clear of the water when hooked."));
+ 		S(TEXT("warsaw"), TEXT("Warsaw Grouper"), 60, 440, 1.55, 3.5, 0x3b332e, false, TEXT("Warsaw grouper live past fifty years and almost never leave the deep ledges they settle on."));
+@@ -69,6 +70,7 @@
+ 		S(TEXT("spanishmack"), TEXT("Spanish Mackerel"), 1, 9, 0.55, 14, 0x44739a, false, TEXT("Golden spots and no bars is how you tell a Spanish from a cero. They slash through bait schools at speed."));
+ 		S(TEXT("bigeye"), TEXT("Bigeye Tuna"), 30, 300, 1.2, 7, 0x24405f, false, TEXT("That enormous eye is for hunting in deep, dark water  -  bigeye feed far below the other tunas."));
+ 		S(TEXT("skipjack"), TEXT("Skipjack Tuna"), 4, 30, 0.8, 11, 0x2b4160, false, TEXT("The striped belly is unique among tunas. Skipjack school in the thousands and churn the surface when they feed."));
++		M[TEXT("halibut")].bRetired = true;
+ 		return M;
+ 	}
+ 
+@@ -77,26 +79,43 @@
+ 	const TArray<FString>& SpeciesKeys()
+ 	{
+ 		static TArray<FString> K;
+-		if (!K.Num()) AllSpecies().GetKeys(K);
++		if (!K.Num()) for (const TPair<FString, FSpecies>& P : AllSpecies()) if (!P.Value.bRetired) K.Add(P.Key);
+ 		return K;
+ 	}
+ 
++	const TArray<FString>& RetiredKeys()
++	{
++		static TArray<FString> K;
++		static bool bDone = false;
++		if (!bDone) { bDone = true; for (const TPair<FString, FSpecies>& P : AllSpecies()) if (P.Value.bRetired) K.Add(P.Key); }
++		return K;
++	}
++
+ 	const TArray<FZoneRow>& ZoneTable(const FString& Zone)
+ 	{
+ 		using FRow = TArray<FZoneRow>;
+ 		static TMap<FString, FRow> T;
+ 		if (!T.Num())
+ 		{
+-			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(Name, FRow(Rows)); };
++			// Gone: the weight of rows since taken out of the table (the halibut's). It is spread over the rows left in
++			// proportion, so the table's total and every other fish's share against the others stay what they were.
++			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows, double Gone = 0)
++			{
++				FRow Rw(Rows);
++				double Sum = 0;
++				for (const FZoneRow& R : Rw) Sum += R.W;
++				if (Gone > 0 && Sum > 0) for (FZoneRow& R : Rw) R.W *= (Sum + Gone) / Sum;
++				T.Add(Name, MoveTemp(Rw));
++			};
+ 			Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.5}, {TEXT("snook"), 5}, {TEXT("redfish"), 3}, {TEXT("tarpon"), 2}, {TEXT("mangrove"), 4}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 2}});
+ 			Z(TEXT("Flats"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.2}, {TEXT("bonefish"), 11}, {TEXT("permit"), 2}, {TEXT("barracuda"), 3}, {TEXT("tarpon"), 1}, {TEXT("ladyfish"), 2}, {TEXT("lemonshark"), 0.8}, {TEXT("blacktip"), 1}, {TEXT("palometa"), 1.5}});
+ 			// the real map's bay-side flats: the grass banks behind the keys fish like the backcountry, not like the ocean flats
+ 			Z(TEXT("Bay Flats"), {{TEXT("flounder"), 2}, {TEXT("redfish"), 8}, {TEXT("trout"), 6}, {TEXT("snook"), 3}, {TEXT("bonefish"), 2.5}, {TEXT("tarpon"), 1.5}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("lemonshark"), 0.8}, {TEXT("blacktip"), 1}, {TEXT("barracuda"), 1.2}});
+ 			Z(TEXT("Backcountry"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.6}, {TEXT("snook"), 4}, {TEXT("redfish"), 4}, {TEXT("trout"), 5}, {TEXT("tarpon"), 2}, {TEXT("ladyfish"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("tripletail"), 0.8}, {TEXT("bullshark"), 0.6}});
+ 			Z(TEXT("Bridge"), {{TEXT("flounder"), 1.5}, {TEXT("tarpon"), 11}, {TEXT("mangrove"), 4}, {TEXT("snook"), 2}, {TEXT("sheepshead"), 3}, {TEXT("jackcrevalle"), 2}, {TEXT("goliath"), 0.6}, {TEXT("bullshark"), 0.6}, {TEXT("lookdown"), 2}, {TEXT("bluerunner"), 2.5}});
+-			Z(TEXT("Hawk Channel"), {{TEXT("halibut"), 0.4}, {TEXT("mangrove"), 4}, {TEXT("yellowtail"), 3}, {TEXT("mutton"), 2}, {TEXT("redgrouper"), 1.2}, {TEXT("gag"), 0.8}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("jackcrevalle"), 1.5}, {TEXT("graytrigger"), 1.5}, {TEXT("bluerunner"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("spanishmack"), 2.5}, {TEXT("lookdown"), 1}, {TEXT("tarpon"), 0.5}, {TEXT("amberjack"), 0.5}, {TEXT("kingfish"), 1.2}, {TEXT("blacktip"), 0.3}});
++			Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("yellowtail"), 3}, {TEXT("mutton"), 2}, {TEXT("redgrouper"), 1.2}, {TEXT("gag"), 0.8}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("jackcrevalle"), 1.5}, {TEXT("graytrigger"), 1.5}, {TEXT("bluerunner"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("spanishmack"), 2.5}, {TEXT("lookdown"), 1}, {TEXT("tarpon"), 0.5}, {TEXT("amberjack"), 0.5}, {TEXT("kingfish"), 1.2}, {TEXT("blacktip"), 0.3}}, 0.4);
+ 			Z(TEXT("Reef"), {{TEXT("cubera"), 0.6}, {TEXT("yellowtail"), 5}, {TEXT("mutton"), 3}, {TEXT("hogfish"), 3}, {TEXT("grouper"), 2.5}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("barracuda"), 2}, {TEXT("cero"), 2.5}, {TEXT("kingfish"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("goliath"), 0.5}, {TEXT("amberjack"), 0.8}, {TEXT("cobia"), 0.6}, {TEXT("lemonshark"), 0.25}, {TEXT("schoolmaster"), 3}, {TEXT("lanesnapper"), 2.5}, {TEXT("vermilion"), 2.5}, {TEXT("bluerunner"), 2.5}, {TEXT("spanishmack"), 1.5}});
+-			Z(TEXT("Offshore"), {{TEXT("halibut"), 1}, {TEXT("mako"), 0.8}, {TEXT("tigershark"), 0.35}, {TEXT("mahi"), 6}, {TEXT("blackfin"), 4}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 2}, {TEXT("marlin"), 1.3}, {TEXT("blackmarlin"), 0.6}, {TEXT("swordfish"), 1.1}, {TEXT("yellowfin"), 0.8}, {TEXT("albacore"), 0.3}, {TEXT("bluefin"), 0.4}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("cobia"), 0.5}, {TEXT("hammerhead"), 0.5}, {TEXT("skipjack"), 3}, {TEXT("bigeye"), 0.7}});
++			Z(TEXT("Offshore"), {{TEXT("mako"), 0.8}, {TEXT("tigershark"), 0.35}, {TEXT("mahi"), 6}, {TEXT("blackfin"), 4}, {TEXT("wahoo"), 2}, {TEXT("sailfish"), 2}, {TEXT("marlin"), 1.3}, {TEXT("blackmarlin"), 0.6}, {TEXT("swordfish"), 1.1}, {TEXT("yellowfin"), 0.8}, {TEXT("albacore"), 0.3}, {TEXT("bluefin"), 0.4}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("cobia"), 0.5}, {TEXT("hammerhead"), 0.5}, {TEXT("skipjack"), 3}, {TEXT("bigeye"), 0.7}}, 1);
+ 		}
+ 		const FRow* R = T.Find(Zone);
+ 		return R ? *R : T[TEXT("Hawk Channel")];
+--- a/Source/KeysRun/KeysLife.cpp
++++ b/Source/KeysRun/KeysLife.cpp
+@@ -243,7 +243,8 @@
+ 	{ FKeysShape& S = Add(TEXT("dolphin")); S.Peak = 0.38; S.Nose = 0.7; S.Ped = 0.14; S.Tail = EKeysTail::Flukes; S.TL = 0.2; S.TH = 1; S.Pec = 0.2; S.Dor.Add({0.42, 0.55, 0.7, EKeysFin::Sickle}); S.Hump = 0.18; }
+ 	{ FKeysShape& S = Add(TEXT("pilotwhale")); S.Peak = .3; S.Nose = .5; S.Ped = .16; S.Tail = EKeysTail::Flukes; S.TL = .22; S.TH = 1.1; S.Pec = .16; S.Dor.Add({.28, .4, .4, EKeysFin::Sickle}); S.Hump = .5; }
+ 	{ FKeysShape& S = Add(TEXT("humpback")); S.Peak = .3; S.Nose = .6; S.Ped = .2; S.Tail = EKeysTail::Flukes; S.TL = .26; S.TH = 1.15; S.Pec = .34; S.Dor.Add({.56, .63, .15, EKeysFin::Round}); S.bWings = true; S.Hump = .18; }
+-	// and their shapes (SHAPE); sole and halibut borrow the flounder's
++	// and their shapes (SHAPE); sole and halibut borrow the flounder's (the halibut is retired: in no zone's table, so
++	// never spawned; its look and shape stay for the mounted ones in old saves)
+ 	{ FKeysShape& S = Add(TEXT("flounder")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
+ 	{ FKeysShape& S = Add(TEXT("sole")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
+ 	{ FKeysShape& S = Add(TEXT("halibut")); S.Peak = 0.46; S.Nose = 0.35; S.Ped = 0.13; S.Tail = EKeysTail::Round; S.TL = 0.15; S.TH = 0.5; S.Pec = 0.1; S.Dor.Add({0.1, 0.93, 0.3, EKeysFin::Long}); S.Anal.Add({0.36, 0.93, 0.26, EKeysFin::Long}); S.Belly = 0.95; }
+@@ -309,7 +310,15 @@
+ 		static TMap<FString, TArray<FZoneRow>> T;
+ 		if (!T.Num())
+ 		{
+-			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows) { T.Add(FString(Name), TArray<FZoneRow>(Rows)); };
++			// Gone: the weight of rows since taken out (the halibut's), spread over the rest in proportion, as in KeysData's ZoneTable
++			auto Z = [](const TCHAR* Name, std::initializer_list<FZoneRow> Rows, double Gone = 0)
++			{
++				TArray<FZoneRow> Rw(Rows);
++				double Sum = 0;
++				for (const FZoneRow& R : Rw) Sum += R.W;
++				if (Gone > 0 && Sum > 0) for (FZoneRow& R : Rw) R.W *= (Sum + Gone) / Sum;
++				T.Add(FString(Name), MoveTemp(Rw));
++			};
+ 		Z(TEXT("Creek"), {{TEXT("flounder"), 2}, {TEXT("sole"), 1.6}, {TEXT("snook"), 3}, {TEXT("redfish"), 2.5}, {TEXT("tarpon"), 1.5}, {TEXT("manatee"), 1}, {TEXT("mangrove"), 3.5}, {TEXT("ladyfish"), 2.5}, {TEXT("trout"), 1.5}, {TEXT("jackcrevalle"), 1}});
+ 		Z(TEXT("Flats"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.2}, {TEXT("sawfish"), 0.012}, {TEXT("bonefish"), 5}, {TEXT("permit"), 2.2}, {TEXT("stingray"), 3}, {TEXT("redfish"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("blacktip"), 1.5}, {TEXT("lemonshark"), 1}, {TEXT("eagleray"), 1}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.2}, {TEXT("palometa"), 3}, {TEXT("bluerunner"), 2}, {TEXT("manatee"), 0.7}});
+ 		Z(TEXT("Backcountry"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.8}, {TEXT("sawfish"), 0.01}, {TEXT("redfish"), 4}, {TEXT("snook"), 3}, {TEXT("trout"), 3}, {TEXT("mangrove"), 2.5}, {TEXT("tarpon"), 2}, {TEXT("bonefish"), 1.5}, {TEXT("permit"), 1}, {TEXT("barracuda"), 1.2}, {TEXT("manatee"), 1.2}, {TEXT("stingray"), 2.2}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.5}, {TEXT("tripletail"), 0.6}, {TEXT("dolphin"), 1.5}});
+@@ -320,7 +329,7 @@
+ 		// tables (content/creatures.ts), which the Reef zone hands off to by depth (LifeHabitat) so the wall feels different
+ 		Z(TEXT("ReefWall"), {{TEXT("cubera"), .7}, {TEXT("tigershark"), .12}, {TEXT("grouper"), 3}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("yellowtail"), 4}, {TEXT("mutton"), 2.5}, {TEXT("amberjack"), 2}, {TEXT("kingfish"), 1.5}, {TEXT("cero"), 1.5}, {TEXT("nurse"), 1}, {TEXT("goliath"), .6}, {TEXT("graytrigger"), 1.2}, {TEXT("lionfish"), 1}, {TEXT("hammerhead"), .8}, {TEXT("bullshark"), .5}, {TEXT("cobia"), 1}, {TEXT("dolphin"), 1.3}, {TEXT("vermilion"), 5}, {TEXT("bluerunner"), 3}, {TEXT("schoolmaster"), 2}});
+ 		Z(TEXT("DeepWall"), {{TEXT("warsaw"), 1}, {TEXT("cubera"), .6}, {TEXT("mako"), .3}, {TEXT("giantmanta"), .04}, {TEXT("tigershark"), .2}, {TEXT("grouper"), 3.5}, {TEXT("gag"), 2.5}, {TEXT("redgrouper"), 2}, {TEXT("amberjack"), 3}, {TEXT("kingfish"), 2}, {TEXT("cobia"), 1.5}, {TEXT("goliath"), 1.3}, {TEXT("nurse"), 1.5}, {TEXT("hammerhead"), .7}, {TEXT("bullshark"), .5}, {TEXT("mutton"), 1.4}, {TEXT("yellowtail"), 1}, {TEXT("cero"), 1}, {TEXT("dolphin"), 1}, {TEXT("vermilion"), 3.5}, {TEXT("bluerunner"), 1.5}});
+-		Z(TEXT("Offshore"), {{TEXT("halibut"), 1.1}, {TEXT("mako"), 0.5}, {TEXT("mola"), 0.03}, {TEXT("greatwhite"), 0.025}, {TEXT("whaleshark"), 0.04}, {TEXT("giantmanta"), 0.04}, {TEXT("tigershark"), 0.14}, {TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2.5}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), 0.12}, {TEXT("humpback"), 0.02}, {TEXT("skipjack"), 4}, {TEXT("bigeye"), 0.7}});
++		Z(TEXT("Offshore"), {{TEXT("mako"), 0.5}, {TEXT("mola"), 0.03}, {TEXT("greatwhite"), 0.025}, {TEXT("whaleshark"), 0.04}, {TEXT("giantmanta"), 0.04}, {TEXT("tigershark"), 0.14}, {TEXT("mahi"), 5}, {TEXT("flyingfish"), 4}, {TEXT("dolphin"), 2.5}, {TEXT("blackfin"), 3}, {TEXT("sailfish"), 1.5}, {TEXT("wahoo"), 1}, {TEXT("turtle"), 0.8}, {TEXT("marlin"), 0.6}, {TEXT("blackmarlin"), 0.25}, {TEXT("swordfish"), 0.3}, {TEXT("yellowfin"), 2.5}, {TEXT("albacore"), 1.2}, {TEXT("bluefin"), 0.8}, {TEXT("kingfish"), 1.5}, {TEXT("amberjack"), 1.5}, {TEXT("hammerhead"), 0.3}, {TEXT("pilotwhale"), 0.12}, {TEXT("humpback"), 0.02}, {TEXT("skipjack"), 4}, {TEXT("bigeye"), 0.7}}, 1.1);
+ 		}
+ 		const TArray<FZoneRow>* R = T.Find(Zone);
+ 		return R ? *R : T[TEXT("Hawk Channel")];
+--- a/Source/KeysRun/KeysHUD.cpp
++++ b/Source/KeysRun/KeysHUD.cpp
+@@ -1562,7 +1562,10 @@
+ 		Text(TEXT("No save slot available."), X + 32 * U, Yy, 1.f, Dim);
+ 		return;
+ 	}
+-	const TArray<FString>& Keys = KeysData::SpeciesKeys();
++	TArray<FString> Keys = KeysData::SpeciesKeys();
++	// a species since taken out of the game is listed only for a player whose save holds one, under its old name
++	const int32 Live = Keys.Num();
++	for (const FString& K : KeysData::RetiredKeys()) if (Sv->SpeciesBest.Contains(K)) Keys.Add(K);
+ 	auto SpName = [](const FString& K) { const KeysData::FSpecies* S = KeysData::Species(K); return S ? S->Name : K; };
+ 	if (bBig)
+ 	{
+@@ -1585,16 +1588,18 @@
+ 	else
+ 	{
+ 		int32 Mine = 0;
+-		for (const FString& K : Keys) if (Sv->SpeciesBest.Contains(K)) Mine++;
+-		Text(FString::Printf(TEXT("You have caught %d of %d species."), Mine, Keys.Num()), X + 32 * U, Yy, .9f, Teal);
++		for (int32 i = 0; i < Live; i++) if (Sv->SpeciesBest.Contains(Keys[i])) Mine++;
++		Text(FString::Printf(TEXT("You have caught %d of %d species."), Mine, Live), X + 32 * U, Yy, .9f, Teal);
+ 		Yy += 40 * U;
+ 		const int32 PerCol = (Keys.Num() + 1) / 2;
+ 		for (int32 i = 0; i < Keys.Num(); i++)
+ 		{
+-			const float CX = X + 32 * U + (i / PerCol) * (W * .5f - 16 * U), CY = Yy + (i % PerCol) * 31 * U;
++			// (the rows are fitted to the panel: at 31 U apiece the last six of each column ran off its foot, under the hint line)
++			const float RowH = FMath::Min(31 * U, (Y + H - 56 * U - Yy) / PerCol);
++			const float CX = X + 32 * U + (i / PerCol) * (W * .5f - 16 * U), CY = Yy + (i % PerCol) * RowH;
+ 			const double* Best = Sv->SpeciesBest.Find(Keys[i]);
+ 			const FLinearColor Col = Best ? Gold : Dim;
+-			Text(SpName(Keys[i]), CX, CY, .8f, Col);
++			Text(i < Live ? SpName(Keys[i]) : SpName(Keys[i]) + TEXT(" (retired)"), CX, CY, .8f, Col);
+ 			Text(Best ? FString::Printf(TEXT("%.1f lb"), *Best) : FString(TEXT("-")), CX + 300 * U, CY, .8f, Col);
+ 			Text(KeysFeed::ShortBest(Keys[i]), CX + 376 * U, CY + 3 * U, .6f, Dim);   // when it feeds best
+ 		}
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -901,6 +901,7 @@
+ 				ToggleAshore();
+ 			}
+ 		}
++		else if (Cmd.StartsWith(TEXT("board="))) { bBoardOpen = true; BoardTab = FCString::Atoi(*Cmd.Mid(6)); }   // board=1: the leaderboard, open on that tab (0 biggest fish, 1 species records), for a shot
+ 		else if (Cmd == TEXT("board")) { if (IsAshore()) ToggleAshore(); }
+ 		else if (Cmd.StartsWith(TEXT("walk=")))
+ 		{

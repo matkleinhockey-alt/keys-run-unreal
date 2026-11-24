@@ -56,7 +56,7 @@ lane's own files.
 | blackmarlin | Black Marlin | **no**: an Indo-Pacific fish; a handful of strays have ever been recorded in the Atlantic | 200-900 lb, 3.6 m; its own text says "rarely seen this side of the Pacific" | **Left exactly as it is, at the user's word.** Not one field, weight or text of it is touched by any request here (its share of offshore bites moves with every other fish's when the halibut goes: 2.1% to 2.2%) |
 | gag | Gag Grouper | yes | 6-45 lb, 0.9 m; "big ones are males" right | right |
 | redgrouper | Red Grouper | yes | 5-30 lb, 0.75 m; hole-digging text right | right |
-| flounder | Southern Flounder | **no**: its range ends north of the Keys on both coasts | 1-12 lb, 0.5 m, one black tail spot (the redfish's pattern) | **wrong: R2** makes it the gulf flounder (0.5-6 lb, 0.38 m, three eye-spots), same key |
+| flounder | Southern Flounder | **no**: its range ends north of the Keys on both coasts | 1-12 lb, 0.5 m, one black tail spot (the redfish's pattern); painted back-to-belly like an upright fish, so its upper flank faded from brown to white | **wrong: R2** makes it the gulf flounder (0.5-6 lb, 0.38 m, three eye-spots), same key, and paints flatfish by their sides (eyed side sand-brown, blind side white) |
 | sole | Hogchoker Sole | rare (a fish of mainland rivers and estuaries; the lined sole is the Keys' own) | 0.4-4 lb, 0.26 m; text calls it "a true sole" | species doubtful, kept. **Size and text plainly wrong: R4** (a hogchoker is an American sole, family Achiridae, and reaches about 8 in and a few ounces, never 4 lb) |
 | halibut | Atlantic Halibut | **no**: a cold-water fish of the North Atlantic, south to about Virginia | 3-400 lb, 1.25 m; hooked in Hawk Channel and offshore, seen offshore | **wrong: R1** retires it |
 | mako | Shortfin Mako | seasonal (winter, offshore) | 80-600 lb, 3.6 m (a very large one) | right |
@@ -170,7 +170,7 @@ one is a Florida Keys kind and the depth bands are the real ones. Their looks we
 
 | Kind | In the Keys | Verdict |
 |---|---|---|
-| kelp forest (about 170 stalks, 8-15 m tall) | **no**: kelp is a cold-water plant; nothing like it grows in tropical water | **replaced** by sea plumes, sea rods, sea whips, wire coral, black coral bushes, deep-water sea fans and rope sponges on rock ledges, with stove-pipe, yellow tube, brown tube, elephant ear and more giant barrel sponges |
+| kelp forest (about 170 stalks, 8-15 m tall) | **no**: kelp is a cold-water plant; nothing like it grows in tropical water | **replaced** by 270 colonies of sea plumes, sea rods, sea whips, wire coral, black coral bushes, deep-water sea fans and rope sponges on 36 rock ledges, with stove-pipe, yellow tube, brown tube, elephant ear and more giant barrel sponges |
 | barrel sponges in purple, orange and tan | the sponge yes, those colours no | **recoloured** red-brown to grey, as a giant barrel sponge is |
 | sea fans, purple and yellow | yes (the common sea fan comes in both) | right |
 | three manta rays lapping the site, 4.8-6.4 m across | rare | doubtful, kept: a giant manta is real here but three in permanent residence over one site is the scene's licence, and it is the site's drama |

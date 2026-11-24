@@ -1,0 +1,32 @@
+--- a/Source/KeysRun/KeysData.cpp
++++ b/Source/KeysRun/KeysData.cpp
+@@ -55,7 +55,8 @@
+ 		// the web game's later species (content/species.ts): flatfish, the reef's schooling snappers and jacks, the wreck giants, more pelagics
+ 		// the gulf flounder (Paralichthys albigutta) is the Keys' flounder; the southern flounder's range stops north of them. Same key, for the saves.
+ 		S(TEXT("flounder"), TEXT("Gulf Flounder"), 0.5, 6, 0.4, 18, 0x7a6a50, false, TEXT("Three dark eye-spots in a triangle on its back tell a gulf flounder from its cousins. It starts life upright; one eye migrates across its skull as it settles onto the sand."));
+-		S(TEXT("sole"), TEXT("Hogchoker Sole"), 0.4, 4, 0.3, 22, 0x5e5444, false, TEXT("A true sole, and small enough that it earned its name from hogs choking on the ones thrown to them: the rough scales catch in the throat."));
++		// (a hogchoker is an American sole, family Achiridae, not a true sole; it grows to about 8 in and a few ounces, not 4 lb)
++		S(TEXT("sole"), TEXT("Hogchoker"), 0.1, 0.5, 0.3, 22, 0x5e5444, false, TEXT("An American sole no longer than your hand. It earned its name from hogs choking on the ones thrown to them: the rough scales catch in the throat."));
+ 		// retired: a cold-water fish of the North Atlantic that never comes near the Keys. Kept (bRetired, below) for old saves only.
+ 		S(TEXT("halibut"), TEXT("Atlantic Halibut"), 3, 400, 1.5, 9, 0x4a4a44, false, TEXT("The largest flatfish in the world, and it hunts like one: it will leave the bottom entirely and run down a fish in open water."));
+ 		S(TEXT("mako"), TEXT("Shortfin Mako"), 80, 600, 1.7, 5, 0x1f4f86, false, TEXT("Makos have been clocked at over 40 mph and will jump clear of the water when hooked."));
+@@ -68,7 +69,7 @@
+ 		S(TEXT("vermilion"), TEXT("Vermilion Snapper"), 1, 7, 0.35, 16, 0xb8402e, false, TEXT("Called the beeliner. They stack up in big schools just off the reef drop."));
+ 		S(TEXT("lookdown"), TEXT("Lookdown"), 0.5, 4, 0.35, 20, 0xc3d2dc, false, TEXT("A living mirror  -  flat as a plate, with a face that looks permanently unimpressed."));
+ 		S(TEXT("palometa"), TEXT("Palometa"), 0.5, 3, 0.4, 22, 0xd7d2bd, false, TEXT("The long black fin streamers trail behind it like ribbons in the surf."));
+-		S(TEXT("spanishmack"), TEXT("Spanish Mackerel"), 1, 9, 0.55, 14, 0x44739a, false, TEXT("Golden spots and no bars is how you tell a Spanish from a cero. They slash through bait schools at speed."));
++		S(TEXT("spanishmack"), TEXT("Spanish Mackerel"), 1, 9, 0.55, 14, 0x44739a, false, TEXT("Golden spots and no stripe down the side is how you tell a Spanish from a cero. They slash through bait schools at speed."));
+ 		S(TEXT("bigeye"), TEXT("Bigeye Tuna"), 30, 300, 1.2, 7, 0x24405f, false, TEXT("That enormous eye is for hunting in deep, dark water  -  bigeye feed far below the other tunas."));
+ 		S(TEXT("skipjack"), TEXT("Skipjack Tuna"), 4, 30, 0.8, 11, 0x2b4160, false, TEXT("The striped belly is unique among tunas. Skipjack school in the thousands and churn the surface when they feed."));
+ 		M[TEXT("halibut")].bRetired = true;
+--- a/Source/KeysRun/KeysLife.cpp
++++ b/Source/KeysRun/KeysLife.cpp
+@@ -159,7 +159,7 @@
+ 	// the web game's later creatures (content/creatures.ts VIS)
+ 	// (the gulf flounder: 25-45 cm, sandy brown, three ocellated spots; LifeBodyColor paints a flatfish by its sides)
+ 	{ FKeysVis& V = Add(TEXT("flounder")); V.Kind = EKeysKind::Fish; V.Len = 0.38; V.H = 0.23; V.W = 0.042; V.Back = LHex(0x7a6a50); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x6a5c46); V.Finlet = V.Fin; V.Pattern = EKeysPat::Ocelli; V.Level = 2; V.Speed = 0.45; V.SMin = 1; V.SMax = 2; V.Spread = 2.2; V.DMin = 0.5; V.DMax = 14; V.bFlat = true; }
+-	{ FKeysVis& V = Add(TEXT("sole")); V.Kind = EKeysKind::Fish; V.Len = 0.26; V.H = 0.17; V.W = 0.03; V.Back = LHex(0x5e5444); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x4e4639); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.38; V.SMin = 1; V.SMax = 3; V.Spread = 1.8; V.DMin = 0.5; V.DMax = 18; V.bFlat = true; }
++	{ FKeysVis& V = Add(TEXT("sole")); V.Kind = EKeysKind::Fish; V.Len = 0.15; V.H = 0.1; V.W = 0.018; V.Back = LHex(0x5e5444); V.Belly = LHex(0xefe9dd); V.Fin = LHex(0x4e4639); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.38; V.SMin = 1; V.SMax = 3; V.Spread = 1.8; V.DMin = 0.5; V.DMax = 18; V.bFlat = true; }
+ 	{ FKeysVis& V = Add(TEXT("halibut")); V.Kind = EKeysKind::Fish; V.Len = 1.25; V.H = 0.72; V.W = 0.13; V.Back = LHex(0x4a4a44); V.Belly = LHex(0xf0ece2); V.Fin = LHex(0x3e3e39); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.6; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 18; V.DMax = 240; V.bFlat = true; }
+ 	{ FKeysVis& V = Add(TEXT("bluerunner")); V.Kind = EKeysKind::Fish; V.Len = 0.5; V.H = 0.15; V.W = 0.09; V.Back = LHex(0x43707d); V.Belly = LHex(0xeef2f2); V.Fin = LHex(0xcdb94e); V.Finlet = V.Fin; V.Level = 1; V.Speed = 2; V.SMin = 12; V.SMax = 26; V.Spread = 4.2; V.DMin = 1.5; V.DMax = 120; }
+ 	{ FKeysVis& V = Add(TEXT("schoolmaster")); V.Kind = EKeysKind::Fish; V.Len = 0.45; V.H = 0.16; V.W = 0.09; V.Back = LHex(0x8a7347); V.Belly = LHex(0xe8dcc0); V.Fin = LHex(0xe0ac3c); V.Finlet = V.Fin; V.Pattern = EKeysPat::Bars; V.Level = 1; V.Speed = 1.1; V.SMin = 8; V.SMax = 18; V.Spread = 3; V.DMin = 1.5; V.DMax = 30; }
