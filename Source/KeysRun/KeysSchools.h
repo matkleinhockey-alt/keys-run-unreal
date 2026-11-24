@@ -137,6 +137,8 @@ private:
 	TSet<int64> SiteDone;            // sites put in the water while the camera has been near (not put again till it leaves)
 	TArray<FSite> Forced;            // fish:ballhere's
 	double SiteT = 0, SonarT = 0, SplashBudget = 0, BirdsLastT = 0;
+	int32 BirdsDrawn = -1;           // birds drawn last frame (-1: not yet laid out)
+	bool bDeepOff = false;           // fish:deepoff or -KRNoBaitBalls: none of the deep balls (a frame-time comparison)
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> BirdPools;
 	UInstancedStaticMeshComponent* MakePool(const FString& Name, FKeysMesh& M, bool bShadow);
 

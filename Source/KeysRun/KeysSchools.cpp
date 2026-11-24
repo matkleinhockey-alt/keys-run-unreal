@@ -264,6 +264,7 @@ void AKeysSchools::BeginPlay()
 	Super::BeginPlay();
 	FString Script;
 	bScriptLog = FParse::Value(FCommandLine::Get(), TEXT("KRScript="), Script, false);
+	bDeepOff = FParse::Param(FCommandLine::Get(), TEXT("KRNoBaitBalls"));
 	UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Boid.M_KR_Boid"));
 	if (!M) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: M_KR_Boid missing (open the editor once to create it); no school fish")); return; }
 	MID = UMaterialInstanceDynamic::Create(M, this);
@@ -1162,6 +1163,7 @@ AKeysSchools::FSchool* AKeysSchools::RealiseSite(const FSite& Si, double Work)
 
 void AKeysSchools::DealSites()
 {
+	if (bDeepOff) { KeysBait::Publish({}); return; }
 	TArray<KeysBait::FBall> Pub;
 	TSet<int64> Live;
 	auto Publish = [&](const FSchool& B)
@@ -1310,6 +1312,8 @@ void AKeysSchools::StepBirds(double Dt)
 		}
 	}
 	if (BirdPools.Num() < 2 || !BirdPools[0] || !BirdPools[1]) return;
+	// (nothing to draw now and nothing drawn last frame: leave the pools alone)
+	if (BirdsDrawn == 0 && !KeysBait::Balls().ContainsByPredicate([&](const KeysBait::FBall& B) { return B.Work >= .12 && Hyp(B.X - Cam.X, B.Z - Cam.Z) <= BirdR; })) return;
 	TArray<FTransform> XT, XF;
 	XT.Init(FTransform(FQuat::Identity, FVector(0, 0, -1e7), FVector(.001)), NumTerns);
 	XF.Init(FTransform(FQuat::Identity, FVector(0, 0, -1e7), FVector(.001)), NumFrigates);
@@ -1363,6 +1367,7 @@ void AKeysSchools::StepBirds(double Dt)
 			Put(XF, IFr++, P, Fwd, -FMath::Sign(W) * 15, 1.0, 1, .85 + .1 * FMath::Sin(T * .7 + k));
 		}
 	}
+	BirdsDrawn = IT + IFr;
 	BirdPools[0]->BatchUpdateInstancesTransforms(0, XT, true, true, false);
 	BirdPools[1]->BatchUpdateInstancesTransforms(0, XF, true, true, false);
 }
@@ -1763,8 +1768,7 @@ void AKeysSchools::Tick(float DeltaSeconds)
 	FlushPools();
 	// the deep balls from above: nervous water, showers and the birds; and their fish for the sounder
 	for (FSchool& S : Schools) S.SplashT -= Dt;
-	SurfaceSigns(Dt);
-	StepBirds(Dt);
+	if (!bDeepOff) { SurfaceSigns(Dt); StepBirds(Dt); }
 	if ((SonarT -= Dt) <= 0)
 	{
 		SonarT = .25;
@@ -2133,6 +2137,14 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		Dv->DebugCmd(TEXT("hold"), Dep);   // (and stays there)
 		DebugCmd(TEXT("look"));
 		UE_LOG(LogTemp, Log, TEXT("KRBait toball %s #%d: %d fish, %.1f m down, work %.2f"), Specs[S->Sp].Key, S->Id, S->Fish.Num(), SurfY - S->Center.Y, S->Work);
+	}
+	else if (C == TEXT("deepoff") || C == TEXT("deepon"))
+	{
+		// frame-time comparison: the deep bait balls, their predators and birds gone (or back)
+		bDeepOff = C == TEXT("deepoff");
+		if (bDeepOff) for (int32 i = Schools.Num() - 1; i >= 0; i--) if (Schools[i].Site) Despawn(i);
+		SiteDone.Reset();
+		UE_LOG(LogTemp, Log, TEXT("KRBait deep balls %s"), bDeepOff ? TEXT("off") : TEXT("on"));
 	}
 	else if (C == TEXT("off") || C == TEXT("on"))
 	{
