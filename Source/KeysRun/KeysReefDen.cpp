@@ -1289,7 +1289,32 @@ namespace KeysReefDen
 			for (const FDen& DnR : Hits)
 			{
 				const FDen* Dn = &DnR;
-				if (!Matches(*Dn, A[1]) || Got++ < Which) continue;
+				if (!Matches(*Dn, A[1])) continue;
+				// a den she can see from there: no coral standing in the line from her mask to its opening (the reef is
+				// thick with it; the next such den is taken instead)
+				{
+					// (from 4 m behind her, where the chase view's camera rides)
+					const FVector AxF = FVector(Dn->Axis.X, 0, Dn->Axis.Z).GetSafeNormal(.0001, FVector(0, 0, 1));
+					const FVector Eye = Dn->Mouth + (AxF * Off + Dn->Right * Side) * ((Off + 4) / FMath::Max(.5, Off));
+					const FVector2D E2(Eye.X, Eye.Z), M2(Dn->Mouth.X, Dn->Mouth.Z);
+					bool bBlocked = false;
+					if (Dn->Kind != GapKind && Dn->Id >= 0)
+					{
+						const int32 C0x = FMath::FloorToInt32((FMath::Min(E2.X, M2.X) - 2) / ChunkM), C1x = FMath::FloorToInt32((FMath::Max(E2.X, M2.X) + 2) / ChunkM);
+						const int32 C0z = FMath::FloorToInt32((FMath::Min(E2.Y, M2.Y) - 2) / ChunkM), C1z = FMath::FloorToInt32((FMath::Max(E2.Y, M2.Y) + 2) / ChunkM);
+						for (int32 cz = C0z; cz <= C1z && !bBlocked; cz++)
+							for (int32 cx = C0x; cx <= C1x && !bBlocked; cx++)
+								for (const AKeysReef::FInst& I : D->Reef->ChunkInstances(cx, cz))
+								{
+									if (!I.Den && !AKeysReef::IsSolidCoral(I.Species) && !AKeysReef::IsTallCoral(I.Species)) continue;
+									const FVector2D C(I.X, I.Z);
+									if (I.Den && FVector2D::Distance(C, FVector2D(Dn->X, Dn->Z)) < 3.5) continue;   // (its own rock)
+									if (FMath::PointDistToSegment(FVector(C.X, C.Y, 0), FVector(E2.X, E2.Y, 0), FVector(M2.X, M2.Y, 0)) < 1.3 && FVector2D::Distance(C, M2) > 1.0) { bBlocked = true; break; }
+								}
+					}
+					if (bBlocked) continue;
+				}
+				if (Got++ < Which) continue;
 				D->bPin = true; D->bPinNew = true; D->PinDen = *Dn; D->PinOff = Off; D->PinSide = Side; D->PinUp = Up;
 				D->PinAimYaw = A.Num() > 7 ? FCString::Atod(*A[7]) : 0; D->PinAimPitch = A.Num() > 8 ? FCString::Atod(*A[8]) : 0;
 				const FVector P = Dn->Mouth + FVector(Dn->Axis.X, 0, Dn->Axis.Z).GetSafeNormal(.0001, FVector(0, 0, 1)) * Off + Dn->Right * Side + FVector(0, Up, 0);
