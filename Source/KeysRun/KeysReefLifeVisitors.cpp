@@ -389,7 +389,7 @@ namespace KeysReefLifeVisitors
 					const double U = R * Sgn(Cs) * FMath::Pow(FMath::Abs(Cs), 2 / SN), V = R * Sgn(Sn) * FMath::Pow(FMath::Abs(Sn), 2 / SN);
 					FVector P = ShellP(T, U, V);
 					P.Z = Ring ? -T.Hp : 0;
-					M.AddVert(P, FVector(Cs * (Ring ? .2 : 1), Sn * (Ring ? .2 : 1), Ring ? -1 : -.45).GetSafeNormal(), Ring ? T.Under : Blend(T.Under, T.Margin, .45));
+					M.AddVert(P, FVector(Cs * (Ring ? .2 : 1), Sn * (Ring ? .2 : 1), Ring ? -1 : -.45).GetSafeNormal(), Ring ? T.Under : T.Margin * .85f);
 				}
 			Band(M, R0, R0 + N, N, true);
 			const int32 C = M.AddVert(FVector(T.Cx, 0, -T.Hp * 1.06), FVector(0, 0, -1), T.Under * .96f);
@@ -541,7 +541,7 @@ namespace KeysReefLifeVisitors
 			G.CL = .70; G.Cx = -.03; G.HW = .275; G.Heart = .06; G.H = .15; G.Hp = .05; G.Costals = 4;
 			G.HeadL = .075; G.HeadW = .047; G.HeadH = .046; G.Block = 0; G.NeckL = .03;
 			G.FlipL = .43; G.FlipC = .06; G.StreakAmt = 1;
-			G.Shell = Hex(0x54452a); G.Streak = Hex(0xb89a52); G.Seam = Hex(0x1c170f); G.Margin = Hex(0x7c6a40);
+			G.Shell = Hex(0x54452a); G.Streak = Hex(0xb89a52); G.Seam = Hex(0x1c170f); G.Margin = Hex(0x5e5030);
 			G.Skin = Hex(0x4a3c28); G.SkinEdge = Hex(0xd9cc9a); G.Under = Hex(0xe8dfb0); G.Beak = Hex(0x8a7a54);
 			return G;
 		}();
@@ -555,7 +555,7 @@ namespace KeysReefLifeVisitors
 			G.CL = .66; G.Cx = -.045; G.HW = .262; G.Heart = .16; G.H = .15; G.Hp = .055; G.Costals = 5;
 			G.HeadL = .1; G.HeadW = .076; G.HeadH = .066; G.Block = 1; G.NeckL = .015;
 			G.FlipL = .36; G.FlipC = .064; G.StreakAmt = .45;
-			G.Shell = Hex(0x7c3818); G.Streak = Hex(0xb0602c); G.Seam = Hex(0x3a1a0c); G.Margin = Hex(0xb07a38);
+			G.Shell = Hex(0x7c3818); G.Streak = Hex(0xb0602c); G.Seam = Hex(0x3a1a0c); G.Margin = Hex(0x8a4a22);
 			G.Skin = Hex(0x8a4a22); G.SkinEdge = Hex(0xdcae56); G.Under = Hex(0xe2c880); G.Beak = Hex(0xc8a258);
 			return G;
 		}();
