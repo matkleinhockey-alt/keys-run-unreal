@@ -817,7 +817,9 @@ namespace KeysReefLife
 				for (FAnimal& A : Gp->M)
 				{
 					const double D = (A.P - Cam).Size();
-					int32 Lod = D < 11 ? 0 : D < 28 ? 1 : 2;
+					// (a fish of a few centimetres takes its finer meshes only close up: the neon goby's near mesh is 936 triangles)
+					const double Lk = A.Len < .08 ? .3 : 1;
+					int32 Lod = D < 11 * Lk ? 0 : D < 28 * Lk ? 1 : 2;
 					if (A.Lod >= 0 && FMath::Abs(Lod - A.Lod) == 1 && FMath::Abs(D - (FMath::Max(Lod, int32(A.Lod)) == 1 ? 11 : 28)) < 2) Lod = A.Lod;   // hysteresis
 					if (Lod == A.Lod && A.Pool >= 0) continue;
 					const int32 Pl = PoolFor(Gp->Sp, A.Phase, Lod);
@@ -924,7 +926,9 @@ namespace KeysReefLife
 		// where an air breather's middle is while it breathes: the top of its back just awash. Down in a trough it goes
 		// with the water; on a crest it stays at the mean level (the sea is drawn smoother than KeysOcean::Height says, and
 		// an animal above the drawn surface is not seen from below)
-		double AirY(const FAnimal& A, const FBody& B, double X, double Z) const { return SurfY + FMath::Min(0.0, KeysOcean::Height(X, Z)) - B.HalfH * A.Len * .3 - .06; }
+		// (reeflinks: 0.2 m lower than it was - the back a hand under the trough, the head tipped up to the air - to try
+		// whether the turtle the mask view lost within a metre of the surface was above the drawn underside of the waves)
+		double AirY(const FAnimal& A, const FBody& B, double X, double Z) const { return SurfY + FMath::Min(0.0, KeysOcean::Height(X, Z)) - B.HalfH * A.Len * .3 - .26; }
 
 		// sand thrown up off the bottom: N soft puffs over a patch R wide
 		void SandCloud(FGroup& G, const FVector& At, double R, int32 N, double Len)
@@ -989,8 +993,8 @@ namespace KeysReefLife
 			if (A.bSpongeBite)
 			{
 				Nips++;
-				if ((A.Aim - Cam).Size() < 30) Log(FString::Printf(TEXT("nip: %s nipped at the wall of a %s at %.1f, %.1f, %.1f (%.1f m over the bottom) because angelfish feed on sponges and this one is within its range; effect: it hangs nose-in at the sponge for a bite, %d more to go, then roves on to the next sponge"),
-					*Who(G, A), SpongeName(A.SpongeSp), A.Aim.X, A.Aim.Y, A.Aim.Z, A.Aim.Y - TopAt(A.Aim.X + A.BiteN.X * 1.5, A.Aim.Z + A.BiteN.Z * 1.5), FMath::Max(0, A.BitesLeft - 1)));
+				if ((A.Aim - Cam).Size() < 30) Log(FString::Printf(TEXT("nip: %s nipped at the wall of a %s at %.1f, %.1f, %.1f (%.2f m over the sand) because angelfish feed on sponges and this one is within its range; effect: it hangs nose-in at the sponge for a bite, %d more to go, then roves on to the next sponge"),
+					*Who(G, A), SpongeName(A.SpongeSp), A.Aim.X, A.Aim.Y, A.Aim.Z, A.Aim.Y - KeysReefDen::FloorNear(A.Aim.X, A.Aim.Z), FMath::Max(0, A.BitesLeft - 1)));
 			}
 			if (S.ScarCm > 0)
 			{
@@ -1265,7 +1269,8 @@ namespace KeysReefLife
 				if (!Dir.Normalize()) Dir = A.FleeDir;
 				Want = Dir * S.Burst * .8;
 				Move(A, S, B, Want, 7, Clear0, nullptr, .55, 0, Dt);
-				if ((!R && A.StateT > 1.2) || A.StateT > 5) { G.ChasedBy = -1; A.State = SRove; A.StateT = 0; }
+				// (a fish run off a guard's ground keeps going 3 s: it used to stop after 1.2 s and be caught up with)
+				if ((!R && A.StateT > 3) || A.StateT > 5) { G.ChasedBy = -1; A.State = SRove; A.StateT = 0; }
 				break;
 			}
 			case SToBite:
@@ -2083,28 +2088,55 @@ namespace KeysReefLife
 			else if (C == TEXT("look"))
 			{
 				if (W.IsValidIndex(1) && W[1] == TEXT("off")) { if (FGroup* G = FindGroup(LookGroup)) G->bPosed = false; LookGroup = -1; Log(TEXT("look off")); return; }
-				int32 SpI, Ph;
-				if (!SpArg(1, SpI, Ph)) return;
 				AKeysDiver* D = AKeysDiver::Get(Act);
 				if (!D || !D->IsDiving()) { Log(TEXT("look: the diver is not in the water (dive first)")); return; }
-				FGroup* G; int32 Ix = 0;
-				if (!Nearest(SpI, Ph, G, Ix)) { Log(FString::Printf(TEXT("look %s: none alive near"), *W[1])); return; }
+				FGroup* G = nullptr; int32 Ix = 0;
+				// (reeflinks) look @clean | @wait | @nip | @rest | @den | @chase | @eggs: the nearest animal doing that now, looked at
+				// as it is (nothing it is doing is stopped for the camera)
+				const bool bLink = W.IsValidIndex(1) && W[1].StartsWith(TEXT("@"));
+				if (bLink)
+				{
+					const FString Wh = W[1].Mid(1);
+					double Best = 1e18;
+					for (TUniquePtr<FGroup>& Gp : Groups)
+						for (int32 i = 0; i < Gp->M.Num(); i++)
+						{
+							const FAnimal& Q = Gp->M[i];
+							const bool bOk = Wh == TEXT("clean") ? Q.State == SClean : Wh == TEXT("wait") ? Q.State == SWait : Wh == TEXT("nip") ? (Q.bSpongeBite && (Q.State == SToBite || Q.State == SBite))
+								: Wh == TEXT("rest") ? (Q.bRest && Q.State == SSleep) : Wh == TEXT("den") ? (Q.Spot == 1 && !Q.bRest && Q.State == SSleep) : Wh == TEXT("chase") ? Q.State == SChase
+								: Wh == TEXT("eggs") ? (i == 0 && Gp->bEggRock) : false;
+							const double Dd = (Q.P - Centre).SizeSquared();
+							if (bOk && Dd < Best) { Best = Dd; G = Gp.Get(); Ix = i; }
+						}
+					if (!G) { Log(FString::Printf(TEXT("look %s: nothing near is doing that now"), *W[1])); return; }
+				}
+				else
+				{
+					int32 SpI, Ph;
+					if (!SpArg(1, SpI, Ph)) return;
+					if (!Nearest(SpI, Ph, G, Ix)) { Log(FString::Printf(TEXT("look %s: none alive near"), *W[1])); return; }
+				}
 				if (FGroup* Old = FindGroup(LookGroup)) Old->bPosed = false;
 				LookDist = 1.6;
 				for (int32 k = 2; k < W.Num(); k++) if (W[k].IsNumeric()) LookDist = FCString::Atod(*W[k]);
 				FAnimal& A = G->M[Ix];
 				G->bPosed = true;
 				LookGroup = G->Id; LookIx = Ix; LookT = 0;
-				if (A.State != SSleep && A.State != SToSleep) { A.State = SRove; A.PoseT = 3; A.V = FVector::ZeroVector; A.Fwd = RlFlat(A.Fwd).GetSafeNormal(); if (A.Fwd.IsNearlyZero()) A.Fwd = FVector(1, 0, 0); }
+				if (!bLink && A.State != SSleep && A.State != SToSleep) { A.State = SRove; A.PoseT = 3; A.V = FVector::ZeroVector; A.Fwd = RlFlat(A.Fwd).GetSafeNormal(); if (A.Fwd.IsNearlyZero()) A.Fwd = FVector(1, 0, 0); }
 				// abeam of it, on the side with the more open water
-				const FVector Sd(-A.Fwd.Z, 0, A.Fwd.X);
+				FVector Hd = RlFlat(A.Fwd).GetSafeNormal();
+				if (Hd.IsNearlyZero()) Hd = FVector(1, 0, 0);
+				const FVector Sd(-Hd.Z, 0, Hd.X);
 				const FVector P1 = A.P + Sd * LookDist, P2 = A.P - Sd * LookDist;
 				const bool bFlip = W.Contains(TEXT("flip"));   // 'flip': the other side (for the light)
 				FVector At = (TopAt(P1.X, P1.Z) <= TopAt(P2.X, P2.Z)) != bFlip ? P1 : P2;
 				if (TopAt(At.X, At.Z) > A.P.Y - .25) At = At == P1 ? P2 : P1;   // (not from inside a coral head)
+				if (A.Spot == 1 && A.DenId) At = A.DenMouth + A.DenAxis * LookDist + FVector(-A.DenAxis.Z, 0, A.DenAxis.X) * (LookDist * .25);   // (in a den: from out in front of its opening)
+				// (from above for what lies on a head or in the sand: the egg patch, a resting turtle)
+				const double Up = bLink && (W[1] == TEXT("@eggs") || W[1] == TEXT("@rest") || W[1] == TEXT("@den")) ? .55 : 0;
 				D->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), At.X, At.Z));
-				D->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15)));
-				D->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15)));
+				D->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15 + Up)));
+				D->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -(A.P.Y - .15 + Up)));
 				Log(FString::Printf(TEXT("look (test camera): the diver is put %.1f m abeam of %s, %.2f m long, at %.1f, %.1f, %.1f, and its group does not shy from the diver until 'look off'"), LookDist, *Who(*G, A), A.Len, A.P.X, A.P.Y, A.P.Z));
 			}
 			else if (C == TEXT("do"))

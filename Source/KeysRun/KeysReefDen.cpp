@@ -744,7 +744,17 @@ namespace KeysReefDen
 						for (const FVector2D& P : Pts) { const double Hf = LatticeFloor(P.X, P.Y, 2.0); Hi = FMath::Max(Hi, Hf); Lo = FMath::Min(Lo, Hf); }
 						// too steep or too broken for a den to sit right, or its top too near the surface
 						if (Hi - Lo > .35 || -Hi - S.Top * D.Scale < .8) { bRough = true; continue; }
-						D.Y = Hi;
+						// (reeflinks) and it stands on the highest the drawn bottom comes anywhere under the opening and the
+						// pocket, not only at those seven points: the 2 m lattice can peak between them, and then sand showed
+						// pale and lit inside the low mouth of a cave or a plate. A 5 x 5 grid over the pocket, and 4 cm to spare
+						double HiAll = Hi;
+						for (int32 a = 0; a <= 4; a++)
+							for (int32 b = 0; b <= 4; b++)
+							{
+								const FVector2D Pg = Mc + Ax * (.3 - (D.Deep + .3) * a / 4.0) + Rt * (D.W * (b / 4.0 - .5));
+								HiAll = FMath::Max(HiAll, LatticeFloor(Pg.X, Pg.Y, 2.0));
+							}
+						D.Y = HiAll + .04;
 						Stand(D);
 						RollResident(D);
 						Out.Add(D);
