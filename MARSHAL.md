@@ -21,7 +21,7 @@ once).
 | `diving` | Scuba tank and gear, diving made better (brief written by the marshal) | `lane/diving` | `../KeysRun-diving` | merged 2026-11-22 |
 | `birdview` | Mangrove wildlife visible from the boat: bird size and contrast, a closer camera at idle (brief written by the marshal) | `lane/birdview` | `../KeysRun-birdview` | running since 2026-11-23 (background agent) |
 | `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | merged 2026-11-23 |
-| `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | running since 2026-11-23 (background agent) |
+| `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | merged 2026-11-24 |
 | `reefparrot` | Reef ecosystem, template lane: the reef-life framework, the stoplight parrotfish end to end, and the recipe later lanes follow (brief written by the marshal) | `lane/reefparrot` | `../KeysRun-reefparrot` | merged 2026-11-23 |
 | `reeffish` | Rainbow and midnight parrotfish, queen, French and gray angelfish, sergeant major (brief written by the marshal) | `lane/reeffish` | `../KeysRun-reeffish` | merged 2026-11-24 |
 | `reefvisitors` | Southern stingray, green and loggerhead turtles, audit of the fish already there (brief written by the marshal) | `lane/reefvisitors` | `../KeysRun-reefvisitors` | merged 2026-11-24 |
@@ -312,3 +312,16 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   faults (fish R9, bottom R4), staghorn as thick fingers, turtle grass on Sombrero's crest (bottom R3).
 - 2026-11-24: `birdview` restarted at the user's word ("restart birdview") with a new background agent in the same worktree, beside `reefdens`.
 - 2026-11-24: the user played a local packaged build (`Saved/StagedBuilds/Mac`, not a release): "everything looks great". Next, at the user's word: behaviour links (`reeflinks`, opens once `reefdens` is merged), reef sounds (`reefaudio`), a realism clean-up that keeps the black marlin (`reefreal`), then a proper release. `lane/reefaudio` and `lane/reefreal` created from `main` (this entry).
+- 2026-11-24: `reefdens` merged at the user's word (lane at e6bdbb9, status IN PROGRESS by its own judgment) with
+  R1 (den rock solid to the diver and the spear) and R2 (schools keep off occupied holes). NOT applied: R3 (gaps
+  in wrecks: they do not read as holes). It joined `main`'s `KeysReef.cpp` with no conflict; the reef audit now
+  skips den rocks; reef life still counts a den's rock as a coral head. Five kinds of den, residents green and
+  spotted moray, Caribbean reef octopus, spiny lobster, stone crab, nurse shark under a ledge, and the earlier
+  agent's squirrelfish, sweepers, clinging crab, shrimp and goliath. Marshal's runs on a quiet machine: 165-169
+  dens round the camera at Sombrero, residents' cost 0.023 ms a frame (0.009 on the classic map; the lane's late
+  readings of 8-60 ms were taken with the packaged game running beside it), dealing a chunk 0.08 ms mean, 7.2 ms
+  worst; diving with dens game 18.1-18.4, GPU 22.4-23.4 against 17.4-18.0 and 23.9-24.0 with `-KRNoDens`;
+  `tpcheck` 48, 0 bad; dock audit 545; a goliath speared; classic map 150 dens, `tpcheck` 19, 0 bad. Open: cave
+  and plate dens show a pale floor from above, wreck gaps, the nurse shark thin and stiff, the green moray
+  hanging from the roof and stick-straight at night, the octopus's whole head showing by day, the grouper and
+  moray hunt never seen, no logbook page, patch reefs have no dens. `reeflinks` can open now.
