@@ -23,9 +23,9 @@ once).
 | `canalways` | A way out to sea for every residential canal (brief written by the marshal) | `lane/canalways` | `../KeysRun-canalways` | merged 2026-11-23 |
 | `reefdens` | Hidden holes on the reefs and the animals that live in them (brief written by the marshal) | `lane/reefdens` | `../KeysRun-reefdens` | running since 2026-11-23 (background agent) |
 | `reefparrot` | Reef ecosystem, template lane: the reef-life framework, the stoplight parrotfish end to end, and the recipe later lanes follow (brief written by the marshal) | `lane/reefparrot` | `../KeysRun-reefparrot` | merged 2026-11-23 |
-| `reeffish` | Rainbow and midnight parrotfish, queen, French and gray angelfish, sergeant major (brief written by the marshal) | `lane/reeffish` | `../KeysRun-reeffish` | running since 2026-11-23 (background agent) |
-| `reefvisitors` | Southern stingray, green and loggerhead turtles, audit of the fish already there (brief written by the marshal) | `lane/reefvisitors` | `../KeysRun-reefvisitors` | running since 2026-11-23 (background agent) |
-| `reefbottom` | Queen conch, giant Caribbean anemone, purple sea fans, audit of the reef itself (brief written by the marshal) | `lane/reefbottom` | `../KeysRun-reefbottom` | running since 2026-11-23 (background agent) |
+| `reeffish` | Rainbow and midnight parrotfish, queen, French and gray angelfish, sergeant major (brief written by the marshal) | `lane/reeffish` | `../KeysRun-reeffish` | merged 2026-11-24 |
+| `reefvisitors` | Southern stingray, green and loggerhead turtles, audit of the fish already there (brief written by the marshal) | `lane/reefvisitors` | `../KeysRun-reefvisitors` | merged 2026-11-24 |
+| `reefbottom` | Queen conch, giant Caribbean anemone, purple sea fans, audit of the reef itself (brief written by the marshal) | `lane/reefbottom` | `../KeysRun-reefbottom` | merged 2026-11-24 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -281,3 +281,27 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   reef itself), and `reefdens` resumed (morays, octopus, spiny lobster, stone crab). `reeflinks`, `reefaudio`
   and `reefreal` are held back. `birdview` was stopped by the user and is not restarted.
 - 2026-11-23: `lane/reeffish`, `lane/reefvisitors` and `lane/reefbottom` created from `main` (this entry), run as background agents. `reefdens` could not be resumed (stopped by the user; its work is committed on its branch at 1be066d): a new agent only at the user's word.
+- 2026-11-24: `reeffish` (5968793, IN PROGRESS by its own status), `reefbottom` (22c5f4c, READY) and `reefvisitors`
+  (bc5545e, READY) merged together at the user's word. The three framework patches (visitors R1: `Build`, `Limb`,
+  `LimbWave`, breathing, burying, digging; bottom R1: `Mesh`, `Pose`, `Where`, `bNoBolt`, `bOnFloor`, `HeadWithin`;
+  fish R1: `DorTrail`/`AnTrail`, `bHomeOnHead`) were joined by hand in `KeysReefLife.h/.cpp`: all hooks kept,
+  `Build` tried before `Mesh`, `Pose` runs after the fins or limbs are placed, a Sitter's height honours both
+  `bOnFloor` and `Bury`. Also applied: fish R2 and visitors R2 (generic angelfish and turtle out of the Reef and
+  Hawk Channel tables), bottom R2 (sea fans across the surge and 0.6-1.5 m, none below 16 m, barrels to 1.5 m,
+  tan elkhorn), visitors R4 (nurse shark's own shape and near-still by day, slower lionfish, hogfish rooting;
+  built, not looked at closely). NOT applied: visitors R3 (release-only fish not spear targets: with it the
+  spear test's nearest target was 9-13 m off and nothing was speared; the game already makes a speared goliath
+  a release) and bottom R3 (reef from 1 m down: changes every shallow reef). In the game now, 14 registered
+  species: stoplight, rainbow and midnight parrotfish, blue tang, queen, French and gray angelfish, sergeant
+  major and its guard, queen conch, giant Caribbean anemone, southern stingray, green turtle, loggerhead.
+  Marshal's runs: real map 230-320 of 900 units used at Sombrero, `tpcheck` 48, 0 bad, dock audit 545, a
+  goliath speared; classic map 220-254 units, `tpcheck` 19, 0 bad. Same build with and without `-KRNoReefLife`
+  at the reef, Medium, frame 33.3 ms both ways: diving, game 16.4-16.6 with against 17.0-17.4 without, draw
+  13.2-13.6 against 15.1-15.6, GPU 23.5-23.8 against 21.1-21.5 (about 2.3 ms, 11%, more: over the 3% rule;
+  shadows from the nearest level of detail only did not change it); from the boat no difference (GPU 32-33
+  both ways). To settle on a packaged build. Seen in shots: midnight parrotfish, sergeant majors, green turtle,
+  stingray, anemone, queen angelfish at a distance; `reef:look` found no conch or loggerhead near the Sombrero
+  spot. Open from the lanes: angelfish nip rock not sponges, no egg patch, the guard's chase never seen,
+  hoverers not tied to heads or wrecks, the ray is not half buried, a turtle is not drawn in the last metre
+  under the surface, no turtles resting under ledges, the recipe's section 7 is a placeholder and its other
+  faults (fish R9, bottom R4), staghorn as thick fingers, turtle grass on Sombrero's crest (bottom R3).
