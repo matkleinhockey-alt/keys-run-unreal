@@ -1,45 +1,95 @@
 # birdview
 
 Status: IN PROGRESS
-Updated: 2026-11-23 11:15
+Updated: 2026-11-24 07:45
 Branch: lane/birdview (see `git log -1 lane/birdview`)
 
 The user picked this from a list, in the marshal's words: "Bring the camera in or enlarge the birds so the new
 mangrove wildlife is actually visible from the boat." The goal, the deliverables and criteria 1 to 8 below are the
-marshal's reading of that, not the user's words. Criterion 9 (pelicans) came during the work: the user's words were
+marshal's reading of that, not the user's words. Criterion 9 (pelicans) came during the work. The user's words were
 "use this as a model for pelicans" (with a photograph, `KeysRun-devkit/refs/pelican_ref.png`), "and this one for
 others, mix them up" (a second photograph that reached this lane only as the marshal's description), and the
-standing rule "i just want to keep it realistic". How those were read is the marshal's reading, set out under
-criterion 9. What this lane itself had to guess is under "Guesses".
+standing rule "i just want to keep it realistic". How those were read (the American white pelican in place of the
+photograph's great white pelican, the brown pelican staying the common one, the two kinds together where pelicans
+gather) is the marshal's reading, and this lane followed it. What the lane itself had to guess is under "Guesses".
 
 Evidence is outside the repo in `/Users/mat/Documents/Unreal Projects/KeysRun-devkit/lanes/KeysRun-birdview/`:
-`shots/<tag>/KRScript_NN.png` (and `KREco_*.png`) and `log_<tag>.log`. Every run had request R1 (the hub patch)
-applied locally; it is not committed. The save's boat is the 43 ft one. No `verifier` agent type was available in
-this session: the lane followed the verifier's brief itself (every shot cited was opened; what was not checked is
-said).
+`shots/<tag>/KRScript_NN.png` (and `KREco_*.png`), `shots/sheets/*.png` and `log_<tag>.log`. Every run had request
+R1 (the hub patch) applied locally, and the runs of 24 November also R4; neither is committed. The save's boat is
+the 43 ft one. No `verifier` agent type was available: the lane followed the verifier's brief itself (every shot
+cited was opened; what was not checked is said).
 
-**State of the evidence, read this first.** Another session ran long scripted drives on this machine through most
-of this lane's time and the game lock is not first come first served: single runs of this lane waited 15 to 35
-minutes. The code for every criterion is written and builds. The runs that back criteria 1 to 6 below were made on
-builds before the last changes (the pelican rebuild, the still-mesh deferral for criterion 7); the final-build runs
-for criteria 2, 4, 7, 8 and 9 had not come back when this was written. Ticks below are only for what a run on some
-build of this lane showed; "owed" says what is still to run.
+**Two things to know about the evidence.**
+- The lane was worked in two sittings by two agents. What sections 3 and 6 and the `c3a`, `rook2`, `fwat` shots
+  show is as the first sitting recorded it; the second sitting opened the sheets and the `pk*` shots, not those.
+   Runs tagged `m_*`, `tour*`, `c3a`, `rook*`, `fwat*`, `fbirds`,
+  `else_*`, `pf_*` are of 23 November, on builds before the pelican rebuild and the heron colours; runs `pk*`,
+  `e2_*`, `pf2_*` are of 24 November on the final code (bar a last colour-only change, said where it matters).
+- The game slot is shared, the lock is not first come first served, and during the night of 23 to 24 November the
+  user's own copy of the game and another lane's compiler were running: three runs of this lane were spoiled by it
+  (`pk4`: the game stalled for seconds a frame; `pk6`: an Esc from the keyboard paused it; `e2_before`: commands
+  bunched at start-up). They are not cited. Nothing on frame time was measured in that state.
 
 ## Acceptance criteria
 
 - [x] 1. Measure first - table and reasoning below (`log_m_before.log`, shots `m_before/50`, `m_before/51`).
-- [ ] 2. Every kind can be seen in normal play - shown for 11 of 13 kinds at 25 to 33 m (`tourM`, `tourB`: table
-  below); tern and osprey were only caught far off; the mixed shore at 60 m and the final-build sheet are owed.
-- [x] 3. A closer look, for the player - `c3a` (below). One wording gap, since fixed in code and not yet re-run:
-  when a line went out the look ended without a "released" line (the game goes to first person).
-- [ ] 4. Life in and on the water reads too - a school's dark patch, a mullet's jump and a shower are shown
-  (`fwat`); a predator's wake and crabs from 8 m are NOT shown yet.
+- [ ] 2. Every kind can be seen in normal play - 12 of 13 kinds shown at or over their pixel height in the player's
+  view, with a sheet of crops (`shots/sheets/kinds_final.png`, run `pk5`; kingfisher and anhinga from `fbirds`);
+  the osprey is NOT shown near (11 px, perched 124 m off); the 60 m shore is shown but against the light.
+- [x] 3. A closer look, for the player - `c3a` (below). The "released" line when a line goes out was fixed in code
+  after that run and has not been re-run.
+- [ ] 4. Life in and on the water reads too - a school's dark patch, a mullet's jump, a shower and jacks' white
+  water are shown (`fwat`, `fwat2`, `shots/sheets/water.png`); crabs are shown from 11 m, NOT from 8 m.
 - [ ] 5. The faults left behind - snag, bookmarks and fiddlers shown; ibis, kingfisher and night heron shown from
-  one side only.
+  one side only; the pale wash on dark birds in full sun is NOT cured (see "Not right yet").
 - [x] 6. Rookeries are a sight - `rook2` (below).
-- [ ] 7. No slowdown - "before" measured; "after" owed. The ecosystem's own cost at the rookeries is measured.
-- [ ] 8. Nothing else moves - owed (the script is written: `tpcheck`, `dk:audit`, the reef pair, the classic map).
-- [ ] 9. Pelicans on the user's pictures - written and built, not yet seen in a single shot.
+- [ ] 7. No slowdown - see section 7 for what was measured and what it is worth.
+- [x] 8. Nothing else moves - `e2_on`, `e2_classic`, `else_before` (below); the "before" half of the reef pair is
+  from 23 November's build.
+- [x] 9. Pelicans on the user's pictures - shots below; one shortfall: the brown pelican washes pale in low sun.
+
+## 9. Pelicans (added by the user during the work)
+
+What is in the game now (`EmitPelican` in `KeysMangroveEcoBirds.cpp`; `KeysMangroveLife::Pelican` for the still ones
+on snags and dock piles):
+- **One model, three plumages.** Pouched bill with a hooked nail, a big head, the neck tucked on the shoulders in
+  flight, two-panel broad wings (coverts along the leading edge, flight feathers behind, five broad primaries
+  spread at the tip), a folded wing at rest whose dark tip hangs past the tail, webbed feet trailing in the air and
+  flat on the perch, a short fanned tail, a few flaps and a long glide. No two alike: size varies by a fifth, a
+  brown bird's back by a quarter in tone, a white bird's bill and pouch between yellow and orange.
+- **American white pelican** (the photograph's near twin, without the pink face): white, black primaries and outer
+  secondaries, yellow-orange bill and pouch with a red nail, a small crest, orange legs. Flocks of 5 to 9 on
+  bay-side flats under 0.4 m, on the outer part of the flat; they stand, walk and dip their bills together and
+  never plunge. A few on rookery crowns.
+- **Brown pelican**: adult (pale yellow crown, white neck, bill grey shading to orange-pink over a dark pouch, dark
+  silver-grey back, black-brown belly, short dark legs) and, one in five, a young bird (brown head and back, pale
+  belly). Perched singly on mangrove crowns, on rookeries, in lines of 3 to 5 gliding low along the edge and
+  plunging on bait, and new: **hunched on an old piling standing in the water off the roots** (the second
+  picture), 391 of them map-wide.
+- **Mixed**: about one in four of the followers in a white flock is a brown pelican loafing with them (it keeps
+  with the flock, does not dip); both kinds are on rookeries; the still pelicans on snags and dock piles are one
+  in seven white and one in five young.
+- Numbers map-wide (`KREco census`, `log_pk3.log`): brown pelican 2,195 (391 on pilings), white pelican 644, of
+  which by the rule about 130 are the browns among the whites (not counted by a run): 3.4 browns to one white
+  as counted, about 4.5 to one as drawn.
+
+Shots (all the player's own view unless said):
+| What | Shot | Note |
+|---|---|---|
+| a flock of white pelicans on a flat, browns among them (both kinds in view) | `pk5/KRScript_55`, `pk3/KRScript_55`, `pk3/KRScript_57` | `KREco px wflock ... white pelican (standing): 71 px tall ... 24 m from the boat; 8 of the kind in frame` (87 px at 21 m in `pk3`) |
+| white pelicans taking wing and gliding low | `pk5/KREco_fly_15`, `pk5/KREco_fly_12` | about 35 m off; small in frame |
+| a brown pelican perched on a piling | `pk7/KRScript_50` | `brown pelican (perched): 61 px tall ... 20 m from the boat`; it reads pale grey in that low sun, not brown |
+| a brown pelican gliding | `pk7/KREco_fly_06` (past the bow, 9 m off) | pale in that light; the model's colours are plain in `pk2/KRScript_53` (TEST camera, earlier light) |
+| the photograph beside the game | `shots/sheets/pelican_ref_vs_game.png` | the game half is the TEST camera on a test dummy (`kr.eco dummy`, `look dummy 5 7 0.2 0 40 -1.0`), `pk7/KRScript_52` |
+| the models close (TEST camera) | `pk2/KRScript_52` white gliding, `pk2/KRScript_53` brown gliding, `pk3/KRScript_53` adult brown at rest, `pk1/KRScript_56` white at rest | before the last enlargement of bill and head; after it: `pk7/KRScript_52` to `55` |
+
+Triangles (counted from the code): 129 a pelican on the wing near, 115 past 70 m; at rest or on the water it also
+has its dark edge: 197 near, 169 far. A piling adds 12. From a run (`log_pk7.log`, off Boot Key): `KREco drawn: 36
+birds (13 moving), 2582 + 3020 bird triangles in 2 meshes`. The still
+pelicans on snags are part of the mangrove tile's mesh as before.
+
+Where the likeness falls short of the photograph, seen in the side-by-side: the body is a six-sided spindle, not a
+smooth long body; the primaries are five flat triangles; the head is a small faceted egg; there is no eye.
 
 ## 1. Measured before any change
 
@@ -65,48 +115,41 @@ that is drawn into the mud):
 | osprey (across the wings) | 2.55 m | 38 | 23 |
 | brown pelican | 1.31 m | 19 | 12 |
 
-Birds really in that frame: a cormorant 10 px tall at 29 m, a night heron 7 px at 64 m, a tern 7 px across at 45 m.
-
 What it says, and so what was done:
-- **Size is not the lever.** The models at "1.5 times life" already stood taller than the birds do in life (their
-  necks are drawn upright): the great blue heron stood 1.89 m above its feet, taller than a person on deck, which
-  the brief forbids. It was brought DOWN (model scale 1.5 to 1.35: 1.67 m, the same as the great egret). Only the
-  two smallest had room to grow: kingfisher 1.9 to 2.5 (0.57 m), green heron 1.7 to 1.8 (0.62 m). The rest are
-  unchanged.
+- **Size is not the lever.** The models at "1.5 times life" already stood taller than the birds do in life: the
+  great blue heron stood 1.89 m above its feet, taller than a person on deck. It was brought DOWN (model scale 1.5
+  to 1.35: 1.67 m). Only the two smallest had room to grow: kingfisher 1.9 to 2.5 (0.57 m), green heron 1.7 to 1.8.
 - **The camera is the lever.** 25 m off the shore the lens was 56 m from the bird, through a wide lens. The closer
   look halves the camera's distance to the boat (15.3 m) and closes the lens to 46 degrees (1,885 pixels a radian):
   3.1 times the pixels at 25 m, with no change to the bird.
-- **Contrast is the third.** From a low camera the water is near white, and legs, necks and bills are under a pixel
-  at 40 m. Every bird now has a dark edge (a dark copy of itself standing just behind it: the vertex colour
-  material is two-sided, so a hull turned inside out hid the bird) and a least thickness for its thin parts.
+- **Contrast is the third.** Every bird at rest has a dark edge (a dark copy of itself standing just behind it) and
+  a least thickness for its thin parts.
 
 ## 2. Every kind, in the player's own view
 
-Runs `tourM` (Middle Keys bay side) and `tourB` (off Boot Key): `eco:goto <kind> 25` puts the boat bow on to the
-nearest of the kind she can lie 25 m off in 1.1 m of water; the closer look then engages by itself (it is told
-which kind to prefer, a test hook; the camera is the player's). `KREco px ... in frame` lines:
+Run `pk5` (final code): `eco:goto <kind> 25` puts the boat bow on to the nearest of the kind she can lie 25 m off;
+the closer look engages by itself (it is told which kind to prefer, a test hook; the camera is the player's).
+`KREco px ... in frame` lines; crops of each in `shots/sheets/kinds_final.png`:
 
-| Kind | height on screen | from the boat | shot |
-|---|---|---|---|
-| great egret | 95 px | 25 m | `tourM/50` |
-| great blue heron | 102 px | 25 m | `tourM/51` |
-| little blue heron | 66 px | 25 m | `tourM/52` |
-| white ibis (a party of 3) | 50 px | 33 m | `tourM/53` |
-| roseate spoonbill | 76 px | 25 m | `tourM/54` |
-| cormorant, swimming | 27 px (low in the water) | 36 m | `tourM/55`; on its snag `tour1/56` |
-| anhinga | 67 px | 25 m | `tourM/56` |
-| belted kingfisher | 26 px at 29 m, 28 px at 25 m | | `tourM/57`, `tourB/57` |
-| green heron | 29 px at 29 m, 24 px at 25 m | | `tourM/58`, `tourB/58` |
-| night heron | 34 px at 29 m, 38 px at 25 m | | `tourM/59`, `tourB/59` |
-| brown pelican (the old model) | 68 px | 25 m | `tourM/62` (hidden by the boat in that shot: fixed after) |
-| tern | 21 px across at 67 m; 64 px across at 24 m in `tour3` | | NOT caught near and centred |
-| osprey | 12 px, perched 102 m off | | NOT shown well |
+| Kind | height on screen | from the boat | shot | read in the crop |
+|---|---|---|---|---|
+| great egret | 293 px (the lens came to 13 m from it); 97 px in `fbirds` | 25 m | `pk5/60` | yes |
+| great blue heron | 101 px | 25 m | `pk5/61` | yes: slate body, paler neck (it was a pale grey ghost before the darker colours) |
+| little blue heron | 66 px | 25 m | `pk5/62` | yes: dark slate, maroon neck |
+| white ibis (a party of 3) | 50 px | 33 m | `pk5/63` | yes: red bill and legs |
+| roseate spoonbill | 76 px | 25 m | `pk5/64` | yes: pink |
+| cormorant, drying on its snag | 53 px | 25 m | `pk5/65` | yes |
+| anhinga | 68 px | 25 m | `fbirds/56` (69 px); missed in `pk5` (the shot came after the next move) | yes in `shots/sheets/kinds_25m.png` |
+| belted kingfisher | 26 px perched at 29 m | | `fbirds/57`; in `pk5/67` it was on the wing | yes in `kinds_25m.png` |
+| green heron | 29 px | 29 m | `pk5/68` | shape and yellow legs yes; still pale |
+| night heron | 34 px | 29 m | `pk5/69` | dim, in shade |
+| tern | 34 px across | 29 m | `pk5/70` | yes |
+| white pelican | 71 px | 24 m | `pk5/55` | yes |
+| brown pelican | 61 px perched | 20 m | `pk7/50` | shape yes, colour pale (see 9) |
+| osprey | 11 px, perched | 124 m | `pk5/73` | NO: not shown near; it circles 27 m up |
 
-All large waders are over 40 px and the three small perching kinds are at or over 24 px at 25 m. Looked at, in
-crops: the great egret, little blue, anhinga, night heron and the ibis party read as those birds; the spoonbill
-and great blue heron washed out pale in full sun (both darkened afterwards, not yet re-shot); the green heron
-reads pale. Shots at 60 m: `m_after/51` (an earlier build; a mixed shore with the dark birds readable, the white
-ones small). The final-build contact sheet and the 60 m mixed shore are owed.
+A mixed shore at 60 m: `pk5/75` (`mixed60`: great egret 55 px at 59 m, anhinga on its snag 38 px at 61 m, three
+brown pelicans on the wing 44 px across at 73 m); it is against the light, the dark birds read, the egret is pale.
 
 ## 3. The closer look
 
@@ -115,64 +158,52 @@ tutorial; it is one small hub change against two hub files for binoculars; and i
 asks for. A binoculars key with the animal's name on screen would be a good second step (it needs `KeysHUD`).
 
 What it does (`KeysMangroveEcoView.cpp`): under about 3 kn for 1.2 s with a rookery key within 230 m of its edge or
-animals of the ecosystem within 95 m, the camera goes to the far side of the boat from them and round one shoulder
-(so her middle is just out of frame and the line of sight clears her whole hull, trees, ground and docks), 15 m from
-her instead of 30, 3.4 m up instead of 8.6, lens 46 to 40 degrees. A rookery is looked at from above its crowns
-(17 to 19 m up). With no room beside her (a creek) it stays astern and above and only draws in a little. It lets
-go above about 5 kn, when a line is out or a fish is on, and the moment the player moves the camera, until she has
-been under way again. A shower of bait within 80 m takes the eye for a few seconds.
+animals of the ecosystem within 95 m, the camera goes to the far side of the boat from them and round one shoulder,
+15 m from her instead of 30, 3.4 m up instead of 8.6, lens 46 to 40 degrees. A rookery is looked at from above its
+crowns. With no room beside her (a creek) it stays astern and only draws in a little. It lets go above about 5 kn,
+when a line is out or a fish is on, and the moment the player moves the camera, until she has been under way again.
+A shower of bait within 80 m takes the eye for a few seconds.
 
-Run `c3a` (`log_c3a.log`):
-- The pair, same place: `c3a/52` passing at speed (`KREco afloat pass30: the boat at -1164, 374 ... making 28.5 kn`,
-  `closer look not engaged`, lens 88, 34 m from the boat) and `c3a/57` idle at -1150, 374 (`KREco closer look:
-  engaged at -1150, 374, the boat making 0.0 kn: on anhinga 28 m off`; lens 46, 15.3 m from the boat, 3.5 m up).
-- Released by way on: in `m_after` and the tours, `KREco closer look: released ... she is making N kn` (see also
-  `log_rook2.log` for `released ... nothing to look at here any more` after a teleport).
-- The player's hand: `cam=0.8,0.2,1.3` gives `KREco closer look: the player moved the camera (yaw 0.80, pitch 0.20,
-  zoom 1.30): it is his until she has been under way again` and `released ... the player moved the camera`; shot
-  `c3a/58` is his own view (lens 88, 39.8 m, 13 m up); 12 s later still `held off` (`c3a/59`). After a run under
-  power it engages again (`engaged 2 times`).
-- A fish on: `cast` puts the game in first person, where the closer look does not exist; the snook was on from
-  15.22.43 to 15.22.46 with no `engaged` line; it engaged again a second after the fish was lost.
-- A fault found and fixed here: slowing through 5 m/s was taken for the player's hand (the pawn swings the camera
-  astern above that speed). An earlier `c3a` run shows it; the run cited does not.
+Run `c3a` (`log_c3a.log`, 23 November):
+- The pair, same place: `c3a/52` passing at speed (`making 28.5 kn`, `closer look not engaged`, lens 88) and
+  `c3a/57` idle (`KREco closer look: engaged at -1150, 374, the boat making 0.0 kn: on anhinga 28 m off`; lens 46).
+- Released by way on: `KREco closer look: released ... she is making N kn` (`log_m_after.log`, the tours).
+- The player's hand: `cam=0.8,0.2,1.3` gives `the player moved the camera ...: it is his until she has been under
+  way again`; shot `c3a/58` is his own view; 12 s later still `held off` (`c3a/59`).
+- A fish on: `cast` puts the game in first person, where the closer look does not exist; no `engaged` line while
+  the snook was on.
 
-## 4. Life in and on the water (run `fwat`, an earlier build)
+## 4. Life in and on the water (runs `fwat`, `fwat2`, 23 November; crops in `shots/sheets/water.png`)
 
-- A school under the roots: a dark, ragged patch at the foot of the roots, `fwat/50` (25 m) and `fwat/51` (40 m).
-  The silver flashes on it are faint in the stills (they were enlarged afterwards; not re-shot).
-- A mullet's jump at 41 m: `fwat/KREco_jump_02` (a column of spray over a metre high).
-- A shower of bait 28 m off: `fwat/KREco_showerview_08`, `_10` (white water thrown up).
-- A predator's wake: drawn (a V of foam behind any fish under way near the top), NOT shown: no shot caught one.
-- Crabs from 8 m: NOT shown. Lying 8 m off the roots the camera has no room beside a 43 ft boat and stays astern
-  (`fwat/58`: the roots are there, the crabs cannot be made out). Tree crabs are now 14 to 18 cm (were 8 to 9).
+- A school under the roots: a dark, ragged patch at the foot of the roots, 25 m and 40 m.
+- A mullet's jump at 41 m: `fwat/KREco_jump_02`. A shower of bait 28 m off: `fwat/KREco_showerview_08`.
+- A predator's white water: jacks at 25 m in `fwat2` (the two "jacks" crops of the sheet): white water and a
+  streak; it reads as disturbed water, not plainly as a wake.
+- Crabs: tree crabs on the roots from 11 m (`water.png`, "tree crabs 11m": small brown shapes on a root). NOT from
+  8 m: the 43 ft boat has no room to lie 8 m off the roots with the camera beside her.
 
 ## 5. The faults left behind
 
-- Drying cormorant and anhinga: each now has a weathered post standing in the water under it with a bar across the
-  top, along the shore: `tour1/56`, `tourM/56`.
-- Fiddlers: darker, purple-brown with an orange claw: `fwat/60` (the lane's test camera, 2.2 m off). From the boat
-  they are specks: at low tide she cannot lie nearer than 20 m.
-- Kingfisher and night heron: darker upper parts, and a bird's flanks are now its back's colour, not a wash of back
-  and belly: `tourM/57`, `tourM/59`, `tour3/59`. Ibis: a dark edge and redder bill and legs: `tourM/53`. Each shown
-  from one side only.
-- Rookery bookmarks: the census now prints one spot per rookery, about 150 m off, where the chart shows 1.6 m with
-  the same all round (the deepest hull in the boat table grounds at 1.2 m and the tide takes 0.32 m off the chart;
-  rookery 9 has only 1.5 m). Run `rook2`: twelve `KREco afloat rookeryN ... afloat` lines, none aground (the save's
-  boat grounds at 0.52 m; least water under her 1.35 m).
+- Drying cormorant and anhinga: each has a weathered post in the water under it with a bar across the top:
+  `pk5/65`, `fbirds/56`.
+- Fiddlers: darker, purple-brown with an orange claw: `fwat/60` (TEST camera, 2.2 m off). From the boat they are
+  specks: at low tide she cannot lie nearer than 20 m.
+- Kingfisher and night heron: darker upper parts, flanks the back's colour: `fbirds/57`, `pk5/69`. Ibis: a dark
+  edge and redder bill and legs: `pk5/63`. Each shown from one side only.
+- Rookery bookmarks: the census prints one spot per rookery, about 150 m off, in 1.6 m charted (the deepest hull in
+  the boat table grounds at 1.2 m and the tide takes 0.32 m off; rookery 9 has only 1.5 m). Run `rook2`: twelve
+  `KREco afloat rookeryN ... afloat` lines, none aground.
 
-## 6. Rookeries (run `rook2`)
+## 6. Rookeries (run `rook2`, 23 November)
 
 From the bookmarks, 150 to 190 m off, in the player's view: `rook2/50`, `/51` (rookery 2, Lower Keys), `rook2/52`,
-`/53` (rookery 7, Upper Keys: dozens of white birds on the crowns), `rook2/54`, `/55` (rookery 10, Key Largo),
-`rook2/56`, `/57` (rookery 7 at dusk). By day about six in ten are at home and each bird's turn out on the flats
-comes round every seven minutes: `KREco rookery 7 (Upper Keys) ... day: a flight of 5 leaves for the flats` /
-`a flight of 4 comes in to roost` every few seconds, 10 on the wing at once. The mix is whiter and pinker
-(egret 28%, ibis 24%, spoonbill 16%).
+`/53` (rookery 7, Upper Keys), `rook2/54`, `/55` (rookery 10, Key Largo), `rook2/56`, `/57` (rookery 7 at dusk). By
+day about six in ten are at home and flights of 4 to 7 leave and come in every few seconds.
 
 ## 7. Perf
 
-Before, clean branch build, Medium, 1600x900, editor capped at 30 fps (`log_pf_main1.log`, `log_pf_main2.log`):
+Before, clean branch build of 23 November, Medium, 1600x900, editor capped at 30 fps (`log_pf_main1.log`,
+`log_pf_main2.log`):
 
 | Spot | game ms | draw ms | GPU ms |
 |---|---|---|---|
@@ -183,63 +214,71 @@ Before, clean branch build, Medium, 1600x900, editor capped at 30 fps (`log_pf_m
 `KREco drawn` before: flat 33-34 birds, 2,496-2,624 bird triangles, 501 instances (53,765 triangles), cpu 0.18-0.22
 ms; rookery 7 96 birds, 7,104 triangles, cpu 0.06 ms; Saddlebunch 49 birds, 3,626 triangles, cpu 0.12 ms.
 
-After: OWED (script `perf.sh`, the same samples). What is known: the ecosystem's own cost at the rookery bookmarks
-was 0.88 to 1.00 ms a frame with day flights (the still mesh was laid out again at every take-off and landing);
-with far birds deferred to once a second it is 0.17 to 0.21 ms (`log_rook2.log`: rookery 7 139 birds, 16,526
-triangles; rookery 10 173 birds, 20,820 triangles). Bird triangles are about double (the dark edge).
+After: PERF_AFTER
 
-## 9. Pelicans (added during the work)
+## 8. Nothing else moves
 
-The marshal's reading, stated as a reading: the bird in the user's photograph is a great white pelican (Africa); its
-near twin in the Keys is the American white pelican, a winter bird of Florida Bay, so that is what was added, built
-on the photograph but without the pink face the American bird lacks. The brown pelican stays the common one and is
-rebuilt on the second picture (adult: pale yellow crown, white neck, bill grey at the base and orange-pink toward
-the tip over a dark grey pouch, silver grey-brown back, dark belly, short dark legs).
+- `KRTp checked 48 destinations, 0 bad` and `KRDocks audit: 545 docks; standing on - ... another dock 0`
+  (`log_e2_on.log`, final code).
+- The classic map: `log_e2_classic.log`: no `KREco` line at all, `KRTp checked 19 destinations, 0 bad`, no
+  `Error:` line.
+- The camera away from mangroves: at `goto=reef` the lane on gives `KREco px reef: ... lens 88.0 deg (828 px a
+  radian), 30.6 m from the boat and 8.7 m above the water; closer look not engaged` (`log_e2_on.log`); with
+  `-KRBirdsBefore` (no closer look at all) `30.7 m ... 8.9 m` (`log_else_before.log`, 23 November: the boat rides
+  the swell, the numbers move by that much). The pair of shots, both of 23 November's build (`else_on/50`,
+  `else_before/50`), side by side and the same framing: `shots/sheets/reef_on_vs_before.png`. The final code's own
+  reef shot was lost (the run's first shot did not land). By the code, with
+  nothing to look at `CloserLook` returns 1, 1, 0 and K 0 and `CloserFov` 88.
 
-Written and built (`EmitPelican` in `KeysMangroveEcoBirds.cpp`, `KeysMangroveLife::Pelican`), NOT YET SEEN:
-- one model for both: pouched bill with a hooked nail, the neck tucked on the shoulders in flight, two-panel wings
-  with coverts along the leading edge, flight feathers behind and five primaries spread at the tip, a folded wing
-  at rest whose dark tip hangs past the tail, webbed feet trailing in the air and flat on the perch, a fanned tail,
-  a few flaps and a long glide;
-- white pelicans: flocks of 5 to 9 on bay-side flats under 0.4 m, standing, walking and dipping their bills
-  together (they never plunge); a few on rookeries;
-- brown pelicans: perched singly as before, on rookeries, and now in lines of 3 to 5 gliding low along the edge,
-  plunging on bait; one in five is a young bird (brown head, pale belly); sizes vary by a fifth;
-- the perched pelicans built into the mangrove tiles (snags, crowns) recoloured to the adult, with young and white
-  ones among them.
-Owed: every shot the criterion asks for, the side-by-side with the photograph, the triangle count from a run
-(by the code: about 130 triangles a pelican, 195 with its dark edge), the map-wide counts of the two kinds.
+## Not right yet
+
+- **Dark birds wash pale in the sun.** A sunlit rounded body goes pale tan whatever its colour (the brown pelican's
+  breast, the green heron, a cormorant's back): it is the shared vertex-colour material's response to the sun, not
+  the bird's colour, and it changes with the hour. Darker colours helped the flat parts (wings) and the herons;
+  they do not cure a rounded body. The cure is in the material (a hub asset), not in this lane's files.
+- The osprey is not shown near; a predator's wake reads as white water; crabs not from 8 m (above).
+- Pelicans up off a flat glide very low for a long way before they climb.
+- The test's stills after `eco:fly` come too early to catch the birds abeam.
 
 ## Done (all in the lane's own files)
 
 - `KeysMangroveEcoView.cpp` (new): the closer look's rule and the measuring (`kr.eco px`, `afloat`, `closer`).
 - `KeysMangroveEcoBirds.cpp`: the dark edge, least thickness, sizes, colours, the snag, rookery flights by day, the
-  still mesh's deferral, the pelicans.
+  still mesh's deferral, the pelicans, the piling, pelicans kept clear of the water in flight.
 - `KeysMangroveEcoWater.cpp`: a school's patch and flashes, wakes, larger splashes, larger and darker crabs.
-- `KeysMangroveEco.cpp/.h`, `KeysMangroveEcoInt.h`: the white pelican kind, bookmarks with water for a boat, the
-  rookery mix, test commands `goto`, `fly`, `jump`, `shower` stills, `px`, `afloat`, `closer`.
-- `KeysMangroveLife.cpp`: the perched pelican model.
+- `KeysMangroveEco.cpp/.h`, `KeysMangroveEcoInt.h`: the white pelican kind, pilings, flocks on the outer flat,
+  bookmarks with water for a boat, the rookery mix, the test commands.
+- `KeysMangroveLife.cpp`: the perched pelican model's colours and mix.
 
 ## In progress
 
-- The final-build evidence runs (scripts are written; they wait on the game lock).
+- Nothing running.
 
 ## Blocked
 
-- Not blocked in code. Slowed badly by the game lock (see the top).
+- Not blocked in code. Criterion 7 needs a quiet machine and a build of `main` to compare with (see 7).
 
 ## Requests for the marshal
 
 - R1 (open): `Source/KeysRun/KeysBoatPawn.cpp` - the chase view in `UpdateCamera` asks `KeysMangroveEco::CloserLook`
   each frame and applies what it returns, and `UpdateJumpCam` takes its resting lens from
   `KeysMangroveEco::CloserFov()` instead of the constant 88. Twelve lines. With no ecosystem, away from mangroves
-  or under way it returns 1, 1, 0, K 0 and 88. patch: `.marshal/requests/birdview/R1.patch`
-- R2 (open, one line, NOT tested): `Source/KeysRun/KeysLife.cpp` - the open-water brown pelicans' colours to the
-  adult's (dark body, silver-grey wings, pale yellow head) so they match the mangrove ones. Their shape stays as it
-  is; white pelicans are bay birds and do not belong offshore. patch: `.marshal/requests/birdview/R2.patch`
-- R3 (open, a note): `KeysRun-devkit/shoot.sh` - the game lock is taken by whoever polls first; a lane's two-minute
-  run can wait behind three fifteen-minute drives. A ticket file in the lock directory would make it first come
-  first served.
+  or under way it returns 1, 1, 0, K 0 and 88. Checked on 24 November: the patch file is byte for byte what is
+  applied in the worktree. patch: `.marshal/requests/birdview/R1.patch`
+- R2 (open, one line, NOT tested, perhaps without effect): `Source/KeysRun/KeysLife.cpp` - the open-water brown
+  pelicans' fallback colours to the adult's. `KeysLife` draws its pelicans from a model file
+  (`Content/KeysRun/Props/bird_pelican.krfish`, `KeysLife: seabird model pelican 450 verts 900 tris` in every log)
+  and uses these colours only if the file is missing, so the line may change nothing. Making the open-water
+  pelicans use this lane's model is not a small request: they are drawn by `KeysLife`'s own bird code from that
+  file. They stay as they are. patch: `.marshal/requests/birdview/R2.patch`
+- R3 (open, a note): `KeysRun-devkit/shoot.sh` - the game lock is taken by whoever polls first; a ticket file in
+  the lock directory would make it first come first served. And a game started by a script takes the keyboard:
+  a key meant for another window paused one run (Esc) and put another overboard (J).
+- R4 (open, compiled, NOT looked at in the game): `Source/KeysRun/KeysTownKit.cpp` - the town's pelicans (pier
+  pilings, the eateries' rails, a roof) drawn by `KeysMangroveLife::Pelican`, so they are the same birds as the
+  mangroves' (adults, a few young, a few white), life size. Eight lines; `-KRTownPelicanOld` gives the old ones
+  back. It was applied in the worktree for the runs of 24 November but no run went to a town to look. The dock
+  piles (`KeysDocks.cpp`) already use this lane's model. patch: `.marshal/requests/birdview/R4.patch`
 
 ## Guesses (the lane's own)
 
@@ -250,14 +289,27 @@ Owed: every shot the criterion asks for, the side-by-side with the photograph, t
 - The draught for rookery bookmarks: the deepest hull in the boat table (grounds at 1.2 m) at dead low water.
 - The closer look also follows a shower of bait for a few seconds, which the brief did not ask for.
 - White pelicans are in the game the year round (the game has no seasons), on the bay side only.
-- A young brown pelican is one in five; a white one among perched browns one in seven.
+- A young brown pelican is one in five; a white one among the still perched browns one in seven; a brown among a
+  white flock's followers one in four. The census and the pixel report call such a brown "white pelican" (it is
+  one of that flock's birds).
+- "On pilings, marks, snags and mangrove limbs": pilings (new, the lane's own posts), snags and dock piles (the
+  still model) and crowns are done; channel marks are not (they are hub scenery).
+- The herons and the brown pelican were set darker than their true colours to stand the game's sun.
 
 ## Notes for integration
 
-- Apply R1 with `git apply`. Test commands (console `kr.eco ...` or script `eco:...`): `px [tag]`, `afloat [tag]`,
-  `closer [on|off|want <kind>]`, `goto <kind> [dist]`, `fly <kind>`, `jump`, `shower`, and the old ones.
-- `-KRBirdsBefore` draws the birds as they were before this lane and switches the closer look off (for measuring).
+- Apply R1 and R4 with `git apply`. Test commands (console `kr.eco ...` or script `eco:...`): `px [tag]`,
+  `afloat [tag]`, `closer [on|off|want <kind>]`, `goto <kind> [dist]` (now falls back to the nearest she can lie
+  to; `goto piling` finds a pelican's piling), `fly <kind>`, `jump`, `shower`, `dummy` / `look dummy <n> <dist>
+  <height> <side> <fov> [quarter]` (six pelican dummies beside the boat), `census all` (now also prints three
+  pilings and three white flocks a region with a bookmark each), and the old ones.
+- Bookmarks used: a white flock `tp=-5017,-4546,2.095` (Middle Keys bay side); a pelican's piling
+  `tp=-8224,-2090,-1.253`.
+- `-KRBirdsBefore` draws the birds as they were before this lane and switches the closer look off (for measuring);
+  it does not take away the white pelicans, the pilings or the rookery mix.
 - `EKind` gained `WhitePelican` after `Pelican`: every later kind's number moved up by one. Nothing outside the
-  lane's files uses the numbers (checked by grep: the hub uses names and functions only).
+  lane's files uses the numbers (checked by grep).
+- The game's sun follows the real clock; `clock=12:00` sets the hour the animals keep, not the light. Shots taken
+  at different real hours differ in light.
 - The boat table in `KeysData.cpp` and the HUD show real boat and engine brand names (seen, not this lane's).
 - Scratch scripts used for the runs are in the session's scratchpad, not in the repo.
