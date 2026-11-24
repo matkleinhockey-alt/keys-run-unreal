@@ -97,7 +97,7 @@ namespace KeysMangroveEco
 				for (int32 i = 0; i < NS; i++)
 				{
 					const double X0 = .5 - .85 * i / NS, X1 = .5 - .85 * (i + 1) / NS;
-					auto R = [](double X) { const double U = (X - .05) / .47; return FMath::Max(.035, .2 * FMath::Sqrt(FMath::Max(0.0, 1 - U * U))); };
+					auto R = [](double X) { const double U = (X - .05) / .47; return FMath::Max(.03, .17 * FMath::Sqrt(FMath::Max(0.0, 1 - U * U))); };
 					M.AddTube(FVector(X0, 0, 0), FVector(X1, 0, 0), R(X0), R(X1), 8, FLinearColor::White);
 				}
 				for (const double Sd : {1.0, -1.0})
@@ -106,15 +106,15 @@ namespace KeysMangroveEco
 					M.AddTri(FVector(-.33, 0, 0), FVector(-.44, 0, 0), FVector(-.5, 0, -.2), FLinearColor::White, FVector(0, Sd, 0));
 					M.AddTri(FVector(.15, 0, .16), FVector(-.3, 0, .1), FVector(-.05, 0, .32), FLinearColor::White, FVector(0, Sd, 0));
 				}
-				const FLinearColor Yel = Hex(0xd8c848), Sil = Hex(0xe6ece8), Bar = Hex(0x1a1c1e), Fin = Hex(0xb8b070);
+				const FLinearColor Yel = Hex(0xf0e060), Sil = Hex(0xf2f4f0), Bar = Hex(0x26282a), Fin = Hex(0xd8d090);
 				for (int32 i = I0; i < M.V.Num(); i++)
 				{
 					FVector& P = M.V[i];
-					P = FVector(P.X, P.Y * .5, P.Z * 1.45);   // (flat-sided and deep)
+					P = FVector(P.X, P.Y * .5, P.Z * 1.3);   // (flat-sided and deep)
 					const double X = P.X / 100, Z = P.Z / 100;
 					FLinearColor C = FMath::Lerp(Sil, Yel, float(FMath::Clamp((Z + .02) / .2, 0.0, 1.0)));
 					if (X < -.33 || Z > .26) C = Fin;
-					for (int32 b = 0; b < 5; b++) if (X < .33 && FMath::Abs(X - (.26 - b * .14)) < .03) C = Bar;
+					for (int32 b = 0; b < 5; b++) if (X < .33 && FMath::Abs(X - (.26 - b * .14)) < .022) C = Bar;
 					M.C[i] = C;
 				}
 			}
@@ -385,7 +385,7 @@ namespace KeysMangroveEco
 					{
 						FSwim& M = G.M[i];
 						const double H1 = EHash(Sp.Seed * 1e-6 + i, 8.0), H2 = EHash(Sp.Seed * 1e-6 + i, 9.0);
-						M.Off = Sp.Kind == Snook ? FVector2D(-.55 * i + .2 * H1, (i % 2 ? .35 : -.1) + .2 * H2) : Sp.Kind == GraySnapper ? FVector2D((H1 - .5) * 2.8, (H2 - .5) * 1.4) : FVector2D::ZeroVector;
+						M.Off = Sp.Kind == Snook ? FVector2D(-.75 * i + .25 * H1, (i % 2 ? .5 : -.1) + .25 * H2) : Sp.Kind == GraySnapper ? FVector2D((H1 - .5) * 2.8, (H2 - .5) * 1.4) : FVector2D::ZeroVector;
 						M.Fwd = FVector(FMath::Cos(G.Yaw), 0, FMath::Sin(G.Yaw));
 					}
 				}

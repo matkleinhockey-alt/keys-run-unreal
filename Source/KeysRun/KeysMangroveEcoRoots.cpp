@@ -568,7 +568,7 @@ namespace KeysMangroveEco
 		if (bUnder)
 		{
 			const double Fl = FloorAt(Eye.X, Eye.Z);
-			const double Lo = Fl + .1, Hi = E.Sea - FMath::Clamp((E.Sea - Fl) * .4, .1, .4);
+			const double Lo = Fl + .1, Hi = E.Sea - FMath::Clamp((E.Sea - Fl) * .5, .1, .6);
 			Eye.Y = Lo <= Hi ? FMath::Clamp(Eye.Y, Lo, Hi) : (Fl + E.Sea) * .5;
 		}
 		else if (Wet(Eye.X, Eye.Z)) Eye.Y = FMath::Max(Eye.Y, E.Sea + .12);

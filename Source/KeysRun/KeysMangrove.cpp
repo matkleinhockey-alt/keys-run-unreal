@@ -126,6 +126,8 @@ namespace
 		}
 		return false;
 	}
+	// (root life) where a prop root ends: in the mud, under the bottom wherever it comes down
+	double MgRootFoot(const FVector& End, double Foot) { return FMath::Min(Foot, KeysGeo::LandH(End.X, End.Z) - .15); }
 	// a lump on a root: an oyster, a barnacle, a sponge (a squashed eight-sided stone)
 	void MgLump(FTownBatch& B, const FVector& C, double R, const FLinearColor& Col)
 	{
@@ -174,6 +176,8 @@ namespace
 	const bool bEco = KeysMangroveEco::Enabled();
 	// (with the root life on, what grows on the roots is drawn near the camera only, as instances: KeysMangroveEcoRoots.cpp)
 	const bool bLumps = bEco && !KeysMangroveEco::RootLife();
+	// (and its roots go down into the bottom where it is, not stop in mid-water over a creek's deeper channel)
+	const bool bRootLife = KeysMangroveEco::RootLife();
 	static const uint32 ShellC[] = {0xb9b5a6, 0xa39f92, 0xd6d2c4, 0xc9c4b2}, SpongeC[] = {0xc8572a, 0x7a3f8a, 0xb89a2a, 0xa83a30};
 
 	// A red mangrove standing at (X, Z), shaped on a photograph of a mangrove creek: a cage of thin prop roots that
@@ -210,7 +214,8 @@ namespace
 			const FVector Dir(FMath::Cos(A), 0, FMath::Sin(A));
 			// most leave the foot of the trunk at different heights; every third one comes off the trunk higher up
 			const FVector From = r % 3 == 2 ? FMath::Lerp(Fork, Mid, .25 + .5 * MHash(r, Z)) : Fork + FVector(0, -Hh * .55 * MHash(r, X), 0);
-			const FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
+			FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
+			if (bRootLife) End.Y = MgRootFoot(End, Foot);
 			const FLinearColor C = FMath::Lerp(RootC, RootDark, float(MHash(r * 3.0, X + Z)) * .7f);
 			Arc(From, End, (.1 + .4 * MHash(Z, r)) * Sz, .052 * Sz, C);
 			if (bLumps && Detail > 0)
@@ -236,7 +241,9 @@ namespace
 			{
 				const double A2 = A + (MHash(r, X + Z) < .5 ? -.5 : .5);
 				const FVector Split = FMath::Lerp(From, End, .45) + FVector(0, (From.Y - Foot) * .22, 0);
-				Arc(Split, FVector(X + FMath::Cos(A2) * Reach * .9, Foot, Z + FMath::Sin(A2) * Reach * .9), .1 * Sz, .036 * Sz, C * .9f);
+				FVector End2(X + FMath::Cos(A2) * Reach * .9, Foot, Z + FMath::Sin(A2) * Reach * .9);
+				if (bRootLife) End2.Y = MgRootFoot(End2, Foot);
+				Arc(Split, End2, .1 * Sz, .036 * Sz, C * .9f);
 			}
 		}
 		// the boughs and the leaves on them: one clump over the trunk, the others shouldering out round it
@@ -710,7 +717,8 @@ namespace KeysMangroveEco
 		const int32 NR = (S.Detail == 2 ? 11 : 8) + int32(MHash(X + 1.0, Z) * 2.5), Seg = S.Detail == 2 ? 4 : 3, r = Root % 3 == 2 ? Root + 1 : Root;
 		const double A = 2 * PI * (r + MHash(X + r, Z)) / NR, Reach = (1.3 + 2.1 * MHash(X, Z + r)) * Sz;
 		const FVector From = FVector(X, Base + Hh, Z) + FVector(0, -Hh * .55 * MHash(r, X), 0);
-		const FVector End = FVector(X, Foot, Z) + FVector(FMath::Cos(A), 0, FMath::Sin(A)) * Reach;
+		FVector End = FVector(X, Foot, Z) + FVector(FMath::Cos(A), 0, FMath::Sin(A)) * Reach;
+		if (RootLife()) End.Y = MgRootFoot(End, Foot);
 		const FVector Ctrl(From.X + (End.X - From.X) * .78, From.Y + (.1 + .4 * MHash(Z, r)) * Sz, From.Z + (End.Z - From.Z) * .78);
 		auto Bez = [&](double T) { return From * ((1 - T) * (1 - T)) + Ctrl * (2 * T * (1 - T)) + End * (T * T); };
 		const double F = FMath::Clamp(U, 0.0, 1.0) * Seg;
@@ -749,13 +757,16 @@ namespace KeysMangroveEco
 			const double A = 2 * PI * (r + MHash(X + r, Z)) / NR, Reach = (1.3 + 2.1 * MHash(X, Z + r)) * Sz;
 			const FVector Dir(FMath::Cos(A), 0, FMath::Sin(A));
 			const FVector From = r % 3 == 2 ? FMath::Lerp(Fork, Mid, .25 + .5 * MHash(r, Z)) : Fork + FVector(0, -Hh * .55 * MHash(r, X), 0);
-			const FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
+			FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
+			if (RootLife()) End.Y = MgRootFoot(End, Foot);
 			Arc(From, End, (.1 + .4 * MHash(Z, r)) * Sz, .052 * Sz);
 			if (Detail == 2 && MHash(X + r * 1.7, Z - r) < .55)
 			{
 				const double A2 = A + (MHash(r, X + Z) < .5 ? -.5 : .5);
 				const FVector Split = FMath::Lerp(From, End, .45) + FVector(0, (From.Y - Foot) * .22, 0);
-				Arc(Split, FVector(X + FMath::Cos(A2) * Reach * .9, Foot, Z + FMath::Sin(A2) * Reach * .9), .1 * Sz, .036 * Sz);
+				FVector End2(X + FMath::Cos(A2) * Reach * .9, Foot, Z + FMath::Sin(A2) * Reach * .9);
+				if (RootLife()) End2.Y = MgRootFoot(End2, Foot);
+				Arc(Split, End2, .1 * Sz, .036 * Sz);
 			}
 		}
 	}
