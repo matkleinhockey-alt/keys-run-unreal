@@ -1,11 +1,32 @@
 # rootlife
 
-Status: IN PROGRESS (criterion 6 not met: the dive costs 5-7% more; criterion 5 only partly)
+Status: BLOCKED (perf retake waits for the user's packaged game to close: KeysRun-Mac-Shipping pid 23172 still running at the last check); criterion 5 partly met
 Updated: 2026-11-24 evening
 Branch: lane/rootlife (see git log; last code commit e2060ff)
 
 Evidence lives in `/Users/mat/Documents/Unreal Projects/KeysRun-devkit/lanes/KeysRun-rootlife/` (shots/<tag>/, log_<tag>.log). Scripts: shots/p2 is the proof run
 (script in the log's command line), pfA*/pfB* the frame-time pairs (A root life on, B `-KRNoRootLife`), cls the classic map.
+
+## Round 2 (the marshal's three points)
+1. Growth as a crust - done (2c2a7f0 and the next commit): every piece now sits on one side of the root, small (oyster clumps
+   of three rounded shells lying on the bark, 3-10 cm; fire sponge as three irregular lobes and a vent; tunicates as five-bead
+   bunches; algae as small tufts; barnacles a thin pale band 4-10 cm long; anemones 5-8 cm), scale 0.6-1.15 of the root,
+   rotated all round the root (about half toward the open water), one per station every 5-12 cm, two per station and larger
+   below low water (thickening toward the bottom), bark between. Meshes 16-116 triangles (were 56-156). Same budget: 26 m,
+   cap 3,600 pieces (more pieces, smaller), ~190k triangles in Sister Creek (was ~180-220k). Evidence:
+   shots/p4/KRScript_54.png (snook in the roots with the crust round them), p4/_51, _52, p3/_50.._55. Still low-poly; the
+   sponge close look in p4/_50 is blocked by the bank.
+2. Walls by rule - the census now needs 1 m+ of water at high tide (0.7 m charted at 3 m out, 0.9 m at 6 m), 8+ trees and fish
+   within 15 m, and ranks by crowd (creek banks +1.5); eco:dive roots also counts trees within 8 m and gives +2.5 for snook or
+   gray snapper within 10 m. Lower Keys (-9096,-394, off a mangrove key): 20 trees within reach, snook in frame p4/_56, gray
+   snapper p4/_57, mask view p4/_01. Key Largo (now 30296,-10181, off a mangrove key): shots/kl/_00 (mask, half above the
+   surface: thin water), _50, _51 (silversides and pilchards in the roots), _52 (gray snapper, small in frame), _53 (growth);
+   only 7 trees within reach and no snook near: still thin. The map's Key Largo fringe here is sparse; I did not find a
+   creek bank there.
+3. Perf - NOT RETAKEN: the user's packaged game (KeysRun-Mac-Shipping) was still running through all of round 2. The numbers
+   below (round 1) stand until then. To take: the pfA/pfB script in this file's criterion 6, diver spot dv:at=-265.1,432.2.
+   Also noted in round 2: tile hitches after long teleports of 68 and 91 ms (log_p3, log_kl), with the user's game running;
+   not compared against -KRNoRootLife yet (roots now sample the bottom height per root: a possible small cost).
 
 ## Acceptance criteria (the marshal's reading; my guesses at the end)
 - [~] 1. Thick schools in the roots - done in code, partly shown. Schools now follow the roots by depth: on every creek-bank tree
