@@ -51,6 +51,9 @@ public:
 	bool RequestReboard();
 	bool IsBlackedOut() const { return bDiving && S.bBlackedOut; }
 	bool HasFishOnLine() const { return Speared.bOn || FishMode != 0; }
+	// a blackout's haul-out is due: the pawn ends the dive in its own tick, before it places the camera (else one frame
+	// draws the deck's look from the diver's old eye under water)
+	bool WakeDue() const { return bDiving && bWakeDue; }
 	void ExitToBoat();
 	void SetButtons(const FKeysDiverButtons& B);
 	FString CycleView();
@@ -268,6 +271,17 @@ private:
 	// surface crossing (world/underwater/transition.ts)
 	bool bCamUnder = false;
 	double UnderAmt = 0, Wet = 0;
+	// the eye's exposure across the surface (UpdateExposure). The underwater look divides its haze by the exposure, so
+	// a free auto exposure under water fed on itself and ran 4-5 EV dark in ten seconds, and the deck then took 7 s to
+	// come back from it: under water the exposure is held at the one last settled on above the surface instead.
+	double DeckLogE = 99;          // log2 of the exposure last measured with the camera clear of the water (99: none yet)
+	double ExOpen = 0;             // EV the eye opens under water against the deck's (dv:exopen=)
+	double SurfLogNext = 0;        // test log (dv:surflog=1): KRSurf lines every 0.1 s
+	bool bSurfLog = false;
+	int32 ExFix = 1;               // test switch (dv:exfix=0): the old free exposure under water
+	bool bWakeDue = false;
+	double OutT = -1;              // when ExitToBoat put the camera on deck (its old place under water is stale a frame or two)
+	void UpdateExposure(double Dt);
 	double ShockT = 99;            // seconds since the gun's pressure ring went out from the muzzle
 	FVector2D ShockUV = FVector2D(.5, .5);
 	FVector CamGame = FVector::ZeroVector;

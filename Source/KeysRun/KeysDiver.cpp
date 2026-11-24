@@ -25,9 +25,42 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "SceneView.h"
+#include "SceneViewExtension.h"
 
 using namespace KeysGeo;
 using namespace KeysDive;
+
+namespace KeysDiverEye
+{
+	// What the renderer's auto exposure last settled on for the game view, read on the game thread as each frame's view
+	// is set up: the exposure scale and the exposure bias in force, so the white point it sits at can be put in EV100
+	// (the units of AutoExposureMin/MaxBrightness): log2(2^bias / exposure).
+	class FProbe : public FSceneViewExtensionBase
+	{
+	public:
+		FProbe(const FAutoRegister& R) : FSceneViewExtensionBase(R) {}
+		virtual void SetupView(FSceneViewFamily& Family, FSceneView& View) override
+		{
+			if (View.bIsSceneCapture || View.bIsReflectionCapture || View.bIsPlanarReflection) return;
+			const float E = View.GetLastEyeAdaptationExposure();
+			if (E <= 0) return;
+			Exposure = E;
+			Lum = View.GetLastAverageSceneLuminance();
+			Bias = View.FinalPostProcessSettings.AutoExposureBias;
+			Frame = GFrameCounter;
+		}
+		double WhiteEV() const { return Exposure > 0 ? Bias - FMath::Log2(Exposure) : 99; }
+		float Exposure = 0, Lum = 0, Bias = 0;
+		uint64 Frame = 0;
+	};
+	static TSharedPtr<FProbe, ESPMode::ThreadSafe> GProbe;
+	static FProbe* Get()
+	{
+		if (!GProbe.IsValid()) GProbe = FSceneViewExtensions::NewExtension<FProbe>();
+		return GProbe.Get();
+	}
+}
 
 namespace
 {
@@ -727,7 +760,7 @@ void AKeysDiver::ExitToBoat()
 	Gauge->SetVisibility(false, true);
 	Torch->SetVisibility(false);
 	TorchW = 0;
-	bDiving = false; bCanReboard = false; WakingT = 0;
+	bDiving = false; bCanReboard = false; WakingT = 0; bWakeDue = false;
 	Shot = FShot();
 	if (Speared.bOn) EndFight();
 	FishMode = 0;
@@ -737,6 +770,18 @@ void AKeysDiver::ExitToBoat()
 	Body->SetVisibility(false, true);
 	GunBase->SetVisibility(false, true);
 	if (AKeysLife* L = AKeysLife::Get(this)) L->SetDiver(false, 0, 0, 0);
+	// the camera is on deck from the next frame: no underwater look fading out over it (it drew the deck through
+	// 0.3 s of haze), just water on the lens
+	if (ExFix > 0 && (bCamUnder || UnderAmt > 0))
+	{
+		bCamUnder = false;
+		UnderAmt = 0;
+		Wet = 1;
+	}
+	OutT = GetWorld()->GetTimeSeconds();
+	// a cut: the temporal upscaler and Lumen start the deck view fresh instead of from the underwater frames
+	if (ExFix > 0)
+		if (APlayerCameraManager* C = UGameplayStatics::GetPlayerCameraManager(this, 0)) C->SetGameCameraCutThisFrame();
 }
 
 void AKeysDiver::SetButtons(const FKeysDiverButtons& B)
@@ -797,8 +842,12 @@ void AKeysDiver::FixedStep(double Dt, double T)
 		FrameEvents.Append(S.Events);
 		if (WakingT >= BlackoutWakeDelay)
 		{
-			ExitToBoat();
-			if (P) P->ShowMsg(TEXT("You wake up on the deck, coughing. The crew hauled you aboard."), 4);
+			if (P && ExFix > 0) bWakeDue = true;   // (AKeysBoatPawn::Tick takes it)
+			else
+			{
+				ExitToBoat();
+				if (P) P->ShowMsg(TEXT("You wake up on the deck, coughing. The crew hauled you aboard."), 4);
+			}
 		}
 		return;
 	}
@@ -1162,6 +1211,7 @@ void AKeysDiver::Tick(float DeltaSeconds)
 	UpdateSpearedFish(Dt, T);
 	UpdateFishFill();
 	UpdateUnderwaterLook(Dt);
+	UpdateExposure(Dt);
 	Lap(3);
 	UpdateBubbles(Dt, T);
 	UpdateSnow(Dt, T);
@@ -1511,7 +1561,8 @@ void AKeysDiver::UpdateUnderwaterLook(double Dt)
 	const double T = GetWorld()->GetTimeSeconds();
 	const double Surf = WaveH(CamGame.X, CamGame.Z, T, AmpAt(CamGame.X, CamGame.Z), false);
 	const double Y = CamGame.Y - Surf;
-	const bool bUnder = bCamUnder ? Y <= .15 : Y < -.15;
+	// (for a moment after ExitToBoat the camera manager still reports the diver's eye under water)
+	const bool bUnder = ExFix > 0 && !bDiving && T - OutT < .2 ? false : bCamUnder ? Y <= .15 : Y < -.15;
 	if (bUnder != bCamUnder)
 	{
 		bCamUnder = bUnder;
@@ -1538,6 +1589,30 @@ void AKeysDiver::UpdateUnderwaterLook(double Dt)
 	if (AKeysAudio* A = AKeysAudio::Get(this))
 		A->SetUnderwater(bUnder, FMath::Max(0.0, -Y), bDiving ? BreathFrac() : 1, bDiving && !Sc.OnGas() && !S.bBlackedOut && S.Depth() > KeysDive::SurfaceEps, Dt);
 	if (AKeysWorld* W = AKeysWorld::Get(this)) W->SetUnderside(bUnder || UnderAmt > .01);
+}
+
+void AKeysDiver::UpdateExposure(double Dt)
+{
+	const KeysDiverEye::FProbe* Pr = KeysDiverEye::Get();
+	const double Now = GetWorld()->GetTimeSeconds();
+	// the camera clear of the water and the underwater look off: what the eye has settled on up here
+	if (Pr && Pr->Exposure > 0 && !Post->bEnabled) DeckLogE = FMath::Log2(Pr->Exposure);
+	// under water: auto exposure held where it would give the deck's exposure (times 2^ExOpen). The white point that
+	// does it is bias - log2(exposure) in EV100 (PostProcessEyeAdaptation.cpp: exposure = 2^bias / 2^EV). Only while
+	// the camera is under: the lens-wet tail after surfacing has the deck's own exposure and bias.
+	FPostProcessSettings& St = Post->Settings;
+	const bool bUnderNow = UnderAmt > 0;
+	const bool bHold = ExFix > 0 && bUnderNow && DeckLogE < 90;
+	St.bOverride_AutoExposureBias = ExFix > 0 ? bUnderNow : true;
+	St.bOverride_AutoExposureMinBrightness = St.bOverride_AutoExposureMaxBrightness = bHold;
+	if (bHold) St.AutoExposureMinBrightness = St.AutoExposureMaxBrightness = float(St.AutoExposureBias - (DeckLogE + ExOpen));
+	if (bSurfLog && Pr && Now >= SurfLogNext)
+	{
+		SurfLogNext = Now + .1;
+		UE_LOG(LogTemp, Log, TEXT("KRSurf t %.2f diving %d camUnder %d under %.3f wet %.2f post %d exposure %.4f (%.2f EV from deck) lum %.4f bias %.2f hold %d white %.2f"),
+			Now, bDiving ? 1 : 0, bCamUnder ? 1 : 0, UnderAmt, Wet, Post->bEnabled ? 1 : 0, Pr->Exposure, Pr->Exposure > 0 && DeckLogE < 90 ? FMath::Log2(Pr->Exposure) - DeckLogE : 0.0,
+			Pr->Lum, Pr->Bias, bHold ? 1 : 0, bHold ? St.AutoExposureMinBrightness : 0.f);
+	}
 }
 
 int32 AKeysDiver::SpawnBubble(const FVector& P, double R)
@@ -1911,6 +1986,10 @@ void AKeysDiver::DebugCmd(const FString& Cmd, const FString& Arg)
 	}
 	if (Cmd == TEXT("prof")) { bDbgProf = FCString::Atoi(*Arg) != 0; ProfN = 0; for (double& M : ProfMs) M = 0; return; }
 	if (Cmd == TEXT("light")) { const int32 V = FCString::Atoi(*Arg); TorchMode = V == 1 ? 1 : V == 0 ? 2 : 0; return; }
+	// the exposure across the surface (UpdateExposure): its log, the switch back to the old free exposure, the band
+	if (Cmd == TEXT("surflog")) { bSurfLog = FCString::Atoi(*Arg) != 0; return; }
+	if (Cmd == TEXT("exfix")) { ExFix = FCString::Atoi(*Arg); UE_LOG(LogTemp, Log, TEXT("KRSurf exfix %d"), ExFix); return; }
+	if (Cmd == TEXT("exopen")) { ExOpen = FCString::Atod(*Arg); UE_LOG(LogTemp, Log, TEXT("KRSurf exopen %.2f"), ExOpen); return; }
 	if (!bDiving) return;
 	if (Cmd == TEXT("psi")) { Sc.Psi = DvClamp(FCString::Atod(*Arg), 0, KeysScuba::FullPsi); }
 	else if (Cmd == TEXT("nload")) { Sc.NLoad = DvClamp(FCString::Atod(*Arg), 0, 1); }

@@ -1279,10 +1279,15 @@ void AKeysBoatPawn::ToggleDive()
 		else ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
 	}
 	else if (D->RequestReboard()) { SyncChaseCam(); bCamInit = false; }
-	else if (ReboardT < 0 && !D->IsBlackedOut())
+	else if (!D->IsBlackedOut())
 	{
-		// out of reach of the ladder: a short fade to black and you're back aboard, wherever you were (Tick finishes it)
-		ReboardT = 0;
+		// out of reach of the ladder: straight back aboard, wherever you were. A cut (the diver's ExitToBoat marks it):
+		// this used to fade out through black for 0.8 s, which read as the light going wrong on surfacing
+		const bool bLost = D->HasFishOnLine();
+		D->ExitToBoat();
+		SyncChaseCam();
+		bCamInit = false;
+		ShowToast(bLost ? TEXT("Lost the fish - back aboard") : TEXT("Back aboard"), 3);
 	}
 }
 
@@ -4192,24 +4197,12 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 		if (!bOnlineTried) { bOnlineTried = true; if (Save && Save->bOnlineAuto && !Save->OnlineName.IsEmpty()) O->Connect(Save->OnlineName, Save->OnlineCrew); }
 		if (O->Toasts.Num() && T > ToastUntil - 1) { ShowToast(O->Toasts[0], 4); O->Toasts.RemoveAt(0); }
 	}
-	if (ReboardT >= 0)
+	if (AKeysDiver* Dv = AKeysDiver::Get(this); Dv && Dv->WakeDue())
 	{
-		// J from far off while diving: fade out, end the dive at the black, fade back in on deck
-		const double Was = ReboardT;
-		ReboardT += Dt;
-		if (Was < .4 && ReboardT >= .4)
-		{
-			AKeysDiver* D = AKeysDiver::Get(this);
-			if (D && D->IsDiving())
-			{
-				const bool bLost = D->HasFishOnLine();
-				D->ExitToBoat();
-				SyncChaseCam();
-				bCamInit = false;
-				ShowToast(bLost ? TEXT("Lost the fish - back aboard") : TEXT("Back aboard"), 3);
-			}
-		}
-		if (ReboardT >= .8) ReboardT = -1;
+		// hauled aboard after a blackout: the dive ends here, before the camera is placed this frame
+		Dv->ExitToBoat();
+		bCamInit = false;
+		ShowMsg(TEXT("You wake up on the deck, coughing. The crew hauled you aboard."), 4);
 	}
 	if (bRunning && OffshoreF(X, Z) > .5 && !bDeepTip) { bDeepTip = true; ShowToast(TEXT("Deep blue water - the farther out you run, the bigger the fish.")); }
 	if (IsAshore()) { Thr = 0; Speed = 0; DVX = DVZ = 0; Steer = 0; }
