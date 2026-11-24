@@ -1,0 +1,55 @@
+diff --git a/Source/KeysRun/KeysReef.cpp b/Source/KeysRun/KeysReef.cpp
+index ef22f17..d3b7a28 100644
+--- a/Source/KeysRun/KeysReef.cpp
++++ b/Source/KeysRun/KeysReef.cpp
+@@ -47,11 +47,11 @@ namespace
+ 		int32 SaltBase;
+ 	};
+ 	const FSpDef Sp[NumSp] = {
+-		{true, {.8, 2, 5.5, 7.5}, 0x9c3a0a, 0xe8841f, .6, 1.3, 1.7, 0, 220, 1000000},
++		{true, {.8, 2, 5.5, 7.5}, 0x9a7a45, 0xd6b473, .6, 1.3, 1.7, 0, 220, 1000000},
+ 		{true, {2.5, 4.5, 10, 13.5}, 0xc9704a, 0xf0b89a, .6, 1.4, 1.6, 0, 260, 2000000},
+ 		{true, {5, 8, 18, 28}, 0x7a3f16, 0xb8752e, .7, 1.7, 1.8, 0, 90, 3000000},
+ 		{true, {6, 9, 22, 32}, 0x6a4c14, 0x9c7c3c, .7, 1.9, 2.0, 0, 90, 4000000},
+-		{true, {2, 4, 16, 24}, 0x7a3a94, 0xb088d0, .6, 1.4, 1.1, .34, 160, 5000000},
++		{true, {2, 4, 13, 16}, 0x7a3a94, 0xb088d0, .6, 1.4, 1.1, .34, 160, 5000000},
+ 		{true, {2, 4, 14, 22}, 0x6c8a2e, 0xb8d868, .6, 1.3, .9, .72, 130, 6000000},
+ 		{true, {10, 15, 35, 55}, 0xa8280f, 0xe85a28, .7, 1.6, 1.3, 0, 40, 7000000},
+ 		{true, {8, 12, 28, 45}, 0x8c48b0, 0xe8905c, .6, 1.4, 1.0, .08, 40, 8000000},
+@@ -197,6 +197,14 @@ namespace
+ 			I.SX = BaseScale * RLerp(.82, 1.18, H(CX, CZ, Fold(S, SCALE_X, Slot)));
+ 			I.SY = BaseScale * RLerp(.82, 1.18, H(CX, CZ, Fold(S, SCALE_Y, Slot)));
+ 			I.SZ = BaseScale * RLerp(.82, 1.18, H(CX, CZ, Fold(S, SCALE_Z, Slot)));
++			if (S == SeaFan)
++			{
++				// a common sea fan stands 0.6 to 1.5 m (the card is 1.7 m tall at scale 1 and was dealt 0.85 to 2.8 m);
++				// its width follows. Where it stands is as before.
++				const double Ht = RLerp(.6, 1.5, H(CX, CZ, Fold(S, SCALE, Slot))) / 1.7;
++				I.SX *= Ht / BaseScale; I.SZ *= Ht / BaseScale; I.SY = Ht;
++			}
++			if (S == Barrel) I.SY = FMath::Min(I.SY, 1.5);   // (a giant barrel sponge: to about 1.5 m)
+ 			Out.Add(I);
+ 		}
+ 	}
+@@ -507,11 +515,11 @@ namespace
+ 		{TEXT("brain"),        {3, 6, 25, 35},       .7, 1.5, 0, 26, 1.8},
+ 		{TEXT("star"),         {4, 8, 30, 42},       1.0, 2.2, 0, 26, 2.2},
+ 		{TEXT("finger"),       {1, 2, 10, 15},       .3, .6, 0, 30, .7},
+-		{TEXT("seafan"),       {1.5, 3, 18, 28},     .8, 1.6, 0, 36, .5},
++		{TEXT("seafan"),       {1.5, 3, 13, 16},     .8, 1.5, 0, 36, .5},
+ 		{TEXT("searod"),       {1.5, 3, 22, 32},     .8, 1.6, 0, 36, .7},
+ 		{TEXT("lettuce"),      {12, 20, 50, 70},     .5, 1.1, 1, 60, 1.4},
+ 		{TEXT("blackcoral"),   {25, 35, 80, 100},    1.4, 2.8, 1, 34, 1.2},
+-		{TEXT("barrel"),       {10, 18, 60, 90},     1.0, 2.0, 1, 36, 1.2},
++		{TEXT("barrel"),       {10, 18, 60, 90},     .8, 1.5, 1, 36, 1.2},
+ 		{TEXT("azurevase"),    {8, 14, 40, 60},      .4, .8, 1, 44, .4},
+ 		{TEXT("elephantear"),  {15, 22, 60, 90},     .9, 1.8, 1, 30, 1.2},
+ 		{TEXT("algae"),        {.4, 1, 18, 26},      .18, .35, 2, 170, .4},
+@@ -604,6 +612,7 @@ namespace
+ 				// fans and elephant ears stand broadside to the surge
+ 				const FVector2D N = KeysSea::ChainNormal(X);
+ 				I.RotY = FMath::Atan2(N.X, N.Y) + RLerp(-.35, .35, Hs(ROT_Y, Slot));
++				if (M == 6) I.RotY += PI * .5;   // (the sea fan model's face looks along its own x, the code-built card's along z: without this it stands edge-on to the surge)
+ 			}
+ 			const double Wob = RLerp(.88, 1.12, Hs(SCALE_X, Slot));
+ 			I.SX = Ht * Wob; I.SZ = Ht / Wob * RLerp(.9, 1.1, Hs(SCALE_Z, Slot)); I.SY = Ht;

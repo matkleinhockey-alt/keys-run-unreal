@@ -1,0 +1,17 @@
+diff --git a/Source/KeysRun/KeysReef.cpp b/Source/KeysRun/KeysReef.cpp
+index ef22f17..4d09056 100644
+--- a/Source/KeysRun/KeysReef.cpp
++++ b/Source/KeysRun/KeysReef.cpp
+@@ -92,8 +92,10 @@ namespace
+ 	enum class EZ : uint8 { Other, Hawk, Reef };
+ 	EZ ReefZone(double D, double DZ)
+ 	{
+-		if (D < 2.6 || DZ < 0 || D >= 45) return EZ::Other;
+-		return DZ > 1250 ? EZ::Reef : EZ::Hawk;
++		if (DZ < 0 || D >= 45) return EZ::Other;
++		// the reef line's own crest is reef to a metre under the surface (elkhorn's ground), not a seagrass flat
++		if (DZ > 1250) return D < 1.0 ? EZ::Other : EZ::Reef;
++		return D < 2.6 ? EZ::Other : EZ::Hawk;
+ 	}
+ 
+ 	double SandChannel(double X, double DZ)
