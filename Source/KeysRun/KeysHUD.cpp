@@ -1,4 +1,5 @@
 #include "KeysHUD.h"
+#include "KeysBait.h"
 #include "KeysGeoReal.h"
 #include "KeysEateries.h"
 #include "CanvasItem.h"
@@ -1299,6 +1300,7 @@ void AKeysHUD::PushSonarColumn(AKeysBoatPawn* P)
 		TArray<FVector> FP;
 		TArray<double> FL;
 		Life->FishNear(Bx, Bz, 24, FP, FL);
+		KeysBait::SonarNear(Bx, Bz, 24, FP, FL);   // the deep bait balls and what works them (KeysBait.h)
 		for (int32 i = 0; i < FP.Num(); i++) Contacts.Add({FP[i].X, FP[i].Z, FMath::Max(.3, -FP[i].Y), FL[i]});
 		SonarFish.Reset();
 	}
