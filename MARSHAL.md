@@ -31,6 +31,7 @@ once).
 | `rootlife` | Under the mangrove roots: thick schools, growth on the roots, snook and snapper in view (brief written by the marshal) | `lane/rootlife` | `../KeysRun-rootlife` | merged 2026-11-24 |
 | `reeflinks` | Reef behaviour links and the reef lanes' loose ends (brief written by the marshal) | `lane/reeflinks` | `../KeysRun-reeflinks` | merged 2026-11-24 |
 | `baitballs` | More bait balls in deep water, worked by big fish (brief written by the marshal) | `lane/baitballs` | `../KeysRun-baitballs` | merged 2026-11-24 |
+| `smooth` | Surfacing goes dark; the trolling strike smoother and sharper (brief written by the marshal) | `lane/smooth` | `../KeysRun-smooth` | running since 2026-11-24 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -62,6 +63,7 @@ No two lanes own the same file. Every lane also owns `.marshal/status/<lane>.md`
 | `rootlife` | `Source/KeysRun/KeysMangrove.cpp`, `KeysMangroveLife.*`, `KeysMangroveEco*` |
 | `reeflinks` | `Source/KeysRun/KeysReefLife*` (framework and species, while the lane runs), `KeysReefDen*` |
 | `baitballs` | `Source/KeysRun/KeysSchools.*` (while the lane runs), new `Source/KeysRun/KeysBait*` |
+| `smooth` | `Source/KeysRun/KeysBoatPawn.*`, `KeysTroll.cpp`, `KeysCrew.*`, `KeysDiver.*` (while the lane runs) |
 
 ## Marshal-only files
 
@@ -383,3 +385,4 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   at Sombrero; classic map `tpcheck` 19, 0 bad. The first mangrove tile at start-up still takes a 400 ms frame
   (as before the lane). Open: the shower and birds read small from the boat; the sounder never seen; Key Largo's
   root wall thin; growth pieces low-poly; open water between balls offshore is emptier (500-900 fish).
+- 2026-11-24: the user: surfacing "goes dark the screen", and the trolling strike should be "smoother and less pixelated". The marshal reproduced the first (J from the deep: the water stays dark about 7 s; exposure snap and camera cuts did not help, reverted) and opened `lane/smooth` from `main` (this entry) for both.
