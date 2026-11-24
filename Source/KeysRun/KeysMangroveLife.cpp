@@ -167,7 +167,7 @@ namespace KeysMangroveLife
 		const double Hh = LHash(Feet.X * .37 + 3.0, Feet.Z * .53);
 		const bool bWhite = Hh < .14, bYoung = !bWhite && Hh < .34;
 		const double S2 = Sz * (bWhite ? 1.12 : .92 + .16 * LHash(Feet.Z * .7, Feet.X * .3 + 1.0));
-		const uint32 BackC = bWhite ? 0xf4f3ee : bYoung ? 0x4c3e30 : 0x42454b, BellyC = bWhite ? 0xf2eedc : bYoung ? 0xdcd4c2 : 0x1a1614, WingC = bWhite ? 0xf4f3ee : bYoung ? 0x483a2c : 0x3e4147;   // (set dark: the game's full sun washes a mid grey out to white)
+		const uint32 BackC = bWhite ? 0xf4f3ee : bYoung ? 0x4c3e30 : 0x2e3035, BellyC = bWhite ? 0xf2eedc : bYoung ? 0xdcd4c2 : 0x1a1614, WingC = bWhite ? 0xf4f3ee : bYoung ? 0x483a2c : 0x2e3136;   // (set dark: the game's full sun washes a mid grey out to white)
 		const uint32 NeckC = bWhite ? 0xf4f3ee : bYoung ? 0x483a2c : 0xf0eee6, CrownC = bWhite ? 0xf4f3ee : bYoung ? 0x483a2c : 0xf0d470;
 		const FLinearColor Leg = KeysTownPaint::Hex(bWhite ? 0xee7c3c : 0x222226), Neck = KeysTownPaint::Hex(NeckC), BillBase = KeysTownPaint::Hex(bWhite ? 0xee9a28 : 0x7c7c80),
 			BillTip = KeysTownPaint::Hex(bWhite ? 0xe06a24 : 0xe07850), Pouch = KeysTownPaint::Hex(bWhite ? 0xf2a820 : 0x34363a), Tips = KeysTownPaint::Hex(bWhite ? 0x101012 : 0x15120f);

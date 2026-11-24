@@ -172,7 +172,7 @@ namespace KeysMangroveEco
 		struct FPelSpec { double Body, Span, Bill, Leg; uint32 BackC, BellyC, NeckC, CrownC, BillC, TipC, PouchC, CovertC, FlightC, LegC, TailC; bool bWhiteInner; };
 		// (the brown pelican's silver-grey and brown are set dark: in the game's full sun 0x5a5e66 washed out to white
 		// and its dark flight feathers to tan)
-		const FPelSpec PelBrown = {.56, 2.15, .37, .085, 0x34363b, 0x1a1614, 0xf0eee6, 0xf0d470, 0x6c6c72, 0xe07850, 0x2a2c30, 0x45484f, 0x15120f, 0x1c1c20, 0x262320, false};
+		const FPelSpec PelBrown = {.56, 2.15, .37, .085, 0x2b2d32, 0x1a1614, 0xf0eee6, 0xf0d470, 0x6c6c72, 0xe07850, 0x2a2c30, 0x32353b, 0x15120f, 0x1c1c20, 0x262320, false};
 		const FPelSpec PelYoung = {.54, 2.10, .36, .085, 0x4c3e30, 0xdcd4c2, 0x483a2c, 0x483a2c, 0x777165, 0x8c7c62, 0x4a4038, 0x4e4032, 0x221c16, 0x2c2828, 0x33291f, false};
 		const FPelSpec PelWhite = {.66, 2.75, .47, .13, 0xf6f5f0, 0xf4eedc, 0xf6f5f0, 0xf6f5f0, 0xee9a28, 0xd8401e, 0xf2a820, 0xf6f5f0, 0x101012, 0xee7c3c, 0xf6f5f0, true};
 		// "mix them up": about one in four of the followers in a flock of white pelicans on a flat is a brown pelican

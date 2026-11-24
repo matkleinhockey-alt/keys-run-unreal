@@ -1,7 +1,7 @@
 # birdview
 
 Status: IN PROGRESS
-Updated: 2026-11-24 07:45
+Updated: 2026-11-24 08:05
 Branch: lane/birdview (see `git log -1 lane/birdview`)
 
 The user picked this from a list, in the marshal's words: "Bring the camera in or enlarge the birds so the new
@@ -47,7 +47,8 @@ cited was opened; what was not checked is said).
   at the mangrove flat with the closer look engaged (section 7); and no same-hour build of `main` to compare with.
 - [x] 8. Nothing else moves - `e2_on`, `e2_classic`, `else_before` (below); the "before" half of the reef pair is
   from 23 November's build.
-- [x] 9. Pelicans on the user's pictures - shots below; one shortfall: the brown pelican washes pale in low sun.
+- [x] 9. Pelicans on the user's pictures - every shot asked for is below; one shortfall, stated plainly: in the
+  morning sun of the last runs the brown pelican reads pale grey, not brown ("Not right yet").
 
 ## 9. Pelicans (added by the user during the work)
 
@@ -268,6 +269,9 @@ What it says, and what it does not:
   breast, the green heron, a cormorant's back): it is the shared vertex-colour material's response to the sun, not
   the bird's colour, and it changes with the hour. Darker colours helped the flat parts (wings) and the herons;
   they do not cure a rounded body. The cure is in the material (a hub asset), not in this lane's files.
+- A last change set the brown pelican's greys darker still; run `pk8` (the final build: `pk8/50` gliding, TEST
+  camera; `pk8/52` on its piling, the player's view, 61 px at 20 m) shows no difference: in morning sun its wings
+  and back still read pale grey and tan. It confirms the cause is the light on the material, not the colour.
 - The osprey is not shown near; a predator's wake reads as white water; crabs not from 8 m (above).
 - Pelicans up off a flat glide very low for a long way before they climb.
 - The test's stills after `eco:fly` come too early to catch the birds abeam.
@@ -346,3 +350,5 @@ What it says, and what it does not:
   at different real hours differ in light.
 - The boat table in `KeysData.cpp` and the HUD show real boat and engine brand names (seen, not this lane's).
 - Scratch scripts used for the runs are in the session's scratchpad, not in the repo.
+- The worktree is left with two hub files modified and NOT committed: `KeysBoatPawn.cpp` (R1) and
+  `KeysTownKit.cpp` (R4), each identical to its patch file. The built binary has both.
