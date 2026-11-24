@@ -41,9 +41,12 @@ public:
 	void Startle(double X, double Z, double Radius);
 	// test hooks (-KRScript fish:...): bait, herring, snapper, grunt, grouper, cuda, flats, pred, shark, scare, look,
 	// put=<species>, clear, clearall, off, on, stats, body, sound (KRSound: the water under the boat, afloat or aground), canals (KRCanal: canals with no way out)
+	// deep bait balls (KRBait): deep (the balls and predators within 300 m), census (five offshore spots, two reef, two
+	// inshore), balls (each live ball), ballhere=<m>[,all|tuna|sail] (a worked ball that far ahead), toball[=m] (the
+	// diver beside the nearest live ball), lookpred=<key> (the diver's mask on the nearest predator of that kind)
 	void DebugCmd(const FString& Cmd);
 
-	enum class ERole : uint8 { Bait, Reef, Hole, Hanger, Flats, Hunter, Patrol };
+	enum class ERole : uint8 { Bait, Reef, Hole, Hanger, Flats, Hunter, Patrol, Worker };   // Worker: works one bait ball (KeysBait.h)
 
 	struct FFish
 	{
@@ -56,6 +59,8 @@ public:
 		double Alarm = 0, AlarmIn = 0, Flash = 0, FlashSide = 1;
 		double Len = .3, Shade = 1, Seed = 0;
 		double BandY = 0;                      // the depth it likes, inside its species' band
+		double Air = 0;                        // out of the water: a jump (falling back) or a flying fish's glide (s left)
+		bool bGlide = false;
 	};
 
 	struct FSchool
@@ -72,6 +77,10 @@ public:
 		int32 PreyId = -1;
 		bool bPinned = false, bStepped = false;
 		int32 Reef = -1;                        // the named reef it belongs to (KeysSchools.cpp ReefSites), or -1
+		int64 Site = 0;                         // the deep bait-ball site it was put for (its ball, its predators), or 0
+		bool bBall = false;                     // the bait ball of its site
+		double Work = 0, BaseY = -8, Orbit = 0, SplashT = 0, Ring = 6, Below = 3;
+		int32 InAir = 0;
 		TArray<FFish> Fish;
 		FRandomStream Rng;
 	};
@@ -105,6 +114,33 @@ private:
 	FVector PickGoal(FSchool& S);
 	FSchool* Find(int32 Id);
 	FSchool* NearestOfRole(const FVector& P, bool bBaitOnly, int32 NotId, double MaxD);
+	// the deep bait balls (KeysBait.h): dealt on a coarse grid round the camera, put in the water near it
+	struct FSite
+	{
+		int64 Key = 0;
+		double X = 0, Z = 0, Y = -8, NScale = 1, Phase = 0;
+		bool bDeep = true;
+		int32 Bait = 0, NPred = 0, Fly = 0;
+		int32 Pred[5] = {0, 0, 0, 0, 0}, PredN[5] = {0, 0, 0, 0, 0};
+	};
+	bool SiteAt(int32 CX, int32 CZ, FSite& Out);
+	void SitesNear(double X, double Z, double R, TArray<FSite>& Out);
+	void DealSites();
+	FSchool* RealiseSite(const FSite& Si, double Work);
+	void StepWorker(FSchool& S, double Dt);
+	bool StepAir(FSchool& S, FFish& F, double Dt);
+	void SurfaceSigns(double Dt);
+	void StepBirds(double Dt);
+	double SiteWork(const FSite& Si) const;
+	void SplashAt(double X, double Z, int32 N, double Power);
+	TMap<int64, TOptional<FSite>> SiteCache;
+	TSet<int64> SiteDone;            // sites put in the water while the camera has been near (not put again till it leaves)
+	TArray<FSite> Forced;            // fish:ballhere's
+	double SiteT = 0, SonarT = 0, SplashBudget = 0, BirdsLastT = 0;
+	int32 BirdsDrawn = -1;           // birds drawn last frame (-1: not yet laid out)
+	bool bDeepOff = false;           // fish:deepoff or -KRNoBaitBalls: none of the deep balls (a frame-time comparison)
+	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> BirdPools;
+	UInstancedStaticMeshComponent* MakePool(const FString& Name, FKeysMesh& M, bool bShadow);
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> Pools;
