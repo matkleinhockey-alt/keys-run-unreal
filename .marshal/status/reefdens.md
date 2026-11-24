@@ -1,7 +1,7 @@
 # reefdens
 
 Status: IN PROGRESS
-Updated: 2026-11-24 00:55 (second session: the lane was stopped part-way and taken over)
+Updated: 2026-11-24 00:50 (second session: the lane was stopped part-way and taken over)
 Branch: lane/reefdens
 
 The user's own words for this lane: "create hidden holes then, even if i cant explore them", the standing rule "i just
@@ -20,7 +20,12 @@ Why this is not READY FOR MERGE (in order of weight):
    guesses about the seafloor coming up inside were tried and ruled out; the placement code is as it was).
 2. Wreck gaps (R3) do not read as holes (`wreck/50`, `wreck/52`): do not apply R3 as it stands.
 3. Perf is not shown to be within 3% (the difference is smaller than the spread between two identical runs).
-4. The moray-and-grouper hunt was never seen; logbook line seen only as a log line.
+4. The moray-and-grouper hunt was never seen.
+5. On the branch as committed (hub files restored, no R1-R3) two late runs read the residents' cost at 7.8 to 60.9
+   ms a frame (`log_nopatch.log`, `log_nopatch2.log`) against 0.016 to 0.107 ms in every earlier run. A packaged
+   copy of the game was running at about 190% CPU with the load average at 9 to 14 during both, and the second run
+   never finished its `perf=` sample, so this may be the machine and not the code; it could not be told apart.
+   Measure `kr.den stats` ("residents' cpu") on a quiet machine, with and without R2, before merging.
 
 ## The six the user asked for (done first)
 
@@ -197,7 +202,9 @@ within 25 m), 8 of them empty".
 - Patch reefs get dens only where the reef's own patch rule says there is a patch (see "Not verified").
 
 ## Not verified
-- That the branch's dens work in play without R1-R3 beyond one smoke run after the hub files were restored.
+- The branch without R1-R3: it builds (`Result: Succeeded`) and one smoke run found a ledge with five lobsters,
+  dealt and drew dens and gave the same coral checksum (`log_nopatch.log`; its shot `nopatch/50` was not opened),
+  but see point 5 at the top.
 - Patch reefs: Coffins Patch has 0 dens in its square on the real map (5 on the classic map) and "patch reef 0 dens"
   at every place `kr.den stats` was run; no patch-reef den was ever looked at.
 - Looe Key and Carysfort were only counted, never dived.
