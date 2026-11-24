@@ -28,6 +28,7 @@ namespace KeysMangroveEco
 		FSite Site;
 		float Depth = .4f;
 		uint32 Seed = 0;
+		bool bPost = false;   // a brown pelican's perch is an old piling standing in the water (drawn with it)
 	};
 	struct FPlan
 	{
@@ -52,7 +53,7 @@ namespace KeysMangroveEco
 		uint8 Kind = 0, State = BStand, Next = BStand;
 		int16 Rook = -1;
 		int32 Leader = -1;
-		bool bStill = false, bCarry = false, bHasSite = false, bWasStill = false;
+		bool bStill = false, bCarry = false, bHasSite = false, bWasStill = false, bInStill = false, bLine = false, bPost = false;   // bInStill: drawn in the still mesh as it was last laid out
 		FVector P = FVector::ZeroVector, Home = FVector::ZeroVector, Perch = FVector::ZeroVector, From = FVector::ZeroVector, To = FVector::ZeroVector;
 		FVector2D Out = FVector2D(1, 0), Off = FVector2D::ZeroVector;
 		double Yaw = 0, T = 0, Ph = 0, FlyT = 0, FlyDur = 1, Arc = 2, Sz = 1.25, Neck = 0, Wing = 0, Pitch = 0, Peck = 0;
@@ -90,7 +91,7 @@ namespace KeysMangroveEco
 		uint8 Kind = 0, State = GHold;
 		uint32 Seed = 0;
 		FVector2D Home = FVector2D::ZeroVector, C = FVector2D::ZeroVector, Out = FVector2D(1, 0), Aim = FVector2D::ZeroVector;
-		double T = 0, Hunger = 30, Yaw = 0, Depth = 1, FleeT = 0, Wander = 0, RushD = 0;
+		double T = 0, Hunger = 30, Yaw = 0, Depth = 1, FleeT = 0, Wander = 0, RushD = 0, Spd = 0;
 		int32 Prey = -1;
 		bool bBank = false, bActive = false;
 		TArray<FSwim> M;
@@ -157,6 +158,8 @@ namespace KeysMangroveEco
 		FVector2D Example[4][NumKinds];
 		FVector2D ExampleOut[4][NumKinds];
 		bool bHave[4][NumKinds] = {};
+		TArray<FVector2D> Pilings[4], PilingOut[4], Flocks[4], FlockOut[4];   // some of each region's pelican pilings and white pelican flocks (for the test's bookmarks)
+		int32 PilingN = 0;
 		double Secs = 0;
 	};
 
@@ -181,7 +184,7 @@ namespace KeysMangroveEco
 		AKeysLife* Life = nullptr;
 		// drawing
 		FSoup Live, Still;
-		bool bStillDirty = true;
+		bool bStillDirty = true, bStillSoon = false;   // lay the still mesh out again now; or within a second (a far bird changed)
 		double StillT = 0;
 		FVector StillCam = FVector::ZeroVector;
 		FPoolE Pools[NumPools];
@@ -211,8 +214,16 @@ namespace KeysMangroveEco
 		FVector2D StrikeDir = FVector2D(1, 0);
 		int32 StrikeId = 0, LookEvent = 0, LookShots = 0;
 		double LookShotT = 0;
+		// stills of an event taken from the player's own view (kr.eco jump, kr.eco shower): how many are left, when the
+		// next is due, what they are called; armed: they start at the next shower of bait
+		int32 EvShots = 0, EvShowerId = 0;
+		double EvShotT = 0;
+		FString EvName;
+		bool bEvArmed = false;
 		// what made a noise this frame, for the audio to take (PopSound); only what is within earshot is kept
 		TArray<FSoundEv> Sounds;
+		// test (kr.eco dummy): birds held still in the air beside the boat, to look a model over
+		TArray<FBird> Dummies;
 		void Sound(const TCHAR* What, int32 Kind, const FVector& Where, float Power = 1)
 		{
 			if (Sounds.Num() < 24 && FVector::DistSquared(Where, Cam) < 250.0 * 250.0) Sounds.Add({FName(What), Kind, Where, Power});
@@ -224,10 +235,23 @@ namespace KeysMangroveEco
 	void UpdateBirds(FEco& E, FTileE& T);
 	void EmitBirds(FEco& E, FTileE& T, bool bStillPass);
 	void TickRookeries(FEco& E);
+	// how much larger than life a kind is drawn; one bird's triangles as it is drawn (Rim: the width in metres of its
+	// dark edge, 0 for none); a kind in the pose it is mostly seen in, at the origin
+	double BirdScale(int32 Kind);
+	bool BirdsBefore();
+	void BirdSoup(FSoup& Buf, const FBird& B, bool bFar, double Rim);
+	void PoseBird(FBird& B, int32 Kind);
+	void FlyPast(FBird& B, const FVector& To, double Delay);
+	// ---- KeysMangroveEcoView.cpp
+	void CloserCmd(const FString& Arg);
+	void PxReport(FEco& E, UWorld* World, const FString& Tag);
+	void AfloatReport(FEco& E, UWorld* World, const FString& Tag);
 	// ---- KeysMangroveEcoWater.cpp
 	void SpawnWater(FEco& E, FTileE& T, const FPlan& P);
 	void UpdateWater(FEco& E, FTileE& T);
 	void FlushPools(class AKeysMangroveEco* A, FEco& E);
+	// what shows of them at the surface from a boat: a school's dark patch and flashes, a wake (into the moving mesh)
+	void EmitWaterMarks(FEco& E, FTileE& T);
 	// the nearest school of small fish to a point (within R): where it is now and how many it holds
 	FSchoolE* NearestSchool(FEco& E, const FVector2D& P, double R, double* OutD = nullptr);
 	FSchoolE* FindSchool(FEco& E, int32 Id);

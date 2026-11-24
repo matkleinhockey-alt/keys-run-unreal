@@ -1,0 +1,13 @@
+diff --git a/Source/KeysRun/KeysLife.cpp b/Source/KeysRun/KeysLife.cpp
+index 2b4a527..9aa7acb 100644
+--- a/Source/KeysRun/KeysLife.cpp
++++ b/Source/KeysRun/KeysLife.cpp
+@@ -919,7 +919,7 @@ namespace
+ 				{1.25, .42, 0xf6f6f3, 0xaeb5bc, 0x1b1d20, 0xf8f8f6, 0xe2b23a, 0xf6f6f3, 0, false, false},   // gull
+ 				{.95, .34, 0xf8f8f6, 0xd3d8dd, 0x8a9096, 0x15171a, 0xe4572e, 0xf8f8f6, 1, false, false},    // tern
+ 				{2.1, .55, 0x16181c, 0x1b1d22, 0x111216, 0x16181c, 0x8a8f96, 0x16181c, 2, false, true},     // frigatebird
+-				{2.1, .85, 0x6f6556, 0x5d5448, 0x2a2622, 0xf2e6c4, 0xc9a25a, 0x5d5448, 0, true, false}};    // brown pelican
++				{2.15, .85, 0x3a332e, 0x80858c, 0x302c28, 0xf0e2a0, 0x8a8478, 0x443f3a, 0, true, false}};   // brown pelican, an adult's colours: dark body, silver-grey wings, pale yellow head (as the mangrove pelicans, KeysMangroveEcoBirds.cpp)
+ 			for (int32 k = 0; k < 4; k++)
+ 			{
+ 				const FKindDef& D = Defs[k];

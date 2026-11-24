@@ -1,0 +1,38 @@
+diff --git a/Source/KeysRun/KeysBoatPawn.cpp b/Source/KeysRun/KeysBoatPawn.cpp
+index 6ab1197..ac5148e 100644
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -2737,9 +2737,14 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
+ 	else if (CatchLight && CatchLight->IsVisible()) CatchLight->SetVisibility(false);
+ 	if (FState != EKeysFish::Caught)
+ 	{
+-		const double Dist = (S.Len * 1.5 + 11) * CamZoom, Ht = (S.Len * .32 + 4.2) * CamZoom * (1 + CamPitchOff);
++		const double Dist0 = (S.Len * 1.5 + 11) * CamZoom, Ht0 = (S.Len * .32 + 4.2) * CamZoom * (1 + CamPitchOff);
++		// idling by the animals of a mangrove shore or a rookery key the camera comes in, down and round to them, and
++		// lets go as she gathers way or the moment you move it yourself (the rule is KeysMangroveEco::CloserLook; with
++		// nothing there to look at it changes nothing)
++		const KeysMangroveEco::FCloser Cl = KeysMangroveEco::CloserLook(X, Z, H, Speed, !bRunning || FState != EKeysFish::Idle || bCharging || bTrolling || RaiseCamT > 0, CamYaw, CamPitchOff, CamZoom, Dist0, Ht0, Dt);
++		const double Dist = Dist0 * Cl.Dist, Ht = Ht0 * Cl.Ht;
+ 		if (!bDragging && FMath::Abs(Speed) > 5) CamYaw *= 1 - FMath::Min(1.0, Dt * 1.2);
+-		double A = H + CamYaw;
++		double A = H + CamYaw + Cl.Yaw;
+ 		// a fish on: frame the boat and the line from beyond the boat, a little off the line so the hull doesn't hide
+ 		// it, rather than from astern (with the stern held on the fish, astern would put the boat behind the lens)
+ 		if (FState == EKeysFish::Fight && FMath::Abs(Speed) < 6) A = FMath::Atan2(-(FX - X), -(FZ - Z)) + .45 + CamYaw;
+@@ -2765,6 +2770,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
+ 		}
+ 		else if (FState != EKeysFish::Idle) { LX = Lerp(X, Bob.X, .35); LZ = Lerp(Z, Bob.Z, .35); }
+ 		WantLook = FVector(LX, Y + 1.8, LZ);
++		if (Cl.K > 0) WantLook = FMath::Lerp(WantLook, Cl.Look, Cl.K);
+ 		if (RaiseCamT > 0 && bRunning && !bDragging)
+ 		{
+ 			// a fish coming up on the spread: the camera drops down beside that lure, low over the water and a little
+@@ -3981,7 +3987,7 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
+ 	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : bChairBeat ? 5.0 : 1.2);
+ 	// the chair cameras set their own field of view each frame: start the zoom from it and hand it back after
+ 	if (bExtCam && !bOn && JumpLook < .001) { JumpFov = Camera->FieldOfView; return; }
+-	float Want = bExtCam ? Camera->FieldOfView : 88.f;
++	float Want = bExtCam ? Camera->FieldOfView : KeysMangroveEco::CloserFov();   // (88 but in the closer look at a mangrove shore)
+ 	// the landing shot's long lens: cut to it, and cut back out of it when the catch is done
+ 	const bool bLand = FState == EKeysFish::Caught && !bExtCam && !IsDiving();
+ 	if (bLand || bWasLanding)
