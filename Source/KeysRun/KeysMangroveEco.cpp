@@ -375,7 +375,7 @@ namespace KeysMangroveEco
 			{
 				const FVector2D Q = At(9 + 6 * SHash(S, 56));
 				const double Dp = DepthAt(Q.X, Q.Y);
-				if (LandH(Q.X, Q.Y) < -.05 && !KeysGeoReal::MangroveAt(Q.X, Q.Y) && Dp > .3 && Dp < 3) Add(Pelican, S, FVector(Q.X, 1.5 + .5 * SHash(S, 57), Q.Y), O, 1, 27).bPost = true;
+				if (LandH(Q.X, Q.Y) < -.05 && !KeysGeoReal::MangroveAt(Q.X, Q.Y) && Dp > .05 && Dp < 3) Add(Pelican, S, FVector(Q.X, 1.5 + .5 * SHash(S, 57), Q.Y), O, 1, 27).bPost = true;
 			}
 			// a line of brown pelicans gliding low along the edge (more than one at a spot: they are on the wing)
 			if (!S.bRoof && !S.Bank && SHash(S, 25) < .004) Add(Pelican, S, FVector(At(14).X, 2.5, At(14).Y), O, 3 + int32(SHash(S, 54) * 3), 25);
@@ -493,6 +493,8 @@ namespace KeysMangroveEco
 			for (int32 k = 0; k < NumKinds; k++) C->Count[Reg][k] += P.Count[k];
 			for (const FSpot& S : P.Spots)
 			{
+				if (S.bPost) { C->PilingN++; if (C->Pilings[Reg].Num() < 40) { C->Pilings[Reg].Add(FVector2D(S.P.X, S.P.Z)); C->PilingOut[Reg].Add(S.Out); } }
+				if (S.Kind == WhitePelican && S.Rook < 0 && C->Flocks[Reg].Num() < 40) { C->Flocks[Reg].Add(FVector2D(S.P.X, S.P.Z)); C->FlockOut[Reg].Add(S.Out); }
 				if (S.Rook >= 0) C->RookBirds[S.Rook] += S.N;
 				else if (!C->bHave[Reg][S.Kind]) { C->bHave[Reg][S.Kind] = true; C->Example[Reg][S.Kind] = FVector2D(S.P.X, S.P.Z); C->ExampleOut[Reg][S.Kind] = S.Out; }
 			}
@@ -973,6 +975,25 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			UE_LOG(LogTemp, Log, TEXT("KREco census rookery %d (%s, by %s) at %.0f, %.0f: %d birds%s; look at it from %s (bow on, %.1f m charted%s)"), i, RegionName(Rk[i].Region), *KeysGeo::NearestName(Rk[i].C.X, Rk[i].C.Y), Rk[i].C.X, Rk[i].C.Y, Cn.RookBirds[i],
 				i == Busiest ? TEXT(" (the busiest)") : TEXT(""), *Spot, Dp, bDeep ? TEXT("") : *FString::Printf(TEXT(": the deepest within reach, short of the %.1f m that floats every boat at dead low"), RookNeed));
 		}
+		// (the pelicans' places a boat can lie nearest to: three pilings and three flocks of white pelicans a region)
+		UE_LOG(LogTemp, Log, TEXT("KREco census pelicans: %d brown pelicans on pilings map-wide"), Cn.PilingN);
+		if (A.Num() > 1)
+			for (int32 r = 0; r < 4; r++)
+				for (int32 w = 0; w < 2; w++)
+				{
+					const TArray<FVector2D>& Ps = w ? Cn.Flocks[r] : Cn.Pilings[r];
+					const TArray<FVector2D>& Os = w ? Cn.FlockOut[r] : Cn.PilingOut[r];
+					TArray<TPair<double, int32>> By;
+					for (int32 i = 0; i < Ps.Num(); i++)
+					{
+						FVector2D Bt;
+						double Hd;
+						if (BoatSpot(Ps[i], Os[i], w ? 28 : 20, Bt, Hd)) By.Add({FVector2D::Distance(Bt, Ps[i]), i});
+					}
+					By.Sort([](const TPair<double, int32>& X, const TPair<double, int32>& Y) { return X.Key < Y.Key; });
+					for (int32 i = 0; i < FMath::Min(3, By.Num()); i++)
+						UE_LOG(LogTemp, Log, TEXT("KREco where %s / %s: %.0f, %.0f; %s"), RegionName(r), w ? TEXT("flock of white pelicans") : TEXT("pelican on a piling"), Ps[By[i].Value].X, Ps[By[i].Value].Y, *TpFor(Ps[By[i].Value], Os[By[i].Value], w ? 28 : 20));
+				}
 		if (A.Num() > 1)
 			for (int32 r = 0; r < 4; r++)
 				for (int32 k = 0; k < NumKinds; k++)
@@ -1132,10 +1153,10 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 			PoseBird(B, Defs[i].Kind);
 			B.State = Defs[i].State; B.Rank = Defs[i].Rank; B.Wing = B.State == BPatrol ? 1 : 0;
 			B.Ph = 2.5 - Defs[i].Rank * 5.25;   // (set wings: in the glide, not the flap)
-			if (i == 5) B.Ph = .25 / B.FlapHz;   // (the top of the beat)
+			if (i == 5) B.Ph = .075 / B.FlapHz;   // (wings up, part way through the beat)
 			const FVector2D Q = S.Boat + Port * 12 + Fw * (4.0 * (i - 2));
 			B.P = FVector(Q.X, S.Sea + Defs[i].Y, Q.Y);
-			B.Yaw = FMath::Atan2(Fw.Y, Fw.X);
+			B.Yaw = FMath::Atan2(Fw.Y, Fw.X) + (i == 5 ? PI : 0);   // (the sixth flies the other way, to be seen from its other bow)
 			S.Dummies.Add(B);
 		}
 		UE_LOG(LogTemp, Log, TEXT("KREco test: five pelican dummies 12 m off the port side"));
@@ -1166,7 +1187,11 @@ void AKeysMangroveEco::DebugCmd(const FString& Cmd)
 		for (TPair<int64, FTileE*>& T : S.Tiles)
 		{
 			// (a rookery's birds are found by the rookery's own bookmark, not here)
-			for (FBird& B : T.Value->Birds) if (B.Leader < 0 && B.Rook < 0) Try(B.Kind, C0 == TEXT("goto") && B.State != BAway ? FVector2D(B.P.X, B.P.Z) : FVector2D(B.Home.X, B.Home.Z), B.Out);
+			// ("piling": the brown pelicans that sit on a piling off the roots)
+			for (FBird& B : T.Value->Birds)
+				if (A[1] == TEXT("piling")) { if (B.bPost) Hits.Add({FVector2D::Distance(FVector2D(B.Perch.X, B.Perch.Z), S.Boat), FVector2D(B.Perch.X, B.Perch.Z), B.Out, B.Kind}); }
+				else if (B.Leader < 0 && B.Rook < 0) Try(B.Kind, C0 == TEXT("goto") && B.State != BAway ? FVector2D(B.P.X, B.P.Z) : FVector2D(B.Home.X, B.Home.Z), B.Out);
+			if (A[1] == TEXT("piling")) continue;
 			for (FSchoolE& Sc : T.Value->Schools) Try(Sc.Kind, Sc.Home, Sc.Out);
 			for (FGroup& G : T.Value->Groups) Try(G.Kind, G.Home, G.Out);
 			for (FCrabs& Cr : T.Value->Crabs) Try(Cr.Kind, Cr.C, Cr.Out);

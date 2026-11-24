@@ -31,14 +31,14 @@ namespace KeysMangroveEco
 		const FBirdSpec Specs[NumBirds] = {
 			// body leg  neck bill head  span speed flap pitch wade flush draw   body      belly     neck      head      bill      leg       wing      tip
 			{.42, .50, .48, .12, .045, 1.40, 9,   2.4, .55, .45, 30, 700, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xe8b030, 0x1c1c1c, 0xf4f4ee, 0xf0f0e8, 0, false},   // great egret
-			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x384a64, 0x52607a, 0x6e6a80, 0xe8e8e8, 0xd8a030, 0x4a4638, 0x3c4e68, 0x18202c, 0, false},   // great blue heron
-			{.30, .32, .30, .08, .035, 1.00, 9,   3.0, .50, .30, 24, 450, 0x3c4a66, 0x3c4a66, 0x5a4660, 0x5a4660, 0x4a5a70, 0x4a5240, 0x3c4a66, 0x2c3850, 0, false},   // little blue heron
+			{.50, .58, .52, .14, .050, 1.80, 9,   2.0, .55, .60, 36, 700, 0x26364e, 0x3a4860, 0x565268, 0xe8e8e8, 0xd8a030, 0x4a4638, 0x2a3a52, 0x121a26, 0, false},   // great blue heron (set dark: full sun washes a mid slate out to pale grey)
+			{.30, .32, .30, .08, .035, 1.00, 9,   3.0, .50, .30, 24, 450, 0x1f2c48, 0x1f2c48, 0x45304a, 0x45304a, 0x4a5a70, 0x3a4232, 0x1f2c48, 0x162036, 0, false},   // little blue heron (set dark, as above)
 			{.30, .30, .24, .16, .035, .95,  10,  3.6, .35, .22, 22, 500, 0xf4f4ee, 0xf4f4ee, 0xf4f4ee, 0xf2d8d0, 0xe04a30, 0xdc4a32, 0xf4f4ee, 0x181818, 1, true},    // white ibis
 			{.40, .40, .32, .17, .040, 1.25, 9.5, 3.0, .40, .32, 26, 600, 0xee7896, 0xf090aa, 0xf6e4e6, 0xdfe2cc, 0x8a9078, 0xc03c54, 0xe8608a, 0xd03862, 2, true},    // roseate spoonbill
 			{.42, .07, .28, .07, .040, 1.20, 12,  4.0, 1.0, 0,   20, 400, 0x1c1c1e, 0x242426, 0x1c1c1e, 0x1c1c1e, 0xd09030, 0x141414, 0x26262a, 0x141414, 0, true},    // cormorant
 			{.42, .06, .38, .09, .030, 1.15, 11,  3.5, .90, 0,   20, 400, 0x1a1a1c, 0x1a1a1c, 0x4a3a2a, 0x4a3a2a, 0xd8b040, 0x2a2a20, 0x2c2c30, 0xb8b8b0, 0, true},    // anhinga
 			{.16, .025, .03, .06, .046, .50, 11,  7.0, .90, 0,   14, 200, 0x1f4f92, 0xf0f0ee, 0xf0f0ee, 0x1a4484, 0x181c20, 0x3a3a3a, 0x1a4484, 0x12223c, 0, true},    // belted kingfisher
-			{.22, .14, .14, .07, .035, .65,  9,   4.0, .25, .12, 12, 250, 0x3a5a4a, 0x7a4a3a, 0x7a3a2a, 0x24382e, 0x2a2a2a, 0xd8b838, 0x3a5a4a, 0x24382e, 0, false},   // green heron
+			{.22, .14, .14, .07, .035, .65,  9,   4.0, .25, .12, 12, 250, 0x24402f, 0x62301f, 0x62281a, 0x16261d, 0x2a2a2a, 0xd8b838, 0x24402f, 0x16261d, 0, false},   // green heron (set dark, as above)
 			{.30, .22, .14, .08, .050, 1.10, 9,   2.8, .60, .20, 16, 350, 0x27303c, 0xc4cad2, 0xc4cad2, 0x0e1216, 0x1a1a1c, 0xe0c440, 0x66707e, 0x30363e, 0, false},   // night heron
 			{.20, .03, .03, .06, .035, .80,  10,  3.5, .15, 0,   0,  400, 0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0x1a1a1c, 0xf08020, 0x202020, 0xc8ccd0, 0x8a9098, 0, true},    // tern
 			{.34, .10, .06, .035, .050, 1.60, 11, 2.4, .90, 0,   0,  700, 0x4a3a2c, 0xf0ece4, 0xf0ece4, 0xf0ece4, 0x2a2a2a, 0xc8c8b8, 0x4a3a2c, 0x2a2018, 0, true},    // osprey
@@ -172,9 +172,9 @@ namespace KeysMangroveEco
 		struct FPelSpec { double Body, Span, Bill, Leg; uint32 BackC, BellyC, NeckC, CrownC, BillC, TipC, PouchC, CovertC, FlightC, LegC, TailC; bool bWhiteInner; };
 		// (the brown pelican's silver-grey and brown are set dark: in the game's full sun 0x5a5e66 washed out to white
 		// and its dark flight feathers to tan)
-		const FPelSpec PelBrown = {.56, 2.15, .32, .085, 0x42454b, 0x1a1614, 0xf0eee6, 0xf0d470, 0x6c6c72, 0xe07850, 0x2a2c30, 0x45484f, 0x15120f, 0x1c1c20, 0x262320, false};
-		const FPelSpec PelYoung = {.54, 2.10, .31, .085, 0x4c3e30, 0xdcd4c2, 0x483a2c, 0x483a2c, 0x777165, 0x8c7c62, 0x4a4038, 0x4e4032, 0x221c16, 0x2c2828, 0x33291f, false};
-		const FPelSpec PelWhite = {.66, 2.75, .40, .13, 0xf6f5f0, 0xf4eedc, 0xf6f5f0, 0xf6f5f0, 0xee9a28, 0xd8401e, 0xf2a820, 0xf6f5f0, 0x101012, 0xee7c3c, 0xf6f5f0, true};
+		const FPelSpec PelBrown = {.56, 2.15, .37, .085, 0x34363b, 0x1a1614, 0xf0eee6, 0xf0d470, 0x6c6c72, 0xe07850, 0x2a2c30, 0x45484f, 0x15120f, 0x1c1c20, 0x262320, false};
+		const FPelSpec PelYoung = {.54, 2.10, .36, .085, 0x4c3e30, 0xdcd4c2, 0x483a2c, 0x483a2c, 0x777165, 0x8c7c62, 0x4a4038, 0x4e4032, 0x221c16, 0x2c2828, 0x33291f, false};
+		const FPelSpec PelWhite = {.66, 2.75, .47, .13, 0xf6f5f0, 0xf4eedc, 0xf6f5f0, 0xf6f5f0, 0xee9a28, 0xd8401e, 0xf2a820, 0xf6f5f0, 0x101012, 0xee7c3c, 0xf6f5f0, true};
 		// "mix them up": about one in four of the followers in a flock of white pelicans on a flat is a brown pelican
 		// loafing with them, as they do in life on the bay's sandbars. It keeps with the flock (it is one of its
 		// birds) but is drawn as a brown pelican, and does not dip its bill with the whites.
@@ -226,7 +226,7 @@ namespace KeysMangroveEco
 			const FVector HdUp = (Up - Hd * FVector::DotProduct(Up, Hd)).GetSafeNormal(.001, A);
 			if (bFar) Pen.Prism(Sh - A * BodyR * .2, Head, Nr * 1.5, Nr, NeckC, true);
 			else { Pen.Prism(Sh - A * BodyR * .2, Bend, Nr * 1.5, Nr * 1.15, NeckC, true); Pen.Prism(Bend, Head, Nr * 1.15, Nr, NeckC, true); }
-			const double HeadR = BodyL * .105;
+			const double HeadR = BodyL * .115;   // (a big head and a huge bill: they are what a pelican is)
 			Pen.Egg(Head + Hd * HeadR * .3, Hd, Rt, HdUp, HeadR * 2.6, HeadR, HeadR * 1.05, Hex(K.CrownC), NeckC, 5);
 			// (the white pelican's small shaggy crest, at the back of the head; shut for the others)
 			const double Cr = K.bWhiteInner ? HeadR : 0;
@@ -296,7 +296,7 @@ namespace KeysMangroveEco
 					const double U = f / 4.0;
 					// (broad feathers that touch at their roots and part toward their tips, not spikes)
 					const FVector Base = FMath::Lerp(HL, HT, U), Step = (HT - HL) * .125;
-					const FVector Dir = (O2 * (1 - .3 * U) - A * (.1 + .85 * U) + Top * (bFlap || bStoop ? 0 : .08 * (1 - U))).GetSafeNormal(.001, O2);
+					const FVector Dir = (O2 * (1 - .2 * U) - A * (.05 + .7 * U) + Top * (bFlap || bStoop ? 0 : .03 * (1 - U))).GetSafeNormal(.001, O2);
 					Pen.Tri(Base - Step, Base + Step, Base + Dir * Half * .2 * (1 - .15 * U), Nn, FlC);
 				}
 				// shut, at rest and on the water: laid along the flank, its dark tip crossing the tail and hanging below it
@@ -684,7 +684,10 @@ namespace KeysMangroveEco
 				const double U = FMath::Clamp(B.FlyT / B.FlyDur, 0.0, 1.0), Us = U * U * (3 - 2 * U);
 				const bool bLandFeet = B.Next == BStand || B.Next == BPerch || B.Next == BDry || B.Next == BRoost;
 				const FVector To = bLandFeet ? B.To + FVector(0, K.Leg * B.Sz * (1 - FMath::Clamp((U - .9) * 10, 0.0, 1.0)), 0) : B.To;
-				const FVector Np = FMath::Lerp(B.From, To, Us) + FVector(0, B.Arc * FMath::Sin(PI * U), 0);
+				FVector Np = FMath::Lerp(B.From, To, Us) + FVector(0, B.Arc * FMath::Sin(PI * U), 0);
+				// (a pelican up off a flat or the water clears it at once: it does not plough along through the water)
+				if (B.Kind >= Pelican && B.Next != BDive && B.Next != BSwim)
+					Np.Y = FMath::Max(Np.Y, E.Sea + .55 * B.Sz * FMath::Min(1.0, U * 10) * (bLandFeet ? FMath::Clamp((1 - U) * 10, 0.0, 1.0) : 1.0));
 				const FVector V = Np - B.P;
 				if (V.SizeSquared2D() > 1e-8)
 				{

@@ -158,6 +158,8 @@ namespace KeysMangroveEco
 		FVector2D Example[4][NumKinds];
 		FVector2D ExampleOut[4][NumKinds];
 		bool bHave[4][NumKinds] = {};
+		TArray<FVector2D> Pilings[4], PilingOut[4], Flocks[4], FlockOut[4];   // some of each region's pelican pilings and white pelican flocks (for the test's bookmarks)
+		int32 PilingN = 0;
 		double Secs = 0;
 	};
 
