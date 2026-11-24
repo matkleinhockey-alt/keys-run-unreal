@@ -1351,3 +1351,28 @@ namespace KeysReefDen
 	static FAutoConsoleCommand GDenCmd(TEXT("kr.den"), TEXT("Reef den test hooks: stats, census, find <what>, goto <what>, hide, calm, solid, hunt, who"),
 		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args) { DebugCmd(GDens, FString::Join(Args, TEXT(" "))); }));
 }
+
+// kr.den.corals x z: a count and a checksum of every coral (not den) the reef places in the 7 x 7 chunks round a spot.
+// It works with -KRNoDens too, so the two runs can be compared: the dens must not move, add or take away a coral.
+static FAutoConsoleCommandWithWorldAndArgs GDenCoralsCmd(TEXT("kr.den.corals"), TEXT("Count and checksum of the reef's corals in the 49 chunks round x z"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		if (Args.Num() < 2 || !World) return;
+		const double X = FCString::Atod(*Args[0]), Z = FCString::Atod(*Args[1]);
+		const int32 CX = FMath::FloorToInt32(X / KeysReefDen::ChunkM), CZ = FMath::FloorToInt32(Z / KeysReefDen::ChunkM);
+		if (TActorIterator<AKeysReef> It(World); It)
+		{
+			int32 N = 0, NDen = 0;
+			uint32 Sum = 0;
+			for (int32 dz = -3; dz <= 3; dz++)
+				for (int32 dx = -3; dx <= 3; dx++)
+					for (const AKeysReef::FInst& I : It->ChunkInstances(CX + dx, CZ + dz))
+					{
+						if (I.Den) { NDen++; continue; }
+						N++;
+						const double V[11] = {double(I.Species), I.X, I.Y, I.Z, I.RotY, I.TiltX, I.TiltZ, I.SX, I.SY, I.SZ, I.ColorT};
+						Sum = FCrc::MemCrc32(V, sizeof(V), Sum);
+					}
+			UE_LOG(LogTemp, Log, TEXT("KRDen corals round %.0f, %.0f: %d corals in 49 chunks, checksum %08x (and %d den rocks standing in the list); dens %s"), X, Z, N, Sum, NDen, KeysReefDen::Enabled() ? TEXT("on") : TEXT("off (-KRNoDens)"));
+		}
+	}));
