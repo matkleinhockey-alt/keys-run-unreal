@@ -29,6 +29,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "KeysReefAudio.h"
 
 namespace KeysReefDen
 {
@@ -1087,6 +1088,7 @@ namespace KeysReefDen
 			if (Flicked)
 			{
 				L.Links[1]++;
+				KeysReefAudio::Heard(TEXT("rasp"), TEXT("spiny lobster"), FVector(D.Mouth));   // reefaudio R5: the antennae rasp as they flick back
 				if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link flick: %d of %d spiny lobsters at %.1f, %.1f flick back %s (cause: %s within 1.6 m, %.1f m from the ledge)"),
 					Flicked, H.M.Num(), D.Mouth.X, D.Mouth.Z, W.bNight ? TEXT("and make for the ledge") : TEXT("under the ledge"), CauseText(H.LastCause), FVector::Dist(W.Diver, D.Mouth));
 			}

@@ -23,6 +23,7 @@
 #include "EngineUtils.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/CommandLine.h"
+#include "KeysReefAudio.h"
 
 using namespace KeysGeo;
 
@@ -1241,6 +1242,8 @@ void AKeysSchools::Tick(float DeltaSeconds)
 		const int32 Nbr = Every >= 4 ? FMath::Max(3, Boids[S.Sp].Nbr / 2) : Boids[S.Sp].Nbr;
 		for (int32 i = 0; i < S.Fish.Num(); i++) StepFish(S, i, Sd, Nbr);
 		S.bStepped = true;
+		// reefaudio R1: grunts and groupers can be heard (the audio keeps the nearest and decides)
+		if (D < 40 && (Specs[S.Sp].Role == ERole::Reef || Specs[S.Sp].Role == ERole::Hole)) KeysReefAudio::Heard(TEXT("school"), Specs[S.Sp].Key, S.Center, S.Fish.Num());
 	}
 	// detail level: a different mesh up close, mid and far
 	for (FSchool& S : Schools)
