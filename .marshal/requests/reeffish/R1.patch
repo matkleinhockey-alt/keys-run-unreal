@@ -1,0 +1,84 @@
+diff --git a/Source/KeysRun/KeysReefLife.cpp b/Source/KeysRun/KeysReefLife.cpp
+index 8d8edf5..e7c381b 100644
+--- a/Source/KeysRun/KeysReefLife.cpp
++++ b/Source/KeysRun/KeysReefLife.cpp
+@@ -386,6 +386,7 @@ namespace KeysReefLife
+ 			double Fl;
+ 			const double Tp = TopAt(Sd.Home.X, Sd.Home.Z, &Fl);
+ 			G.Home = FVector(Sd.Home.X, Tp, Sd.Home.Z);
++			if (S.bHomeOnHead) { FHead Hd; if (NearestHead(G.Home, 8, Hd)) G.Home = FVector(Hd.X, Hd.TopY, Hd.Z); }
+ 			G.Goal = G.Home; G.Centre = G.Home;
+ 			G.Circ = G.Rng.FRand() * 2 * PI; G.CircDir = G.Rng.FRand() < .5 ? -1 : 1;
+ 			G.M.SetNum(N);
+diff --git a/Source/KeysRun/KeysReefLife.h b/Source/KeysRun/KeysReefLife.h
+index 21e662e..0d5fb0f 100644
+--- a/Source/KeysRun/KeysReefLife.h
++++ b/Source/KeysRun/KeysReefLife.h
+@@ -76,6 +76,7 @@ namespace KeysReefLife
+ 		double TailFork = 0;                     // + a crescent or fork (the middle cut in), - rounded
+ 		double Dor0 = .3, Dor1 = .9, DorH = .07; // dorsal fin: from, to, height
+ 		double An0 = .62, An1 = .9, AnH = .055;  // anal fin
++		double DorTrail = 0, AnTrail = 0;        // > 0: the fin rises toward its rear and the tip is drawn out this far behind its base (angelfish)
+ 		double PecU = .27, PecV = -.15, PecLen = .17, PecW = .09;   // pectoral fin: where its root is, length, width
+ 		double PelU = .34, PelLen = .09;         // pelvic fins
+ 		double EyeU = .1, EyeV = .4, EyeR = .022;
+@@ -112,6 +113,7 @@ namespace KeysReefLife
+ 		// the bite's sound: fill Out with one-shots for AKeysAudio::Burst and say in What exactly what they are
+ 		TFunction<void(int32 Phase, TArray<FKeysBurst>& Out, FString& What)> BiteSound;
+ 		FString FirstSight;          // the toast the first time the diver sees one
++		bool bHomeOnHead = false;    // the group's home is the top of the nearest coral head within 8 m (a nest on a rock, a station over a head)
+ 	};
+ 
+ 	using FMake = FSpecies (*)();
+diff --git a/Source/KeysRun/KeysReefLifeBody.cpp b/Source/KeysRun/KeysReefLifeBody.cpp
+index 93a2e2d..a866d2b 100644
+--- a/Source/KeysRun/KeysReefLifeBody.cpp
++++ b/Source/KeysRun/KeysReefLifeBody.cpp
+@@ -169,7 +169,7 @@ namespace KeysReefLife
+ 			const int32 N = Lod == 0 ? 9 : Lod == 1 ? 4 : 2;
+ 			for (int32 Fin = 0; Fin < 2; Fin++)
+ 			{
+-				const double U0 = Fin ? B.An0 : B.Dor0, U1 = Fin ? B.An1 : B.Dor1, Ht = Fin ? B.AnH : B.DorH, Sg = Fin ? -1 : 1;
++				const double U0 = Fin ? B.An0 : B.Dor0, U1 = Fin ? B.An1 : B.Dor1, Ht = Fin ? B.AnH : B.DorH, Sg = Fin ? -1 : 1, Trail = Fin ? B.AnTrail : B.DorTrail;
+ 				if (Ht <= 0 || U1 <= U0) continue;
+ 				TArray<FVector> P;
+ 				TArray<FLinearColor> C;
+@@ -177,9 +177,10 @@ namespace KeysReefLife
+ 				for (int32 k = 0; k < N; k++)
+ 				{
+ 					const double T = double(k) / (N - 1), U = FMath::Lerp(U0, U1, T);
+-					const double Zb = BodyPt(B, U, Sg * HALF_PI).Z * .93, Hp = Ht * FMath::Pow(FMath::Sin(PI * (.05 + .9 * T)), .4);
++					// a trailing fin: low over the spines in front, tallest at the rear, the tip swept back past the base
++					const double Zb = BodyPt(B, U, Sg * HALF_PI).Z * .93, Hp = Trail > 0 ? Ht * (.3 + .7 * FMath::Pow(T, 1.5)) : Ht * FMath::Pow(FMath::Sin(PI * (.05 + .9 * T)), .4);
+ 					P[k] = FVector(BodyX(B, U), 0, Zb);
+-					P[N + k] = FVector(BodyX(B, U) - Hp * .35, 0, Zb + Sg * Hp);
++					P[N + k] = FVector(BodyX(B, U) - Hp * .35 - Trail * T * T * T, 0, Zb + Sg * Hp);
+ 					C[k] = Col(Fin ? PAnal : PDorsal, T, 0, k, 0, 1);
+ 					C[N + k] = Col(Fin ? PAnal : PDorsal, T, 1, k, 1, 1);
+ 				}
+diff --git a/Source/KeysRun/KeysReefLifeFishAngels.cpp b/Source/KeysRun/KeysReefLifeFishAngels.cpp
+index 2ae0069..23911e3 100644
+--- a/Source/KeysRun/KeysReefLifeFishAngels.cpp
++++ b/Source/KeysRun/KeysReefLifeFishAngels.cpp
+@@ -109,7 +109,8 @@ namespace KeysReefLifeFishAngels
+ 		B.TailLen = .16; B.TailH = .3; B.TailFork = -.2;
+ 		// (the builder's fin is a hump: the tall soft fins are set as far back as it lets them go; see the request
+ 		// for a trailing lobe in the status file)
+-		B.Dor0 = .3; B.Dor1 = 1; B.DorH = .17; B.An0 = .52; B.An1 = 1; B.AnH = .16;
++		B.Dor0 = .24; B.Dor1 = 1; B.DorH = .17; B.An0 = .5; B.An1 = 1; B.AnH = .16;
++		B.DorTrail = .2; B.AnTrail = .18;
+ 		B.PecU = .31; B.PecV = -.25; B.PecLen = .16; B.PecW = .08; B.PelU = .36; B.PelLen = .12;
+ 		B.EyeU = .13; B.EyeV = .35; B.EyeR = .022;
+ 		return B;
+diff --git a/Source/KeysRun/KeysReefLifeFishSergeant.cpp b/Source/KeysRun/KeysReefLifeFishSergeant.cpp
+index 4cbf9cd..f5a70f2 100644
+--- a/Source/KeysRun/KeysReefLifeFishSergeant.cpp
++++ b/Source/KeysRun/KeysReefLifeFishSergeant.cpp
+@@ -123,6 +123,7 @@ namespace KeysReefLifeFishSergeant
+ 		S.Shy = .9;                         // he does not leave his eggs for a diver
+ 		S.Cruise = .3; S.Burst = 2.6; S.Roam = 1.5; S.Alt[0] = .1; S.Alt[1] = .3; S.Spacing = 2; S.Cull = 45;
+ 		S.bRows = true;
++		S.bHomeOnHead = true;               // the eggs are on a rock: he keeps station over a coral head
+ 		S.ChaseR = 2.5;                     // the ground he keeps round the eggs
+ 		S.FirstSight = TEXT("A sergeant major gone dark blue: a male guarding his eggs.");
+ 		return S;
