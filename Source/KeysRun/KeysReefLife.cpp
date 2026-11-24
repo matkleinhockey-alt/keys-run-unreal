@@ -179,6 +179,7 @@ namespace KeysReefLife
 		// ---- the test camera (reef:look)
 		int32 LookGroup = -1, LookIx = 0;
 		bool bLookEggs = false;
+		bool bLinksOff = false;   // -KRNoReefLinks or reef:links 0: the links off and the cleaners and egg patches gone (the A/B for perf)
 		FString PendLook;
 		double PendT = 0, PendTick = 0;
 		double LookDist = 1.6, LookT = 0;
@@ -191,7 +192,7 @@ namespace KeysReefLife
 		TSet<int64> TakenDens;
 		UInstancedStaticMeshComponent* EggC = nullptr;
 		bool bEggTried = false;
-		int32 EggTris = 0, EggsDrawn = 0;
+		int32 EggTris = 0, EggsDrawn = 0, PoolsWritten = 0;
 
 		const FSpecies& Sp(int32 I) const { return (*Reg)[I]; }
 		FGroup* FindGroup(int32 Id) { for (TUniquePtr<FGroup>& G : Groups) if (G->Id == Id) return G.Get(); return nullptr; }
@@ -323,6 +324,7 @@ namespace KeysReefLife
 			for (int32 s = 0; s < Reg->Num(); s++)
 			{
 				const FSpecies& S = Sp(s);
+				if (bLinksOff && S.bCleaner) continue;
 				const uint32 KeyHash = FCrc::StrCrc32(*S.Key);
 				double MixTot = 0;
 				for (const FMix& Mx : S.Mixes) MixTot += Mx.Weight;
@@ -717,7 +719,7 @@ namespace KeysReefLife
 		{
 			TArray<FTransform> Xf;
 			for (TUniquePtr<FGroup>& Gp : Groups)
-				if (Gp->bEggRock && Sp(Gp->Sp).bEggs && (Gp->Home - Cam).Size() < 40)
+				if (!bLinksOff && Gp->bEggRock && Sp(Gp->Sp).bEggs && (Gp->Home - Cam).Size() < 40)
 					Xf.Add(FTransform(FRotator(0, (Gp->Id * 47) % 360, 0), RlG2U(Gp->Home - FVector(0, .006, 0)), FVector(1)));
 			if (!EggC)
 			{
@@ -850,9 +852,11 @@ namespace KeysReefLife
 						if (A.FinPool >= 0 && PoolList[A.FinPool].bDirty) { A.FinSlot = PoolList[A.FinPool].Items.Add(&A); }
 					}
 			TArray<FTransform> Xf;
+			PoolsWritten = 0;
 			for (FPool& Pl : PoolList)
 			{
 				if (!Pl.C || (!Pl.bDirty && !Pl.bMoved)) continue;
+				PoolsWritten++;
 				const int32 Per = Pl.bFin ? 2 : 1;
 				Xf.SetNum(Pl.Items.Num() * Per, EAllowShrinking::No);
 				for (int32 i = 0; i < Pl.Items.Num(); i++)
@@ -948,7 +952,7 @@ namespace KeysReefLife
 		bool PickBite(FGroup& G, FAnimal& A, const FSpecies& S)
 		{
 			A.bSpongeBite = false; A.TiltNow = S.BiteTilt;
-			if (S.bSponges)
+			if (S.bSponges && !bLinksOff)
 			{
 				// an angelfish: a sponge within reach, nipped at its wall from the side, a little nose-down
 				FHead Sg;
@@ -1163,6 +1167,7 @@ namespace KeysReefLife
 		// going to rest under a ledge. True when it has changed state (the step is done)
 		bool LinkStep(FGroup& G, int32 I, FAnimal& A, const FSpecies& S, const FBody& B, double Act01, double Dt)
 		{
+			if (bLinksOff) return false;
 			if (S.bCleaner)
 			{
 				FGroup* CG = nullptr;
@@ -1185,7 +1190,7 @@ namespace KeysReefLife
 				{
 					A.SeekT = 15;
 					KeysReefDen::FDen Dn;
-					if (FreeDen(A.P, 30, A.Len * .65, B.HalfH * 2 * A.Len * .5, true, Dn))
+					if (FreeDen(A.P, 40, A.Len * .65, B.HalfH * 2 * A.Len * .5, true, Dn))
 					{
 						LetGoDen(A);
 						TakenDens.Add(Dn.Id);
@@ -1202,6 +1207,7 @@ namespace KeysReefLife
 						return true;
 					}
 					A.FedT = A.RestAt * .75;   // no ledge free near: it feeds on and looks again later
+					if ((A.P - Cam).Size() < 40) Log(FString::Printf(TEXT("rest: %s wants a rest but no empty ledge or cave lies within 40 m; it feeds on"), *Who(G, A)));
 				}
 			}
 			return false;
@@ -1944,8 +1950,8 @@ namespace KeysReefLife
 				if (Sp(Gp->Sp).bCleaner) { Stations++; Busy += Gp->StNow >= 0 ? 1 : 0; Queued += Gp->StQueue.Num(); }
 				if (Gp->bEggRock) Guards++;
 			}
-			Log(FString::Printf(TEXT("links: slept %d in dens, %d at the foot of a head, %d in the open; %d dens taken now; %d sponge nips; %d cleanings, %d waits, %d stations alive (%d busy, %d queued); %d rests under ledges; %d egg patches alive (%d drawn); %d alarms from the dens"),
-				SleepsInDen, SleepsAtHead, SleepsOpen, TakenDens.Num(), Nips, Cleans, Waits, Stations, Busy, Queued, Rests, Guards, EggsDrawn, Alarms));
+			Log(FString::Printf(TEXT("links: slept %d in dens, %d at the foot of a head, %d in the open; %d dens taken now; %d sponge nips; %d cleanings, %d waits, %d stations alive (%d busy, %d queued); %d rests under ledges; %d egg patches alive (%d drawn); %d alarms from the dens; %d pools, %d written last frame%s"),
+				SleepsInDen, SleepsAtHead, SleepsOpen, TakenDens.Num(), Nips, Cleans, Waits, Stations, Busy, Queued, Rests, Guards, EggsDrawn, Alarms, PoolList.Num() + (EggC ? 1 : 0), PoolsWritten, bLinksOff ? TEXT("; links OFF") : TEXT("")));
 			CpuAcc = 0; CpuN = 0; CpuWorst = 0; StatT = 0;
 		}
 
@@ -2131,12 +2137,23 @@ namespace KeysReefLife
 				}
 				if (FGroup* Old = FindGroup(LookGroup)) Old->bPosed = false;
 				LookDist = 1.6;
-				for (int32 k = 2; k < W.Num(); k++) if (W[k].IsNumeric()) LookDist = FCString::Atod(*W[k]);
-				FAnimal& A = G->M[Ix];
+				double UpArg = -1;
+				for (int32 k = 2; k < W.Num(); k++)
+				{
+					if (W[k] == TEXT("up") && W.IsValidIndex(k + 1)) { UpArg = FCString::Atod(*W[k + 1]); k++; continue; }
+					if (W[k].IsNumeric()) LookDist = FCString::Atod(*W[k]);
+				}
+				FAnimal& A = G->M[LookIx = Ix];
 				G->bPosed = true;
-				LookGroup = G->Id; LookIx = Ix; LookT = 0;
+				LookGroup = G->Id; LookT = 0;
 				if (!bLink && A.State != SSleep && A.State != SToSleep) { A.State = SRove; A.PoseT = 3; A.V = FVector::ZeroVector; A.Fwd = RlFlat(A.Fwd).GetSafeNormal(); if (A.Fwd.IsNearlyZero()) A.Fwd = FVector(1, 0, 0); }
-				// abeam of it, on the side with the more open water
+				// what is looked at, and from how high: the egg patch on its head, or the animal; 'up <m>' raises the eye
+				// (from above for what lies on a head or in the sand: the egg patch, a resting turtle, a sleeper)
+				const FVector Tg = bLookEggs ? G->Home : A.P;
+				const double Up = UpArg >= 0 ? UpArg : bLookEggs ? .75 : bLink && (W[1] == TEXT("@rest") || W[1] == TEXT("@den")) ? .55 : 0;
+				const double EyeY = Tg.Y + Up;
+				// abeam of it on the side with open water; for the link looks, the one of twelve bearings with the clearest line
+				// of sight (nothing of the reef standing in the line from the mask to it: elkhorn hid two shots)
 				FVector Hd = RlFlat(A.Fwd).GetSafeNormal();
 				if (Hd.IsNearlyZero()) Hd = FVector(1, 0, 0);
 				const FVector Sd(-Hd.Z, 0, Hd.X);
@@ -2144,12 +2161,26 @@ namespace KeysReefLife
 				const bool bFlip = W.Contains(TEXT("flip"));   // 'flip': the other side (for the light)
 				FVector At = (TopAt(P1.X, P1.Z) <= TopAt(P2.X, P2.Z)) != bFlip ? P1 : P2;
 				if (TopAt(At.X, At.Z) > A.P.Y - .25) At = At == P1 ? P2 : P1;   // (not from inside a coral head)
-				if (bLookEggs) { At = G->Home + Sd * 1.1; At.Y = G->Home.Y; }
-				if (A.Spot == 1 && A.DenId) At = A.DenMouth + A.DenAxis * LookDist + FVector(-A.DenAxis.Z, 0, A.DenAxis.X) * (LookDist * .25);   // (in a den: from out in front of its opening)
-				// (from above for what lies on a head or in the sand: the egg patch, a resting turtle)
-				const double Up = bLink && (W[1] == TEXT("@eggs") || W[1] == TEXT("@rest") || W[1] == TEXT("@den")) ? .55 : 0;
+				if (bLink)
+				{
+					double BestBlock = 1e9;
+					for (int32 q = 0; q < 12; q++)
+					{
+						const double An = q * PI / 6 + (A.Spot == 1 && A.DenId ? FMath::Atan2(A.DenAxis.Z, A.DenAxis.X) : 0);
+						const FVector E(Tg.X + FMath::Cos(An) * LookDist, EyeY, Tg.Z + FMath::Sin(An) * LookDist);
+						double Block = 0;
+						for (int32 s = 0; s <= 8; s++)
+						{
+							const double T = .1 + .8 * s / 8.0;
+							const FVector Q = FMath::Lerp(E, Tg, T);
+							Block = FMath::Max(Block, TopAt(Q.X, Q.Z) - (Q.Y - .05));
+						}
+						Block = FMath::Max(Block, TopAt(E.X, E.Z) - (EyeY - .4)) + (A.Spot == 1 && A.DenId ? q % 11 * .02 : 0);   // (a den's sleeper: from in front first)
+						if (Block < BestBlock) { BestBlock = Block; At = E; }
+					}
+				}
+				else if (A.Spot == 1 && A.DenId) At = A.DenMouth + A.DenAxis * LookDist;
 				D->DebugCmd(TEXT("at"), FString::Printf(TEXT("%.3f,%.3f"), At.X, At.Z));
-				const double EyeY = bLookEggs ? G->Home.Y + .75 : A.P.Y + Up;
 				D->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%.3f"), -(EyeY - .15)));
 				D->DebugCmd(TEXT("hold"), FString::Printf(TEXT("%.3f"), -(EyeY - .15)));
 				Log(FString::Printf(TEXT("look (test camera): the diver is put %.1f m abeam of %s, %.2f m long, at %.1f, %.1f, %.1f, and its group does not shy from the diver until 'look off'"), LookDist, *Who(*G, A), A.Len, A.P.X, A.P.Y, A.P.Z));
@@ -2189,6 +2220,16 @@ namespace KeysReefLife
 				for (FAnimal& A : R->M) { A.P += Shift; A.P.Y = FMath::Max(A.P.Y, TopAt(A.P.X, A.P.Z) + .3); }
 				R->Goal = To; R->GoalT = 8; G->ChaseCool = 0; R->ChaseCool = 30; G->bPosed = true; G->M[0].PoseT = 0;
 				Log(FString::Printf(TEXT("rival (test hook): group %d and its male #%d moved %.1f m to stand %.1f m from %s; the chase that follows is the game's own rule"), R->Id, R->M[0].Id, Shift.Size(), S.ChaseR * .8, *Who(*G, G->M[0])));
+			}
+			else if (C == TEXT("links"))
+			{
+				bLinksOff = W.IsValidIndex(1) && W[1] == TEXT("0");
+				// (everything is let go and dealt again over the next frames, so on and off are dealt the same way)
+				const int32 Dropped = AliveCount();
+				for (int32 i = Groups.Num() - 1; i >= 0; i--) DropGroup(i);
+				Chunks.Reset();
+				WritePools(); DrawEggs();
+				Log(FString::Printf(TEXT("links %s (test hook): %s"), bLinksOff ? TEXT("OFF") : TEXT("on"), *FString::Printf(TEXT("all %d animals let go and dealt again %s"), Dropped, bLinksOff ? TEXT("without the neon gobies, no egg patches drawn, no link starts") : TEXT("with everything"))));
 			}
 			else if (C == TEXT("clean"))
 			{
@@ -2297,6 +2338,7 @@ void AKeysReefLife::BeginPlay()
 	FString Script;
 	Impl->bScriptLog = FParse::Value(FCommandLine::Get(), TEXT("KRScript="), Script, false);
 	Impl->bOff = FParse::Param(FCommandLine::Get(), TEXT("KRNoReefLife"));
+	Impl->bLinksOff = FParse::Param(FCommandLine::Get(), TEXT("KRNoReefLinks"));
 	// if every species filled its own cap at once the system would pass its budget: all are thinned alike
 	double Sum = 0;
 	for (const KeysReefLife::FSpecies& S : *Impl->Reg) Sum += S.MaxAlive * S.Weight;
@@ -2352,7 +2394,8 @@ void KeysReefLife::Alarm(const FVector& P, double R, const FString& Why)
 {
 	FImpl* L = GLive;
 	if (!L || L->bOff) return;
-	int32 N = 0;
+	int32 N = 0, Near10 = 0;
+	for (TUniquePtr<FGroup>& Gp : L->Groups) for (const FAnimal& A : Gp->M) Near10 += (A.P - P).Size() < 10 ? 1 : 0;
 	for (TUniquePtr<FGroup>& Gp : L->Groups)
 	{
 		if ((Gp->Centre - P).Size() > R + 12) continue;
@@ -2368,7 +2411,7 @@ void KeysReefLife::Alarm(const FVector& P, double R, const FString& Why)
 		}
 	}
 	L->Alarms++;
-	L->Log(FString::Printf(TEXT("link alarm: %s at %.1f, %.1f, %.1f; effect: %d reef fish within %.1f m bolted"), *Why, P.X, P.Y, P.Z, N, R));
+	L->Log(FString::Printf(TEXT("link alarm: %s at %.1f, %.1f, %.1f; effect: %d reef fish within %.1f m bolted (%d reef animals within 10 m)"), *Why, P.X, P.Y, P.Z, N, R, Near10));
 }
 
 void KeysReefLife::DiggingRays(TArray<FVector>& OutP)
