@@ -153,7 +153,21 @@ namespace KeysReefLife
 		double HeadWithin = 0;       // > 0: lives at the foot of a stony coral head: each is put against the nearest
 		                             // within this many metres of where it was dealt; with none, the group is not spawned
 		bool bHomeOnHead = false;    // the group's home is the top of the nearest coral head within 8 m (a nest on a rock, a station over a head)
+		// ---- links between animals (reeflinks; all off by default)
+		bool bSleepsInHoles = false; // at night it goes to an empty den within 30 m, else the foot of a coral head within 16 m, and sleeps in it
+		bool bSponges = false;       // with bBitesRock: feeds on sponges, nipping at their walls; rock only where no sponge is in reach
+		bool bClient = false;        // visits cleaning stations: comes in, holds still at an odd angle, fins spread, while cleaners work it
+		bool bCleaner = false;       // keeps a cleaning station on its home head (bHomeOnHead) and works over the fish that come to it
+		double RestEvery = 0;        // > 0: after about this many seconds of feeding by day it rests on the sand under a ledge till it needs air
+		bool bEggs = false;          // a Territory holder guarding eggs: a patch of them is drawn on the rock at its home
+		bool bShadows = false;       // a Sitter that digs: other fish come to pick over the sand it throws up (reported to the schools)
 	};
+
+	// ---- links between the reef's systems (reeflinks). Safe to call with no reef life in the world.
+	// the reef-life animals within R of P (game metres) bolt, for the reason given (a hunting moray, a grouper)
+	void Alarm(const FVector& P, double R, const FString& Why);
+	// rays digging now: where each is (game metres) and which way its pit is; for the followers that shadow them
+	void DiggingRays(TArray<FVector>& OutP);
 
 	using FMake = FSpecies (*)();
 	void Register(FMake Make);

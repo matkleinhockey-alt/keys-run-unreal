@@ -64,6 +64,9 @@ namespace KeysReefDen
 	void PlaceChunk(int32 CX, int32 CZ, const TArray<AKeysReef::FInst>& Corals, TArray<FDen>& Out);
 	// the dens of a chunk as placed (cached with the reef's own chunk cache); empty when there is no reef actor
 	const TArray<FDen>& DensOfChunk(int32 CX, int32 CZ);
+	// the bottom as the seafloor mesh draws it near a diver (its 2 m lattice, triangulated as KeysSeafloor does), which is
+	// a little lower than KeysSea::SeafloorHeightAt over a rise: what an animal lying in the sand must sink into
+	double FloorNear(double X, double Z);
 
 	// ---- hooks for the hub (requests R1 - R3), all safe to call with no reef in the world
 	// R1, the diver: a body of radius R at (X, Y, Z) is moved out of any den's rock; true when it was touching.

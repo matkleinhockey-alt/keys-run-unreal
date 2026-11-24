@@ -1,0 +1,41 @@
+diff --git a/Source/KeysRun/KeysSchools.cpp b/Source/KeysRun/KeysSchools.cpp
+index 6f7677c..76b9c37 100644
+--- a/Source/KeysRun/KeysSchools.cpp
++++ b/Source/KeysRun/KeysSchools.cpp
+@@ -8,6 +8,7 @@
+ #include "KeysLife.h"
+ #include "KeysReef.h"
+ #include "KeysReefDen.h"
++#include "KeysReefLife.h"
+ #include "KeysWrecks.h"
+ #include "KeysDiver.h"
+ #include "KeysBoatPawn.h"
+@@ -925,6 +926,28 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
+ 		break;
+ 	}
+ 	}
++	// (reeflinks R2) jacks and blue runners shadow a southern stingray digging in the sand: they come in low over it and
++	// pick at what its digging stirs up, then go their way when it stops
++	if ((S.Sp == Jack || S.Sp == Bluerunner) && S.HuntLeft <= 0)
++	{
++		static TMap<int32, FVector> Shadowing;
++		TArray<FVector> Rays;
++		KeysReefLife::DiggingRays(Rays);
++		const FVector* Near = nullptr;
++		for (const FVector& R : Rays) if (FVector::Dist(R, S.Center) < 40) { Near = &R; break; }
++		if (Near)
++		{
++			S.Goal = *Near + FVector(-S.Heading.X * .6, .7, -S.Heading.Z * .6);
++			S.GoalT = 1;
++			if (!Shadowing.Contains(S.Id))
++			{
++				Shadowing.Add(S.Id, *Near);
++				UE_LOG(LogTemp, Log, TEXT("KRSchools link shadow: a school of %s (%d) turns to the southern stingray digging at %.1f, %.1f, %.1f, %.1f m off (cause: the sand it throws up; effect: they come in low over it and pick at what it stirs up)"),
++					Sc.Key, S.Id, Near->X, Near->Y, Near->Z, FVector::Dist(*Near, S.Center));
++			}
++		}
++		else if (Shadowing.Remove(S.Id)) UE_LOG(LogTemp, Log, TEXT("KRSchools link shadow: the school of %s (%d) leaves the stingray (cause: it has stopped digging)"), Sc.Key, S.Id);
++	}
+ 	// predators go hunting: pick a school within reach, charge through it and out the far side
+ 	if (Sc.bPredator)
+ 	{

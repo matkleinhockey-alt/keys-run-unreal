@@ -124,6 +124,7 @@ namespace KeysReefLifeFishSergeant
 		S.Cruise = .3; S.Burst = 2.6; S.Roam = 1.5; S.Alt[0] = .1; S.Alt[1] = .3; S.Spacing = 2; S.Cull = 45;
 		S.bRows = true;
 		S.bHomeOnHead = true;               // the eggs are on a rock: he keeps station over a coral head
+		S.bEggs = true;                     // (reeflinks) the patch of purple eggs is drawn on the top of his head of coral
 		S.ChaseR = 2.5;                     // the ground he keeps round the eggs
 		S.FirstSight = TEXT("A sergeant major gone dark blue: a male guarding his eggs.");
 		return S;

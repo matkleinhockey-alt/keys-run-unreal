@@ -30,6 +30,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "KeysReefAudio.h"
+#include "KeysReefLife.h"
 
 namespace KeysReefDen
 {
@@ -624,6 +625,8 @@ namespace KeysReefDen
 			int32 Hunt = 0;              // the hunt with a grouper: 0 none, 1 it comes, 2 it shakes its head, 3 they hunt, 4 it leaves
 			FMember Buddy;
 			TArray<FMember> Clients;     // the fish at a shrimp's cleaning station
+			TArray<FVector> Stops;       // a hunt with the grouper: the feet of the coral heads round the hole it noses into
+			int32 StandBy = -1;          // the cleaning station: which client has the place in front of the shrimp
 			bool bInit = false, bSeen = false, bNightSaid = false, bWasNight = false, bShown = false, bScared = false, bStation = false;
 			FVector Where = FVector::ZeroVector;   // where its animal is now (the one to look at)
 			int32 LastCause = 0;         // 1 the diver, 2 the light
@@ -823,6 +826,35 @@ namespace KeysReefDen
 			return P;
 		}
 
+		// (reeflinks) where a moray hunting with a grouper works the rock: the feet of two or three solid coral heads 1.2 to
+		// 6 m from its hole, the point on each nearest the hole, a hand's width in (its head goes into the crevice)
+		void HuntStops(FLife& L, FHouse& H)
+		{
+			H.Stops.Reset();
+			if (!L.Reef) return;
+			const FDen& D = H.D;
+			struct FCand { FVector P; double Key; };
+			TArray<FCand> Cand;
+			const int32 CX = FMath::FloorToInt32(D.Mouth.X / ChunkM), CZ = FMath::FloorToInt32(D.Mouth.Z / ChunkM);
+			for (int32 cz = CZ - 1; cz <= CZ + 1; cz++)
+				for (int32 cx = CX - 1; cx <= CX + 1; cx++)
+					for (const AKeysReef::FInst& I : L.Reef->ChunkInstances(cx, cz))
+					{
+						if (I.Den || !AKeysReef::IsSolidCoral(I.Species)) continue;
+						const FVector C(I.X, I.Y, I.Z);
+						FVector Dir = Flat(D.Mouth - C);
+						const double Dd = Dir.Size();
+						if (Dd < 1.2 || Dd > 6) continue;
+						Dir /= Dd;
+						const double R = FMath::Clamp(.35 * FMath::Max(I.SX, I.SZ), .2, 1.0);
+						FVector P = C + Dir * (R - .1);
+						P.Y = FloorNear(P.X, P.Z) + .1;
+						Cand.Add({P, Hash01(D.Seed ^ uint32(Cand.Num() * 2654435761u), 371) + Dd * .1});
+					}
+			Cand.Sort([](const FCand& A, const FCand& B) { return A.Key < B.Key; });
+			for (int32 i = 0; i < FMath::Min(3, Cand.Num()); i++) H.Stops.Add(Cand[i].P);
+		}
+
 		void TickMoray(FLife& L, FHouse& H, bool bMove)
 		{
 			const FWorldNow& W = L.W;
@@ -867,8 +899,10 @@ namespace KeysReefDen
 			}
 			else if (H.State == 1 || H.State == 2)
 			{
-				const int32 NStops = H.Hunt == 3 ? 2 : 3;
-				FVector Goal = H.State == 2 ? Door + D.Axis * .35 : MorayStop(H, Me.Step);
+				const int32 NStops = H.Hunt == 3 ? FMath::Max(2, H.Stops.Num()) : 3;
+				// (reeflinks) hunting with the grouper it works the rock: its stops are the feet of the coral heads round
+				// its hole, where it noses into the crevices
+				FVector Goal = H.State == 2 ? Door + D.Axis * .35 : (H.Hunt == 3 && H.Stops.IsValidIndex(Me.Step) ? H.Stops[Me.Step] : MorayStop(H, Me.Step));
 				const bool bHurry = Threat(L, Me.P, 1.0) != 0;
 				if (bHurry && H.State == 1) { H.State = 2; Me.Hold = 0; }
 				if (Me.Hold > 0)
@@ -885,7 +919,19 @@ namespace KeysReefDen
 					if (SwimTo(Me, Aim, bHurry ? .7 : .26, 1.6, Dt, .3))
 					{
 						if (H.State == 2) { H.State = 3; H.StateT = 0; }
-						else Me.Hold = 3 + Hash01(D.Seed, 340 + Me.Step) * 3;
+						else
+						{
+							Me.Hold = 3 + Hash01(D.Seed, 340 + Me.Step) * 3;
+							if (H.Hunt == 3)
+							{
+								// its head into the rock: what hides there bolts, and the grouper over it waits for that
+								Me.Hold += 2;
+								L.Links[0]++;
+								if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link hunt: the %s noses into the rock at %.1f, %.1f, %.1f (stop %d of %d, %.1f m from its hole) while the grouper waits over it (cause: they hunt together); effect: the small fish near bolt"),
+									ResName(D.Res), Me.P.X, Me.P.Y, Me.P.Z, Me.Step + 1, NStops, FVector::Dist(Me.P, D.Mouth));
+								KeysReefLife::Alarm(Me.P, 5.0, FString::Printf(TEXT("a %s hunting through the rock with a grouper waiting over it"), ResName(D.Res)));
+							}
+						}
 					}
 					Me.P.Y = FMath::Max(Me.P.Y, FloorNear(Me.P.X, Me.P.Z) + .1);
 				}
@@ -917,13 +963,16 @@ namespace KeysReefDen
 				const FVector NeckBase = Door + D.Axis * OutLen;
 				const FVector Neck = NeckBase + Up3() * (Lift * Md.Len * .1);
 				Path.Add(Neck);
+				// (reeflinks) the body lies along the floor of the hole, level, and runs straight back into the dark with a
+				// rope's loose curl from side to side; before, it followed the opening's own tilt and came down out of the
+				// roof of a ledge
+				const FVector In = Flat(-D.Axis).GetSafeNormal(.0001, -D.Axis);
+				const double Curl = FMath::Clamp(D.W * .22, .03, .1);
 				for (int32 i = 1; i <= Md.NSeg; i++)
 				{
-					const double Back = i * Md.SegL;
-					FVector Q = NeckBase - D.Axis * Back;
-					Q.Y = FMath::Max(LieY, Neck.Y - Back * .5);
-					if (Q.Y > LieY + 1e-3) Q = Neck - Fwd * Back * .9 + FVector(0, -Back * .2, 0);
-					Q.Y = FMath::Max(Q.Y, LieY);
+					const double Back = i * Md.SegL, K = Back / Md.Len;
+					FVector Q = NeckBase + In * Back + D.Right * (Curl * FMath::Sin(K * 7.5 + Me.Seed * 6 + H.T * .2) * FMath::Min(1.0, K * 3));
+					Q.Y = LieY + (Neck.Y - LieY) * FMath::Max(0.0, 1 - Back / (2.2 * Md.SegL));
 					Path.Add(Q);
 				}
 				DrawMoray(L, H, Neck, Fwd, Path, H.Gape, true);
@@ -934,6 +983,22 @@ namespace KeysReefDen
 			{
 				const FVector Fwd = Me.Hold > 0 ? (Me.Fwd + FVector(0, -.45 - .15 * FMath::Sin(H.T * 3), 0)).GetSafeNormal() : Me.Fwd;
 				TrailPath(H, Md, Me.P, Path);
+				// (reeflinks) a swimming moray throws its whole length into waves, head to tail; at a stop the waves slow
+				// and the body lies in loose bends
+				if (H.State != 3)
+				{
+					const double Amp = Md.Len * (Me.Hold > 0 ? .05 : .075), Rate = Me.Hold > 0 ? 1.2 : 4.2;
+					TArray<FVector> Bent = Path;
+					for (int32 i = 1; i < Path.Num(); i++)
+					{
+						const FVector Dir = (Path[i - 1] - Path[i]).GetSafeNormal(.0001, Me.Fwd);
+						const FVector Sd = FVector::CrossProduct(Up3(), Dir).GetSafeNormal(.0001, D.Right);
+						const double K = double(i) / Md.NSeg;
+						Bent[i] = Path[i] + Sd * (FMath::Sin(H.T * Rate - K * 2 * PI * 1.2 + Me.Seed * 4) * Amp * FMath::Min(1.0, K * 2.5));
+						Bent[i].Y = FMath::Max(Bent[i].Y, FloorNear(Bent[i].X, Bent[i].Z) + Md.Ht * .5);
+					}
+					Path = MoveTemp(Bent);
+				}
 				// (a swimming moray rolls a little with each wave of its body)
 				DrawMoray(L, H, Me.P, Fwd, Path, H.Gape, H.State == 3, .12 * FMath::Sin(H.T * 2.4));
 				H.Where = Me.P;
@@ -970,6 +1035,7 @@ namespace KeysReefDen
 				if (Gr.T > 2.6)
 				{
 					H.Hunt = 3;
+					HuntStops(L, H);
 					if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link hunt: the grouper shakes its head at the hole at %.1f, %.1f (effect: the moray comes out and they hunt the bottom together, the grouper above it)"), D.Mouth.X, D.Mouth.Z);
 				}
 			}
@@ -1123,7 +1189,9 @@ namespace KeysReefDen
 			// spot, 3 spread over it, 4 crawling home
 			H.NightK += FMath::Clamp((W.bNight ? 1.0 : 0.0) - H.NightK, -Dt * .4, Dt * .4);
 			H.StateT += Dt;
-			const FVector In = Sill - D.Axis * (.13 * S) + Up3() * (.03 * S), OutSeat = Sill + D.Axis * (.16 * S) + Up3() * (.03 * S);
+			// (reeflinks) by day it sits back in the den, so no more than an eye and the tips of two or three arms show at
+			// the opening (it was a whole head at the lip)
+			const FVector In = Sill - D.Axis * (.24 * S) + Up3() * (.02 * S), OutSeat = Sill + D.Axis * (.16 * S) + Up3() * (.03 * S);
 			if (H.State == 0)
 			{
 				H.Out += FMath::Clamp((H.bScared ? 0.0 : 1.0) - H.Out, -Dt * 2.5, Dt * .3);
@@ -1157,7 +1225,9 @@ namespace KeysReefDen
 			const double Sh = bOutside ? 1 : ShadeAt(D, Me.P + D.Axis * .05);
 			// the mantle stands up behind the head when it sits, lies back when it crawls
 			const double Breathe = 1 + .06 * FMath::Sin(H.T * 1.9);
-			Put(L, POctoBody, Me.P, Face(Me.Fwd, Up3()), FVector(S * 1.15, S * 1.15 * Breathe, S * 1.15 * Breathe), Sh);
+			// (in the den it lies turned a little, one eye toward the opening, flattened under the roof)
+			const FVector BodyFwd = bOutside ? Me.Fwd : (Me.Fwd + D.Right * (Me.Seed > .5 ? .55 : -.55)).GetSafeNormal();
+			Put(L, POctoBody, Me.P, Face(BodyFwd, Up3()), FVector(S * 1.15, S * 1.15 * Breathe, S * 1.15 * Breathe * (bOutside ? 1 : .8)), Sh);
 			// arms: by day one or two trail out over the sill and the rest are coiled inside; out in the open all eight
 			// lie spread round it, and wider when it has pounced
 			const double ArmL = .46 * S;
@@ -1298,7 +1368,10 @@ namespace KeysReefDen
 				else if (SwimTo(Me, Rest, .3, 1.2, Dt, .08)) Me.Mode = 0;
 				const bool bAsleep = Me.Mode == 0;
 				// (a body this long is shaded as one: by where its shoulders are)
-				Put(L, PNurse, Me.P, Face(Me.Fwd), FVector(Len), bAsleep ? FMath::Max(.45, ShadeAt(D, Me.P + Me.Fwd * Len * .1)) : 1, bAsleep ? .012 : .26, bAsleep ? .8 : 2.6, H.T * 2.6, 0, Me.Seed);
+				// (reeflinks) the school mesh is a slim shark: a nurse shark is broad and heavy, so it is drawn a third wider and
+				// a fifth deeper; asleep it lies in a slow curve, the tail swept to one side, and breathes
+				const double Curve = bAsleep ? (Me.Seed > .5 ? .38 : -.38) : 0;
+				Put(L, PNurse, Me.P, Face(Me.Fwd), FVector(Len, Len * 1.35, Len * 1.2), bAsleep ? FMath::Max(.45, ShadeAt(D, Me.P + Me.Fwd * Len * .1)) : 1, bAsleep ? .02 : .26, bAsleep ? 1.1 : 2.6, H.T * 2.6, Curve, Me.Seed);
 				H.Where = bAsleep ? Me.P - Me.Fwd * Len * .3 : Me.P;
 				return;
 			}
@@ -1378,21 +1451,51 @@ namespace KeysReefDen
 			// ---- the cleaning station: open by day while the shrimp is out and no diver is within 2.5 m
 			const bool bDiverNear = W.bDiver && !W.bCalm && FVector::Dist(W.Diver, D.Mouth) < 2.5;
 			const bool bOpen = !W.bNight && H.Out > .8 && !bDiverNear;
+			// (reeflinks) one place in front of the shrimp: the first client takes it and holds still to be cleaned; the next
+			// waits its turn a metre off, facing the hole. The clients: a grunt, and a young black grouper
 			int32 Posing = 0, Fled = 0;
+			if (H.StandBy >= 0 && (!H.Clients.IsValidIndex(H.StandBy) || (H.Clients[H.StandBy].Mode != 1 && H.Clients[H.StandBy].Mode != 2))) H.StandBy = -1;
 			for (int32 c = 0; c < H.Clients.Num(); c++)
 			{
 				FMember& Cl = H.Clients[c];
 				Cl.T += Dt;
-				const FVector Stand = D.Mouth + D.Axis * (.3 + .14 * c) + D.Right * ((c ? -.13 : .1)) + Up3() * (D.H * .12 + .04 * c);
+				const TCHAR* Kind = c == 1 ? TEXT("young black grouper") : TEXT("grunt");
+				const FVector Stand = D.Mouth + D.Axis * (.24 + Cl.Size * .45) + Up3() * (D.H * .12 + Cl.Size * .15);
+				const FVector Queue = D.Mouth + D.Axis * (1.1 + Cl.Size) + D.Right * (c ? -.6 : .6) + Up3() * .35;
 				const FVector Far = D.Mouth + D.Axis * 4.5 + D.Right * (c ? -3.0 : 2.5) + Up3() * 1.2;
 				double Amp = .3, Freq = 5;
 				FVector Fw = Cl.Fwd;
 				if (Cl.Mode == 0)
 				{
-					// away: it comes when the station is open and its turn is up
+					// away: it comes when the station is open and its time is up
 					Cl.Hold -= Dt;
-					if (bOpen && Cl.Hold <= 0 && bMove) { Cl.Mode = 1; Cl.P = Far; Cl.Fwd = (Stand - Far).GetSafeNormal(); }
+					if (bOpen && Cl.Hold <= 0 && bMove)
+					{
+						Cl.P = Far; Cl.Fwd = (Stand - Far).GetSafeNormal();
+						if (H.StandBy < 0) { Cl.Mode = 1; H.StandBy = c; }
+						else
+						{
+							Cl.Mode = 4;
+							if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link clean: a %s comes to the banded coral shrimp's station at %.1f, %.1f but a %s is being cleaned (cause: one place in front of the shrimp); effect: it waits its turn a metre off"), Kind, D.Mouth.X, D.Mouth.Z, H.StandBy == 1 ? TEXT("young black grouper") : TEXT("grunt"));
+						}
+					}
 					else continue;
+				}
+				if (Cl.Mode == 4)
+				{
+					// waiting its turn, facing the hole
+					if (!bOpen) { Cl.Mode = 3; Fled++; }
+					else if (H.StandBy < 0)
+					{
+						Cl.Mode = 1; H.StandBy = c;
+						if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link clean: the %s waiting at the station at %.1f, %.1f goes in (cause: the place in front of the shrimp is free)"), Kind, D.Mouth.X, D.Mouth.Z);
+					}
+					else
+					{
+						SwimTo(Cl, Queue, .35, 2.0, Dt, .1);
+						if ((Cl.P - Queue).Size() < .3) { Cl.Fwd = FMath::Lerp(Cl.Fwd, (D.Mouth - Cl.P).GetSafeNormal(), FMath::Min(1.0, Dt * 2)).GetSafeNormal(); Amp = .12; Freq = 3; }
+						Fw = Cl.Fwd;
+					}
 				}
 				if (Cl.Mode == 1)
 				{
@@ -1400,7 +1503,7 @@ namespace KeysReefDen
 					else if (SwimTo(Cl, Stand, .45, 2.0, Dt, .06))
 					{
 						Cl.Mode = 2; Cl.Hold = 8 + Cl.Seed * 6; L.Links[2]++;
-						if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link clean: a grunt stops at the banded coral shrimp's hole at %.1f, %.1f and holds still, head up, to be cleaned (cause: the shrimp is out with its feelers waving, by day, hour %.1f, no diver within 2.5 m)"), D.Mouth.X, D.Mouth.Z, W.Hour);
+						if (W.bScript) UE_LOG(LogTemp, Log, TEXT("KRDen link clean: a %s stops at the banded coral shrimp's hole at %.1f, %.1f and holds still, head up, fins spread, to be cleaned (cause: the shrimp is out with its feelers waving, by day, hour %.1f, no diver within 2.5 m)"), Kind, D.Mouth.X, D.Mouth.Z, W.Hour);
 					}
 				}
 				else if (Cl.Mode == 2)
@@ -1421,7 +1524,7 @@ namespace KeysReefDen
 					if (SwimTo(Cl, Far, bDiverNear ? 1.4 : .5, 2.5, Dt, .5)) { Cl.Mode = 0; Cl.Hold = 6 + Cl.Seed * 10; continue; }
 					Fw = Cl.Fwd;
 				}
-				Put(L, PClient, Cl.P, Face(Fw), FVector(Cl.Size), 1, Amp, Freq, Cl.T * Freq, 0, Cl.Seed);
+				Put(L, c == 1 ? PGrouper : PClient, Cl.P, Face(Fw), FVector(Cl.Size), 1, Amp, Freq, Cl.T * Freq, 0, Cl.Seed);
 			}
 			if (Fled)
 			{
@@ -1497,7 +1600,7 @@ namespace KeysReefDen
 			if (D.Res == Shrimp)
 			{
 				H.Clients.SetNum(2);
-				for (int32 c = 0; c < 2; c++) { H.Clients[c].Seed = Hash01(D.Seed, 380 + c); H.Clients[c].Size = .2 + H.Clients[c].Seed * .07; H.Clients[c].Hold = 2 + c * 7 + H.Clients[c].Seed * 4; }
+				for (int32 c = 0; c < 2; c++) { H.Clients[c].Seed = Hash01(D.Seed, 380 + c); H.Clients[c].Size = c == 1 ? .45 + H.Clients[c].Seed * .15 : .2 + H.Clients[c].Seed * .07; H.Clients[c].Hold = 2 + c * 4 + H.Clients[c].Seed * 3; }
 			}
 			// at night it is found already out
 			if (L.W.bNight && (D.Res == GreenMoray || D.Res == SpottedMoray)) H.StateT = 6;
@@ -1675,8 +1778,15 @@ namespace KeysReefDen
 	{
 		if (A[0] == TEXT("hunt"))
 		{
-			// the grouper comes for the nearest green moray that hunts with one, now
+			// the grouper comes for the nearest green moray that hunts with one, now. (reeflinks) 'hunt near': the nearest
+			// green moray of all is made one that a grouper hunts with, for this session (test hook: the hunt is the rule's)
 			L->bForceHunt = true;
+			if (A.Num() > 1 && A[1] == TEXT("near"))
+			{
+				FHouse* Best = nullptr;
+				for (TPair<int64, FHouse>& Kv : L->Houses) if (Kv.Value.D.Res == GreenMoray && (!Best || Kv.Value.Dist < Best->Dist)) Best = &Kv.Value;
+				if (Best) { Best->D.bBuddy = true; UE_LOG(LogTemp, Log, TEXT("KRDen hunt near (test hook): the green moray at %.1f, %.1f (%.1f m of water, %.1f m off) gets a grouper to hunt with"), Best->D.Mouth.X, Best->D.Mouth.Z, Best->D.Depth, Best->Dist); }
+			}
 			for (TPair<int64, FHouse>& Kv : L->Houses) if (Kv.Value.D.bBuddy) Kv.Value.NextHunt = 0;
 			UE_LOG(LogTemp, Log, TEXT("KRDen hunt: asked for now"));
 			return true;

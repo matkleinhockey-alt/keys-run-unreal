@@ -575,6 +575,7 @@ namespace KeysReefLifeVisitors
 			S.LimbWave = .7;
 			S.Bury = .75;
 			S.DigEvery = 150;
+			S.bShadows = true;              // (reeflinks) the jacks come to pick over the sand it throws up
 		}
 	}
 	static FSpecies MakeRay()
@@ -623,6 +624,7 @@ namespace KeysReefLifeVisitors
 				S.BreathEvery = 240;
 			}
 			S.BreathSecs = 5;
+			S.RestEvery = 420;              // (reeflinks) after a spell of feeding by day, a rest under a ledge till it needs air
 			S.bBitesBottom = true;
 			S.BiteTilt = 36;
 		}
