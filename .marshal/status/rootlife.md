@@ -8,7 +8,7 @@ Evidence lives in `/Users/mat/Documents/Unreal Projects/KeysRun-devkit/lanes/Key
 (script in the log's command line), pfA*/pfB* the frame-time pairs (A root life on, B `-KRNoRootLife`), cls the classic map.
 
 ## Round 2 (the marshal's three points)
-1. Growth as a crust - done (2c2a7f0 and the next commit): every piece now sits on one side of the root, small (oyster clumps
+1. Growth as a crust - done (be2c738, dfc58cf): every piece now sits on one side of the root, small (oyster clumps
    of three rounded shells lying on the bark, 3-10 cm; fire sponge as three irregular lobes and a vent; tunicates as five-bead
    bunches; algae as small tufts; barnacles a thin pale band 4-10 cm long; anemones 5-8 cm), scale 0.6-1.15 of the root,
    rotated all round the root (about half toward the open water), one per station every 5-12 cm, two per station and larger
