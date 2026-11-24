@@ -24,6 +24,7 @@
 #include "HAL/PlatformTime.h"
 #include "Misc/CommandLine.h"
 #include "KeysReefAudio.h"
+#include "KeysBait.h"
 
 using namespace KeysGeo;
 
@@ -52,7 +53,9 @@ namespace
 		double Cruise, Burst, Accel, Spacing, DiverR, DMin, DMax, AltMin, AltMax, Roam;
 		bool bPredator;
 	};
-	enum ESp { Silverside, Herring, Schoolmaster, Grunt, Lane, Yellowtail, Grouper, RedGrouper, Barracuda, Bonefish, Permit, Bluerunner, Jack, Blacktip, Bullshark, NumSpec };
+	enum ESp { Silverside, Herring, Schoolmaster, Grunt, Lane, Yellowtail, Grouper, RedGrouper, Barracuda, Bonefish, Permit, Bluerunner, Jack, Blacktip, Bullshark,
+		// the deep bait balls (KeysBait.h): offshore bait, and the big fish that work it
+		Ballyhoo, Sardine, Scad, Flyingfish, Blackfin, Skipjack, Mahi, Sailfish, Kingfish, Wahoo, Silky, Dolphin, NumSpec };
 	const FSpec Specs[NumSpec] = {
 		// key              role           len         n          subs    cruise burst accel spacing diverR  dmin dmax  alt          roam  pred
 		{TEXT("silverside"), ERole::Bait,   .09, .12,  320, 520,  6, 8,  .5,  2.8, 3.0, 2.3, 4.5,  2.2, 3000, 1.2, 3.5,  22, false},
@@ -70,6 +73,18 @@ namespace
 		{TEXT("jackcrevalle"), ERole::Hunter, .6, .85, 4, 7,      0, 1,  .95, 5.0, 3.0, 2.0, 3,    1,   3000, .8, 4.0,   60, true},
 		{TEXT("blacktip"),   ERole::Patrol, 1.5, 1.9,  1, 1,      0, 0,  .9,  3.2, 1.4, 1,   1.5,  .8,  30, .4, 2.5,   90, true},
 		{TEXT("bullshark"),  ERole::Patrol, 2.0, 2.4,  1, 1,      0, 0,  .8,  3.0, 1.2, 1,   1.5,  4,   45, .6, 4,     90, true},
+		{TEXT("ballyhoo"),   ERole::Bait,   .22, .32,  180, 280,  4, 6,  .6,  3.2, 3.0, 2.3, 4.5,  6,   3000, 1.5, 4,   30, false},
+		{TEXT("sardine"),    ERole::Bait,   .12, .17,  240, 360,  6, 8,  .55, 2.9, 3.0, 2.2, 4.5,  6,   3000, 1.5, 4,   30, false},
+		{TEXT("scad"),       ERole::Bait,   .15, .2,   200, 320,  5, 7,  .6,  3.0, 3.0, 2.2, 4.5,  6,   3000, 1.5, 4,   30, false},
+		{TEXT("flyingfish"), ERole::Bait,   .2, .28,   20, 36,    0, 1,  .9,  4.0, 3.0, 3.2, 5,    25,  3000, 1.0, 3,   60, false},
+		{TEXT("blackfin"),   ERole::Worker, .5, .75,   6, 12,     0, 1,  1.7, 8.0, 4.5, 2.4, 5,    6,   3000, 1.0, 4,   40, true},
+		{TEXT("skipjack"),   ERole::Worker, .45, .65,  8, 16,     0, 1,  1.8, 8.5, 4.5, 2.2, 5,    6,   3000, 1.0, 4,   40, true},
+		{TEXT("mahi"),       ERole::Worker, .8, 1.3,   3, 6,      0, 0,  1.5, 7.0, 3.5, 2.6, 4,    6,   3000, 1.0, 4,   40, true},
+		{TEXT("sailfish"),   ERole::Worker, 1.9, 2.6,  1, 3,      0, 0,  1.0, 9.0, 2.6, 2.2, 4,    6,   3000, 1.0, 4,   40, true},
+		{TEXT("kingfish"),   ERole::Worker, 1.0, 1.4,  2, 4,      0, 0,  1.3, 9.5, 3.5, 3.0, 4,    6,   3000, 1.0, 4,   40, true},
+		{TEXT("wahoo"),      ERole::Worker, 1.3, 1.8,  1, 2,      0, 0,  1.5, 11,  4.0, 3.5, 4,    6,   3000, 1.0, 4,   40, true},
+		{TEXT("silky"),      ERole::Worker, 1.8, 2.4,  1, 1,      0, 0,  .9,  3.5, 1.2, 4,   3,    6,   3000, 1.0, 4,   40, true},
+		{TEXT("dolphin"),    ERole::Worker, 2.2, 2.7,  4, 7,      0, 0,  1.8, 6.5, 2.5, 2.2, 5,    6,   3000, 1.0, 4,   40, true},
 	};
 	// how each species carries itself, on top of its speeds above:
 	//   Flex     how far the school gives to the water round it (0 holds its shape, 1 pours into whatever room there is)
@@ -97,6 +112,18 @@ namespace
 		/* jack */       {.45,  2.0, 1.0,  .8,   1.25,   .8,  1.2,  .1,   .4},    // a heavy, purposeful pack that keeps its shape
 		/* blacktip */   {0,    1,   1,    0,    1,      .7,  .9,   .1,   0},
 		/* bullshark */  {0,    1,   1,    0,    1,      .5,  .7,   .1,   0},
+		/* ballyhoo */   {1.0,  2.2, .7,   1.0,  1.25,   1.0, 1.2,  .1,   .9},    // slim and quick, the ball drawn out a little
+		/* sardine */    {1.0,  2.6, .8,   1.1,  1.05,   1.2, 1.4,  .1,   1.3},   // a tight round ball, flickering
+		/* scad */       {1.0,  2.4, .8,   1.0,  1.1,    1.1, 1.3,  .1,   1.1},
+		/* flyingfish */ {.9,   2.0, .7,   .8,   1.3,    1.0, 1.2,  .12,  .6},
+		/* blackfin */   {.5,   2.5, 1.2,  1.0,  1.3,    1.0, 1.6,  .1,   .5},    // a fast pack
+		/* skipjack */   {.5,   2.6, 1.2,  1.0,  1.3,    1.1, 1.7,  .1,   .6},
+		/* mahi */       {.6,   2.2, 1.0,  .8,   1.2,    1.2, 1.6,  .12,  .4},
+		/* sailfish */   {.3,   1,   1,    0,    1,      .5,  1.1,  .1,   0},
+		/* kingfish */   {.4,   1.5, 1,    .6,   1.3,    .6,  1.0,  .1,   .2},
+		/* wahoo */      {.3,   1,   1,    0,    1.3,    .5,  1.0,  .1,   0},
+		/* silky */      {0,    1,   1,    0,    1,      .5,  .7,   .1,   0},
+		/* dolphin */    {.5,   1.5, 1,    .6,   1.2,    .8,  1.1,  .1,   0},
 	};
 	int32 SpecIndex(const FString& K) { for (int32 i = 0; i < NumSpec; i++) if (K == Specs[i].Key) return i; return -1; }
 
@@ -112,7 +139,10 @@ namespace
 			{TEXT("Hawk Channel"), .58, {{Herring, 5}, {Silverside, 4.5}, {Grunt, 2}, {Schoolmaster, 1}, {Lane, 1.5}, {RedGrouper, .8}, {Barracuda, 1}, {Bluerunner, 1.2}, {Bullshark, .2}}},
 			{TEXT("Reef"), .78, {{Silverside, 6}, {Herring, 4.5}, {Schoolmaster, 3}, {Grunt, 3}, {Lane, 2}, {Yellowtail, 2}, {Grouper, 1.2}, {RedGrouper, .8}, {Barracuda, 1.5}, {Bluerunner, 1.5}, {Jack, .8}, {Blacktip, .3}, {Bullshark, .25}}},
 			// blue water: bait balls up in the top of the water column, with the runners and jacks that work them
-			{TEXT("Offshore"), .3, {{Herring, 6}, {Silverside, 4}, {Bluerunner, 1.6}, {Jack, .8}}},
+			// (the deep bait balls and their predators are dealt on their own, below: Populate, DealSites. Between them a
+			// few small schools of flying fish and ballyhoo; the herring, silversides, runners and jacks this row used to
+			// deal are inshore and reef fish, not the Gulf Stream's)
+			{TEXT("Offshore"), .1, {{Flyingfish, 5}, {Ballyhoo, 2.5}}},
 		};
 		return M;
 	}
@@ -176,13 +206,26 @@ namespace
 		/* jack */       {3.2,  1.05, 1.0,  .45,   2.2, .8,  0,   6},   // loose jacks: wide spacing, a looser pack
 		/* blacktip */   {1,    1,    0,    0,     1,   .9,  0,   0},
 		/* bullshark */  {1,    1,    0,    0,     1,   .9,  0,   0},
+		/* ballyhoo */   {3.0,  .85,  2.0,  1.3,   3.0, .55, 1,   8},
+		/* sardine */    {3.0,  .85,  2.2,  1.4,   3.0, .5,  1,   8},
+		/* scad */       {3.0,  .85,  2.1,  1.35,  3.0, .5,  1,   8},
+		/* flyingfish */ {3.0,  .9,   1.4,  .9,    2.5, .6,  0,   6},
+		/* blackfin */   {3.0,  .95,  1.4,  .7,    2.5, .9,  0,   6},
+		/* skipjack */   {3.0,  .95,  1.4,  .7,    2.5, .9,  0,   6},
+		/* mahi */       {3.0,  1.0,  1.2,  .6,    2.4, .9,  0,   5},
+		/* sailfish */   {2.5,  1.0,  .6,   .3,    2.0, .9,  0,   3},
+		/* kingfish */   {3.0,  1.0,  1.0,  .5,    2.2, .9,  0,   4},
+		/* wahoo */      {2.5,  1.0,  .8,   .4,    2.0, .9,  0,   3},
+		/* silky */      {1,    1,    0,    0,     1,   .9,  0,   0},
+		/* dolphin */    {3.0,  1.0,  1.2,  .6,    2.2, .9,  0,   5},
 	};
 	// a species' sight in meters (the neighbour grid's cell size for it)
 	double SightM(int32 Sp) { return FMath::Max(.3, Boids[Sp].Sight * Specs[Sp].Spacing * (Specs[Sp].LenMin + Specs[Sp].LenMax) * .5); }
 	bool Lives(ERole R) { return R == ERole::Reef || R == ERole::Hole || R == ERole::Flats; }   // its depth is height above the bottom
 	int64 GridKey(int32 Sp, int32 X, int32 Y, int32 Z)
 	{
-		return (int64(Sp & 0xf) << 60) | (int64((X + (1 << 19)) & 0xfffff) << 40) | (int64((Y + (1 << 19)) & 0xfffff) << 20) | int64((Z + (1 << 19)) & 0xfffff);
+		// (five bits of species since the deep bait balls took it past 16; 19 bits a coordinate is 150 km at the smallest cell)
+		return (int64(Sp & 0x1f) << 57) | (int64((X + (1 << 18)) & 0x7ffff) << 38) | (int64((Y + (1 << 18)) & 0x7ffff) << 19) | int64((Z + (1 << 18)) & 0x7ffff);
 	}
 	FVector D2U(const FVector& D) { return FVector(D.X, D.Z, D.Y); }
 	double Hyp(double A, double B) { return FMath::Sqrt(A * A + B * B); }
@@ -321,7 +364,17 @@ int32 AKeysSchools::PoolFor(int32 Sp, int32 Lod)
 	if (!MID) return -1;
 	const double BuildT0 = FPlatformTime::Seconds();
 	FKeysMesh M;
-	if (!AKeysLife::BuildSchoolMesh(Specs[Sp].Key, M, Lod)) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: no model for %s"), Specs[Sp].Key); PoolKey.Add(Key); PoolDirty.Add(false); Pools.Add(nullptr); return -1; }
+	if (!KeysBait::BuildMesh(Specs[Sp].Key, M, Lod) && !AKeysLife::BuildSchoolMesh(Specs[Sp].Key, M, Lod)) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: no model for %s"), Specs[Sp].Key); PoolKey.Add(Key); PoolDirty.Add(false); Pools.Add(nullptr); return -1; }
+	UInstancedStaticMeshComponent* C = MakePool(FString::Printf(TEXT("%s_%d"), Specs[Sp].Key, Lod), M, true);
+	Pools.Add(C);
+	PoolKey.Add(Key);
+	PoolDirty.Add(false);
+	UE_LOG(LogTemp, Log, TEXT("KRSchools: %s lod %d, %d triangles, built in %.1f ms"), Specs[Sp].Key, Lod, M.T.Num() / 3, (FPlatformTime::Seconds() - BuildT0) * 1000);
+	return Pools.Num() - 1;
+}
+
+UInstancedStaticMeshComponent* AKeysSchools::MakePool(const FString& Name, FKeysMesh& M, bool bShadow)
+{
 	M.SyncKinds();
 	// normalize: nose at +X 50, tail at -50, whatever the species' length
 	double MinX = 1e9, MaxX = -1e9;
@@ -358,7 +411,7 @@ int32 AKeysSchools::PoolFor(int32 Sp, int32 Lod)
 		const bool bFlip = FVector::DotProduct(Fn, M.N[A] + M.N[B] + M.N[Cc]) > 0;
 		MD.CreateTriangle(Grp, {Inst[A], Inst[bFlip ? Cc : B], Inst[bFlip ? B : Cc]});
 	}
-	UStaticMesh* SM = NewObject<UStaticMesh>(this, *FString::Printf(TEXT("Fish_%s_%d"), Specs[Sp].Key, Lod));
+	UStaticMesh* SM = NewObject<UStaticMesh>(this, *FString::Printf(TEXT("Fish_%s"), *Name));
 	SM->GetStaticMaterials().Add(FStaticMaterial(MID, FName(TEXT("Mat"))));
 	SM->SetPositiveBoundsExtension(FVector(BoundsExt));
 	SM->SetNegativeBoundsExtension(FVector(BoundsExt));
@@ -369,21 +422,17 @@ int32 AKeysSchools::PoolFor(int32 Sp, int32 Lod)
 	SM->BuildFromMeshDescriptions({&MD}, P);
 	SM->CalculateExtendedBounds();
 	Meshes.Add(SM);
-	UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this, *FString::Printf(TEXT("FishPool_%s_%d"), Specs[Sp].Key, Lod));
+	UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this, *FString::Printf(TEXT("FishPool_%s"), *Name));
 	C->SetStaticMesh(SM);
 	C->SetupAttachment(Root);
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	C->NumCustomDataFloats = 8;   // tail phase, its rate, when, amplitude, body bend, flash, shade, seed (M_KR_Boid)
-	C->SetCastShadow(true);
+	C->SetCastShadow(bShadow);
 	C->SetMaterial(0, MID);
 	C->SetCullDistances(0, int32(KeepR * 100));
 	C->bAffectDistanceFieldLighting = false;
 	C->RegisterComponent();
-	Pools.Add(C);
-	PoolKey.Add(Key);
-	PoolDirty.Add(false);
-	UE_LOG(LogTemp, Log, TEXT("KRSchools: %s lod %d, %d triangles, built in %.1f ms"), Specs[Sp].Key, Lod, M.T.Num() / 3, (FPlatformTime::Seconds() - BuildT0) * 1000);
-	return Pools.Num() - 1;
+	return C;
 }
 
 void AKeysSchools::FlushPools()
@@ -711,6 +760,8 @@ void AKeysSchools::Populate()
 	{
 		FSchool& S = Schools[i];
 		if (S.bPinned) continue;
+		// a deep ball's predators go with it
+		if (S.Site && !S.bBall && !Find(S.PreyId)) { Despawn(i); continue; }
 		const double DX = S.Center.X - Cam.X, DZ = S.Center.Z - Cam.Z, D = Hyp(DX, DZ);
 		if (D <= KeepR) continue;
 		// the bubble: an open-water school that swims out of it comes back in on the far side, just out of sight,
@@ -719,7 +770,7 @@ void AKeysSchools::Populate()
 		// Only one that left by its own swimming, and only into the kind of water it came from: a boat running off (or a
 		// teleport) used to drag the first bait balls it met along for good, from the marina to the reef to blue water,
 		// where they kept the fish budget full and the local schools never appeared.
-		if (bCamStill && D < KeepR + 40 && (Role == ERole::Bait || Role == ERole::Hunter || Role == ERole::Patrol))
+		if (bCamStill && !S.Site && D < KeepR + 40 && (Role == ERole::Bait || Role == ERole::Hunter || Role == ERole::Patrol))
 		{
 			const double NX = Cam.X - DX / D * KeepR * .9, NZ = Cam.Z - DZ / D * KeepR * .9;
 			if (ValidWater(S.Sp, NX, NZ) && ZoneAt(NX, NZ) == ZoneAt(S.Home.X, S.Home.Z))
@@ -750,6 +801,8 @@ void AKeysSchools::Populate()
 		}
 		if (Hyp((CX + .5) * CellSize - Cam.X, (CZ + .5) * CellSize - Cam.Z) > KeepR) It.RemoveCurrent();
 	}
+	// the deep bait balls round the camera: dealt, published, and put in the water near it
+	DealSites();
 	// the camera high above land or far out in the blue: nothing to do
 	if (Cam.Y > 120) return;
 	// a named reef within reach: its own schools, each at a spot of its own round the crest (the charted point is often
@@ -837,12 +890,14 @@ void AKeysSchools::Populate()
 				double Y;
 				// (bait hangs in mid-water; this line used to be overwritten by the else below, which left every ball on the bottom)
 				if (Role == ERole::Bait && Water <= 30) Y = FMath::Lerp(Top + Sc.AltMin, -1.0, .45);
+				else if (Sp == Flyingfish) Y = -.8 - 1.5 * KeysSea::HashCell(0x5c4f, CX, CZ, 13);   // flying fish keep just under the surface
 				else if (Role == ERole::Bait && Water > 30) Y = -5 - 9 * KeysSea::HashCell(0x5c4f, CX, CZ, 13);   // off soundings the bait is up top, where the birds can see it
 				else if (Role != ERole::Bait && Water > 45) Y = -6 - 10 * KeysSea::HashCell(0x5c4f, CX, CZ, 14);     // and so is what hunts it
 				else Y = Top + FMath::Lerp(Sc.AltMin, Sc.AltMax, .5);
 				Y = FMath::Min(Y, -.35 - .2 * FMath::Min(1.0, Water));
 				// a flats bait school is a small one
-				const double NScale = Role == ERole::Bait && DepthFast(BX, BZ) < 4 ? .35 : 1;
+				// (and a loose school of ballyhoo between the deep balls is a small one too)
+				const double NScale = Role == ERole::Bait && DepthFast(BX, BZ) < 4 ? .35 : Sp == Ballyhoo && Zone == TEXT("Offshore") ? .4 : 1;
 				if (FSchool* S = Spawn(Sp, FVector(BX, Y, BZ), Top, K, uint32(K * 2654435761u) ^ 0x9e37u, NScale)) Cells[K] = S->Id;
 			}
 	// wrecks: a school of grunts and snapper over the hull, a grouper beside it, a barracuda above, bait over it all
@@ -878,7 +933,8 @@ FVector AKeysSchools::PickGoal(FSchool& S)
 		double Y;
 		// off soundings the bait and what hunts it stay in the top of the water column (5 to 14 m, 6 to 16 m), as they
 		// are put there; their goals used to be picked between the surface and the bottom, 100 m down, and they sank away
-		if (Sc.Role == ERole::Bait && -Top > 30) Y = -S.Rng.FRandRange(5.0, 14.0);
+		if (S.Sp == Flyingfish) Y = -S.Rng.FRandRange(.8, 2.5);
+		else if (Sc.Role == ERole::Bait && -Top > 30) Y = -S.Rng.FRandRange(5.0, 14.0);
 		else if (Sc.Role == ERole::Hunter && -Top > 45) Y = -S.Rng.FRandRange(6.0, 16.0);
 		else if (Sc.Role == ERole::Bait || Sc.Role == ERole::Hunter || Sc.Role == ERole::Hanger) Y = FMath::Lerp(Top + Sc.AltMin + S.Radius * .5, -.8 - S.Radius * .5, S.Rng.FRandRange(.25, .7));
 		else Y = Top + S.Rng.FRandRange(Sc.AltMin, Sc.AltMax);
@@ -891,6 +947,7 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 {
 	const FSpec& Sc = Specs[S.Sp];
 	S.GoalT -= Dt;
+	if (Sc.Role == ERole::Worker) { StepWorker(S, Dt); return; }
 	switch (Sc.Role)
 	{
 	case ERole::Reef:
@@ -925,6 +982,12 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 		break;
 	}
 	}
+	// a deep ball being worked rises: from its own depth to balled up just under the surface as the work goes on
+	if (S.bBall)
+	{
+		const double Up = SurfY - .9 - S.Radius * .35;
+		S.Goal.Y = FMath::Lerp(S.BaseY, Up, FMath::SmoothStep(0.0, 1.0, S.Work));
+	}
 	// predators go hunting: pick a school within reach, charge through it and out the far side
 	if (Sc.bPredator)
 	{
@@ -949,6 +1012,359 @@ void AKeysSchools::MainGoal(FSchool& S, double Dt)
 			}
 		}
 	}
+}
+
+// ================================================================ the deep bait balls (KeysBait.h)
+// Dealt on a 170 m grid round the camera, a fresh deal every eight minutes or so per cell: off soundings (over 30 m of
+// water, in the Reef or Offshore zone) about one cell in four holds a ball, over the reef itself one in fourteen and a
+// small one, and none inshore of the reef. Each comes with its own bait and its own predators. Within 165 m of the
+// camera it is put in the water as boids - the ball, its predators, maybe a school of flying fish - and the rest of the
+// time it is only its birds and its fishing (KeysBait::Publish).
+namespace
+{
+	constexpr double SiteCell = 170, SiteLife = 480, SiteReach = 420, SitePutR = 165, BirdR = 800;
+	constexpr int32 NumTerns = 96, NumFrigates = 16;
+	// how each predator works a ball: the ring it circles at outside the ball (m), how far below it, how often it
+	// charges (s), and how far on it runs through and out the other side (m)
+	struct FWorkStyle { double Ring, Below, EveryMin, EveryMax, Through; };
+	FWorkStyle StyleOf(int32 Sp)
+	{
+		switch (Sp)
+		{
+		case Blackfin: return {7, 5, 3, 7, 8};          // packs crashing it from below
+		case Skipjack: return {6, 4, 2.5, 6, 8};
+		case Mahi:     return {5, 1.5, 3, 6, 6};        // a few, at its own depth, quick turns
+		case Sailfish: return {2.5, 0, 7, 14, 4};       // herding close round it, sail up, a slash now and then
+		case Kingfish: return {16, 2, 6, 12, 14};       // long fast runs through it from out wide
+		case Wahoo:    return {20, 2, 7, 14, 18};
+		case Silky:    return {9, 6, 14, 26, 8};        // slow circles underneath, a lazy pass
+		case Dolphin:  return {7, 4, 4, 8, 8};          // a pod driving it up from below
+		default:       return {6, 3, 4, 8, 8};
+		}
+	}
+	struct FPredOdds { int32 Sp; double P; };
+	const FPredOdds DeepOdds[] = {{Blackfin, .7}, {Skipjack, .4}, {Mahi, .45}, {Sailfish, .3}, {Kingfish, .3}, {Wahoo, .2}, {Silky, .12}, {Dolphin, .1}};
+	const FPredOdds ShoalOdds[] = {{Kingfish, .55}, {Blackfin, .45}, {Mahi, .1}};
+}
+
+bool AKeysSchools::SiteAt(int32 CX, int32 CZ, FSite& Out)
+{
+	const double Off = KeysSea::HashCell(0xba17, CX, CZ, 1);
+	const int32 W = FMath::FloorToInt32(NowT / SiteLife + Off);
+	const int64 Key = (int64(1) << 62) | (int64(CX & 0xfffff) << 38) | (int64(CZ & 0xfffff) << 18) | int64(W & 0x3ffff);
+	if (const TOptional<FSite>* Have = SiteCache.Find(Key))
+	{
+		if (!Have->IsSet()) return false;
+		Out = Have->GetValue();
+		return true;
+	}
+	if (SiteCache.Num() > 4000) SiteCache.Reset();
+	SiteCache.Add(Key);
+	auto H = [&](int32 Salt) { return KeysSea::HashCell(0xba17, CX, CZ, W * 64 + Salt); };
+	const double X = (CX + .15 + .7 * H(2)) * SiteCell, Z = (CZ + .15 + .7 * H(3)) * SiteCell;
+	if (LandH(X, Z) >= 0) return false;
+	const double D = DepthFast(X, Z);
+	const FString Zone = ZoneAt(X, Z);
+	if (Zone != TEXT("Offshore") && Zone != TEXT("Reef")) return false;
+	const bool bDeep = D > 30;
+	const double P = bDeep ? .26 : (Zone == TEXT("Reef") && D > 7) ? .07 : 0;
+	if (H(4) >= P) return false;
+	FSite S;
+	S.Key = Key;
+	S.X = X;
+	S.Z = Z;
+	S.bDeep = bDeep;
+	S.Phase = H(5);
+	S.NScale = bDeep ? 1 : .5;
+	S.Y = bDeep ? -6 - 8 * H(6) : -FMath::Clamp(D * .45, 2.5, 7.0);
+	const double B = H(7);
+	S.Bait = bDeep ? (B < .4 ? Ballyhoo : B < .75 ? Sardine : Scad) : (B < .5 ? Sardine : Ballyhoo);
+	S.Fly = bDeep && H(8) < .45 ? 1 : 0;
+	const int32 MaxG = bDeep ? 4 : 2;
+	auto Roll = [&](const FPredOdds* Odds, int32 N)
+	{
+		for (int32 k = 0; k < N && S.NPred < MaxG; k++)
+			if (H(10 + k) < Odds[k].P)
+			{
+				S.Pred[S.NPred] = Odds[k].Sp;
+				S.PredN[S.NPred] = FMath::RoundToInt32((Specs[Odds[k].Sp].NMin + Specs[Odds[k].Sp].NMax) * .5);
+				S.NPred++;
+			}
+		if (!S.NPred) { S.Pred[0] = Odds[0].Sp; S.PredN[0] = FMath::RoundToInt32((Specs[Odds[0].Sp].NMin + Specs[Odds[0].Sp].NMax) * .5); S.NPred = 1; }
+	};
+	if (bDeep) Roll(DeepOdds, int32(UE_ARRAY_COUNT(DeepOdds)));
+	else Roll(ShoalOdds, int32(UE_ARRAY_COUNT(ShoalOdds)));
+	SiteCache[Key] = S;
+	Out = S;
+	return true;
+}
+
+void AKeysSchools::SitesNear(double X, double Z, double R, TArray<FSite>& Out)
+{
+	const int32 X0 = FMath::FloorToInt32((X - R) / SiteCell), X1 = FMath::FloorToInt32((X + R) / SiteCell);
+	const int32 Z0 = FMath::FloorToInt32((Z - R) / SiteCell), Z1 = FMath::FloorToInt32((Z + R) / SiteCell);
+	for (int32 cz = Z0; cz <= Z1; cz++)
+		for (int32 cx = X0; cx <= X1; cx++)
+		{
+			FSite S;
+			if (SiteAt(cx, cz, S) && Hyp(S.X - X, S.Z - Z) <= R) Out.Add(S);
+		}
+}
+
+double AKeysSchools::SiteWork(const FSite& Si) const
+{
+	// a ball not yet in the water comes and goes on its own clock: pushed up and crashed for a while, then down and quiet
+	return FMath::Clamp(.45 + .8 * FMath::Sin(2 * PI * (NowT / 150.0 + Si.Phase)), 0.0, 1.0);
+}
+
+AKeysSchools::FSchool* AKeysSchools::RealiseSite(const FSite& Si, double Work)
+{
+	const double Top = TopAt(Si.X, Si.Z);
+	const double Y0 = FMath::Min(FMath::Max(Si.Y, Top + 3), -1.5);
+	const double Y = FMath::Lerp(Y0, SurfY - 2.0, FMath::SmoothStep(0.0, 1.0, Work));
+	const uint32 Seed = uint32(Si.Key * 2654435761ll) ^ 0x51u;
+	FSchool* B = Spawn(Si.Bait, FVector(Si.X, Y, Si.Z), Top, Si.Key, Seed, Si.NScale, true);
+	if (!B) return nullptr;
+	B->Site = Si.Key;
+	B->bBall = true;
+	B->Work = Work;
+	B->BaseY = Y0;
+	const int32 BallId = B->Id;
+	const FVector C = B->Center;
+	const double R = B->Radius;
+	int32 NPut = 0;
+	for (int32 g = 0; g < Si.NPred; g++)
+	{
+		const int32 Sp = Si.Pred[g];
+		const FWorkStyle St = StyleOf(Sp);
+		const double A = 2 * PI * (g + Si.Phase) / FMath::Max(1, Si.NPred);
+		const FVector P = C + FVector(FMath::Cos(A) * (R + St.Ring), -St.Below, FMath::Sin(A) * (R + St.Ring));
+		FSchool* W = Spawn(Sp, FVector(P.X, FMath::Max(P.Y, Top + 2), P.Z), Top, Si.Key, Seed + 977u * (g + 1), 1, true);
+		if (!W) continue;
+		W->Site = Si.Key;
+		W->PreyId = BallId;
+		W->Orbit = A;
+		W->Ring = St.Ring;
+		W->Below = St.Below;
+		W->HuntT = W->Rng.FRandRange(1.0, St.EveryMax);
+		NPut++;
+	}
+	if (Si.Fly)
+	{
+		const FVector P = C + FVector(14, 0, 6);
+		if (FSchool* F = Spawn(Flyingfish, FVector(P.X, SurfY - 1.2, P.Z), Top, Si.Key, Seed + 31u, 1, true)) { F->Site = Si.Key; F->PreyId = BallId; F->Home = C; }
+	}
+	FSchool* Ball = Find(BallId);
+	if (bScriptLog && Ball) UE_LOG(LogTemp, Log, TEXT("KRBait put a %s ball (%d fish) at %.0f %.1f %.0f in %.0f m of water, work %.2f, %d of %d predator groups"),
+		Specs[Ball->Sp].Key, Ball->Fish.Num(), Ball->Center.X, Ball->Center.Y, Ball->Center.Z, -Top, Work, NPut, Si.NPred);
+	return Ball;
+}
+
+void AKeysSchools::DealSites()
+{
+	TArray<KeysBait::FBall> Pub;
+	TSet<int64> Live;
+	auto Publish = [&](const FSchool& B)
+	{
+		KeysBait::FBall O;
+		O.Site = B.Site;
+		O.X = B.Center.X; O.Y = B.Center.Y; O.Z = B.Center.Z;
+		O.R = B.Radius;
+		O.Work = B.Work;
+		O.bLive = true;
+		O.bDeep = -B.HomeTop > 30;
+		O.Bait = Specs[B.Sp].Key;
+		for (const FSchool& W : Schools)
+			if (W.Site == B.Site && !W.bBall && W.PreyId == B.Id && W.Sp != Flyingfish)
+			{
+				TPair<FString, int32>* Have = O.Preds.FindByPredicate([&](const TPair<FString, int32>& P) { return P.Key == Specs[W.Sp].Key; });
+				if (Have) Have->Value += W.Fish.Num(); else O.Preds.Add({Specs[W.Sp].Key, W.Fish.Num()});
+			}
+		Pub.Add(MoveTemp(O));
+	};
+	for (const FSchool& B : Schools) if (B.bBall) { Live.Add(B.Site); Publish(B); }
+	TArray<FSite> Near;
+	SitesNear(Cam.X, Cam.Z, SiteReach, Near);
+	// a site the camera has left behind can be put again when it comes back
+	for (auto It = SiteDone.CreateIterator(); It; ++It)
+		if (!Live.Contains(*It) && !Near.ContainsByPredicate([&](const FSite& S) { return S.Key == *It && Hyp(S.X - Cam.X, S.Z - Cam.Z) < SitePutR + 60; })) It.RemoveCurrent();
+	for (const FSite& Si : Near)
+	{
+		if (Live.Contains(Si.Key)) continue;
+		const double W = SiteWork(Si);
+		if (Cam.Y < 120 && !SiteDone.Contains(Si.Key) && Hyp(Si.X - Cam.X, Si.Z - Cam.Z) < SitePutR)
+		{
+			SiteDone.Add(Si.Key);
+			if (const FSchool* B = RealiseSite(Si, W)) { Publish(*B); continue; }
+		}
+		KeysBait::FBall O;
+		O.Site = Si.Key;
+		O.X = Si.X; O.Y = Si.Y; O.Z = Si.Z;
+		O.R = 3;
+		O.Work = W;
+		O.bDeep = Si.bDeep;
+		O.Bait = Specs[Si.Bait].Key;
+		for (int32 g = 0; g < Si.NPred; g++) O.Preds.Add({Specs[Si.Pred[g]].Key, Si.PredN[g]});
+		Pub.Add(MoveTemp(O));
+	}
+	KeysBait::Publish(MoveTemp(Pub));
+}
+
+void AKeysSchools::StepWorker(FSchool& S, double Dt)
+{
+	const FSpec& Sc = Specs[S.Sp];
+	FSchool* Ball = Find(S.PreyId);
+	if (!Ball) { S.HuntLeft = 0; S.Goal = S.Center + Flat(S.Heading).GetSafeNormal() * 12; return; }
+	const FWorkStyle St = StyleOf(S.Sp);
+	const double R = Ball->Radius + S.Ring;
+	if (S.HuntLeft > 0)
+	{
+		// the charge: on the way in it keeps its line on the middle of the ball, then straight on and out the far side
+		S.HuntLeft -= Dt;
+		const FVector To = Ball->Center - S.Center;
+		if (FVector::DotProduct(To, S.HuntDir) > 1.5) S.HuntDir = To.GetSafeNormal();
+		S.Goal = S.Center + S.HuntDir * 12;
+		if (S.HuntLeft <= 0)
+		{
+			S.HuntT = S.Rng.FRandRange(St.EveryMin, St.EveryMax) * (1.3 - .6 * Ball->Work);
+			S.Orbit = FMath::Atan2(S.Center.Z - Ball->Center.Z, S.Center.X - Ball->Center.X);
+		}
+		return;
+	}
+	// circling: round the ball at its ring and below it, steering for a point a little ahead on the circle
+	const double Cur = FMath::Atan2(S.Center.Z - Ball->Center.Z, S.Center.X - Ball->Center.X);
+	if (FMath::Abs(FMath::FindDeltaAngleRadians(Cur, S.Orbit)) > 1.2) S.Orbit = Cur + S.MillDir * .3;
+	S.Orbit += S.MillDir * Sc.Cruise * S.Pace / FMath::Max(2.0, R) * Dt;
+	const double A = S.Orbit + S.MillDir * .45;
+	S.Goal = FVector(Ball->Center.X + FMath::Cos(A) * R, Ball->Center.Y - S.Below, Ball->Center.Z + FMath::Sin(A) * R);
+	S.HuntT -= Dt;
+	if (S.HuntT <= 0 && Ball->Work > .05)
+	{
+		const FVector To = Ball->Center - S.Center;
+		S.HuntDir = To.GetSafeNormal();
+		S.HuntLeft = (To.Size() + St.Through) / Sc.Burst + .6;
+		S.SplashT = 0;
+	}
+}
+
+void AKeysSchools::SplashAt(double X, double Z, int32 N, double Power)
+{
+	// (KeysLife draws the spray in its own per-frame mesh: a few a second at most, and only where the camera can see)
+	if (SplashBudget < 1 || Hyp(X - Cam.X, Z - Cam.Z) > 300) return;
+	SplashBudget -= 1;
+	if (AKeysLife* L = AKeysLife::Get(this)) L->Splash(X, Z, N, Power);
+}
+
+void AKeysSchools::SurfaceSigns(double Dt)
+{
+	SplashBudget = FMath::Min(8.0, SplashBudget + Dt * 8);
+	for (FSchool& S : Schools)
+	{
+		if (!S.Site || Hyp(S.Center.X - Cam.X, S.Center.Z - Cam.Z) > 300) continue;
+		if (S.bBall)
+		{
+			// nervous water: the top of the ball dimpling and flicking the surface
+			if (S.Work > .3 && S.Center.Y > SurfY - 3 - S.Radius && S.Rng.FRand() < Dt * 2.5 * S.Work)
+			{
+				const double A = S.Rng.FRandRange(0, 2 * PI), Rr = S.Radius * FMath::Sqrt(S.Rng.FRand());
+				SplashAt(S.Center.X + FMath::Cos(A) * Rr, S.Center.Z + FMath::Sin(A) * Rr, 2, .2);
+			}
+		}
+		else if (Specs[S.Sp].Role == ERole::Worker && S.HuntLeft > 0 && S.SplashT <= 0)
+		{
+			// a charge that reaches the top crashes through it: white water where the tuna (or the sail) break the surface
+			for (const FFish& F : S.Fish)
+				if (F.P.Y > SurfY - .4 - F.Len * .3)
+				{
+					SplashAt(F.P.X, F.P.Z, 10 + int32(F.Len * 6), FMath::Clamp(.6 + F.Len * .5, .7, 1.6));
+					S.SplashT = 1;
+					break;
+				}
+		}
+	}
+}
+
+void AKeysSchools::StepBirds(double Dt)
+{
+	// terns over a worked ball, wheeling low and plunging in; a frigatebird or two hanging high above it
+	if (!MID) return;
+	if (BirdPools.Num() == 0)
+	{
+		for (int32 k = 0; k < 2; k++)
+		{
+			FKeysMesh M;
+			KeysBait::BuildMesh(k ? TEXT("frigate") : TEXT("tern"), M, 0);
+			UInstancedStaticMeshComponent* C = MakePool(k ? TEXT("Birds_frigate") : TEXT("Birds_tern"), M, false);
+			BirdPools.Add(C);
+			if (!C) continue;
+			C->SetCullDistances(0, int32(BirdR * 100));
+			const int32 N = k ? NumFrigates : NumTerns;
+			TArray<FTransform> Xf;
+			Xf.Init(FTransform(FQuat::Identity, FVector(0, 0, -1e7), FVector(.001)), N);
+			C->AddInstances(Xf, false, true);
+			for (int32 i = 0; i < N; i++)
+			{
+				const float D[8] = {0, 0, 0, 0, 0, 0, float(k ? 1.0 : 1.05), float(i * .137)};
+				C->SetCustomData(i, TArrayView<const float>(D, 8), false);
+			}
+		}
+	}
+	if (BirdPools.Num() < 2 || !BirdPools[0] || !BirdPools[1]) return;
+	TArray<FTransform> XT, XF;
+	XT.Init(FTransform(FQuat::Identity, FVector(0, 0, -1e7), FVector(.001)), NumTerns);
+	XF.Init(FTransform(FQuat::Identity, FVector(0, 0, -1e7), FVector(.001)), NumFrigates);
+	int32 IT = 0, IFr = 0;
+	const double T = NowT, T0 = BirdsLastT;
+	BirdsLastT = T;
+	auto Put = [&](TArray<FTransform>& Xf, int32 I, const FVector& P, const FVector& Fwd, double RollDeg, double Len, double Span, double Lift)
+	{
+		FRotator R = FRotationMatrix::MakeFromX(D2U(Fwd.GetSafeNormal())).Rotator();
+		R.Roll = RollDeg;
+		Xf[I] = FTransform(R, G2U(P), FVector(Len, Len * Span, Len * Lift));
+	};
+	for (const KeysBait::FBall& B : KeysBait::Balls())
+	{
+		if (Hyp(B.X - Cam.X, B.Z - Cam.Z) > BirdR || B.Work < .12) continue;
+		const int32 Sa = int32(B.Site & 0x7fffffff), Sb = int32((B.Site >> 31) & 0x7fffffff);
+		auto Hh = [&](int32 k, int32 Salt) { return KeysSea::HashCell(0xb1d5, Sa, Sb, k * 16 + Salt); };
+		const int32 NT = FMath::RoundToInt32((3 + 11 * B.Work) * (B.bDeep ? 1 : .6));
+		const int32 NF = B.bDeep ? (B.Work > .35 ? 1 + int32(Hh(99, 1) * 2.99) : int32(Hh(99, 2) * 1.99)) : 0;
+		for (int32 k = 0; k < NT && IT < NumTerns; k++)
+		{
+			const double W = (.35 + .3 * Hh(k, 1)) * (Hh(k, 2) < .5 ? -1 : 1);
+			const double Rr = B.R + (4 + 9 * Hh(k, 3)) * (1 - .3 * B.Work), Hgt = 4 + 7 * Hh(k, 4);
+			const double A = T * W + 2 * PI * Hh(k, 5);
+			FVector P(B.X + FMath::Cos(A) * Rr, SurfY + Hgt + .6 * FMath::Sin(T * 1.1 + k), B.Z + FMath::Sin(A) * Rr);
+			FVector Fwd = FVector(-FMath::Sin(A), 0, FMath::Cos(A)) * FMath::Sign(W);
+			double Lift = .15 + .85 * FMath::Sin(T * 2 * PI * 2.6 + k * 1.7), Span = 1, Roll = -FMath::Sign(W) * 25;
+			// a plunge: folds, drops onto the ball, a splash, and beats back up
+			const double Pd = 5 + 5 * Hh(k, 6), U = FMath::Frac(T / Pd + Hh(k, 7)), U0 = FMath::Frac(T0 / Pd + Hh(k, 7));
+			const int32 Cyc = FMath::FloorToInt32(T / Pd + Hh(k, 7));
+			if (B.Work > .4 && U < .3 && KeysSea::HashCell(0xb1d6, Sa, k, Cyc) < B.Work * .75)
+			{
+				const double Q = U / .3, Down = Q < .5 ? FMath::Square(Q * 2) : 1 - (Q - .5) * 2;
+				const FVector In(B.X + FMath::Cos(A) * B.R * .5, SurfY + .1, B.Z + FMath::Sin(A) * B.R * .5);
+				P = FMath::Lerp(P, In, FMath::Clamp(Down, 0.0, 1.0));
+				Fwd = Q < .5 ? (In - P).GetSafeNormal() + FVector(0, -1, 0) : Fwd + FVector(0, .8, 0);
+				Span = Q < .5 ? .35 : 1;
+				Lift = Q < .5 ? .6 : Lift;
+				Roll = 0;
+				if (U0 < .15 && U >= .15 && T0 > 0) SplashAt(In.X, In.Z, 5, .35);
+			}
+			Put(XT, IT++, P, Fwd, Roll, .45, 1, Lift);
+		}
+		for (int32 k = 0; k < NF && IFr < NumFrigates; k++)
+		{
+			const double W = (.1 + .08 * Hh(k + 40, 1)) * (Hh(k + 40, 2) < .5 ? -1 : 1);
+			const double Rr = 12 + 16 * Hh(k + 40, 3), Hgt = 18 + 22 * Hh(k + 40, 4);
+			const double A = T * W + 2 * PI * Hh(k + 40, 5);
+			const FVector P(B.X + FMath::Cos(A) * Rr, SurfY + Hgt, B.Z + FMath::Sin(A) * Rr);
+			const FVector Fwd = FVector(-FMath::Sin(A), 0, FMath::Cos(A)) * FMath::Sign(W);
+			Put(XF, IFr++, P, Fwd, -FMath::Sign(W) * 15, 1.0, 1, .85 + .1 * FMath::Sin(T * .7 + k));
+		}
+	}
+	BirdPools[0]->BatchUpdateInstancesTransforms(0, XT, true, true, false);
+	BirdPools[1]->BatchUpdateInstancesTransforms(0, XF, true, true, false);
 }
 
 // ================================================================ the boids
@@ -998,6 +1414,15 @@ void AKeysSchools::StepSchool(FSchool& S, double Dt)
 		const double Want = bPred ? 1.0 : 0.0;
 		S.Mill = FMath::Clamp(S.Mill + (Want - S.Mill) * FMath::Min(1.0, Dt * (Want > S.Mill ? 1.6 : .25)), 0.0, 1.0);
 	}
+	// a deep ball's work: it builds while its predators are on it (about a minute from quiet to crashed at the surface)
+	// and dies away in half that once they have gone; one put by a test holds where it was put
+	if (S.bBall && !S.bPinned)
+	{
+		bool bWorked = false;
+		for (const FSchool& O : Schools) if (O.Site == S.Site && O.PreyId == S.Id && !O.bBall && (O.Center - S.Center).Size() < 40) { bWorked = true; break; }
+		const double Want = bWorked ? 1.0 : 0.0;
+		S.Work = FMath::Clamp(S.Work + (Want - S.Work) * Dt * (Want > S.Work ? 1 / 45.0 : 1 / 25.0) * 3, 0.0, 1.0);
+	}
 	// last step's fear, for the wave to spread from
 	for (FFish& F : S.Fish) F.AlarmIn = F.Alarm;
 	(void)Sc;
@@ -1010,6 +1435,7 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 	const FTemper& Tm = Tempers[S.Sp];
 	FFish& F = S.Fish[I];
 	FishSteps++;
+	if (F.Air > 0 && StepAir(S, F, Dt)) return;
 	const double Space = Sc.Spacing * F.Len;
 	const double Cruise = Sc.Cruise * S.Pace * F.Pace, Burst = Sc.Burst * FMath::Sqrt(S.Pace) * F.Pace;
 	FVector Acc = FVector::ZeroVector;
@@ -1147,6 +1573,31 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 	F.Flash = FMath::Max(0.0, F.Flash - Dt * 2.2);
 	if (F.Alarm > .02 && !F.FleeDir.IsNearlyZero()) Acc += (F.FleeDir * Burst - F.V) * F.Alarm * 3.0 * (1 - .5 * S.Mill);
 	if (Sc.Role == ERole::Hole && F.Alarm > .3) Acc.Y = FMath::Min(Acc.Y, -.5);   // a grouper backs down into its hole
+	// out of the water: bait in a worked ball near the surface showers out of it as the tuna come through; a flying fish
+	// pushed near the top takes off and glides away a few feet over the water
+	if (Sc.Role == ERole::Bait && S.Site && F.Alarm > .55 && S.InAir < 14)
+	{
+		const double Under = SurfY - F.P.Y;
+		FVector Out = Flat(F.FleeDir.IsNearlyZero() ? F.Fwd : F.FleeDir).GetSafeNormal();
+		if (Out.IsNearlyZero()) Out = FVector(1, 0, 0);
+		if (S.Sp == Flyingfish && Under < 3 && S.Rng.FRand() < Dt * 1.5 * F.Alarm)
+		{
+			F.V = Out * S.Rng.FRandRange(10.0, 14.0) + FVector(0, 3, 0);
+			F.bGlide = true;
+			F.Air = S.Rng.FRandRange(1.5, 4.0);
+			S.InAir++;
+			SplashAt(F.P.X, F.P.Z, 3, .25);
+			return;
+		}
+		if (S.bBall && S.Work > .5 && Under < 1.4 + F.Len && S.Rng.FRand() < Dt * .8 * F.Alarm)
+		{
+			F.V = Out * S.Rng.FRandRange(1.0, 2.5) + FVector(0, S.Rng.FRandRange(2.5, 4.0), 0);
+			F.bGlide = false;
+			F.Air = 3;
+			S.InAir++;
+			return;
+		}
+	}
 
 	// ---- its depth band, the bottom, coral heads and wrecks ahead, the surface
 	const double TopHere = TopAt(F.P.X, F.P.Z);
@@ -1177,7 +1628,8 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 	}
 
 	// ---- integrate: limited acceleration and turn rate, its own speed, no snapping
-	const double Pref = FMath::Lerp(bHold ? Cruise * .45 : Cruise, Burst, FMath::Min(1.0, F.Alarm * 1.2));
+	double Pref = FMath::Lerp(bHold ? Cruise * .45 : Cruise, Burst, FMath::Min(1.0, F.Alarm * 1.2));
+	if (Sc.Role == ERole::Worker && S.HuntLeft > 0) Pref = Burst;   // a predator working a ball goes through it flat out
 	const double MaxA = Sc.Accel * (1 + 1.5 * F.Alarm) * 2.0;
 	FVector NewV = F.V + Acc.GetClampedToMaxSize(MaxA) * Dt;
 	double Spd = NewV.Size();
@@ -1208,7 +1660,47 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 	const double Rel = Spd / FMath::Max(.05, F.Len);
 	F.Freq = 2 * PI * FMath::Clamp(.9 + .55 * Rel, .9, 9.0);
 	F.Phase = FMath::Fmod(F.Phase + F.Freq * Dt, 2 * PI * 64);
-	F.Amp += (FMath::Clamp(.22 + .16 * Rel + .5 * F.Alarm, .2, 1.0) - F.Amp) * FMath::Min(1.0, Dt * 3);
+	F.Amp += (FMath::Clamp(.22 + .16 * Rel + .5 * F.Alarm, .2, 1.0) * (S.Sp == Dolphin ? .2 : 1.0) - F.Amp) * FMath::Min(1.0, Dt * 3);   // (a dolphin's flukes beat up and down, not across: hardly any of the fish's side-to-side)
+}
+
+bool AKeysSchools::StepAir(FSchool& S, FFish& F, double Dt)
+{
+	// a flying fish gliding: holds a foot or two over the water and slows; then, like any fish that jumped, falls back
+	if (F.bGlide)
+	{
+		F.Air -= Dt;
+		const double H = .5 + .4 * FMath::Sin(F.Seed * 20);
+		F.V.Y += ((SurfY + H - F.P.Y) * 4 - F.V.Y * 2) * Dt;
+		F.V.X *= 1 - .08 * Dt;
+		F.V.Z *= 1 - .08 * Dt;
+		if (F.Air <= 0) { F.bGlide = false; F.Air = 3; F.V.Y = -1; }
+	}
+	else
+	{
+		F.Air -= Dt;
+		F.V.Y -= 9.8 * Dt;
+	}
+	F.P += F.V * Dt;
+	FVector Face = F.V.GetSafeNormal();
+	Face.Y = FMath::Clamp(Face.Y, -.7, .7);
+	if (!Face.IsNearlyZero()) F.Fwd = Face.GetSafeNormal();
+	F.Roll = 0;
+	F.Flash = F.bGlide ? 0 : .6;
+	F.Amp = F.bGlide ? .05 : .7;
+	F.Phase = FMath::Fmod(F.Phase + F.Freq * Dt, 2 * PI * 64);
+	if (!F.bGlide && (F.Air <= 0 || (F.P.Y < SurfY - .1 && F.V.Y < 0)))
+	{
+		// back in the water
+		const bool bFlyer = S.Sp == Flyingfish;
+		F.Air = 0;
+		S.InAir = FMath::Max(0, S.InAir - 1);
+		F.P.Y = FMath::Min(F.P.Y, SurfY - .15);
+		F.V = Flat(F.V) * .4 + FVector(0, -.5, 0);
+		F.Alarm = FMath::Max(F.Alarm, .6);
+		SplashAt(F.P.X, F.P.Z, bFlyer ? 5 : 3, bFlyer ? .4 : .25);
+		return false;
+	}
+	return true;
 }
 
 // ================================================================ per frame
@@ -1269,6 +1761,22 @@ void AKeysSchools::Tick(float DeltaSeconds)
 	}
 	while (PoolMoved.Num() < Pools.Num()) PoolMoved.Add(false);
 	FlushPools();
+	// the deep balls from above: nervous water, showers and the birds; and their fish for the sounder
+	for (FSchool& S : Schools) S.SplashT -= Dt;
+	SurfaceSigns(Dt);
+	StepBirds(Dt);
+	if ((SonarT -= Dt) <= 0)
+	{
+		SonarT = .25;
+		TArray<FVector4> Son;
+		for (const FSchool& S : Schools)
+		{
+			if (!S.Site || Hyp(S.Center.X - BoatP.X, S.Center.Z - BoatP.Z) > 40 + S.Radius) continue;
+			const int32 Every = S.bBall ? FMath::Max(1, S.Fish.Num() / 30) : 1;
+			for (int32 i = 0; i < S.Fish.Num(); i += Every) Son.Add(FVector4(S.Fish[i].P.X, S.Fish[i].P.Y, S.Fish[i].P.Z, S.Fish[i].Len));
+		}
+		KeysBait::PublishSonar(MoveTemp(Son));
+	}
 	for (FSchool& S : Schools) if (S.bStepped && PoolDirty.IsValidIndex(S.Pool)) WriteInstances(S);
 	for (int32 P = 0; P < Pools.Num(); P++) if (PoolMoved[P] && Pools[P]) { Pools[P]->MarkRenderStateDirty(); PoolMoved[P] = false; }
 	CpuAcc += FPlatformTime::Seconds() - T0;
@@ -1469,6 +1977,160 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 			Dv->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%f"), -S->Center.Y));
 			DebugCmd(TEXT("look"));
 		}
+	}
+	else if (C == TEXT("deep") || C == TEXT("census"))
+	{
+		// the deep bait balls within 300 m of a spot: deep (here, as the boat finds them now: in the water or still only
+		// dealt) or census (five offshore spots, two over the reef and two inshore, round the boat, as dealt now)
+		auto Line = [&](const TCHAR* Tag, double X, double Z, bool bHere)
+		{
+			int32 NB = 0, NLive = 0, NWorked = 0;
+			TMap<FString, int32> Preds, Baits;
+			if (bHere)
+			{
+				for (const KeysBait::FBall& B : KeysBait::Balls())
+				{
+					if (Hyp(B.X - X, B.Z - Z) > 300) continue;
+					NB++; NLive += B.bLive; NWorked += B.Work > .25;
+					Baits.FindOrAdd(B.Bait)++;
+					for (const TPair<FString, int32>& P : B.Preds) Preds.FindOrAdd(P.Key) += P.Value;
+				}
+			}
+			else
+			{
+				TArray<FSite> Near;
+				SitesNear(X, Z, 300, Near);
+				for (const FSite& Si : Near)
+				{
+					NB++; NWorked += SiteWork(Si) > .25;
+					Baits.FindOrAdd(Specs[Si.Bait].Key)++;
+					for (int32 g = 0; g < Si.NPred; g++) Preds.FindOrAdd(Specs[Si.Pred[g]].Key) += Si.PredN[g];
+				}
+			}
+			FString PS, BS;
+			int32 NP = 0;
+			for (const TPair<FString, int32>& P : Preds) { PS += FString::Printf(TEXT(" %s %d"), *P.Key, P.Value); NP += P.Value; }
+			for (const TPair<FString, int32>& P : Baits) BS += FString::Printf(TEXT(" %s %d"), *P.Key, P.Value);
+			UE_LOG(LogTemp, Log, TEXT("KRBait %s at %.0f,%.0f zone %s depth %.0f m: %d balls within 300 m (%d in the water, %d worked); bait:%s; %d predators:%s"),
+				Tag, X, Z, *ZoneAt(X, Z), DepthFast(X, Z), NB, NLive, NWorked, BS.IsEmpty() ? TEXT(" none") : *BS, NP, PS.IsEmpty() ? TEXT(" none") : *PS);
+			return NB;
+		};
+		if (C == TEXT("deep"))
+		{
+			Line(TEXT("deep"), BoatP.X, BoatP.Z, true);
+			int32 NF = 0, NFNear = 0;
+			for (const FSchool& S : Schools) { NF += S.Fish.Num(); if (Hyp(S.Center.X - BoatP.X, S.Center.Z - BoatP.Z) < 300) NFNear += S.Fish.Num(); }
+			UE_LOG(LogTemp, Log, TEXT("KRBait deep: %d schools, %d fish alive (cap %d), %d of them within 300 m"), Schools.Num(), NF, MaxFish, NFNear);
+			return;
+		}
+		// spots: a spiral out from the boat, each kind of water at least 1.2 km from the last spot of its kind
+		struct FWant { const TCHAR* Tag; int32 N; TArray<FVector2D> Got; };
+		FWant Wants[4] = {{TEXT("census offshore"), 5, {}}, {TEXT("census reef"), 2, {}}, {TEXT("census hawk"), 1, {}}, {TEXT("census inshore"), 1, {}}};
+		for (int32 q = 0; q < 6000; q++)
+		{
+			const double Ang = q * 2.39996, Rr = 150 + 12000 * FMath::Sqrt((q + .5) / 6000.0);
+			const double X = BoatP.X + FMath::Cos(Ang) * Rr, Z = BoatP.Z + FMath::Sin(Ang) * Rr;
+			if (LandH(X, Z) >= 0) continue;
+			const double D = DepthFast(X, Z);
+			const FString Zn = ZoneAt(X, Z);
+			const int32 W = (Zn == TEXT("Offshore") && D > 30) ? 0 : (Zn == TEXT("Reef") && D > 7) ? 1 : Zn == TEXT("Hawk Channel") ? 2 : (Zn == TEXT("Flats") || Zn == TEXT("Backcountry") || Zn == TEXT("Bridge")) ? 3 : -1;
+			if (W < 0 || Wants[W].Got.Num() >= Wants[W].N) continue;
+			if (Wants[W].Got.ContainsByPredicate([&](const FVector2D& G) { return Hyp(G.X - X, G.Y - Z) < 1200; })) continue;
+			Wants[W].Got.Add(FVector2D(X, Z));
+		}
+		for (FWant& W : Wants) for (const FVector2D& G : W.Got) Line(W.Tag, G.X, G.Y, false);
+		// and how usual it is: of 300 points in deep water round the boat, how many have a ball within 300 m
+		int32 NPts = 0, NWith = 0, NReefPts = 0, NReefWith = 0;
+		for (int32 q = 0; q < 20000 && (NPts < 300 || NReefPts < 150); q++)
+		{
+			const double Ang = q * 2.39996, Rr = 12000 * FMath::Sqrt((q + .5) / 20000.0);
+			const double X = BoatP.X + FMath::Cos(Ang) * Rr, Z = BoatP.Z + FMath::Sin(Ang) * Rr;
+			if (LandH(X, Z) >= 0) continue;
+			const double D = DepthFast(X, Z);
+			const FString Zn = ZoneAt(X, Z);
+			const bool bDeepPt = D > 30 && (Zn == TEXT("Offshore") || Zn == TEXT("Reef")), bReefPt = Zn == TEXT("Reef") && D > 7 && D <= 30;
+			if ((bDeepPt && NPts >= 300) || (bReefPt && NReefPts >= 150) || (!bDeepPt && !bReefPt)) continue;
+			TArray<FSite> Near;
+			SitesNear(X, Z, 300, Near);
+			if (bDeepPt) { NPts++; NWith += Near.Num() > 0; }
+			else { NReefPts++; NReefWith += Near.Num() > 0; }
+		}
+		UE_LOG(LogTemp, Log, TEXT("KRBait census: a ball within 300 m at %d of %d points in deep water (%.0f%%), %d of %d over the reef (%.0f%%)"),
+			NWith, NPts, NPts ? 100.0 * NWith / NPts : 0.0, NReefWith, NReefPts, NReefPts ? 100.0 * NReefWith / NReefPts : 0.0);
+	}
+	else if (C == TEXT("balls"))
+	{
+		for (const FSchool& B : Schools)
+		{
+			if (!B.bBall) continue;
+			FString PS;
+			for (const FSchool& W : Schools)
+				if (W.Site == B.Site && !W.bBall) PS += FString::Printf(TEXT(" %s %d (%.0f m off, %s)"), Specs[W.Sp].Key, W.Fish.Num(), (W.Center - B.Center).Size(), W.HuntLeft > 0 ? TEXT("charging") : TEXT("circling"));
+			UE_LOG(LogTemp, Log, TEXT("KRBait ball %s #%d: %d fish, centre %.0f %.1f %.0f (%.1f under), radius %.1f, work %.2f, mill %.2f, %d in the air, %.0f m from the camera;%s"),
+				Specs[B.Sp].Key, B.Id, B.Fish.Num(), B.Center.X, B.Center.Y, B.Center.Z, SurfY - B.Center.Y, B.Radius, B.Work, B.Mill, B.InAir, Hyp(B.Center.X - Cam.X, B.Center.Z - Cam.Z), *PS);
+		}
+	}
+	else if (C == TEXT("ballhere"))
+	{
+		// ballhere=<m>[,all|tuna|sail]: a worked ball that far ahead of the camera, with its predators and flying fish, held there
+		FString DistS = A, Mix = TEXT("all");
+		A.Split(TEXT(","), &DistS, &Mix);
+		const double Dist = DistS.IsNumeric() ? FCString::Atod(*DistS) : 30;
+		const FVector P = Eye + Flat2 * Dist;
+		FSite Si;
+		Si.Key = (int64(3) << 60) | int64(NextId);
+		Si.X = P.X; Si.Z = P.Z;
+		Si.Y = -4;
+		Si.Bait = Mix == TEXT("sail") ? Sardine : Ballyhoo;
+		Si.Fly = 1;
+		const int32 All[] = {Blackfin, Mahi, Sailfish, Kingfish, Skipjack}, Tuna[] = {Blackfin, Skipjack}, Sail[] = {Sailfish};
+		const int32* Use = Mix == TEXT("tuna") ? Tuna : Mix == TEXT("sail") ? Sail : All;
+		Si.NPred = Mix == TEXT("tuna") ? 2 : Mix == TEXT("sail") ? 1 : 5;
+		for (int32 g = 0; g < Si.NPred; g++) { Si.Pred[g] = Use[g]; Si.PredN[g] = 1; }
+		if (FSchool* B = RealiseSite(Si, .85))
+		{
+			LastPut = B->Id;
+			const int64 K = B->Site;
+			for (FSchool& S : Schools) if (S.Site == K) S.bPinned = true;
+		}
+		UE_LOG(LogTemp, Log, TEXT("KRBait ballhere %s %.0f m ahead at %.0f %.0f"), *Mix, Dist, P.X, P.Z);
+	}
+	else if (C == TEXT("toball") || C == TEXT("lookpred"))
+	{
+		// toball[=m]: the diver beside the nearest ball, m metres off its edge at its depth, looking at it.
+		// lookpred=<key>: the mask on the nearest predator of that kind (from where the diver is)
+		AKeysDiver* Dv = AKeysDiver::Get(this);
+		if (!Dv || !Dv->IsDiving()) { UE_LOG(LogTemp, Log, TEXT("KRBait %s: not diving"), *C); return; }
+		if (C == TEXT("lookpred"))
+		{
+			const FFish* Best = nullptr;
+			double BD = 120;
+			for (const FSchool& S : Schools)
+				if (A == Specs[S.Sp].Key)
+					for (const FFish& F : S.Fish) if ((F.P - Eye).Size() < BD) { BD = (F.P - Eye).Size(); Best = &F; }
+			if (!Best) { UE_LOG(LogTemp, Log, TEXT("KRBait lookpred: no %s within 120 m"), *A); return; }
+			const KeysDive::FState& St = Dv->State();
+			const FVector Dir = (Best->P - FVector(St.X, St.Y + .15, St.Z)).GetSafeNormal();
+			Dv->DebugCmd(TEXT("look"), FString::Printf(TEXT("%f,%f"), FMath::Atan2(-Dir.X, -Dir.Z), FMath::Asin(FMath::Clamp(Dir.Y, -1.0, 1.0))));
+			UE_LOG(LogTemp, Log, TEXT("KRBait lookpred %s %.1f m long, %.1f m away, %.1f m down"), *A, Best->Len, BD, SurfY - Best->P.Y);
+			return;
+		}
+		FSchool* S = Find(LastPut);
+		if (!S || !S->bBall)
+		{
+			S = nullptr;
+			double BD = 400;
+			for (FSchool& O : Schools) if (O.bBall && (O.Center - Eye).Size() < BD) { BD = (O.Center - Eye).Size(); S = &O; }
+		}
+		if (!S) { UE_LOG(LogTemp, Log, TEXT("KRBait toball: no ball in the water within reach")); return; }
+		LastPut = S->Id;
+		FVector Dir = Flat(S->Center - Eye).GetSafeNormal();
+		if (Dir.IsNearlyZero()) Dir = FVector(1, 0, 0);
+		const FVector P = S->Center - Dir * (S->Radius + (A.IsNumeric() ? FCString::Atod(*A) : 7.0));
+		Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%f,%f"), P.X, P.Z));
+		Dv->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%f"), FMath::Max(1.0, SurfY - S->Center.Y + .5)));
+		DebugCmd(TEXT("look"));
+		UE_LOG(LogTemp, Log, TEXT("KRBait toball %s #%d: %d fish, %.1f m down, work %.2f"), Specs[S->Sp].Key, S->Id, S->Fish.Num(), SurfY - S->Center.Y, S->Work);
 	}
 	else if (C == TEXT("off") || C == TEXT("on"))
 	{

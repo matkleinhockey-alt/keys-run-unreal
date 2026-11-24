@@ -1,0 +1,27 @@
+diff --git a/Source/KeysRun/KeysLife.cpp b/Source/KeysRun/KeysLife.cpp
+index 360e3a4..d46372d 100644
+--- a/Source/KeysRun/KeysLife.cpp
++++ b/Source/KeysRun/KeysLife.cpp
+@@ -1,4 +1,5 @@
+ #include "KeysLife.h"
++#include "KeysBait.h"
+ #include "Materials/MaterialInstanceDynamic.h"
+ #include "KeysFeed.h"
+ #include "KeysMangroveEco.h"
+@@ -2684,6 +2685,7 @@ FKeysFishSpot AKeysLife::SpotAt(double X, double Z) const
+ 	S.Zone = ZoneAt(X, Z);
+ 	for (const FKeysHotspot& H : Hotspots)
+ 		if (LHyp(H.X - X, H.Z - Z) < 50) { S.HotspotId = H.Id; S.bHot = true; S.bFrenzy = H.Fr > .5; break; }
++	if (!S.bHot && KeysBait::WorkedAt(X, Z, &S.bFrenzy)) S.bHot = true;   // a deep bait ball being worked (KeysBait.h)
+ 	if (!S.bHot && NearWeedline(X, Z, 18)) { S.bHot = true; S.Zone = TEXT("Weedline"); }
+ 	if (NearRigPtr(X, Z, 70)) { S.bHot = true; S.Zone = TEXT("Oil Rig"); S.HotspotId = -1; S.bFrenzy = false; }
+ 	else if (KeysWrecks::Near(X, Z)) { S.bHot = true; S.Zone = TEXT("Wreck"); S.HotspotId = -1; S.bFrenzy = false; }
+@@ -2702,6 +2704,8 @@ const TArray<FZoneRow>& AKeysLife::FishTable(const FString& Zone)
+ 
+ FString AKeysLife::PickSpecies(const FKeysFishSpot& S, double BobX, double BobZ) const
+ {
++	// at a worked bait ball most bites are the fish working it (KeysBait.h)
++	{ const FString B = KeysBait::PickAt(BobX, BobZ, FMath::FRand()); if (!B.IsEmpty()) return B; }
+ 	const FHump* Hump = NearHump(BobX, BobZ);
+ 	// (on the real map a flat on the bay side of the keys is a redfish and trout flat; on the ocean side, bonefish and permit)
+ 	const bool bBayFlat = S.Zone == TEXT("Flats") && KeysGeo::RealMap() && KeysGeo::DZAt(BobX, BobZ) < 0;
