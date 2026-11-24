@@ -68,7 +68,7 @@ namespace KeysReefLifeBottomAudit
 		for (int32 cz = C0z; cz <= C1z; cz++)
 			for (int32 cx = C0x; cx <= C1x; cx++)
 				for (const AKeysReef::FInst& I : R->ChunkInstances(cx, cz))
-					if (I.Species >= 0 && I.Species < NumKinds && FMath::Square(I.X - At.X) + FMath::Square(I.Z - At.Z) <= Radius * Radius) Fn(I);
+					if (!I.Den && I.Species >= 0 && I.Species < NumKinds && FMath::Square(I.X - At.X) + FMath::Square(I.Z - At.Z) <= Radius * Radius) Fn(I);
 	}
 
 	static void CmdReef(const TArray<FString>& Args, UWorld* W)

@@ -1,4 +1,5 @@
 #include "KeysDive.h"
+#include "KeysReefDen.h"
 #include "KeysSea.h"
 #include "KeysGeo.h"
 #include "KeysData.h"
@@ -95,6 +96,9 @@ namespace KeysDive
 			if (S.VY < 0) S.VY = 0;
 			S.Events.Add(EEvent::GroundHit);
 		}
+		// a den's rock on the reef is as solid as the bottom (KeysReefDen.h): she is put back outside it, and what speed
+		// she had into it is lost
+		if (KeysReefDen::PushOut(S.X, S.Y, S.Z, DiverRadius)) { S.VX *= .5; S.VZ *= .5; if (S.VY < 0) S.VY = 0; }
 		S.X = DClamp(S.X, KeysGeo::WBX0, KeysGeo::WBX1);
 		S.Z = DClamp(S.Z, KeysGeo::WBZ0, KeysGeo::WBZ1);
 	}

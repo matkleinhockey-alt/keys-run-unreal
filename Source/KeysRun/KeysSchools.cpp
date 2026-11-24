@@ -7,6 +7,7 @@
 #include "KeysMesh.h"
 #include "KeysLife.h"
 #include "KeysReef.h"
+#include "KeysReefDen.h"
 #include "KeysWrecks.h"
 #include "KeysDiver.h"
 #include "KeysBoatPawn.h"
@@ -222,6 +223,15 @@ void AKeysSchools::BeginPlay()
 	UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/KeysRun/Materials/M_KR_Boid.M_KR_Boid"));
 	if (!M) { UE_LOG(LogTemp, Warning, TEXT("KRSchools: M_KR_Boid missing (open the editor once to create it); no school fish")); return; }
 	MID = UMaterialInstanceDynamic::Create(M, this);
+	// the dens' test lines ask how many school fish are within R of a hole (KeysReefDen.h)
+	KeysReefDen::SchoolFishCounter = [Weak = TWeakObjectPtr<AKeysSchools>(this)](const FVector& P, double R)
+	{
+		int32 N = 0;
+		if (const AKeysSchools* Sc = Weak.Get())
+			for (const FSchool& S : Sc->Schools)
+				for (const FFish& F : S.Fish) if ((F.P - P).SizeSquared() < R * R) N++;
+		return N;
+	};
 }
 
 // ================================================================ the bottom: floor, coral and wrecks, cached on 1 m tiles
@@ -514,6 +524,21 @@ void AKeysSchools::ReadWorld(double Dt)
 		T.R = 5 + Pp.W * 3;
 		T.Power = .6;
 		Threats.Add(T);
+	}
+	// the holes with teeth in them (KeysReefDen.h): a moray with its head out, an octopus abroad, a big grouper at its
+	// door. Kind 5: a small fish gives the place room without taking fright
+	{
+		TArray<FVector4> Holes;
+		KeysReefDen::SchoolThreats(Holes);
+		for (const FVector4& Hp : Holes)
+		{
+			FThreat T;
+			T.Kind = 5;
+			T.P = FVector(Hp.X, Hp.Y, Hp.Z);
+			T.R = Hp.W;
+			T.Power = .6;
+			Threats.Add(T);
+		}
 	}
 	// our own predators: cruising they unsettle bait, charging they scatter everything
 	for (const FSchool& S : Schools)
@@ -1095,6 +1120,7 @@ void AKeysSchools::StepFish(FSchool& S, int32 I, double Dt, int32 MaxNbr)
 		}
 		Dir.Y *= .45;
 		Flee += Dir * K;
+		if (T.Kind == 5) continue;   // (a hole to keep clear of, not a fright)
 		Direct = FMath::Max(Direct, FMath::Min(1.0, K * 1.8));
 	}
 	const double Prev = F.Alarm;

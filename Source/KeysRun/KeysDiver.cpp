@@ -1,4 +1,5 @@
 #include "KeysDiver.h"
+#include "KeysReefDen.h"
 #include "KeysExtras.h"
 #include "KeysSchools.h"
 #include "KeysBoatPawn.h"
@@ -955,7 +956,12 @@ void AKeysDiver::UpdateSpear(double Dt, double T)
 		GetTargets(Tg);
 		FHit Hit;
 		const FVector Tip0 = Shot.At(Shot.Dist);
-		const bool bHitNow = StepSpear(Shot, Tg, Dt, Hit);
+		bool bHitNow = StepSpear(Shot, Tg, Dt, Hit);
+		// a den's rock stops the shaft (KeysReefDen.h): what it would have reached behind the rock is safe
+		if (const double Rock = KeysReefDen::RayHit(Shot.O, Shot.D, Shot.Range); Rock < Shot.Range && (bHitNow ? Hit.AtDist : Shot.Dist) > Rock)
+		{
+			bHitNow = false; Shot.Dist = Rock; Shot.bAlive = false;
+		}
 		// the shaft drags a seam of fine bubbles through the water behind it (the line, a thinner trickle)
 		if (bDiving)
 		{
