@@ -1,0 +1,97 @@
+--- a/Source/KeysRun/KeysData.h
++++ b/Source/KeysRun/KeysData.h
+@@ -60,6 +60,9 @@
+ 	// the hull you start in and can never lose (sim/economy.ts STARTER_BOAT)
+ 	inline const TCHAR* StarterBoat() { return TEXT("grady"); }
+ 
++	// how long a fish of that species and weight is, nose to tail, in inches: each species by its own build (a
++	// barracuda is a rod, a permit a plate), fitted to published length-weight figures
++	double LengthInches(const FString& Key, double WeightLb);
+ 	bool IsSounder(const FString& Key);
+ 	bool IsBillfish(const FString& Key);
+ 	// catch-and-release only; empty if it can be kept
+--- a/Source/KeysRun/KeysData.cpp
++++ b/Source/KeysRun/KeysData.cpp
+@@ -197,6 +197,71 @@
+ 		return -1;
+ 	}
+ 
++	double LengthInches(const FString& Key, double WeightLb)
++	{
++		// inches = K x the cube root of the pounds. The old card used 11.7 for every fish (KeysMesh::FishLength x 1.1),
++		// which is a bass or a snapper: right for the groupers and tunas, a foot or more short for anything long. Each K
++		// is fitted to a typical fish (noted: inches at pounds). The black marlin is left on the old figure, as it was.
++		static const TMap<FString, double> K = {
++			{TEXT("bonefish"), 13.0},      // 26 in at 8 lb
++			{TEXT("permit"), 11.8},        // 32 in at 20 lb
++			{TEXT("tarpon"), 14.6},        // 68 in at 100 lb
++			{TEXT("barracuda"), 16.4},     // 45 in at 20 lb
++			{TEXT("snook"), 14.6},         // 36 in at 15 lb
++			{TEXT("redfish"), 13.0},       // 28 in at 10 lb
++			{TEXT("trout"), 14.0},         // 20 in at 3 lb
++			{TEXT("mangrove"), 12.5},      // 18 in at 3 lb
++			{TEXT("yellowtail"), 13.9},    // 20 in at 3 lb
++			{TEXT("mutton"), 12.5},        // 27 in at 10 lb
++			{TEXT("hogfish"), 11.0},       // 22 in at 8 lb
++			{TEXT("grouper"), 12.3},       // 42 in at 40 lb
++			{TEXT("mahi"), 14.7},          // 40 in at 20 lb
++			{TEXT("blackfin"), 11.1},      // 30 in at 20 lb
++			{TEXT("wahoo"), 16.3},         // 60 in at 50 lb
++			{TEXT("sailfish"), 22.8},      // 84 in at 50 lb, bill and all
++			{TEXT("yellowfin"), 12.3},     // 57 in at 100 lb
++			{TEXT("bluefin"), 12.1},       // 96 in at 500 lb
++			{TEXT("albacore"), 11.7},      // 40 in at 40 lb
++			{TEXT("cobia"), 14.0},         // 48 in at 40 lb
++			{TEXT("amberjack"), 13.0},     // 48 in at 50 lb
++			{TEXT("kingfish"), 15.5},      // 48 in at 30 lb
++			{TEXT("cero"), 15.8},          // 27 in at 5 lb
++			{TEXT("jackcrevalle"), 12.5},  // 34 in at 20 lb
++			{TEXT("ladyfish"), 15.9},      // 20 in at 2 lb
++			{TEXT("sheepshead"), 10.5},    // 18 in at 5 lb
++			{TEXT("pompano"), 11.1},       // 16 in at 3 lb
++			{TEXT("tripletail"), 10.9},    // 27 in at 15 lb
++			{TEXT("lionfish"), 13.0},      // 13 in at 1 lb
++			{TEXT("goliath"), 11.6},       // 78 in at 300 lb
++			{TEXT("graytrigger"), 10.5},   // 18 in at 5 lb
++			{TEXT("blacktip"), 15.3},      // 60 in at 60 lb
++			{TEXT("bullshark"), 14.3},     // 90 in at 250 lb
++			{TEXT("lemonshark"), 16.4},    // 96 in at 200 lb
++			{TEXT("hammerhead"), 17.9},    // 132 in at 400 lb
++			{TEXT("marlin"), 17.7},        // 130 in at 400 lb, bill and all
++			{TEXT("swordfish"), 18.8},     // 110 in at 200 lb, sword and all
++			{TEXT("gag"), 12.5},           // 34 in at 20 lb
++			{TEXT("redgrouper"), 12.1},    // 26 in at 10 lb
++			{TEXT("flounder"), 13.5},      // 17 in at 2 lb
++			{TEXT("sole"), 11.5},          // 6 in at 0.15 lb
++			{TEXT("mako"), 14.3},          // 96 in at 300 lb
++			{TEXT("warsaw"), 11.3},        // 66 in at 200 lb
++			{TEXT("cubera"), 11.8},        // 55 in at 100 lb
++			{TEXT("tigershark"), 16.6},    // 132 in at 500 lb
++			{TEXT("bluerunner"), 12.7},    // 16 in at 2 lb
++			{TEXT("schoolmaster"), 11.9},  // 15 in at 2 lb
++			{TEXT("lanesnapper"), 12.0},   // 12 in at 1 lb
++			{TEXT("vermilion"), 12.7},     // 16 in at 2 lb
++			{TEXT("lookdown"), 11.0},      // 11 in at 1 lb
++			{TEXT("palometa"), 13.0},      // 13 in at 1 lb
++			{TEXT("spanishmack"), 15.3},   // 22 in at 3 lb
++			{TEXT("bigeye"), 11.7},        // 62 in at 150 lb
++			{TEXT("skipjack"), 11.6},      // 25 in at 10 lb
++		};
++		const double* Kp = K.Find(Key);
++		return (Kp ? *Kp : 11.7) * FMath::Pow(FMath::Max(.05, WeightLb), 1.0 / 3.0);
++	}
++
+ 	bool IsSounder(const FString& Key)
+ 	{
+ 		static const TSet<FString> S = {TEXT("blackfin"), TEXT("yellowfin"), TEXT("bluefin"), TEXT("albacore"), TEXT("amberjack"), TEXT("grouper"), TEXT("goliath"), TEXT("swordfish"),
+--- a/Source/KeysRun/KeysBoatPawn.cpp
++++ b/Source/KeysRun/KeysBoatPawn.cpp
+@@ -3197,7 +3197,7 @@
+ 	CardName = S.Name;
+ 	CardWeight = Weight;
+ 	CardPts = Pts;
+-	CardInches = FMath::RoundToInt(FishLen * 1.1 * 39.37);
++	CardInches = FMath::RoundToInt(KeysData::LengthInches(Key, Weight));   // by the species' own build (was FishLen x 1.1 for every fish)
+ 	CardFact = S.Fact + TEXT("  ") + KeysFeed::BestTimes(Key);
+ 	CardBonus = Bonus;
+ 	CardZone = ZoneDesc(Zone) + TEXT(" - ") + NearestName(FX, FZ);

@@ -11,8 +11,23 @@
 #include "Engine/World.h"
 
 // Built in the style of Noniv's "Abyssal Garden" (MIT licence, (c) 2026 Maksymilian Dendura,
-// https://github.com/Noniv/abyssal-garden): the scene's ideas - kelp, light rays, the wooden wreck, the stone whale
+// https://github.com/Noniv/abyssal-garden): the scene's ideas - light rays, the wooden wreck, the stone whale
 // fluke, mantas, barrel sponges and the magenta grotto glow - rebuilt here as procedural meshes for this game.
+// Its kelp forest is not here: kelp does not grow in the Florida Keys. In its place stand the things that sway on a
+// deep Keys reef, each after a real animal (lengths are colony heights):
+//   sea plumes        Antillogorgia spp.         0.9-1.9 m, feathered, violet to grey-purple, some yellowish
+//   sea rods          Plexaura, Eunicea,         0.6-1.3 m, candelabra of thick fingers, tan, dark brown or purple
+//                     Plexaurella spp.
+//   sea whips         Ellisella barbadensis      1.2-2.4 m, bundles of thin unbranched whips, red-orange (some yellow)
+//   wire coral        Stichopathes luetkeni      2.2-4.2 m, one wire, coiled at the tip, olive to brown
+//   black coral       Antipathes and             0.8-1.6 m bushes, rust-brown to grey-green over a black skeleton
+//                     Plumapathes spp.
+//   deep-water        Iciligorgia schrammi       0.8-1.5 m, one flat forking fan set across the current, red-brown
+//   sea fan
+//   rope sponges      Amphimedon compressa,      0.6-1.4 m, lumpy ropes, red or lavender
+//                     Aplysina cauliformis
+// and, standing still, the large sponges: giant barrel (Xestospongia muta, red-brown to grey, to 1.7 m), yellow tube
+// (Aplysina fistularis), stove-pipe (Aplysina archeri, lavender-grey, to 1.6 m) and orange elephant ear (Agelas clathrodes).
 
 namespace
 {
@@ -37,10 +52,10 @@ AKeysGarden::AKeysGarden()
 		return P;
 	};
 	Static = Make(TEXT("GardenStatic"));
-	Kelp = Make(TEXT("GardenKelp"));
+	Sway = Make(TEXT("GardenSway"));
 	Mantas = Make(TEXT("GardenMantas"));
 	Glow = Make(TEXT("GardenGlow"));
-	Kelp->SetCastShadow(false);
+	Sway->SetCastShadow(false);
 	Mantas->SetCastShadow(false);
 	Glow->SetCastShadow(false);
 }
@@ -105,32 +120,263 @@ void AKeysGarden::BeginPlay()
 void AKeysGarden::BuildAll()
 {
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: Abyssal Garden ground at centre %.1f"), Ground(0, 0));
+	PlantThickets();
 	BuildStatic();
 	BuildGlow();
+	BuildSway(0);
+	BuildMantas(0);
+}
 
-	// the kelp: clumps on the west half of the site, lanes left open to swim through, every stalk reaching for the light
+// ---------------------------------------------------------------- the thickets: what grows where, in its pose at rest
+// Rock ledges on the west half of the site (where the kelp clumps stood), lanes left open to swim through. Each carries
+// a crowd of gorgonians, black corals and rope sponges on its top and a few more on the sand at its foot.
+void AKeysGarden::PlantThickets()
+{
 	FRandomStream R(7311);
+	const FVector Flow = FVector(.8, .35, 0).GetSafeNormal(), Cross(-Flow.Y, Flow.X, 0);
+	int32 Cur = -1;
+	auto Begin = [&](const FVector& Base, double H, double Flex)
+	{
+		FColony Cn;
+		Cn.Base = Base; Cn.H = H; Cn.Flex = Flex; Cn.Phase = R.FRandRange(0, 2 * PI);
+		Cn.Seg0 = Segs.Num(); Cn.Leaf0 = Leaves.Num(); Cn.SegN = Cn.LeafN = 0;
+		Cur = Colonies.Add(Cn);
+	};
+	auto Seg = [&](const FVector& A, const FVector& B, double RA, double RB, int32 Sides, const FLinearColor& Col)
+	{
+		FSeg S;
+		S.A = A; S.B = B; S.RA = float(RA); S.RB = float(RB); S.Sides = uint8(Sides); S.C = Col;
+		Segs.Add(S);
+		Colonies[Cur].SegN++;
+	};
+	auto Leaf = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D, const FLinearColor& Col)
+	{
+		FLeaf L;
+		L.P[0] = A; L.P[1] = B; L.P[2] = C; L.P[3] = D; L.C = Col;
+		Leaves.Add(L);
+		Colonies[Cur].LeafN++;
+	};
+	auto Around = [&]() { const double Az = R.FRandRange(0, 2 * PI); return FVector(FMath::Cos(Az), FMath::Sin(Az), 0); };
+
+	// a sea plume: a short trunk, four to six long branches, each feathered with branchlets in one plane
+	auto Plume = [&](const FVector& Base)
+	{
+		const double H = R.FRandRange(1.2, 2.2);
+		Begin(Base, H, .26);
+		const FLinearColor Col = Mix(Mix(Hx(0x8f6cc0), Hx(0xc0a8dc), R.FRand()), Hx(0xd6c486), R.FRand() < .3 ? .8 : .1);
+		const FLinearColor Dk = Col * .7f;
+		const int32 NB = R.RandRange(4, 6);
+		const FVector Trunk = Base + FVector(0, 0, H * .12);
+		Seg(Base, Trunk, .045, .035, 3, Dk);
+		for (int32 b = 0; b < NB; b++)
+		{
+			const double Az = b * 2 * PI / NB + R.FRandRange(-.4, .4), Tilt = R.FRandRange(.12, .38);
+			const FVector Out(FMath::Cos(Az), FMath::Sin(Az), 0);
+			const FVector Side = FVector::CrossProduct(FVector::UpVector, Out);
+			const double L = H * R.FRandRange(.7, .88);
+			FVector Prev = Trunk;
+			for (int32 k = 1; k <= 3; k++)
+			{
+				const double U = k / 3.0;
+				const FVector P = Trunk + Out * (L * Tilt * U * (1.2 - .4 * U)) + FVector(0, 0, L * U);   // leans out, then straightens
+				Seg(Prev, P, .03 - .008 * (k - 1), .03 - .008 * k, 3, Dk);
+				const FVector Dir = (P - Prev).GetSafeNormal();
+				for (int32 j = 0; j < 2; j++)
+					for (int32 Sgn = -1; Sgn <= 1; Sgn += 2)
+					{
+						const FVector Q = FMath::Lerp(Prev, P, (j + .5) / 2.0);
+						const double Len = (.34 - .14 * U) * R.FRandRange(.8, 1.2), Wd = L / 6 * .8;
+						const FVector Tw = (Side * (Sgn * .8) + Dir * .6).GetSafeNormal() * Len;
+						Leaf(Q - Dir * (Wd * .5), Q + Dir * (Wd * .5), Q + Tw + Dir * (Wd * .5), Q + Tw - Dir * (Wd * .1), Col);   // a vane of branchlets
+					}
+				Prev = P;
+			}
+		}
+	};
+	// sea rods: a candelabra of thick fingers that go out, then up
+	auto Rods = [&](const FVector& Base)
+	{
+		const double H = R.FRandRange(.8, 1.5);
+		Begin(Base, H, .1);
+		static const uint32 Cs[3] = {0xc9ae6c, 0x7a5c3c, 0x8a5cae};
+		const FLinearColor Col = Hx(Cs[R.RandRange(0, 2)]);
+		const int32 NB = R.RandRange(5, 8);
+		for (int32 b = 0; b < NB; b++)
+		{
+			const FVector Out = Around();
+			const double Sp = R.FRandRange(.1, .35) * H, L = H * R.FRandRange(.6, 1.0);
+			FVector Prev = Base;
+			for (int32 k = 1; k <= 3; k++)
+			{
+				const double U = k / 3.0;
+				const FVector P = Base + Out * (Sp * FMath::Sqrt(U)) + FVector(0, 0, L * (.4 * U * U + .6 * U));
+				Seg(Prev, P, .04, k == 3 ? .028 : .04, 3, Col);
+				Prev = P;
+			}
+		}
+	};
+	// sea whips: a bundle of long thin whips from one holdfast
+	auto Whips = [&](const FVector& Base)
+	{
+		const double H = R.FRandRange(1.5, 2.6);
+		Begin(Base, H, .3);
+		const FLinearColor Col = Mix(Hx(0xe2502c), Hx(0xe8b23c), R.FRand() < .3 ? .6 + .4 * R.FRand() : R.FRand() * .25);
+		const int32 NB = R.RandRange(5, 9);
+		for (int32 b = 0; b < NB; b++)
+		{
+			const FVector Out = Around();
+			const double Sp = R.FRandRange(.05, .3) * H, L = H * R.FRandRange(.6, 1.0);
+			FVector Prev = Base;
+			for (int32 k = 1; k <= 4; k++)
+			{
+				const double U = k / 4.0;
+				const FVector P = Base + Out * (Sp * U) + FVector(0, 0, L * U);
+				Seg(Prev, P, .024 - .004 * (k - 1), .024 - .004 * k, 3, Col);
+				Prev = P;
+			}
+		}
+	};
+	// wire coral: one long wire, coiling at its tip
+	auto Wire = [&](const FVector& Base)
+	{
+		const double H = R.FRandRange(2.5, 4.5);
+		Begin(Base, H, .2);
+		const FLinearColor Col = Mix(Hx(0xa8ae44), Hx(0x86703c), R.FRand());
+		const double Az0 = R.FRandRange(0, 2 * PI), Coil = R.FRandRange(.12, .3);
+		FVector Prev = Base;
+		for (int32 k = 1; k <= 12; k++)
+		{
+			const double U = k / 12.0, Cu = FMath::Max(0.0, U - .55) / .45;
+			const double Ang = Az0 + Cu * 9, Rad = Coil * Cu;
+			const FVector P = Base + FVector(FMath::Cos(Ang) * Rad + .15 * H * U * FMath::Cos(Az0), FMath::Sin(Ang) * Rad + .15 * H * U * FMath::Sin(Az0), H * (U - .12 * Cu * Cu));
+			Seg(Prev, P, .022, .018, 3, Col);
+			Prev = P;
+		}
+	};
+	// a black coral bush: a dark trunk, arching boughs, sprays of fine twigs in the living colour
+	auto Bush = [&](const FVector& Base)
+	{
+		const double H = R.FRandRange(1.0, 1.8);
+		Begin(Base, H, .07);
+		const FLinearColor Col = Mix(Hx(0xb0703c), Hx(0x8a8c66), R.FRand()), Dk = Hx(0x2a211b);
+		const FVector Top = Base + FVector(0, 0, H * .3);
+		Seg(Base, Top, .05, .035, 3, Dk);
+		const int32 NB = R.RandRange(5, 7);
+		for (int32 b = 0; b < NB; b++)
+		{
+			const FVector Tip = Top + Around() * (H * R.FRandRange(.35, .6)) + FVector(0, 0, H * R.FRandRange(.35, .7));
+			FVector Prev = Top;
+			for (int32 k = 1; k <= 3; k++)
+			{
+				const double U = k / 3.0;
+				const FVector P = FMath::Lerp(Top, Tip, U) + FVector(0, 0, H * .08 * FMath::Sin(U * PI));
+				Seg(Prev, P, .03 - .006 * (k - 1), .03 - .006 * k, 3, Mix(Dk, Col, .5 * U));
+				for (int32 j = 0; j < 2; j++)
+				{
+					// a spray of fine twigs, drawn as one small frond
+					const FVector Tw = (Around() * .7 + FVector(0, 0, .7)) * (H * R.FRandRange(.16, .26)), Wd = FVector::CrossProduct(Tw, FVector::UpVector).GetSafeNormal() * (H * .07);
+					Leaf(P - Wd * .3, P + Wd * .3, P + Tw + Wd, P + Tw - Wd, Col);
+				}
+				Prev = P;
+			}
+		}
+	};
+	// a deep-water sea fan: one flat fan, forking again and again, set across the current
+	auto Fan = [&](const FVector& Base)
+	{
+		const double H = R.FRandRange(1.0, 1.7);
+		Begin(Base, H, .05);
+		const FLinearColor Col = Mix(Hx(0xb04a30), Hx(0xcc7436), R.FRand());
+		const FVector Wd = (Cross + Flow * R.FRandRange(-.3, .3)).GetSafeNormal();
+		struct FFork { FVector P; double Ang, Len; int32 Depth; };
+		TArray<FFork> St;
+		St.Add({Base, R.FRandRange(-.1, .1), H * .34, 0});
+		while (St.Num())
+		{
+			const FFork F = St.Pop();
+			const FVector E = F.P + (FVector::UpVector * FMath::Cos(F.Ang) + Wd * FMath::Sin(F.Ang)) * F.Len;
+			if (F.Depth >= 4)
+			{
+				// the outermost forks, too fine to draw one by one: a small blade of the fan
+				const FVector Wv = FVector::CrossProduct(E - F.P, Flow).GetSafeNormal() * (F.Len * .11);
+				Leaf(F.P, F.P, E + Wv, E - Wv, Col);
+				continue;
+			}
+			Seg(F.P, E, .045 * FMath::Pow(.62, double(F.Depth)), .045 * FMath::Pow(.62, double(F.Depth + 1)), 3, Col);
+			const double Spread = .3 + .14 * R.FRand();
+			St.Add({E, FMath::Clamp(F.Ang - Spread, -1.2, 1.2), F.Len * .78, F.Depth + 1});
+			St.Add({E, FMath::Clamp(F.Ang + Spread * R.FRandRange(.7, 1.1), -1.2, 1.2), F.Len * .78, F.Depth + 1});
+		}
+	};
+	// rope sponges: a few lumpy ropes, red or lavender
+	auto Ropes = [&](const FVector& Base)
+	{
+		const double H = R.FRandRange(.8, 1.5);
+		Begin(Base, H, .1);
+		const FLinearColor Col = R.FRand() < .55 ? Hx(0xc8322e) : Hx(0xa890cc);
+		const int32 NB = R.RandRange(3, 5);
+		for (int32 b = 0; b < NB; b++)
+		{
+			const FVector Out = Around();
+			const double Sp = R.FRandRange(.1, .4) * H, L = H * R.FRandRange(.6, 1.0);
+			FVector Prev = Base;
+			double RPrev = .05;
+			for (int32 k = 1; k <= 4; k++)
+			{
+				const double U = k / 4.0, Rk = k == 4 ? .03 : .042 + .012 * ((k + b) % 2);
+				const FVector P = Base + Out * (Sp * U * U) + FVector(0, 0, L * U);
+				Seg(Prev, P, RPrev, Rk, 4, Col);
+				Prev = P; RPrev = Rk;
+			}
+		}
+	};
+
+	auto Plant = [&](const FVector& Base)
+	{
+		const double Pick = R.FRand();
+		if (Pick < .22) Plume(Base);
+		else if (Pick < .38) Rods(Base);
+		else if (Pick < .54) Whips(Base);
+		else if (Pick < .66) Wire(Base);
+		else if (Pick < .76) Bush(Base);
+		else if (Pick < .88) Fan(Base);
+		else Ropes(Base);
+	};
+	auto OnLedge = [&](const FLedge& L, double R0, double R1)
+	{
+		const double Az = R.FRandRange(0, 2 * PI), Rr = FMath::Sqrt(R.FRandRange(R0 * R0, R1 * R1));
+		const FVector2D P = L.At + FVector2D(FMath::Cos(Az) * Rr * L.A, FMath::Sin(Az) * Rr * L.B).GetRotated(FMath::RadiansToDegrees(L.Yaw));
+		return FVector(P.X, P.Y, L.Top - .06);
+	};
 	for (int32 c = 0; c < 26; c++)
 	{
 		const FVector2D Cc(R.FRandRange(-56, 6), R.FRandRange(-50, 50));
 		if (FVector2D::Distance(Cc, FlukeAt) < 9 || Cc.Size() > SiteR) continue;
-		const int32 N = R.RandRange(5, 10);
-		for (int32 i = 0; i < N; i++)
+		// a ledge, and on most of them a second block standing on it
+		FLedge L;
+		L.At = Cc; L.A = R.FRandRange(3.0, 5.2); L.B = R.FRandRange(2.2, 3.8); L.H = R.FRandRange(.9, 1.8); L.Yaw = R.FRandRange(0, PI);
+		L.Top = Ground(Cc.X, Cc.Y) + L.H; L.bUpper = false;
+		Ledges.Add(L);
+		const bool bTwo = R.FRand() < .7;
+		for (int32 i = 0; i < 5; i++) Plant(OnLedge(L, bTwo ? .62 : 0, .82));
+		if (bTwo)
 		{
-			const FVector2D P = Cc + FVector2D(R.FRandRange(-4.5, 4.5), R.FRandRange(-4.5, 4.5));
-			FStalk S;
-			S.Base = FVector(P.X, P.Y, Ground(P.X, P.Y) - .1);
-			S.H = FMath::Max(4.0, -S.Base.Z * R.FRandRange(.72, .97));
-			S.Phase = R.FRandRange(0, 2 * PI);
-			S.Lean = R.FRandRange(-.2, .2);
-			S.Hue = R.FRand();
-			S.Blades = FMath::Clamp(int32(S.H / .3), 10, 48);
-			Stalks.Add(S);
+			FLedge Up = L;
+			Up.At = Cc + FVector2D(R.FRandRange(-.5, .5), R.FRandRange(-.4, .4));
+			Up.A = L.A * R.FRandRange(.42, .55); Up.B = L.B * R.FRandRange(.42, .55); Up.H = R.FRandRange(.8, 1.7); Up.Yaw = L.Yaw + R.FRandRange(-.5, .5);
+			Up.Top = L.Top + Up.H; Up.bUpper = true;
+			Ledges.Add(Up);
+			for (int32 i = 0; i < 4; i++) Plant(OnLedge(Up, 0, .75));
+		}
+		// and on the sand and rubble round its foot
+		for (int32 i = 0; i < 5; i++)
+		{
+			const double Az = R.FRandRange(0, 2 * PI), Rr = FMath::Max(L.A, L.B) + R.FRandRange(.6, 4.5);
+			const FVector2D P = Cc + FVector2D(FMath::Cos(Az), FMath::Sin(Az)) * Rr;
+			Plant(FVector(P.X, P.Y, Ground(P.X, P.Y) - .05));
 		}
 	}
-	UE_LOG(LogTemp, Log, TEXT("Keys Run: Abyssal Garden - %d kelp stalks"), Stalks.Num());
-	BuildKelp(0);
-	BuildMantas(0);
+	UE_LOG(LogTemp, Log, TEXT("Keys Run: Abyssal Garden - %d swaying colonies on %d ledges (%d branches, %d branchlets)"), Colonies.Num(), Ledges.Num(), Segs.Num(), Leaves.Num());
 }
 
 // ---------------------------------------------------------------- the things that don't move
@@ -291,7 +537,7 @@ void AKeysGarden::BuildStatic()
 		M.AddRoundBox(FVector(P.X, P.Y, Ground(P.X, P.Y) + S * .2), FVector(S * R.FRandRange(1, 1.8), S * R.FRandRange(.9, 1.5), S * R.FRandRange(.6, 1.1)), S * .3, Mix(Rock, RockLt, R.FRand() * .6), FQuat(FVector::UpVector, R.FRand() * 6));
 	}
 
-	// ---- barrel sponges (purple, orange and tan), open at the top, and purple sea fans
+	// ---- giant barrel sponges, open at the top, and common sea fans (purple or yellow)
 	auto Barrel = [&](const FVector2D& P, double S, const FLinearColor& C)
 	{
 		const FVector B(P.X, P.Y, Ground(P.X, P.Y) - .1);
@@ -299,7 +545,7 @@ void AKeysGarden::BuildStatic()
 		for (int32 k = 0; k < 5; k++) M.AddTube(B + FVector(0, 0, k * .32 * S), B + FVector(0, 0, (k + 1) * .32 * S), Rp[k] * S, Rp[k + 1] * S, 12, Mix(C, C * .7f, (k % 2) * .5));
 		M.AddTube(B + FVector(0, 0, 1.6 * S), B + FVector(0, 0, .5 * S), .7 * S, .5 * S, 12, C * .35f);   // the dark inside
 	};
-	const FLinearColor SpC[3] = {Hx(0x6b4a9a), Hx(0xc77a3a), Hx(0xb9a46a)};
+	const FLinearColor SpC[3] = {Hx(0x7b5348), Hx(0x8a6a5c), Hx(0x6e5a52)};   // a giant barrel sponge is red-brown to grey, never purple or orange
 	for (int32 k = 0; k < 22; k++)
 	{
 		const FVector2D P(R.FRandRange(-10, 50), R.FRandRange(-50, 45));
@@ -341,6 +587,73 @@ void AKeysGarden::BuildStatic()
 		const double S = R.FRandRange(.8, 1.6);
 		M.AddRoundBox(FVector(P.X, P.Y, Ground(P.X, P.Y) + S * .3), FVector(S * 1.4, S, S * 1.2), S * .35, Hx(0x3b3346), FQuat(FVector::UpVector, A));
 	}
+	// ---- the ledges the thickets stand on (PlantThickets), their rubble and crusts, and the large sponges
+	{
+		FRandomStream R2(5521);
+		const FLinearColor Crust[4] = {Hx(0xb5542a), Hx(0x8a5a7a), Hx(0x9a2f2a), Hx(0x6f6a3a)};   // orange and red encrusting sponge, coralline algae, turf
+		auto TubeSponge = [&](const FVector& Foot, int32 Num, double Len, double Rad, const FLinearColor& Col)
+		{
+			for (int32 k = 0; k < Num; k++)
+			{
+				const double Az = R2.FRandRange(0, 2 * PI), Ln = Len * R2.FRandRange(.6, 1.0);
+				const FVector Dir = (FVector(FMath::Cos(Az), FMath::Sin(Az), 0) * R2.FRandRange(.1, .45) + FVector::UpVector).GetSafeNormal();
+				const FVector A = Foot + FVector(FMath::Cos(Az), FMath::Sin(Az), 0) * (Rad * 1.2), B = A + Dir * Ln;
+				M.AddTube(A, B, Rad * .75, Rad, 7, Col);
+				M.AddTube(B, B - Dir * (Ln * .35), Rad * .8, Rad * .4, 7, Col * .3f);   // the dark inside
+			}
+		};
+		const FLinearColor Lime = Hx(0xb4ae94), LimeDk = Hx(0x8c907e);   // old reef limestone under a thin turf
+		for (const FLedge& L : Ledges)
+		{
+			const FQuat Q(FVector::UpVector, L.Yaw);
+			auto OnTop = [&](double Reach)
+			{
+				const double Az = R2.FRandRange(0, 2 * PI), Rr = FMath::Sqrt(R2.FRand()) * Reach;
+				const FVector2D P = L.At + FVector2D(FMath::Cos(Az) * Rr * L.A, FMath::Sin(Az) * Rr * L.B).GetRotated(FMath::RadiansToDegrees(L.Yaw));
+				return FVector(P.X, P.Y, L.Top);
+			};
+			auto AtFoot = [&](double Off)
+			{
+				const double Az = R2.FRandRange(0, 2 * PI);
+				return L.At + FVector2D(FMath::Cos(Az), FMath::Sin(Az)) * (FMath::Max(L.A, L.B) + Off);
+			};
+			M.AddRoundBox(FVector(L.At.X, L.At.Y, L.Top - (L.H + .8) * .5), FVector(L.A * 2, L.B * 2, L.H + .8), FMath::Min(.5, L.H * .4), Mix(Lime, LimeDk, R2.FRand()), Q, 2);
+			// shoulders: lower, tilted blocks leaning on its sides, so the outcrop is not one slab
+			for (int32 k = 0; k < (L.bUpper ? 1 : 3); k++)
+			{
+				const double Az = R2.FRandRange(0, 2 * PI), Hs = L.H * R2.FRandRange(.45, .8);
+				const FVector2D P = L.At + FVector2D(FMath::Cos(Az) * L.A * .8, FMath::Sin(Az) * L.B * .8).GetRotated(FMath::RadiansToDegrees(L.Yaw));
+				M.AddRoundBox(FVector(P.X, P.Y, L.Top - L.H + Hs * .5 - .3), FVector(L.A * R2.FRandRange(.7, 1.1), L.B * R2.FRandRange(.7, 1.1), Hs + .6), FMath::Min(.45, Hs * .4), Mix(Lime, LimeDk, R2.FRand()),
+					FQuat(FVector::UpVector, R2.FRand() * 6) * FQuat(FVector::ForwardVector, R2.FRandRange(-.18, .18)), 2);
+			}
+			for (int32 k = 0; k < 3; k++)
+				M.AddRoundBox(OnTop(.8) + FVector(0, 0, .02), FVector(R2.FRandRange(.4, 1.0), R2.FRandRange(.3, .8), .1), .04, Crust[(k + int32(L.At.X)) & 3], FQuat(FVector::UpVector, R2.FRand() * 6), 1);
+			if (R2.FRand() < .4) TubeSponge(OnTop(.7), R2.RandRange(3, 5), R2.FRandRange(.3, .5), .06, Hx(0xa07c52));   // brown tube sponge
+			if (L.bUpper)
+			{
+				if (R2.FRand() < .5) TubeSponge(OnTop(.5), R2.RandRange(2, 3), R2.FRandRange(1.0, 1.6), .085, Hx(0xb4a2c8));   // stove-pipe sponge
+				continue;
+			}
+			// rubble at the foot
+			for (int32 k = 0; k < 3; k++)
+			{
+				const FVector2D P = AtFoot(R2.FRandRange(-.3, .9));
+				const double S = R2.FRandRange(.5, 1.1);
+				M.AddRoundBox(FVector(P.X, P.Y, Ground(P.X, P.Y) + S * .2), FVector(S * 1.5, S * 1.1, S * .8), S * .3, Mix(Lime, Rock, R2.FRand() * .6), FQuat(FVector::UpVector, R2.FRand() * 6), 1);
+			}
+			// the large sponges: one to a ledge
+			const int32 Kind = R2.RandRange(0, 2);
+			if (Kind == 0) Barrel(AtFoot(R2.FRandRange(.9, 1.8)), R2.FRandRange(.8, 1.05), SpC[R2.RandRange(0, 2)]);
+			else if (Kind == 1) TubeSponge(OnTop(.8), R2.RandRange(4, 7), R2.FRandRange(.35, .6), .06, Hx(0xe6cc3c));    // yellow tube sponge
+			else
+			{
+				// orange elephant ear: thick lobes spreading over the ledge
+				const FVector C0 = OnTop(.8);
+				for (int32 k = 0; k < 3; k++)
+					M.AddRoundBox(C0 + FVector(R2.FRandRange(-.5, .5), R2.FRandRange(-.5, .5), .06 + .05 * k), FVector(R2.FRandRange(.7, 1.3), R2.FRandRange(.5, .9), .16), .07, Mix(Hx(0xe8802c), Hx(0xc86424), R2.FRand()), FQuat(FVector::UpVector, R2.FRand() * 6) * FQuat(FVector::ForwardVector, R2.FRandRange(-.25, .25)), 1);
+			}
+		}
+	}
 	M.Commit(Static, 0, AKeysWorld::VertexColorMaterial());
 	UE_LOG(LogTemp, Log, TEXT("Keys Run: Abyssal Garden static - %d tris"), M.T.Num() / 3);
 }
@@ -372,7 +685,7 @@ void AKeysGarden::BuildGlow()
 			}
 		}
 	}
-	// the gold and green specks that drift in the kelp
+	// the gold and green specks (plankton catching the light) that drift over the thickets
 	for (int32 k = 0; k < 420; k++)
 	{
 		const FVector2D P(R.FRandRange(-58, 10), R.FRandRange(-52, 52));
@@ -392,56 +705,42 @@ void AKeysGarden::BuildGlow()
 	M.Commit(Glow, 0, GlowMID);
 }
 
-// ---------------------------------------------------------------- the kelp, swaying
-void AKeysGarden::BuildKelp(double T)
+// ---------------------------------------------------------------- the thickets, swaying
+void AKeysGarden::BuildSway(double T)
 {
 	FKeysMesh M;
-	const FLinearColor Stipe = Hx(0x6e6a30), BladeA = Hx(0x6f8f2c), BladeB = Hx(0xa89c36), Tip = Hx(0xd0b24a);
 	const FVector Flow = FVector(.8, .35, 0).GetSafeNormal(), Cross(-Flow.Y, Flow.X, 0);
-	for (const FStalk& S : Stalks)
+	for (const FColony& Cn : Colonies)
 	{
-		auto At = [&](double U)
+		// (the kelp's own motion) a colony bends downstream more the higher it goes, rocking with the surge, with a slower
+		// side-to-side wander; how far is its Flex: a sea whip gives a lot, a black coral bush or a sea fan hardly at all
+		auto Warp = [&](const FVector& P)
 		{
-			// the stalk bends downstream more the higher it goes, rocking with the surge, with a slower side-to-side wander
-			const double Sw = FMath::Sin(T * .55 + S.Phase + U * 1.8) * .9 + .6;
-			const double Wn = FMath::Sin(T * .31 + S.Phase * 1.7 + U * 2.6) * .55;
-			const double Bend = U * U;
-			return S.Base + FVector(0, 0, S.H * U) + Flow * (Bend * S.H * .16 * Sw + S.Lean * U) + Cross * (Bend * Wn * S.H * .08);
+			const double U = FMath::Clamp((P.Z - Cn.Base.Z) / Cn.H, 0.0, 1.3);
+			const double Sw = FMath::Sin(T * .55 + Cn.Phase + U * 1.8) * .9 + .6;
+			const double Wn = FMath::Sin(T * .31 + Cn.Phase * 1.7 + U * 2.6) * .55;
+			const double Bend = U * U * Cn.H * Cn.Flex;
+			return P + Flow * (Bend * Sw) + Cross * (Bend * Wn * .5);
 		};
-		const int32 Seg = 10;
-		FVector Prev = At(0);
-		for (int32 k = 1; k <= Seg; k++)
+		for (int32 i = Cn.Seg0; i < Cn.Seg0 + Cn.SegN; i++)
 		{
-			const FVector P = At(double(k) / Seg);
-			M.AddTube(Prev, P, .05, .035, 4, Stipe);
-			Prev = P;
+			const FSeg& S = Segs[i];
+			M.AddTube(Warp(S.A), Warp(S.B), S.RA, S.RB, S.Sides, S.C);
 		}
-		// the blades: alternating sides up the stalk, streaming downstream, thicker toward the top; both faces
-		for (int32 b = 0; b < S.Blades; b++)
+		for (int32 i = Cn.Leaf0; i < Cn.Leaf0 + Cn.LeafN; i++)
 		{
-			const double U = .08 + .92 * double(b) / S.Blades;
-			const FVector P = At(U);
-			const FVector Up = (At(FMath::Min(1.0, U + .05)) - P).GetSafeNormal();
-			const double Side = (b % 2 ? 1 : -1);
-			const double Ang = S.Phase + b * 2.4;
-			const FVector Out = (FVector(FMath::Cos(Ang), FMath::Sin(Ang), 0) * .6 + Flow * .8).GetSafeNormal();
-			const double Len = .75 + .55 * U, Wd = .14 + .08 * U;
-			const double Flap = FMath::Sin(T * 2.1 + b * .9 + S.Phase) * .15;
-			const FVector Dir = (Out + Up * (.08 + Flap) + Flow * .3 * Side * .2).GetSafeNormal();
-			const FVector Wv = FVector::CrossProduct(Dir, Up).GetSafeNormal() * Wd;
-			const FVector A0 = P - Wv * .3, A1 = P + Wv * .3, B1 = P + Dir * Len + Wv + FVector(0, 0, -.16), B0 = P + Dir * Len - Wv + FVector(0, 0, -.16);
-			const FVector C = P + Dir * Len * 1.45 + FVector(0, 0, -.3);
-			const FLinearColor Col = Mix(Mix(BladeA, BladeB, S.Hue), Tip, U * .5);
-			const FVector Nn = FVector::CrossProduct(Dir, Wv).GetSafeNormal();
-			M.AddQuad(A0, A1, B1, B0, Col, Nn);
-			M.AddQuad(A0, B0, B1, A1, Col, -Nn);
-			M.AddTri(B0, B1, C, Col, Nn);
-			M.AddTri(B0, C, B1, Col, -Nn);
+			const FLeaf& L = Leaves[i];
+			const FVector Flut(0, 0, FMath::Sin(T * 2.1 + i * .9 + Cn.Phase) * .012);   // the branchlets' own flutter, at their tips
+			const FVector Q0 = Warp(L.P[0]), Q1 = Warp(L.P[1]), Q2 = Warp(L.P[2]) + Flut, Q3 = Warp(L.P[3]) + Flut;
+			M.AddQuad(Q0, Q1, Q2, Q3, L.C, FVector::CrossProduct(Q1 - Q0, Q3 - Q0));
 		}
-		// the gas floats at the top
-		M.AddTube(At(.985), At(1.0) + FVector(0, 0, .12), .07, .05, 5, Tip);
 	}
-	M.Commit(Kelp, 0, AKeysWorld::VertexColorMaterial());
+	if (!bSwayLogged)
+	{
+		bSwayLogged = true;
+		UE_LOG(LogTemp, Log, TEXT("Keys Run: Abyssal Garden sway - %d tris, rebuilt 30 times a second within 450 m"), M.T.Num() / 3);
+	}
+	M.Commit(Sway, 0, AKeysWorld::VertexColorMaterial());
 }
 
 // ---------------------------------------------------------------- manta rays, gliding laps over the garden
@@ -500,13 +799,13 @@ void AKeysGarden::Tick(float DeltaSeconds)
 		BuildAll();
 	}
 	bNear = D < 450;
-	Kelp->SetVisibility(D < 900);
+	Sway->SetVisibility(D < 900);
 	Mantas->SetVisibility(D < 900);
 	Glow->SetVisibility(D < 600);
 	if (!bNear) return;
 	const double T = GetWorld()->GetTimeSeconds();
-	KelpAcc += DeltaSeconds;
-	if (KelpAcc > 1 / 30.0) { KelpAcc = 0; BuildKelp(T); }
+	SwayAcc += DeltaSeconds;
+	if (SwayAcc > 1 / 30.0) { SwayAcc = 0; BuildSway(T); }
 	BuildMantas(T);
 	if (GlowMID) GlowMID->SetScalarParameterValue(TEXT("Bright"), float(.85 + .15 * FMath::Sin(T * .7) + .08 * FMath::Sin(T * 2.3)));
 }
