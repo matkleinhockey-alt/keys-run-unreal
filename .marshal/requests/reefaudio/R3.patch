@@ -1,0 +1,20 @@
+diff --git a/Source/KeysRun/KeysLife.cpp b/Source/KeysRun/KeysLife.cpp
+index 3c52122..d76c192 100644
+--- a/Source/KeysRun/KeysLife.cpp
++++ b/Source/KeysRun/KeysLife.cpp
+@@ -17,6 +17,7 @@
+ #include "Templates/UniquePtr.h"
+ #include "Misc/FileHelper.h"
+ #include "Misc/Paths.h"
++#include "KeysReefAudio.h"
+ 
+ using namespace KeysGeo;
+ using KeysData::FZoneRow;
+@@ -2416,6 +2417,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
+ 	{
+ 		const FKeysVis* V = G.V;
+ 		if (!V) continue;
++		if (G.Type == TEXT("dolphin")) KeysReefAudio::Heard(TEXT("pod"), G.Type, FVector(G.CX, -1.5, G.CZ), G.Members.Num());   // reefaudio R3
+ 		const double Bdx = G.CX - BoatX, Bdz = G.CZ - BoatZ, Bd = LHyp(Bdx, Bdz);
+ 		// spooked by the boat
+ 		if ((Bs > 2 && Bd < 14 + Bs * .6) || Bd < 6)

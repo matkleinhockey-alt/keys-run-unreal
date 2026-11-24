@@ -1,0 +1,20 @@
+diff --git a/Source/KeysRun/KeysReefLife.cpp b/Source/KeysRun/KeysReefLife.cpp
+index a201734..4dd59d4 100644
+--- a/Source/KeysRun/KeysReefLife.cpp
++++ b/Source/KeysRun/KeysReefLife.cpp
+@@ -22,6 +22,7 @@
+ #include "EngineUtils.h"
+ #include "HAL/PlatformTime.h"
+ #include "Misc/CommandLine.h"
++#include "KeysReefAudio.h"
+ 
+ namespace KeysReefLife
+ {
+@@ -1275,6 +1276,7 @@ namespace KeysReefLife
+ 						Him.State = SChased; Him.StateT = 0; Him.FleeDir = RlFlat(Him.P - Me.P).GetSafeNormal();
+ 						if (Ix == 0) O.ChasedBy = G.Id;
+ 						Chases++;
++						KeysReefAudio::Heard(TEXT("chase"), S.Key, Me.P);   // reefaudio R2: a damselfish pops as it goes
+ 						Log(FString::Printf(TEXT("chase: %s went for %s because it came within %.1f m of %s (he drives rivals off inside %.1f m); effect: he charges at %.1f m/s, the rival turns and runs"), *Who(G, Me), *Who(O, Him), D,
+ 							bMale ? TEXT("him and his group") : TEXT("his territory"), S.ChaseR, S.Burst * .72));
+ 						break;
