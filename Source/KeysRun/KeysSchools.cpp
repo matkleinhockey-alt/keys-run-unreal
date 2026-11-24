@@ -1267,14 +1267,14 @@ void AKeysSchools::SurfaceSigns(double Dt)
 			if (S.Work > .3 && S.Center.Y > SurfY - 3 - S.Radius && S.Rng.FRand() < Dt * 2.5 * S.Work)
 			{
 				const double A = S.Rng.FRandRange(0, 2 * PI), Rr = S.Radius * FMath::Sqrt(S.Rng.FRand());
-				SplashAt(S.Center.X + FMath::Cos(A) * Rr, S.Center.Z + FMath::Sin(A) * Rr, 2, .2);
+				SplashAt(S.Center.X + FMath::Cos(A) * Rr, S.Center.Z + FMath::Sin(A) * Rr, 4, .35);
 			}
 		}
 		else if (Specs[S.Sp].Role == ERole::Worker && S.HuntLeft > 0 && S.SplashT <= 0)
 		{
 			// a charge that reaches the top crashes through it: white water where the tuna (or the sail) break the surface
 			for (const FFish& F : S.Fish)
-				if (F.P.Y > SurfY - .4 - F.Len * .3)
+				if (F.P.Y > SurfY - .9 - F.Len * .5)   // (as high as a fish is let swim: StepFish keeps it under the top)
 				{
 					SplashAt(F.P.X, F.P.Z, 10 + int32(F.Len * 6), FMath::Clamp(.6 + F.Len * .5, .7, 1.6));
 					S.SplashT = 1;
@@ -2129,7 +2129,7 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		const FVector P = S->Center - Dir * (S->Radius + (A.IsNumeric() ? FCString::Atod(*A) : 7.0));
 		Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%f,%f"), P.X, P.Z));
 		const FString Dep = FString::Printf(TEXT("%f"), FMath::Max(1.0, SurfY - S->Center.Y + .5));
-		Dv->DebugCmd(TEXT("depth"), Dep);
+		Dv->DebugCmd(TEXT("depth"), Dep);   // (level with it, a little below: a view along the ball, not up into the surface)
 		Dv->DebugCmd(TEXT("hold"), Dep);   // (and stays there)
 		DebugCmd(TEXT("look"));
 		UE_LOG(LogTemp, Log, TEXT("KRBait toball %s #%d: %d fish, %.1f m down, work %.2f"), Specs[S->Sp].Key, S->Id, S->Fish.Num(), SurfY - S->Center.Y, S->Work);
