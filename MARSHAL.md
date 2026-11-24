@@ -28,9 +28,9 @@ once).
 | `reefbottom` | Queen conch, giant Caribbean anemone, purple sea fans, audit of the reef itself (brief written by the marshal) | `lane/reefbottom` | `../KeysRun-reefbottom` | merged 2026-11-24 |
 | `reefaudio` | Sound for the reef and the mangroves, synthesised (brief written by the marshal) | `lane/reefaudio` | `../KeysRun-reefaudio` | merged 2026-11-24 |
 | `reefreal` | Realism clean-up: halibut out, gulf flounder, no kelp, audit; black marlin stays at the user's word (brief written by the marshal) | `lane/reefreal` | `../KeysRun-reefreal` | merged 2026-11-24 |
-| `rootlife` | Under the mangrove roots: thick schools, growth on the roots, snook and snapper in view (brief written by the marshal) | `lane/rootlife` | `../KeysRun-rootlife` | running since 2026-11-24 (background agent) |
+| `rootlife` | Under the mangrove roots: thick schools, growth on the roots, snook and snapper in view (brief written by the marshal) | `lane/rootlife` | `../KeysRun-rootlife` | merged 2026-11-24 |
 | `reeflinks` | Reef behaviour links and the reef lanes' loose ends (brief written by the marshal) | `lane/reeflinks` | `../KeysRun-reeflinks` | merged 2026-11-24 |
-| `baitballs` | More bait balls in deep water, worked by big fish (brief written by the marshal) | `lane/baitballs` | `../KeysRun-baitballs` | running since 2026-11-24 (background agent) |
+| `baitballs` | More bait balls in deep water, worked by big fish (brief written by the marshal) | `lane/baitballs` | `../KeysRun-baitballs` | merged 2026-11-24 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -368,3 +368,18 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   means); the user's packaged game was running during every lane run today. Still without a picture: gobies on a
   client, an angelfish biting a sponge, a turtle under a ledge, a cave den from above; small fish bolting from a
   hunt never seen.
+- 2026-11-24: the user's packaged game had run 9.5 h under every lane's frame-time run; at the user's word ("force
+  quit then game") it was killed. `rootlife` (2b26ae3, BLOCKED only on that) and `baitballs` (97875ce, IN PROGRESS)
+  merged, with baitballs R1 (a worked ball is a hot spot; `KeysBait::PickAt` first in `PickSpecies`) and R2 (the
+  sounder shows bait balls). `KeysSchools.cpp` joined by hand: reeflinks' ray-shadowing block and baitballs' rising
+  ball both kept. In the game: schools and growth (oysters, barnacles, fire sponge, tunicates, algae, anemones)
+  under the mangrove roots near the camera, snook and gray snapper in view, `-KRNoRootLife`; bait balls of
+  ballyhoo, sardine and scad over deep water and half-size over the reef, worked by blackfin, skipjack, mahi,
+  sailfish, kingfish, wahoo, silky sharks and dolphins, rising and showering with terns and frigatebirds over
+  them, `-KRNoBaitBalls`. Marshal's quiet-machine runs, same build on and off, Medium: diving in Sister Creek
+  game 18.0-18.5 against 17.0-18.5, draw 18.1-19.6 against 16.9-19.2, GPU 32.0-32.6 against 30.5-32.1 (means +3%
+  game, +4% draw, +3% GPU, at the line and inside the off runs' own spread); bait_ball scene GPU 19.7 with against
+  22.1 without; offshore no cost. Real map `tpcheck` 48, 0 bad, dock audit 545, a goliath speared, three balls dealt
+  at Sombrero; classic map `tpcheck` 19, 0 bad. The first mangrove tile at start-up still takes a 400 ms frame
+  (as before the lane). Open: the shower and birds read small from the boat; the sounder never seen; Key Largo's
+  root wall thin; growth pieces low-poly; open water between balls offshore is emptier (500-900 fish).
