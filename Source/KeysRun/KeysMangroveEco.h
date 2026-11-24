@@ -15,6 +15,10 @@ namespace KeysMangroveEco
 {
 	// on the real map, unless -KRNoMangroveEco (which also puts the old still waders back into the mangrove mesh)
 	bool Enabled();
+	// the life in and on the roots (the rootlife lane): thick schools in the roots, growth on the roots below the tide
+	// line, snook and gray snapper where a diver can see them. -KRNoRootLife leaves all of it out (the ecosystem as it
+	// was, oyster lumps in the tile mesh and all)
+	bool RootLife();
 	struct FEco;
 
 	enum EKind : uint8
@@ -22,7 +26,8 @@ namespace KeysMangroveEco
 		// birds
 		GreatEgret, GreatBlue, LittleBlue, Ibis, Spoonbill, Cormorant, Anhinga, Kingfisher, GreenHeron, NightHeron, Tern, Osprey, Pelican, WhitePelican,   // (Pelican: the brown pelican)
 		// under the roots
-		Silverside, Pilchard, Snapper, Grunt, Needlefish, Mullet, Barracuda, LemonShark, NurseShark, Stingray, Jelly, Snook, Jack, Tarpon,
+		Silverside, Pilchard, Snapper, Grunt, Schoolmaster, LaneSnapper, Sergeant,   // (the schools: Silverside..Sergeant)
+		Needlefish, Mullet, Barracuda, LemonShark, NurseShark, Stingray, Jelly, Snook, Jack, Tarpon, GraySnapper,   // (GraySnapper: the adults)
 		// on the roots and the mud
 		TreeCrab, Fiddler, Horseshoe,
 		// asked of KeysLife, and built into the mangrove tile
@@ -41,14 +46,18 @@ namespace KeysMangroveEco
 		double X = 0, Z = 0, Ground = 0, Sz = 1, Hh = 1.5;
 		uint8 Detail = 1, Bank = 0;   // Bank: a creek's bank tree; then In points at the channel, (CX, CZ) is its centre line there
 		bool bRoof = false;
+		bool bThird = true;   // a bank tree among the one in three the older rules use (SitesOfTile with bAllBank)
 		FVector2D In = FVector2D::ZeroVector;
 		double MouthX = 0, MouthZ = 0, Along = 0, CX = 0, CZ = 0;
 		FVector Top = FVector::ZeroVector;   // the top of its crown (not for a bank tree, which leans)
 	};
 	// KeysMangrove.cpp: the trees of a tile and the crown tops a bird can stand on; a point on one of a tree's prop roots;
 	// every tile that has mangrove (game thread)
-	void SitesOfTile(int64 Key, TArray<FSite>& Sites, TArray<FVector>& Tops);
+	void SitesOfTile(int64 Key, TArray<FSite>& Sites, TArray<FVector>& Tops, bool bAllBank = false);
 	FVector RootPoint(const FSite& S, int32 Root, double U);
+	// every prop root of that tree as it is drawn: the straight pieces, each from A to B, R thick (game metres)
+	struct FRootSeg { FVector A, B; float R; };
+	void RootPieces(const FSite& S, TArray<FRootSeg>& Out);
 	void MangroveTiles(TArray<TPair<int64, FVector2D>>& Out);
 	// rules the mangrove builder shares with the ecosystem: the bare low limb a cormorant or anhinga dries its wings on
 	// (from A out to B), and the dead snag where a tile's pelicans roost (its foot; false when the tile has none)
@@ -114,6 +123,7 @@ public:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> StillMesh;   // the ones standing or far off, rebuilt when one changes
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> Pools;
 	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> Meshes;
+	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> GrowPools;   // (root life) what grows on the roots near the camera
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> MID;
 
 private:

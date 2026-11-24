@@ -37,6 +37,7 @@ namespace KeysMangroveEco
 		TArray<FSpot> Spots;
 		TArray<FVector> Roosts;          // crown tops the day birds sleep on
 		TArray<FVector2D> Wade;          // places off the roots a wader can stand
+		TArray<FSite> Trees;             // (root life) every tree with its feet in water a fish could hold in: the roots that carry growth
 		int32 Count[NumKinds] = {};
 		int32 Sites = 0;
 	};
@@ -77,6 +78,11 @@ namespace KeysMangroveEco
 		FVector2D Home = FVector2D::ZeroVector, Mouth = FVector2D::ZeroVector, C = FVector2D::ZeroVector, Out = FVector2D(1, 0), ThreatP = FVector2D::ZeroVector;
 		double Th = 0, Scatter = 0, HitT = -1e9, R = 1, Y = -.2, Floor = -.4, Mill = 0;
 		bool bOut = false, bAwake = false, bBank = false;
+		// (root life) the shore's line here (the school lies along it, weaving through the roots), how many of its fish are
+		// moved and drawn this frame (fewer the further it is from the camera), and whether it hangs head to the current
+		FVector2D Tan = FVector2D(0, 1);
+		int32 Live = 0;
+		bool bHang = false;
 		TArray<FFishE> Fish;
 	};
 	struct FSwim
@@ -114,6 +120,7 @@ namespace KeysMangroveEco
 		TArray<FSchoolE> Schools;
 		TArray<FGroup> Groups;
 		TArray<FCrabs> Crabs;
+		TArray<FSite> Trees;
 		TArray<FVector> Roosts;
 		TArray<bool> RoostUsed;
 		TArray<FVector2D> Wade;
@@ -159,6 +166,9 @@ namespace KeysMangroveEco
 		FVector2D ExampleOut[4][NumKinds];
 		bool bHave[4][NumKinds] = {};
 		TArray<FVector2D> Pilings[4], PilingOut[4], Flocks[4], FlockOut[4];   // some of each region's pelican pilings and white pelican flocks (for the test's bookmarks)
+		// (root life) each region's best root wall: a bank or fringe tree with deep water off its roots
+		FVector2D Wall[4], WallOut[4];
+		double WallScore[4] = {-1, -1, -1, -1};
 		int32 PilingN = 0;
 		double Secs = 0;
 	};
@@ -209,6 +219,9 @@ namespace KeysMangroveEco
 		FVector2D LookDir = FVector2D(1, 0);
 		double LookDist = 6, LookH = 1.2, LookSide = 0;
 		bool bLook = false;
+		// (root life) where the test camera's eye was put, for what, and where it aims from there
+		bool bLookEyeSet = false;
+		FVector LookEye = FVector::ZeroVector, LookEyeFor = FVector::ZeroVector, LookAim = FVector::ZeroVector, LookAimOff = FVector::ZeroVector;
 		// the last wader's strike (for the test camera), and the stills the test camera takes of an event by itself
 		FVector StrikeAt = FVector::ZeroVector;
 		FVector2D StrikeDir = FVector2D(1, 0);
@@ -224,6 +237,16 @@ namespace KeysMangroveEco
 		TArray<FSoundEv> Sounds;
 		// test (kr.eco dummy): birds held still in the air beside the boat, to look a model over
 		TArray<FBird> Dummies;
+		// (root life) the growth on the roots near the camera: where it was laid out from, what it holds, and where each
+		// piece is (for the test camera: game metres and the way out from the root)
+		FVector GrowC = FVector(1e9);
+		bool bGrowForce = true;
+		int32 GrowN[8] = {}, GrowTrees = 0, GrowRoots = 0, GrowTris = 0;
+		double GrowMs = 0;
+		TArray<FVector> GrowP[8];
+		TArray<FVector2D> GrowO[8];
+		int32 FishCap = 0, FishThinned = 0;
+		double TideWas = 0, TideRate = 0;
 		void Sound(const TCHAR* What, int32 Kind, const FVector& Where, float Power = 1)
 		{
 			if (Sounds.Num() < 24 && FVector::DistSquared(Where, Cam) < 250.0 * 250.0) Sounds.Add({FName(What), Kind, Where, Power});
@@ -242,6 +265,16 @@ namespace KeysMangroveEco
 	void BirdSoup(FSoup& Buf, const FBird& B, bool bFar, double Rim);
 	void PoseBird(FBird& B, int32 Kind);
 	void FlyPast(FBird& B, const FVector& To, double Delay);
+	// ---- KeysMangroveEcoRoots.cpp (root life)
+	constexpr int32 NumGrow = 8;
+	const TCHAR* GrowName(int32 G);
+	void UpdateGrowth(class AKeysMangroveEco* A, FEco& E);
+	// the best root wall within Range of Near: the point in its roots to look at, the way out to its open water, its line
+	bool FindWall(FEco& E, const FVector2D& Near, double Range, FVector& OutAt, FVector2D& OutOut, FVector2D& OutTan, bool bLog);
+	// a test camera's eye moved where it can be: in water deep enough to hold it, not under the bottom, not in a root
+	FVector SafeEye(FEco& E, FVector Eye, const FVector& At, bool bUnder, FVector& OutAim);
+	// the root-life rules for a tile's fish (PlanTile calls it for each tree with its feet in water)
+	void PlanRootLife(const FSite& S, const FVector2D& O, TFunctionRef<FSpot&(uint8, const FSite&, const FVector&, const FVector2D&, int32, double)> Add);
 	// ---- KeysMangroveEcoView.cpp
 	void CloserCmd(const FString& Arg);
 	void PxReport(FEco& E, UWorld* World, const FString& Tag);

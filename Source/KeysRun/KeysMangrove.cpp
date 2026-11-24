@@ -172,6 +172,8 @@ namespace
 	// with the ecosystem on (KeysMangroveEco) the birds and crabs are alive and not part of the mesh; the roots carry
 	// oysters, barnacles and sponges below the tide line instead
 	const bool bEco = KeysMangroveEco::Enabled();
+	// (with the root life on, what grows on the roots is drawn near the camera only, as instances: KeysMangroveEcoRoots.cpp)
+	const bool bLumps = bEco && !KeysMangroveEco::RootLife();
 	static const uint32 ShellC[] = {0xb9b5a6, 0xa39f92, 0xd6d2c4, 0xc9c4b2}, SpongeC[] = {0xc8572a, 0x7a3f8a, 0xb89a2a, 0xa83a30};
 
 	// A red mangrove standing at (X, Z), shaped on a photograph of a mangrove creek: a cage of thin prop roots that
@@ -211,7 +213,7 @@ namespace
 			const FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
 			const FLinearColor C = FMath::Lerp(RootC, RootDark, float(MHash(r * 3.0, X + Z)) * .7f);
 			Arc(From, End, (.1 + .4 * MHash(Z, r)) * Sz, .052 * Sz, C);
-			if (bEco && Detail > 0)
+			if (bLumps && Detail > 0)
 			{
 				// what grows on it between the tides: oysters and barnacles high, sponges lower, on the root's last piece
 				const double Bow = (.1 + .4 * MHash(Z, r)) * Sz, U = double(Seg - 1) / Seg;
@@ -550,7 +552,7 @@ void AKeysWorld::StreamMangroves()
 	if (GMgWatch > 0 && --GMgWatch == 0)
 	{
 		const double Fr = GetWorld()->GetDeltaSeconds() * 1000;
-		if (Fr > 60) UE_LOG(LogTemp, Log, TEXT("KRMangrove tile of %d triangles: set up in %.0f ms, the frame after took %.0f ms"), GMgLastTris, GMgLastMs, Fr);
+		if (Fr > 40) UE_LOG(LogTemp, Log, TEXT("KRMangrove tile of %d triangles: set up in %.0f ms, the frame after took %.0f ms"), GMgLastTris, GMgLastMs, Fr);
 	}
 	if (bMgJob && GMgJob.IsReady()) { Commit(GMgJobKey, GMgJob.Get()); bMgJob = false; }
 	if (!bMgJob)
@@ -609,7 +611,7 @@ namespace KeysMangroveEco
 
 	// Every tree with its feet in the water in that tile, exactly where GenMangroves stands it (the same cells, hashes
 	// and tests, none of the geometry), and the tops of the crowns a bird can stand on. Plain map reads: any thread.
-	void SitesOfTile(int64 Key, TArray<FSite>& Sites, TArray<FVector>& Tops)
+	void SitesOfTile(int64 Key, TArray<FSite>& Sites, TArray<FVector>& Tops, bool bAllBank)
 	{
 		using namespace KeysGeo;
 		const double Cell = KeysGeoReal::Cell();
@@ -684,11 +686,12 @@ namespace KeysMangroveEco
 				for (double X = C.X0; X < C.X1; X += Step)
 				{
 					const double PX = X + (MHash(X, Z + 1.7) - .5) * Step * .8, PZ = Z + (MHash(Z, X + 2.9) - .5) * Step * .8;
-					if (PX < TX0 || PX >= TX0 + 600 || PZ < TZ0 || PZ >= TZ0 + 600 || MHash(PX * 3.1, PZ * 1.3) > .34) continue;
+					const bool bThird = MHash(PX * 3.1, PZ * 1.3) <= .34;
+						if (PX < TX0 || PX >= TX0 + 600 || PZ < TZ0 || PZ >= TZ0 + 600 || (!bThird && !bAllBank)) continue;
 					const KeysMangroveLife::FNear N = KeysMangroveLife::Near(PX, PZ);
 					if (N.D < .5 || N.D > 4.4 || &Creeks[N.Creek] != &C || MgBlocked(PX, PZ) || MgOnLot(PX, PZ)) continue;
 					FSite S;
-					S.X = PX; S.Z = PZ; S.Ground = LandH(PX, PZ); S.Sz = .8 + .5 * MHash(PZ, PX); S.Detail = 2; S.Bank = 1; S.bRoof = N.bRoof;
+					S.X = PX; S.Z = PZ; S.Ground = LandH(PX, PZ); S.Sz = .8 + .5 * MHash(PZ, PX); S.Detail = 2; S.Bank = 1; S.bRoof = N.bRoof; S.bThird = bThird;
 					S.Hh = (1.3 + .9 * MHash(PX, PZ)) * S.Sz + (N.bRoof ? 1.4 : .3) * .5;
 					S.In = (N.C - FVector2D(PX, PZ)).GetSafeNormal();
 					S.MouthX = C.Pts[0].X; S.MouthZ = C.Pts[0].Y; S.Along = N.S; S.CX = N.C.X; S.CZ = N.C.Y;
@@ -713,5 +716,47 @@ namespace KeysMangroveEco
 		const double F = FMath::Clamp(U, 0.0, 1.0) * Seg;
 		const int32 K = FMath::Min(Seg - 1, int32(F));
 		return FMath::Lerp(Bez(double(K) / Seg), Bez(double(K + 1) / Seg), F - K) + FVector(0, .052 * Sz * (1 - .3 * U) * .9, 0);
+	}
+
+	// Every prop root of a tree exactly as Tree() draws it (the same hashes; a bank tree's lean and height from its site),
+	// as the straight pieces it is made of: what grows on the roots is laid along these (KeysMangroveEcoRoots.cpp)
+	void RootPieces(const FSite& S, TArray<FRootSeg>& Out)
+	{
+		const double X = S.X, Z = S.Z, Sz = S.Sz;
+		const int32 Detail = S.Detail;
+		const FVector2D Lean = S.Bank ? S.In * (S.bRoof ? 1.8 : 1.1) : FVector2D::ZeroVector;
+		const double Tall = S.Bank ? (S.bRoof ? 1.4 : .3) : 0;
+		const double Base = FMath::Max(S.Ground, -.05), Foot = FMath::Min(S.Ground, -.35) - .25;
+		const double Hh = (1.3 + .9 * MHash(X, Z)) * Sz + Tall * .5;
+		const double TrunkH = (2.3 + 1.5 * MHash(X + 4.0, Z)) * Sz + Tall * .5;
+		const FVector Fork(X, Base + Hh, Z);
+		const FVector Mid(X + (MHash(X, 3.0) - .5) * 1.0 + Lean.X * .45, Fork.Y + TrunkH * .55, Z + (MHash(Z, 5.0) - .5) * 1.0 + Lean.Y * .45);
+		const int32 NR = (Detail == 2 ? 11 : Detail == 1 ? 8 : 5) + int32(MHash(X + 1.0, Z) * 2.5), Seg = Detail == 2 ? 4 : Detail == 1 ? 3 : 2;
+		auto Arc = [&](const FVector& From, const FVector& End, double Bow, double R0)
+		{
+			const FVector Ctrl(From.X + (End.X - From.X) * .78, From.Y + Bow, From.Z + (End.Z - From.Z) * .78);
+			FVector P = From;
+			for (int32 k = 1; k <= Seg; k++)
+			{
+				const double U = double(k) / Seg;
+				const FVector Q = From * ((1 - U) * (1 - U)) + Ctrl * (2 * U * (1 - U)) + End * (U * U);
+				Out.Add({P, Q, float(R0 * (1 - .3 * U))});
+				P = Q;
+			}
+		};
+		for (int32 r = 0; r < NR; r++)
+		{
+			const double A = 2 * PI * (r + MHash(X + r, Z)) / NR, Reach = (1.3 + 2.1 * MHash(X, Z + r)) * Sz;
+			const FVector Dir(FMath::Cos(A), 0, FMath::Sin(A));
+			const FVector From = r % 3 == 2 ? FMath::Lerp(Fork, Mid, .25 + .5 * MHash(r, Z)) : Fork + FVector(0, -Hh * .55 * MHash(r, X), 0);
+			const FVector End = FVector(X, Foot, Z) + Dir * Reach * (r % 3 == 2 ? 1.25 : 1.0);
+			Arc(From, End, (.1 + .4 * MHash(Z, r)) * Sz, .052 * Sz);
+			if (Detail == 2 && MHash(X + r * 1.7, Z - r) < .55)
+			{
+				const double A2 = A + (MHash(r, X + Z) < .5 ? -.5 : .5);
+				const FVector Split = FMath::Lerp(From, End, .45) + FVector(0, (From.Y - Foot) * .22, 0);
+				Arc(Split, FVector(X + FMath::Cos(A2) * Reach * .9, Foot, Z + FMath::Sin(A2) * Reach * .9), .1 * Sz, .036 * Sz);
+			}
+		}
 	}
 }
