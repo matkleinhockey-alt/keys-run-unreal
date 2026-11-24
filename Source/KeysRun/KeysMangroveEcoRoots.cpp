@@ -120,14 +120,15 @@ namespace KeysMangroveEco
 				// purple-black insides showing on the flat ones
 				for (int32 k = 0; k < 3; k++)
 				{
-					const double A = PI / 2 + (RHash(k, 1.0) - .5) * 2.2, X = (RHash(k, 2.0) - .5) * 1.4, Tilt = (RHash(k, 3.0) - .5) * 1.2;
+					const double A = PI / 2 + (RHash(k, 1.0) - .5) * 2.2, X = (RHash(k, 2.0) - .5) * 1.4, Tilt = (RHash(k, 3.0) - .5) * .7;
 					const FVector Out = Rad(A, 1);
 					const FVector Long = (Out * FMath::Cos(Tilt) + FVector(FMath::Sin(Tilt), 0, 0)).GetSafeNormal();
 					const FVector Side = FVector::CrossProduct(Long, FVector(1, 0, 0)).GetSafeNormal(.01, FVector(0, 0, 1));
 					const FVector Thin = FVector::CrossProduct(Long, Side).GetSafeNormal();
 					const double Ls = .9 + .7 * RHash(k, 4.0);
 					const uint32 Shell = k == 0 ? 0x5c4e56 : k == 1 ? 0x8f8878 : 0x9e9684;
-					Blob(M, FVector(X, 0, 0) + Out * (.9 + Ls * .5), Long * Ls * .55, Side * Ls * .4, Thin * .25, 5, 2,
+					// (lying close along the bark, thick-lipped and rounded)
+					Blob(M, FVector(X, 0, 0) + Out * (.95 + Ls * .25), Long * Ls * .5, Side * Ls * .45, Thin * .42, 5, 2,
 						[Shell](double T) { return FMath::Lerp(RHex(Shell) * .75f, RHex(0xc8c2b2), float(FMath::Square(T))); });
 				}
 			}
@@ -270,8 +271,8 @@ namespace KeysMangroveEco
 			const FVector2D W(S.X + O.X * 2.5, S.Z + O.Y * 2.5);
 			const double D = KeysGeo::DepthAt(W.X, W.Y);
 			if (KeysGeo::LandH(W.X, W.Y) > -.05 || D < .12) return 0;
-			if (S.Bank) return .5;
-			return D > 1.0 ? .42 : D > .5 ? .3 : .18;
+			if (S.Bank) return .32;
+			return D > 1.0 ? .3 : D > .5 ? .22 : .12;
 		}
 
 		// what grows on one tree's roots, into Out (per kind); Live: the tide's height now (a piece in the air is left
@@ -333,7 +334,7 @@ namespace KeysMangroveEco
 						Out[G].Add(FTransform(R, G2U(Mid), IsSleeve(G) ? FVector(Lp, Sc, Sc) : FVector(Sc)));
 						if (OutP[G].Num() < 400) { OutP[G].Add(Mid); OutO[G].Add(Norm2(FVector2D(Up.X, Up.Z), Away)); }
 					}
-					T += .03 + .06 * H2;
+					T += .05 + .07 * H2;
 				}
 			}
 			return NRoot;
