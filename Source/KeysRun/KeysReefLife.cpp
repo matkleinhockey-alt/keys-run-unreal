@@ -1307,6 +1307,7 @@ namespace KeysReefLife
 				Move(A, S, B, FVector::ZeroVector, 20, B.HalfW * A.Len + .02, &A.PoseDir, TailEase, PecEase * .3, Dt);
 				if (A.StateT > .24)
 				{
+					if (A.bSpongeBite && G.bPosed) A.BitesLeft = int8(FMath::Max(int32(A.BitesLeft), 2));   // (biting on while the test camera looks)
 					if (--A.BitesLeft > 0 && !bAvoid)
 					{
 						// another mouthful a hand's width along (on a sponge, along its wall)
@@ -1494,6 +1495,7 @@ namespace KeysReefLife
 				}
 				Want = (Hover - A.P) * 1.5;
 				Move(A, S, B, Want, 3, Clear0 * .6, &A.PoseDir, .01, 0, Dt);
+				if (G.bPosed) A.Hold = FMath::Max(A.Hold, A.StateT + 4);   // (held while the test camera looks at it)
 				if (A.StateT > A.Hold)
 				{
 					FGroup* NG = nullptr;

@@ -1778,8 +1778,15 @@ namespace KeysReefDen
 	{
 		if (A[0] == TEXT("hunt"))
 		{
-			// the grouper comes for the nearest green moray that hunts with one, now
+			// the grouper comes for the nearest green moray that hunts with one, now. (reeflinks) 'hunt near': the nearest
+			// green moray of all is made one that a grouper hunts with, for this session (test hook: the hunt is the rule's)
 			L->bForceHunt = true;
+			if (A.Num() > 1 && A[1] == TEXT("near"))
+			{
+				FHouse* Best = nullptr;
+				for (TPair<int64, FHouse>& Kv : L->Houses) if (Kv.Value.D.Res == GreenMoray && (!Best || Kv.Value.Dist < Best->Dist)) Best = &Kv.Value;
+				if (Best) { Best->D.bBuddy = true; UE_LOG(LogTemp, Log, TEXT("KRDen hunt near (test hook): the green moray at %.1f, %.1f (%.1f m of water, %.1f m off) gets a grouper to hunt with"), Best->D.Mouth.X, Best->D.Mouth.Z, Best->D.Depth, Best->Dist); }
+			}
 			for (TPair<int64, FHouse>& Kv : L->Houses) if (Kv.Value.D.bBuddy) Kv.Value.NextHunt = 0;
 			UE_LOG(LogTemp, Log, TEXT("KRDen hunt: asked for now"));
 			return true;
