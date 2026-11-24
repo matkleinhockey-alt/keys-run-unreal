@@ -372,13 +372,13 @@ namespace KeysReefLife
 		// how far into a den's opening a point is (m; 0 or less: outside)
 		static double InDen(const FAnimal& A, const FVector& P) { return A.DenId ? FVector::DotProduct(A.DenMouth - P, A.DenAxis) : -1; }
 
-		// where to sleep. A fish that sleeps in holes (parrotfish) takes an empty den within 16 m, else wedges in at the
+		// where to sleep. A fish that sleeps in holes (parrotfish) takes an empty den within 30 m (16 m found none at Sombrero: ev3), else wedges in at the
 		// foot of the nearest coral head within 16 m; the rest lie beside the nearest head within 7 m, or where they are
 		bool SleepSpot(FAnimal& A, const FBody& B, const FSpecies& S, FVector& OutP, FVector& OutDir, bool& bByHead)
 		{
 			LetGoDen(A);
 			KeysReefDen::FDen Dn;
-			if (S.bSleepsInHoles && FreeDen(A.P, 16, B.HalfH * 2 * A.Len + .04, B.HalfH * 2 * A.Len + .06, false, Dn))
+			if (S.bSleepsInHoles && FreeDen(A.P, 30, B.HalfH * 2 * A.Len + .04, B.HalfH * 2 * A.Len + .06, false, Dn))
 			{
 				TakenDens.Add(Dn.Id);
 				A.DenId = Dn.Id; A.Spot = 1;
@@ -1341,7 +1341,7 @@ namespace KeysReefLife
 				else if ((A.Aim - A.P).Size() < .06 || A.StateT > 60)
 				{
 					A.State = SSleep; A.StateT = 0; A.V = FVector::ZeroVector;
-					const TCHAR* Where = A.Spot == 1 ? TEXT("in the opening of an empty den") : A.Spot == 2 ? (S.bSleepsInHoles ? TEXT("wedged in at the foot of a coral head (no empty den within 16 m)") : TEXT("against a coral head")) : TEXT("in the open (no coral head near)");
+					const TCHAR* Where = A.Spot == 1 ? TEXT("in the opening of an empty den") : A.Spot == 2 ? (S.bSleepsInHoles ? TEXT("wedged in at the foot of a coral head (no empty den within 30 m)") : TEXT("against a coral head")) : TEXT("in the open (no coral head near)");
 					if (A.bRest)
 					{
 						Rests++;

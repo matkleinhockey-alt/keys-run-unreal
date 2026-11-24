@@ -154,7 +154,7 @@ namespace KeysReefLife
 		                             // within this many metres of where it was dealt; with none, the group is not spawned
 		bool bHomeOnHead = false;    // the group's home is the top of the nearest coral head within 8 m (a nest on a rock, a station over a head)
 		// ---- links between animals (reeflinks; all off by default)
-		bool bSleepsInHoles = false; // at night it goes to an empty den or a hole at the foot of a coral head within 16 m and sleeps in it
+		bool bSleepsInHoles = false; // at night it goes to an empty den within 30 m, else the foot of a coral head within 16 m, and sleeps in it
 		bool bSponges = false;       // with bBitesRock: feeds on sponges, nipping at their walls; rock only where no sponge is in reach
 		bool bClient = false;        // visits cleaning stations: comes in, holds still at an odd angle, fins spread, while cleaners work it
 		bool bCleaner = false;       // keeps a cleaning station on its home head (bHomeOnHead) and works over the fish that come to it
