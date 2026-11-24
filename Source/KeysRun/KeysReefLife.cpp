@@ -23,6 +23,7 @@
 #include "HAL/PlatformTime.h"
 #include "Misc/CommandLine.h"
 #include "KeysReefAudio.h"
+#include "KeysReefDen.h"
 
 namespace KeysReefLife
 {
@@ -32,10 +33,11 @@ namespace KeysReefLife
 	constexpr double BiteHearR = 9;                     // a bite is played when the diver is this near (m)
 	constexpr double RlBoundsExt = 40;
 
-	enum EState : uint8 { SRove, SToBite, SBite, SFlee, SChase, SChased, SToSleep, SSleep, SHop, SBreathe, SDig };
+	enum EState : uint8 { SRove, SToBite, SBite, SFlee, SChase, SChased, SToSleep, SSleep, SHop, SBreathe, SDig, SToClean, SWait, SClean, SCleaning };
 	static const TCHAR* StateName(uint8 S)
 	{
-		static const TCHAR* N[] = {TEXT("roving"), TEXT("going to bite"), TEXT("biting"), TEXT("fleeing"), TEXT("chasing"), TEXT("chased"), TEXT("going to sleep"), TEXT("asleep"), TEXT("hopping"), TEXT("up for air"), TEXT("digging")};
+		static const TCHAR* N[] = {TEXT("roving"), TEXT("going to bite"), TEXT("biting"), TEXT("fleeing"), TEXT("chasing"), TEXT("chased"), TEXT("going to sleep"), TEXT("asleep"), TEXT("hopping"), TEXT("up for air"), TEXT("digging"),
+			TEXT("going to be cleaned"), TEXT("waiting its turn at a cleaning station"), TEXT("being cleaned"), TEXT("cleaning a client")};
 		return S < UE_ARRAY_COUNT(N) ? N[S] : TEXT("?");
 	}
 	static const TCHAR* RoleName(ERole R)
@@ -67,6 +69,18 @@ namespace KeysReefLife
 		uint8 Phase = 0, State = SRove;
 		int8 BitesLeft = 0, Lod = -1;
 		bool bFloorOnly = false;
+		// ---- links (reeflinks)
+		double Load = 0, LoadMax = 120;      // a client: seconds since it was last cleaned, and when it goes to be cleaned again
+		double FedT = 0, RestAt = 400;       // a resting animal: seconds fed since its last rest, and when it rests again
+		double DenShade = 1, TiltNow = 50, SeekT = 0;
+		int64 DenId = 0;                     // the den it sleeps or rests in (0: none)
+		FVector DenMouth = FVector::ZeroVector, DenAxis = FVector(1, 0, 0);
+		uint8 Spot = 0;                      // where it sleeps: 0 in the open, 1 in a den, 2 at the foot of a coral head
+		bool bRest = false, bSpongeBite = false;
+		int32 Station = -1;                  // a client: the cleaner group whose station it is going to, waiting at or at
+		int32 SpongeSp = -1;
+		FVector BiteN = FVector(1, 0, 0);    // a bite on a sponge's wall: the wall's outward normal there
+		double DigFor = 12;                  // how long this dig goes on (s)
 		int32 Id = 0, Pool = -1, Slot = -1, FinPool = -1, FinSlot = -1;
 		FTransform Xf, FinXf[2];
 		float Data[8] = {0, 0, 0, 0, 0, 0, 1, 0};
@@ -84,6 +98,11 @@ namespace KeysReefLife
 		int32 ChaseGroup = -1, ChaseIx = 0, ChasedBy = -1;   // who member 0 is chasing; who is chasing this group's male
 		FVector ChaseFrom = FVector::ZeroVector;
 		double ChaseStartD = 0;
+		// ---- links: the head it lives on; a cleaning station's client now and those waiting (group id << 8 | member)
+		double HeadR = 0, HeadFloor = 0;
+		bool bEggRock = false;
+		int64 StNow = -1;
+		TArray<int64> StQueue;
 		FRandomStream Rng;
 		TArray<FAnimal> M;
 	};
@@ -92,7 +111,9 @@ namespace KeysReefLife
 	struct FSeed { int32 Sp = 0, NA = 0, NB = 0, A = 0, B = -1; FVector Home = FVector::ZeroVector; uint32 Zone = 0, Seed = 0; double Depth = 0, Reef = 0; };
 
 	struct FTile { float Top[32 * 32]; float Floor[32 * 32]; uint8 Kind[32 * 32]; };   // Kind: 0 bottom, 1 stony coral, 2 sponge or wreck
-	struct FHead { double X, Z, R, TopY, FloorY; bool bStony; };
+	struct FHead { double X = 0, Z = 0, R = 0, TopY = 0, FloorY = 0; bool bStony = false, bSponge = false, bMassive = false; int32 Sp = -1; };
+	enum EHeadWant : int32 { HeadAny = 0, HeadStony = 1, HeadSponge = 2, HeadMassive = 3 };
+	static const TCHAR* SpongeName(int32 Sp) { return Sp == 6 ? TEXT("barrel sponge") : Sp == 7 ? TEXT("tube sponge") : Sp == 20 ? TEXT("giant barrel sponge") : Sp == 21 ? TEXT("azure vase sponge") : TEXT("sponge"); }
 	struct FPool { int32 Key = 0, Tris = 0; UInstancedStaticMeshComponent* C = nullptr; TArray<FAnimal*> Items; bool bDirty = false, bMoved = false, bFin = false; };
 	struct FScar { FVector P; double Size, Age, Life; bool bPit = false; FVector AxU = FVector(1, 0, 0), AyU = FVector(0, 1, 0); };
 	struct FPuff { FVector P, V; double Size, Age, Life; };
@@ -100,6 +121,10 @@ namespace KeysReefLife
 	// a coral or sponge as something solid: its radius and height, and whether it is stony coral (rock a beak can
 	// scrape). Sea fans, plumes, rods, algae and grass are soft: fish pass through them. Sizes are KeysSchools' table
 	// for the hand-built kinds and KeysReef's model table (footprint, mean height) for the modelled ones.
+	// (sponges: the hand-built barrel 6 and tube 7, the modelled barrel 20 and azure vase 21; massive heads that a patch of
+	// eggs can lie on: the hand-built brain 2 and star 3, the modelled brain 13 and star 14, and a den's rock)
+	static bool IsSpongeSp(int32 Sp) { return Sp == 6 || Sp == 7 || Sp == 20 || Sp == 21; }
+	static bool IsMassiveSp(const AKeysReef::FInst& I) { return I.Den != 0 || I.Species == 2 || I.Species == 3 || I.Species == 13 || I.Species == 14; }
 	static bool HeadDims(const AKeysReef::FInst& I, double& R, double& H, bool& bStony)
 	{
 		static const double PH[] = {1.0, 1.1, .56, .72, 0, 0, 1.0, 1.1, .24, 0};
@@ -157,7 +182,13 @@ namespace KeysReefLife
 		// ---- statistics
 		double CpuAcc = 0, CpuWorst = 0, ChunkWorstMs = 0, FrameAfterChunkWorst = 0, StatT = 0;
 		int32 CpuN = 0, Wakes = 0, Bites = 0, Crunches = 0, PuffN = 0, Flees = 0, Chases = 0, Sleeps = 0, ChunksDealt = 0, Breaths = 0, Lifts = 0, Digs = 0;
+		int32 SleepsInDen = 0, SleepsAtHead = 0, SleepsOpen = 0, Nips = 0, Cleans = 0, Waits = 0, Rests = 0, Alarms = 0;
 		bool bChunkLastFrame = false;
+		// ---- links (reeflinks): the dens taken for the night or a rest, the egg patches
+		TSet<int64> TakenDens;
+		UInstancedStaticMeshComponent* EggC = nullptr;
+		bool bEggTried = false;
+		int32 EggTris = 0, EggsDrawn = 0;
 
 		const FSpecies& Sp(int32 I) const { return (*Reg)[I]; }
 		FGroup* FindGroup(int32 Id) { for (TUniquePtr<FGroup>& G : Groups) if (G->Id == Id) return G.Get(); return nullptr; }
@@ -192,7 +223,10 @@ namespace KeysReefLife
 				{
 					double Rr, H; bool bSt;
 					if (!HeadDims(I, Rr, H, bSt)) continue;
-					Out.Add({I.X, I.Z, Rr, I.Y + H, I.Y, bSt});
+					FHead Hd;
+					Hd.X = I.X; Hd.Z = I.Z; Hd.R = Rr; Hd.TopY = I.Y + H; Hd.FloorY = I.Y; Hd.bStony = bSt;
+					Hd.bSponge = IsSpongeSp(I.Species); Hd.bMassive = IsMassiveSp(I); Hd.Sp = I.Species;
+					Out.Add(Hd);
 				}
 			return HeadCache.Add(K, MoveTemp(Out));
 		}
@@ -253,7 +287,7 @@ namespace KeysReefLife
 			if (OutKind) *OutKind = T->Kind[J * 32 + I];
 			return T->Top[J * 32 + I];
 		}
-		bool NearestHead(const FVector& At, double MaxR, FHead& Out, bool bStonyOnly = false)
+		bool NearestHead(const FVector& At, double MaxR, FHead& Out, int32 Want = HeadAny)
 		{
 			double Best = MaxR;
 			bool bFound = false;
@@ -262,7 +296,7 @@ namespace KeysReefLife
 					for (const FHead& H : HeadsOf(cx, cz))
 					{
 						const double D = RlHyp(H.X - At.X, H.Z - At.Z) - H.R;
-						if (bStonyOnly && !H.bStony) continue;
+						if ((Want == HeadStony && !H.bStony) || (Want == HeadSponge && !H.bSponge) || (Want == HeadMassive && !H.bMassive)) continue;
 						if (D < Best && H.TopY - H.FloorY > .3 && H.TopY < SurfY - .4) { Best = D; Out = H; bFound = true; }
 					}
 			return bFound;
@@ -314,16 +348,59 @@ namespace KeysReefLife
 			}
 		}
 
-		bool SleepSpot(const FAnimal& A, const FBody& B, FVector& OutP, FVector& OutDir, bool& bByHead)
+		// ---- dens (KeysReefDen): an empty one nobody has taken, its opening at least MinW wide and MinH high, within R
+		bool FreeDen(const FVector& At, double R, double MinW, double MinH, bool bLedge, KeysReefDen::FDen& Out)
 		{
+			double Best = R;
+			bool bFound = false;
+			for (int32 cz = FMath::FloorToInt32((At.Z - R) / 50); cz <= FMath::FloorToInt32((At.Z + R) / 50); cz++)
+				for (int32 cx = FMath::FloorToInt32((At.X - R) / 50); cx <= FMath::FloorToInt32((At.X + R) / 50); cx++)
+					for (const KeysReefDen::FDen& D : KeysReefDen::DensOfChunk(cx, cz))
+					{
+						if (D.Res != KeysReefDen::ResNone || D.Kind >= KeysReefDen::NumKinds || TakenDens.Contains(D.Id)) continue;
+						if (bLedge && D.Kind != KeysReefDen::Ledge && D.Kind != KeysReefDen::Cave) continue;
+						if (D.W < MinW || D.H < MinH || D.Mouth.Y > SurfY - .8 || FMath::Abs(D.Axis.Y) > .6) continue;
+						const double Dd = RlHyp(D.Mouth.X - At.X, D.Mouth.Z - At.Z);
+						if (Dd < Best) { Best = Dd; Out = D; bFound = true; }
+					}
+			return bFound;
+		}
+		void LetGoDen(FAnimal& A) { if (A.DenId) TakenDens.Remove(A.DenId); A.DenId = 0; A.Spot = 0; }
+		// how far into a den's opening a point is (m; 0 or less: outside)
+		static double InDen(const FAnimal& A, const FVector& P) { return A.DenId ? FVector::DotProduct(A.DenMouth - P, A.DenAxis) : -1; }
+
+		// where to sleep. A fish that sleeps in holes (parrotfish) takes an empty den within 16 m, else wedges in at the
+		// foot of the nearest coral head within 16 m; the rest lie beside the nearest head within 7 m, or where they are
+		bool SleepSpot(FAnimal& A, const FBody& B, const FSpecies& S, FVector& OutP, FVector& OutDir, bool& bByHead)
+		{
+			LetGoDen(A);
+			KeysReefDen::FDen Dn;
+			if (S.bSleepsInHoles && FreeDen(A.P, 16, B.HalfH * 2 * A.Len + .04, B.HalfH * 2 * A.Len + .06, false, Dn))
+			{
+				TakenDens.Add(Dn.Id);
+				A.DenId = Dn.Id; A.Spot = 1;
+				const FVector Ax = RlFlat(Dn.Axis).GetSafeNormal(.0001, FVector(1, 0, 0)), Rt(-Ax.Z, 0, Ax.X);
+				A.DenMouth = Dn.Mouth; A.DenAxis = Ax;
+				// side on in the opening when it is wide enough, else head first with the tail just inside
+				const bool bSide = Dn.W > A.Len * 1.05;
+				const double In = bSide ? B.HalfW * A.Len + .1 : A.Len * .42;
+				OutP = Dn.Mouth - Ax * In;
+				OutP.Y = FMath::Min(Dn.Mouth.Y - Dn.H * .5 + .02 + B.HalfH * A.Len, Dn.Mouth.Y + Dn.H * .5 - B.HalfH * A.Len - .02);
+				OutDir = bSide ? (A.Seed > .5 ? Rt : -Rt) : -Ax;
+				bByHead = true;
+				return true;
+			}
 			FHead H;
-			bByHead = NearestHead(A.P, 7, H);
+			const bool bHoles = S.bSleepsInHoles;
+			bByHead = NearestHead(A.P, bHoles ? 16 : 7, H, bHoles ? HeadStony : HeadAny);
 			if (bByHead)
 			{
+				A.Spot = 2;
 				FVector Dir = RlFlat(A.P - FVector(H.X, 0, H.Z));
 				if (!Dir.Normalize()) Dir = FVector(FMath::Cos(A.Seed * 6.28), 0, FMath::Sin(A.Seed * 6.28));
 				Dir = Dir.RotateAngleAxis((A.Seed - .5) * 70, FVector(0, 1, 0));   // (each its own place round the head)
-				const FVector At = FVector(H.X, 0, H.Z) + Dir * (H.R + B.HalfW * A.Len + .04);
+				// one that sleeps in holes wedges itself in under the head's rim; the others lie beside it
+				const FVector At = FVector(H.X, 0, H.Z) + Dir * (bHoles ? H.R * .9 + B.HalfW * A.Len * .3 : H.R + B.HalfW * A.Len + .04);
 				double Fl;
 				TopAt(At.X, At.Z, &Fl);
 				OutP = FVector(At.X, Fl + B.HalfH * A.Len + .02, At.Z);
@@ -369,9 +446,33 @@ namespace KeysReefLife
 				if (Away) Sc += FMath::Min(10.0, RlHyp(X - Away->X, Z - Away->Z)) * .4;
 				if (Sc > BestSc) { BestSc = Sc; Best = FVector(X, Tp, Z); }
 			}
+			// an angelfish roves from sponge to sponge (where there are any in its range)
+			FHead Sg;
+			if (S.bSponges && G.Role != ERole::Territory && RandomHead(G.Home, S.Roam, HeadSponge, G.Rng, Sg))
+			{
+				FVector Dir = RlFlat(G.Centre - FVector(Sg.X, 0, Sg.Z));
+				if (!Dir.Normalize()) Dir = FVector(1, 0, 0);
+				Best = FVector(Sg.X, 0, Sg.Z) + Dir * (Sg.R + 1.0);
+				Best.Y = TopAt(Best.X, Best.Z);
+			}
 			G.Goal = Best;
 			G.GoalT = G.Rng.FRandRange(9.f, 22.f);
 			SetOffsets(G, S);
+		}
+
+		// one head of the kind wanted within R of At, picked at random
+		bool RandomHead(const FVector& At, double R, int32 Want, FRandomStream& Rng, FHead& Out)
+		{
+			int32 N = 0;
+			for (int32 cz = FMath::FloorToInt32((At.Z - R) / 50); cz <= FMath::FloorToInt32((At.Z + R) / 50); cz++)
+				for (int32 cx = FMath::FloorToInt32((At.X - R) / 50); cx <= FMath::FloorToInt32((At.X + R) / 50); cx++)
+					for (const FHead& H : HeadsOf(cx, cz))
+					{
+						if ((Want == HeadSponge && !H.bSponge) || (Want == HeadStony && !H.bStony) || (Want == HeadMassive && !H.bMassive)) continue;
+						if (RlHyp(H.X - At.X, H.Z - At.Z) > R || H.TopY > SurfY - .5 || H.TopY - H.FloorY < .25) continue;
+						if (Rng.RandRange(0, N++) == 0) Out = H;
+					}
+			return N > 0;
 		}
 
 		bool SpawnGroup(const FSeed& Sd, int64 ChunkKey)
@@ -390,7 +491,15 @@ namespace KeysReefLife
 			double Fl;
 			const double Tp = TopAt(Sd.Home.X, Sd.Home.Z, &Fl);
 			G.Home = FVector(Sd.Home.X, Tp, Sd.Home.Z);
-			if (S.bHomeOnHead) { FHead Hd; if (NearestHead(G.Home, 8, Hd)) G.Home = FVector(Hd.X, Hd.TopY, Hd.Z); }
+			// a nest on a rock, a cleaning station, a station kept over a head: home is the top of the nearest head within 8 m
+			// (eggs want a massive head: a brain or star coral, a den's rock, not the tips of a branching coral)
+			if (S.bHomeOnHead || G.Role == ERole::Hoverer)
+			{
+				FHead Hd;
+				G.bEggRock = S.bEggs && NearestHead(G.Home, 8, Hd, HeadMassive);
+				if (G.bEggRock || NearestHead(G.Home, 8, Hd, S.bCleaner ? HeadStony : HeadAny)) { G.Home = FVector(Hd.X, Hd.TopY, Hd.Z); G.HeadR = Hd.R; G.HeadFloor = Hd.FloorY; }
+				else if (S.bCleaner || S.bEggs) return false;   // (nothing counted yet: no rock, no station, no nest)
+			}
 			G.Goal = G.Home; G.Centre = G.Home;
 			G.Circ = G.Rng.FRand() * 2 * PI; G.CircDir = G.Rng.FRand() < .5 ? -1 : 1;
 			G.M.SetNum(N);
@@ -407,6 +516,8 @@ namespace KeysReefLife
 				A.BiteT = G.Rng.FRandRange(.5f, 1.f) * S.BiteEvery;
 				A.PuffT = (S.DigEvery > 0 ? S.DigEvery : S.PuffEvery) * G.Rng.FRandRange(.2f, 1.2f);
 				A.AirT = S.BreathEvery * G.Rng.FRandRange(.15f, 1.f);
+				A.LoadMax = G.Rng.FRandRange(90.f, 300.f); A.Load = A.LoadMax * G.Rng.FRandRange(0.f, .9f);
+				A.RestAt = FMath::Max(60.0, S.RestEvery) * G.Rng.FRandRange(.7f, 1.3f); A.FedT = A.RestAt * G.Rng.FRandRange(0.f, .8f);
 				A.PecPh = G.Rng.FRand();
 				const double An = G.Rng.FRand() * 2 * PI;
 				A.Fwd = FVector(FMath::Cos(An), 0, FMath::Sin(An));
@@ -426,7 +537,7 @@ namespace KeysReefLife
 					uint8 Kd = 0;
 					double Fl0;
 					TopAt(X, Z, &Fl0, &Kd);
-					const bool bFoot = NearestHead(A.P, S.HeadWithin > 0 ? S.HeadWithin : 1.5, Hd, S.HeadWithin > 0);
+					const bool bFoot = NearestHead(A.P, S.HeadWithin > 0 ? S.HeadWithin : 1.5, Hd, S.HeadWithin > 0 ? HeadStony : HeadAny);
 					if (S.HeadWithin > 0 && !bFoot) return false;   // (nothing has been counted yet: the group is simply not there)
 					if (bFoot && (S.HeadWithin > 0 || Kd != 0))
 					{
@@ -446,7 +557,7 @@ namespace KeysReefLife
 				{
 					// dealt at night: already tucked in
 					bool bHead;
-					SleepSpot(A, B, A.Aim, A.PoseDir, bHead);
+					SleepSpot(A, B, S, A.Aim, A.PoseDir, bHead);
 					A.P = A.Aim; A.Fwd = A.PoseDir; A.State = SSleep; A.Cocoon = S.bCocoon ? 1 : 0; A.bFloorOnly = true;
 				}
 				Pose(A, S, 0);
@@ -466,6 +577,7 @@ namespace KeysReefLife
 			{
 				if (A.Pool >= 0) PoolList[A.Pool].bDirty = true;
 				if (A.FinPool >= 0) PoolList[A.FinPool].bDirty = true;
+				LetGoDen(A);
 			}
 			// (the pools still hold pointers into this group: they are laid out again before anything reads them)
 			for (FPool& Pl : PoolList) if (Pl.bDirty) Pl.Items.Reset();
@@ -515,21 +627,9 @@ namespace KeysReefLife
 		int32 AliveCount() const { int32 N = 0; for (const int32 C : SpAlive) N += C; return N; }
 
 		// ================================================================ meshes and pools
-		int32 PoolFor(int32 SpI, int32 Phase, int32 Kind)   // Kind 0..2 a level of detail, 3 the rowing fin
+		// a mesh made into an instanced pool in M_KR_Boid (the species' pools and the egg patches)
+		UInstancedStaticMeshComponent* MakeComp(FKeysMesh& M, const FString& Nm, double Cull, bool bShadow, int32& Tris)
 		{
-			const int32 Key = SpI * 64 + Phase * 4 + Kind;
-			for (int32 i = 0; i < PoolList.Num(); i++) if (PoolList[i].Key == Key) return PoolList[i].C ? i : -1;
-			if (!Act->MID || bBuiltMesh) return -1;
-			bBuiltMesh = true;
-			const double T0 = FPlatformTime::Seconds();
-			const FSpecies& S = Sp(SpI);
-			const FBody& B = S.Phases[Phase].Body;
-			FKeysMesh M;
-			const TFunction<FLinearColor(const FPaint&)> Paint = [&S, Phase](const FPaint& At) { return S.Paint(Phase, At); };
-			if (S.Build) S.Build(M, Phase, Kind);
-			else if (S.Mesh && S.Mesh(Phase, Kind, M)) {}
-			else if (Kind == 3) BuildPectoral(M, B, Paint);
-			else BuildBody(M, B, Kind, !(S.bRows && Kind == 0), Paint);
 			M.SyncKinds();
 			FMeshDescription MD;
 			FStaticMeshAttributes Attr(MD);
@@ -554,7 +654,7 @@ namespace KeysReefLife
 				UVs.Set(Iid, 1, FVector2f(M.K[i]));
 				Inst[i] = Iid;
 			}
-			int32 Tris = 0;
+			Tris = 0;
 			for (int32 i = 0; i + 2 < M.T.Num(); i += 3)
 			{
 				const int32 Ia = M.T[i], Ib = M.T[i + 1], Ic = M.T[i + 2];
@@ -564,7 +664,6 @@ namespace KeysReefLife
 				MD.CreateTriangle(Grp, {Inst[Ia], Inst[bFlip ? Ic : Ib], Inst[bFlip ? Ib : Ic]});
 				Tris++;
 			}
-			const FString Nm = FString::Printf(TEXT("%s_%d_%d"), *S.Key, Phase, Kind);
 			UStaticMesh* SM = NewObject<UStaticMesh>(Act, *(TEXT("ReefLife_") + Nm));
 			SM->GetStaticMaterials().Add(FStaticMaterial(Act->MID, FName(TEXT("Mat"))));
 			SM->SetPositiveBoundsExtension(FVector(RlBoundsExt));
@@ -581,12 +680,78 @@ namespace KeysReefLife
 			C->SetupAttachment(Act->Root);
 			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			C->NumCustomDataFloats = 8;   // tail phase, its rate, when, amplitude, body bend, flash, shade, seed (M_KR_Boid)
-			C->SetCastShadow(Kind == 0);   // only the nearest level of detail throws a shadow (marshal, 2026-11-24: dive GPU)
+			C->SetCastShadow(bShadow);
 			C->SetMaterial(0, Act->MID);
-			C->SetCullDistances(0, int32(S.Cull * 100));
+			C->SetCullDistances(0, int32(Cull * 100));
 			C->bAffectDistanceFieldLighting = false;
 			C->RegisterComponent();
 			Act->Pools.Add(C);
+			return C;
+		}
+
+		// a sergeant major's eggs: a patch of purple-red eggs about 22 by 15 cm laid on the rock, a little raised, grainy
+		static void BuildEggs(FKeysMesh& M)
+		{
+			constexpr int32 NR = 5, NA = 20;
+			const FLinearColor Ca = Hex(0x7b2b66), Cb = Hex(0x5c1d4d), Rim = Hex(0x6e4a5c);
+			M.AddVert(FVector(0, 0, .011), FVector(0, 0, 1), Ca);
+			for (int32 r = 1; r <= NR; r++)
+				for (int32 a = 0; a < NA; a++)
+				{
+					const double T = double(r) / NR, An = a * 2 * PI / NA, Wob = 1 + .16 * FMath::Sin(An * 3 + 1) + .09 * FMath::Sin(An * 5 + 2);
+					const FVector P(FMath::Cos(An) * .11 * T * Wob, FMath::Sin(An) * .075 * T * Wob, .011 * (1 - T * T) + (((r + a) & 1) ? .002 : 0) - (r == NR ? .004 : 0));
+					M.AddVert(P, FVector(FMath::Cos(An) * T * .4, FMath::Sin(An) * T * .4, 1).GetSafeNormal(), r == NR ? Rim : ((r * 7 + a) % 3 ? Ca : Cb));
+				}
+			for (int32 a = 0; a < NA; a++) { M.T.Add(0); M.T.Add(1 + a); M.T.Add(1 + (a + 1) % NA); }
+			for (int32 r = 1; r < NR; r++)
+				for (int32 a = 0; a < NA; a++)
+				{
+					const int32 I0 = 1 + (r - 1) * NA + a, I1 = 1 + (r - 1) * NA + (a + 1) % NA, J0 = I0 + NA, J1 = I1 + NA;
+					M.T.Append({I0, J0, J1, I0, J1, I1});
+				}
+		}
+		void DrawEggs()
+		{
+			TArray<FTransform> Xf;
+			for (TUniquePtr<FGroup>& Gp : Groups)
+				if (Gp->bEggRock && Sp(Gp->Sp).bEggs && (Gp->Home - Cam).Size() < 40)
+					Xf.Add(FTransform(FRotator(0, (Gp->Id * 47) % 360, 0), RlG2U(Gp->Home - FVector(0, .006, 0)), FVector(1)));
+			if (!EggC)
+			{
+				if (!Xf.Num() || bEggTried || !Act->MID) return;
+				bEggTried = true;
+				FKeysMesh M;
+				BuildEggs(M);
+				EggC = MakeComp(M, TEXT("sergeantmajor_eggs"), 40, false, EggTris);
+				UE_LOG(LogTemp, Log, TEXT("KRReef mesh sergeant major eggs: %d triangles"), EggTris);
+			}
+			if (!Xf.Num() && !EggsDrawn) return;
+			EggC->ClearInstances();
+			if (Xf.Num()) EggC->AddInstances(Xf, false, true);
+			const float D[8] = {0, 0, float(NowT), 0, 0, 0, 1, 0};
+			for (int32 i = 0; i < Xf.Num(); i++) EggC->SetCustomData(i, TArrayView<const float>(D, 8), false);
+			EggC->MarkRenderStateDirty();
+			EggsDrawn = Xf.Num();
+		}
+
+		int32 PoolFor(int32 SpI, int32 Phase, int32 Kind)   // Kind 0..2 a level of detail, 3 the rowing fin
+		{
+			const int32 Key = SpI * 64 + Phase * 4 + Kind;
+			for (int32 i = 0; i < PoolList.Num(); i++) if (PoolList[i].Key == Key) return PoolList[i].C ? i : -1;
+			if (!Act->MID || bBuiltMesh) return -1;
+			bBuiltMesh = true;
+			const double T0 = FPlatformTime::Seconds();
+			const FSpecies& S = Sp(SpI);
+			const FBody& B = S.Phases[Phase].Body;
+			FKeysMesh M;
+			const TFunction<FLinearColor(const FPaint&)> Paint = [&S, Phase](const FPaint& At) { return S.Paint(Phase, At); };
+			if (S.Build) S.Build(M, Phase, Kind);
+			else if (S.Mesh && S.Mesh(Phase, Kind, M)) {}
+			else if (Kind == 3) BuildPectoral(M, B, Paint);
+			else BuildBody(M, B, Kind, !(S.bRows && Kind == 0), Paint);
+			const FString Nm = FString::Printf(TEXT("%s_%d_%d"), *S.Key, Phase, Kind);
+			int32 Tris = 0;
+			UInstancedStaticMeshComponent* C = MakeComp(M, Nm, S.Cull, Kind == 0, Tris);   // (only the nearest level of detail throws a shadow: marshal, 2026-11-24, dive GPU)
 			FPool Pl;
 			Pl.Key = Key; Pl.Tris = Tris; Pl.C = C; Pl.bFin = Kind == 3;
 			PoolList.Add(Pl);
@@ -603,7 +768,7 @@ namespace KeysReefLife
 			R.Roll = FMath::RadiansToDegrees(A.Roll);
 			A.Xf = FTransform(R, RlG2U(A.P), FVector(A.Len));
 			A.Data[0] = float(FMath::Fmod(A.TailPh, 2 * PI)); A.Data[1] = float(A.TailFreq); A.Data[2] = float(NowT); A.Data[3] = float(A.TailAmp);
-			A.Data[4] = float(FMath::Clamp(A.YawRate * .45, -.9, .9)); A.Data[5] = 0; A.Data[6] = float(A.Shade); A.Data[7] = float(A.Seed);
+			A.Data[4] = float(FMath::Clamp(A.YawRate * .45, -.9, .9)); A.Data[5] = 0; A.Data[6] = float(A.Shade * A.DenShade); A.Data[7] = float(A.Seed);
 			if (S.bRows) PoseFins(A, S);
 			if (!S.Pose) return;
 			FPoseIn In;
@@ -631,7 +796,9 @@ namespace KeysReefLife
 			double Sw, Feather;
 			if (Cyc < .6) { const double T = Cyc / .6; Sw = T * T * (3 - 2 * T); Feather = FMath::Sin(PI * T); }
 			else { const double T = (Cyc - .6) / .4; Sw = 1 - T * T * (3 - 2 * T); Feather = 0; }
-			const double Ang = 10 + 62 * A.PecAmp * Sw, Fe = 60 * A.PecAmp * Feather;
+			// (being cleaned: both fins held spread out wide and still)
+			const bool bSpread = A.State == SClean;
+			const double Ang = bSpread ? 74 : 10 + 62 * A.PecAmp * Sw, Fe = bSpread ? 0 : 60 * A.PecAmp * Feather;
 			const double Th = FMath::Asin(FMath::Clamp(B.PecV, -1.0, 1.0));
 			const double Yr = B.HalfW * .98 * FMath::Cos(Th) + .004, Zr = B.HalfH * FMath::Sin(Th) * (1 - B.Arch) * .95, Xr = .5 - B.PecU * (1 - B.TailLen);
 			for (int32 k = 0; k < 2; k++)
@@ -773,6 +940,27 @@ namespace KeysReefLife
 
 		bool PickBite(FGroup& G, FAnimal& A, const FSpecies& S)
 		{
+			A.bSpongeBite = false; A.TiltNow = S.BiteTilt;
+			if (S.bSponges)
+			{
+				// an angelfish: a sponge within reach, nipped at its wall from the side, a little nose-down
+				FHead Sg;
+				if (NearestHead(A.P, 4.5, Sg, HeadSponge) && !(bDiving && !G.bPosed && RlHyp(Sg.X - DiverP.X, Sg.Z - DiverP.Z) < S.Shy * 1.3 + Sg.R))
+				{
+					FVector Dir = RlFlat(A.P - FVector(Sg.X, 0, Sg.Z));
+					if (!Dir.Normalize()) Dir = FVector(1, 0, 0);
+					Dir = Dir.RotateAngleAxis(G.Rng.FRandRange(-35.f, 35.f), FVector(0, 1, 0));
+					const double Y = FMath::Lerp(Sg.FloorY + .12, Sg.TopY - .06, G.Rng.FRandRange(.3f, .85f));
+					A.Aim = FVector(Sg.X, Y, Sg.Z) + Dir * (Sg.R * .82);
+					A.BiteN = Dir; A.SpongeSp = Sg.Sp;
+					A.bSpongeBite = true; A.TiltNow = 14;
+					A.BitesLeft = int8(G.Rng.RandRange(2, 4));
+					A.State = SToBite; A.StateT = 0;
+					return true;
+				}
+				// (no sponge in reach: now and then a bite of what grows on the rock - algae, tunicates - else on to a sponge)
+				if (G.Rng.FRand() < .7) return false;
+			}
 			FVector Best = FVector::ZeroVector;
 			double BestSc = -1e9;
 			const FVector Toward = RlFlat(G.Goal + A.Off - A.P).GetClampedToMaxSize(1.0);
@@ -798,6 +986,12 @@ namespace KeysReefLife
 		void OnBite(FGroup& G, FAnimal& A, const FSpecies& S)
 		{
 			Bites++;
+			if (A.bSpongeBite)
+			{
+				Nips++;
+				if ((A.Aim - Cam).Size() < 30) Log(FString::Printf(TEXT("nip: %s nipped at the wall of a %s at %.1f, %.1f, %.1f (%.1f m over the bottom) because angelfish feed on sponges and this one is within its range; effect: it hangs nose-in at the sponge for a bite, %d more to go, then roves on to the next sponge"),
+					*Who(G, A), SpongeName(A.SpongeSp), A.Aim.X, A.Aim.Y, A.Aim.Z, A.Aim.Y - TopAt(A.Aim.X + A.BiteN.X * 1.5, A.Aim.Z + A.BiteN.Z * 1.5), FMath::Max(0, A.BitesLeft - 1)));
+			}
 			if (S.ScarCm > 0)
 			{
 				if (Scars.Num() >= 160) Scars.RemoveAt(0);
@@ -857,7 +1051,7 @@ namespace KeysReefLife
 			double Need = TopAt(NP.X, NP.Z, &Fl) + Clear;
 			if (A.bFloorOnly) Need = Fl + Clear;
 			// one that lies in the sand lies in the sand as it is drawn, not in the 1 m tile's
-			if (S.Bury > 0 && Clear < B.HalfH * A.Len && Need - Clear <= Fl + .01) Need = KeysSea::SeafloorHeightAt(NP.X, NP.Z) + Clear;
+			if (S.Bury > 0 && Clear < B.HalfH * A.Len && Need - Clear <= Fl + .01) Need = KeysReefDen::FloorNear(NP.X, NP.Z) + Clear;
 			if (NP.Y < Need)
 			{
 				const double MaxLift = (S.Cruise + 1.2) * Dt + .01;
@@ -893,7 +1087,8 @@ namespace KeysReefLife
 			if (A.Fwd.IsNearlyZero()) A.Fwd = OldF;
 			const double Yr = Dt > 0 ? FMath::FindDeltaAngleRadians(FMath::Atan2(OldF.Z, OldF.X), FMath::Atan2(A.Fwd.Z, A.Fwd.X)) / Dt : 0;
 			A.YawRate += (Yr - A.YawRate) * FMath::Min(1.0, Dt * 8);
-			const double RollWant = A.State == SSleep ? .22 : A.State == SBite ? FMath::Sin(A.StateT * 55) * .14 : FMath::Clamp(A.YawRate * Spd * .5, -.5, .5);
+			// (asleep in a hole it lies as the hole holds it; being cleaned it hangs over on its side, at an odd angle)
+			const double RollWant = A.State == SSleep ? (A.Spot == 1 || A.bRest ? .05 : .22) : A.State == SClean ? (A.Seed > .5 ? .5 : -.5) : A.State == SBite ? FMath::Sin(A.StateT * 55) * .14 : FMath::Clamp(A.YawRate * Spd * .5, -.5, .5);
 			A.Roll += (RollWant - A.Roll) * FMath::Min(1.0, Dt * (A.State == SBite ? 30 : 5));
 			const double Rel = Spd / FMath::Max(.05, A.Len);
 			A.TailFreq = 2 * PI * FMath::Clamp(.9 + .55 * Rel, .9, 9.0);
@@ -901,6 +1096,108 @@ namespace KeysReefLife
 			A.TailAmp += (TailAmp - A.TailAmp) * FMath::Min(1.0, Dt * 4);
 			A.PecAmp += (PecAmp - A.PecAmp) * FMath::Min(1.0, Dt * 5);
 			A.PecPh += Dt * (1.3 + 1.7 * FMath::Clamp(Spd / FMath::Max(.05, S.Cruise), 0.0, 1.3)) * (A.PecAmp > .05 || (S.Limb && A.TailAmp > .1) ? 1 : 0);
+		}
+
+		// ================================================================ links (reeflinks): cleaning stations, rests
+		static int64 Pack(const FGroup& G, int32 I) { return (int64(G.Id) << 8) | int64(I & 255); }
+		FAnimal* Unpack(int64 K, FGroup*& OutG)
+		{
+			OutG = K >= 0 ? FindGroup(int32(K >> 8)) : nullptr;
+			const int32 I = int32(K & 255);
+			return OutG && OutG->M.IsValidIndex(I) ? &OutG->M[I] : nullptr;
+		}
+		// the nearest station open within R with room in its queue (one being cleaned and two waiting at most)
+		FGroup* NearestStation(const FVector& P, double R)
+		{
+			FGroup* Best = nullptr;
+			double BestD = R;
+			for (TUniquePtr<FGroup>& Gp : Groups)
+			{
+				if (!Sp(Gp->Sp).bCleaner || SleepTime(Sp(Gp->Sp))) continue;
+				const int32 N = (Gp->StNow >= 0 ? 1 : 0) + Gp->StQueue.Num();
+				if (N >= 3) continue;
+				const double D = RlHyp(Gp->Home.X - P.X, Gp->Home.Z - P.Z) + N * 4;
+				if (D < BestD) { BestD = D; Best = Gp.Get(); }
+			}
+			return Best;
+		}
+		void JoinStation(FGroup& St, FGroup& G, int32 I, FAnimal& A)
+		{
+			const int64 K = Pack(G, I);
+			A.Station = St.Id; A.StateT = 0;
+			FGroup* CG = nullptr;
+			const FAnimal* Now = Unpack(St.StNow, CG);
+			if (!Now)
+			{
+				St.StNow = K; A.State = SToClean;
+				Log(FString::Printf(TEXT("clean: %s makes for the cleaning station on the coral head at %.1f, %.1f (%.1f m off) because it has gone %.0f s since it was last cleaned; effect: it swims in to be cleaned"), *Who(G, A), St.Home.X, St.Home.Z, RlHyp(St.Home.X - A.P.X, St.Home.Z - A.P.Z), A.Load));
+			}
+			else
+			{
+				St.StQueue.Add(K); A.State = SWait; Waits++;
+				Log(FString::Printf(TEXT("queue: %s comes to the cleaning station at %.1f, %.1f because it has gone %.0f s since it was last cleaned, but %s is being cleaned; effect: it waits its turn off the head, %d in the queue"), *Who(G, A), St.Home.X, St.Home.Z, A.Load, CG ? *Who(*CG, *Now) : TEXT("another fish"), St.StQueue.Num()));
+			}
+		}
+		void LeaveStation(FGroup& G, int32 I, FAnimal& A)
+		{
+			if (FGroup* St = FindGroup(A.Station)) { const int64 K = Pack(G, I); if (St->StNow == K) St->StNow = -1; St->StQueue.Remove(K); }
+			A.Station = -1; A.State = SRove; A.StateT = 0; A.Load = 0; A.LoadMax = G.Rng.FRandRange(180.f, 420.f); A.SeekT = 0;
+		}
+		// in a cleaner group's step: who is not coming any more loses its place; the next in line moves up
+		void TendStation(FGroup& St)
+		{
+			FGroup* CG = nullptr;
+			auto Valid = [&](int64 K) { const FAnimal* C = Unpack(K, CG); return C && C->Station == St.Id && (C->State == SWait || C->State == SToClean || C->State == SClean); };
+			if (St.StNow >= 0 && !Valid(St.StNow)) St.StNow = -1;
+			St.StQueue.RemoveAll([&](int64 K) { return !Valid(K); });
+			if (St.StNow < 0 && St.StQueue.Num()) { St.StNow = St.StQueue[0]; St.StQueue.RemoveAt(0); }
+		}
+		// the links that start from roving: a cleaner going to work on a client, a client going to be cleaned, a turtle
+		// going to rest under a ledge. True when it has changed state (the step is done)
+		bool LinkStep(FGroup& G, int32 I, FAnimal& A, const FSpecies& S, const FBody& B, double Act01, double Dt)
+		{
+			if (S.bCleaner)
+			{
+				FGroup* CG = nullptr;
+				const FAnimal* Cl = Unpack(G.StNow, CG);
+				if (Cl && Cl->State == SClean && Cl->StateT > .4 + A.Seed * .8) { A.State = SCleaning; A.StateT = 0; A.Hold = 0; return true; }
+			}
+			if (S.bClient && Act01 > .5 && G.ChasedBy < 0 && A.State == SRove)
+			{
+				A.Load += Dt;
+				if (A.Load > A.LoadMax && (A.SeekT -= Dt) <= 0)
+				{
+					A.SeekT = 5;
+					if (FGroup* St = NearestStation(A.P, 25)) { JoinStation(*St, G, I, A); return true; }
+				}
+			}
+			if (S.RestEvery > 0 && A.State == SRove)
+			{
+				A.FedT += Dt * Act01;
+				if (A.FedT > A.RestAt && Hour > 9 && Hour < 16.5 && (S.BreathEvery <= 0 || A.AirT > 45) && (A.SeekT -= Dt) <= 0)
+				{
+					A.SeekT = 15;
+					KeysReefDen::FDen Dn;
+					if (FreeDen(A.P, 30, A.Len * .65, B.HalfH * 2 * A.Len * .5, true, Dn))
+					{
+						LetGoDen(A);
+						TakenDens.Add(Dn.Id);
+						A.DenId = Dn.Id; A.Spot = 1;
+						const FVector Ax = RlFlat(Dn.Axis).GetSafeNormal(.0001, FVector(1, 0, 0));
+						A.DenMouth = Dn.Mouth; A.DenAxis = Ax;
+						// the front of the shell just under the lip, the head in under the rock
+						A.Aim = Dn.Mouth + Ax * (A.Len * .18);
+						A.Aim.Y = FMath::Max(Dn.Mouth.Y - Dn.H * .5, KeysReefDen::FloorNear(A.Aim.X, A.Aim.Z)) + B.HalfH * A.Len * .9;
+						A.PoseDir = -Ax;
+						A.bRest = true; A.State = SToSleep; A.StateT = 0; A.Hold = 0;
+						Log(FString::Printf(TEXT("rest: %s heads for an empty ledge %.1f m off (opening %.1f m wide) because it has fed %.0f s since it last rested (about every %.0f s by day) and the clock reads %s; effect: it will lie under the ledge until it needs air"),
+							*Who(G, A), RlHyp(Dn.Mouth.X - A.P.X, Dn.Mouth.Z - A.P.Z), Dn.W, A.FedT, S.RestEvery, *KeysFeed::ClockText(Hour)));
+						return true;
+					}
+					A.FedT = A.RestAt * .75;   // no ledge free near: it feeds on and looks again later
+				}
+			}
+			return false;
 		}
 
 		void StepAnimal(FGroup& G, int32 I, double Dt)
@@ -923,6 +1220,8 @@ namespace KeysReefLife
 				const FVector Rel = A.P - DiverP;
 				DvD = Rel.Size();
 				Keep = S.Shy * (1 + .8 * FMath::Clamp(DiverSpd / 1.0, 0.0, 2.0));
+				// a fish at a cleaning station, and the cleaners on it, let a diver come much closer
+				if (A.State == SClean || A.State == SWait || A.State == SToClean || A.State == SCleaning) Keep *= .4;
 				AwayDv = DvD > 1e-3 ? Rel / DvD : FVector(1, 0, 0);
 				const double Closing = FMath::Max(0.0, FVector::DotProduct(DiverV, AwayDv));   // how fast the diver is coming at it
 				if (A.State != SFlee && A.State != SChased && (DvD < Keep * .45 || (DvD < Keep * 1.4 && Closing > 1.3)))
@@ -950,7 +1249,9 @@ namespace KeysReefLife
 				Move(A, S, B, Want, 6, Clear0, nullptr, .5, 0, Dt);
 				if (bGone || A.StateT > 4 || FromHome > S.ChaseR * 2.4 || D > S.ChaseR * 2)
 				{
-					Log(FString::Printf(TEXT("chase over: %s saw the rival off; effect: pursued it %.1f m in %.1f s, rival now %.1f m away, he turns back to his group"), *Who(G, A), FromHome, A.StateT, D));
+					Log(FString::Printf(TEXT("chase over: %s saw the %s off; effect: pursued it %.1f m in %.1f s, it is now %.1f m away, he turns back to %s"), *Who(G, A), G.Role == ERole::Territory ? TEXT("intruder") : TEXT("rival"), FromHome, A.StateT, D,
+						S.bEggs ? TEXT("his eggs") : G.Role == ERole::Territory ? TEXT("his ground") : TEXT("his group")));
+					if (G.Role == ERole::Territory) { G.Goal = G.Home; G.GoalT = 6; }
 					if (R) { R->ChasedBy = -1; PickGoal(*R, Sp(R->Sp), &G.Centre); }
 					G.ChaseGroup = -1; G.ChaseCool = 25;
 					A.State = SRove; A.StateT = 0;
@@ -972,8 +1273,10 @@ namespace KeysReefLife
 				FVector Hd = RlFlat(A.Aim - A.P);
 				const double HDist = Hd.Size();
 				if (HDist > .02) Hd /= HDist; else Hd = RlFlat(A.Fwd).GetSafeNormal();
+				// a sponge is bitten from in front of its wall, side on to it, wherever the fish came from
+				if (A.bSpongeBite) { Hd = -A.BiteN; A.bFloorOnly = RlHyp(A.Aim.X - A.P.X, A.Aim.Z - A.P.Z) < 1.6; }
 				// beak-down: the body tipped some 50 degrees onto the rock
-				A.PoseDir = (Hd * FMath::Cos(FMath::DegreesToRadians(S.BiteTilt)) - FVector(0, FMath::Sin(FMath::DegreesToRadians(S.BiteTilt)), 0)).GetSafeNormal();
+				A.PoseDir = (Hd * FMath::Cos(FMath::DegreesToRadians(A.TiltNow)) - FVector(0, FMath::Sin(FMath::DegreesToRadians(A.TiltNow)), 0)).GetSafeNormal();
 				const FVector Ctr = A.Aim - A.PoseDir * (.47 * A.Len);
 				const FVector To = Ctr - A.P;
 				const double D = To.Size();
@@ -992,9 +1295,10 @@ namespace KeysReefLife
 				{
 					if (--A.BitesLeft > 0 && !bAvoid)
 					{
-						// another mouthful a hand's width along
+						// another mouthful a hand's width along (on a sponge, along its wall)
 						const double An = G.Rng.FRand() * 2 * PI, X = A.Aim.X + FMath::Cos(An) * .09, Z = A.Aim.Z + FMath::Sin(An) * .09;
-						A.Aim = FVector(X, TopAt(X, Z) + .01, Z);
+						if (A.bSpongeBite) A.Aim += FVector(-A.BiteN.Z, 0, A.BiteN.X) * G.Rng.FRandRange(-.07f, .07f) + FVector(0, G.Rng.FRandRange(-.06f, .06f), 0);
+						else A.Aim = FVector(X, TopAt(X, Z) + .01, Z);
 						A.State = SToBite; A.StateT = 0;
 						A.V = -A.PoseDir * .25;
 					}
@@ -1009,18 +1313,40 @@ namespace KeysReefLife
 			}
 			case SToSleep:
 			{
-				const FVector To = A.Aim - A.P;
+				// to a den: first to a point out in front of its opening, then straight in (A.Hold 0, then 1)
+				if (A.bRest && bSleepNow) A.bRest = false;   // (night fell on the way: it sleeps there)
+				FVector Goal = A.Aim;
+				if (A.Spot == 1 && A.Hold < .5)
+				{
+					Goal = A.Aim + A.DenAxis * (.45 + A.Len * .8);
+					if ((Goal - A.P).Size() < .25 + A.Len * .2) A.Hold = 1;
+				}
+				else A.Hold = 1;
+				const FVector To = Goal - A.P;
 				const double D = To.Size();
-				A.bFloorOnly = RlHyp(To.X, To.Z) < 1.3;   // the last of the way it sinks down beside the head, not onto it
+				A.bFloorOnly = (A.Spot == 1 && A.Hold > .5) || RlHyp(A.Aim.X - A.P.X, A.Aim.Z - A.P.Z) < 1.3;   // the last of the way it sinks down beside the head, not onto it
 				Want = D > 1e-3 ? To / D * FMath::Min(S.Cruise * 1.2, D * 2 + .03) : FVector::ZeroVector;
-				Move(A, S, B, Want, 1.5, A.bFloorOnly ? B.HalfH * A.Len + .015 : Clear0, D < .5 ? &A.PoseDir : nullptr, TailEase, PecEase * .6, Dt);
-				if (!bSleepNow) { A.State = SRove; A.StateT = 0; A.bFloorOnly = false; }
-				else if (D < .06 || A.StateT > 30)
+				const FVector In = -A.DenAxis;
+				Move(A, S, B, Want, 1.5, A.bFloorOnly ? B.HalfH * A.Len + .015 : Clear0, (A.Aim - A.P).Size() < .5 ? &A.PoseDir : (A.Spot == 1 && A.Hold > .5 ? &In : nullptr), TailEase, PecEase * .6, Dt);
+				A.DenShade = A.Spot == 1 ? FMath::Lerp(1.0, .55, FMath::SmoothStep(0.0, .3, InDen(A, A.P))) : 1;
+				if (!bSleepNow && !A.bRest) { A.State = SRove; A.StateT = 0; A.bFloorOnly = false; LetGoDen(A); A.DenShade = 1; }
+				else if ((A.Aim - A.P).Size() < .06 || A.StateT > 60)
 				{
 					A.State = SSleep; A.StateT = 0; A.V = FVector::ZeroVector;
-					Sleeps++;
-					if ((A.P - Cam).Size() < 25) Log(FString::Printf(TEXT("sleep: %s tucked in at %.1f, %.1f, %.1f because the feeding clock reads %s (night from %s); effect: lying still against the reef%s"), *Who(G, A), A.P.X, A.P.Y, A.P.Z,
-						*KeysFeed::ClockText(Hour), *KeysFeed::ClockText(Dusk), S.bCocoon ? TEXT(", spinning its mucus cocoon") : TEXT("")));
+					const TCHAR* Where = A.Spot == 1 ? TEXT("in the opening of an empty den") : A.Spot == 2 ? (S.bSleepsInHoles ? TEXT("wedged in at the foot of a coral head (no empty den within 16 m)") : TEXT("against a coral head")) : TEXT("in the open (no coral head near)");
+					if (A.bRest)
+					{
+						Rests++;
+						Log(FString::Printf(TEXT("rest: %s settled under the ledge at %.1f, %.1f, %.1f because it had fed %.0f s since its last rest and it is the middle of the day (%s); effect: lying still on the sand with its head under the rock until it needs air, in about %.0f s"),
+							*Who(G, A), A.P.X, A.P.Y, A.P.Z, A.FedT, *KeysFeed::ClockText(Hour), FMath::Max(0.0, A.AirT)));
+					}
+					else
+					{
+						Sleeps++;
+						if (A.Spot == 1) SleepsInDen++; else if (A.Spot == 2) SleepsAtHead++; else SleepsOpen++;
+						if ((A.P - Cam).Size() < 25 || S.bSleepsInHoles) Log(FString::Printf(TEXT("sleep: %s tucked in at %.1f, %.1f, %.1f %s because the feeding clock reads %s (night from %s); effect: lying still%s"), *Who(G, A), A.P.X, A.P.Y, A.P.Z, Where,
+							*KeysFeed::ClockText(Hour), *KeysFeed::ClockText(Dusk), S.bCocoon ? TEXT(", spinning its mucus cocoon") : TEXT("")));
+					}
 				}
 				break;
 			}
@@ -1028,14 +1354,33 @@ namespace KeysReefLife
 			{
 				A.V = FVector::ZeroVector;
 				Move(A, S, B, FVector::ZeroVector, 5, B.HalfH * A.Len + .015, &A.PoseDir, 0, 0, Dt);
-				if (S.bCocoon) A.Cocoon = FMath::Min(1.0, A.Cocoon + Dt / 20);
-				if (!bSleepNow)
+				if (S.bCocoon && !A.bRest) A.Cocoon = FMath::Min(1.0, A.Cocoon + Dt / 20);
+				A.DenShade = A.Spot == 1 ? FMath::Lerp(1.0, .55, FMath::SmoothStep(0.0, .3, InDen(A, A.P))) : 1;
+				if (A.bRest) A.AirT -= Dt;
+				const bool bUp = A.bRest ? (A.AirT <= 0 || bSleepNow) : !bSleepNow;
+				if (bUp)
 				{
-					A.State = SRove; A.StateT = 0; A.bFloorOnly = false;
-					A.V = FVector(0, .3, 0);
-					Wakes++;
-					if ((A.P - Cam).Size() < 25) Log(FString::Printf(TEXT("wake: %s left its sleeping place because the feeding clock reads %s (day from %s); effect: out over the reef again%s"), *Who(G, A), *KeysFeed::ClockText(Hour), *KeysFeed::ClockText(Dawn),
-						S.bCocoon ? TEXT(", the cocoon left behind") : TEXT("")));
+					if (A.bRest) Log(FString::Printf(TEXT("rest over: %s leaves the ledge at %.1f, %.1f because %s after %.0f s at rest; effect: it backs out from under the rock%s"), *Who(G, A), A.P.X, A.P.Z,
+						bSleepNow ? TEXT("night has come") : TEXT("it needs air"), A.StateT, bSleepNow ? TEXT("") : TEXT(" and goes up to breathe")));
+					else
+					{
+						Wakes++;
+						if ((A.P - Cam).Size() < 25 || S.bSleepsInHoles) Log(FString::Printf(TEXT("wake: %s left its sleeping place%s because the feeding clock reads %s (day from %s); effect: out over the reef again%s"), *Who(G, A), A.Spot == 1 ? TEXT(" in a den") : TEXT(""),
+							*KeysFeed::ClockText(Hour), *KeysFeed::ClockText(Dawn), S.bCocoon ? TEXT(", the cocoon left behind") : TEXT("")));
+					}
+					A.FedT = 0; A.RestAt = FMath::Max(60.0, S.RestEvery) * G.Rng.FRandRange(.7f, 1.3f);
+					const bool bWasDen = A.Spot == 1;
+					const FVector Out = A.DenAxis;
+					LetGoDen(A);
+					A.bRest = false; A.DenShade = 1;
+					if (bWasDen)
+					{
+						// out of the hole the way it went in, along the floor, before it rises
+						A.State = SHop; A.StateT = 0; A.bFloorOnly = true;
+						A.Aim = A.P + Out * (.5 + A.Len);
+						A.V = Out * .2;
+					}
+					else { A.State = SRove; A.StateT = 0; A.bFloorOnly = false; A.V = FVector(0, .3, 0); }
 				}
 				break;
 			}
@@ -1067,13 +1412,14 @@ namespace KeysReefLife
 				Move(A, S, B, FVector::ZeroVector, 4, B.HalfH * A.Len * (1 - S.Bury) + .01, &Flat, .5, 0, Dt);
 				A.Hold -= Dt;
 				if (A.Hold <= 0) { A.Hold = .45; SandCloud(G, A.P + Flat * (.22 * A.Len), A.Len * .1, 4, A.Len); }
-				if (A.StateT > 5 || bAvoid)
+				// (reeflinks: 10 to 20 s, long enough for the fish that follow a digging ray to come to it; it was 5 s)
+				if (A.StateT > A.DigFor || bAvoid)
 				{
-					const FVector Pit(A.P.X + Flat.X * .22 * A.Len, KeysSea::SeafloorHeightAt(A.P.X + Flat.X * .22 * A.Len, A.P.Z + Flat.Z * .22 * A.Len) + .015, A.P.Z + Flat.Z * .22 * A.Len);
+					const FVector Pit(A.P.X + Flat.X * .22 * A.Len, KeysReefDen::FloorNear(A.P.X + Flat.X * .22 * A.Len, A.P.Z + Flat.Z * .22 * A.Len) + .015, A.P.Z + Flat.Z * .22 * A.Len);
 					const double Wide = FMath::Clamp(A.Len * .2, .2, .6);
 					if (Scars.Num() >= 160) Scars.RemoveAt(0);
 					// (it lies on the bottom as the bottom slopes there)
-					const double Sx = (KeysSea::SeafloorHeightAt(Pit.X + .4, Pit.Z) - KeysSea::SeafloorHeightAt(Pit.X - .4, Pit.Z)) / .8, Sz = (KeysSea::SeafloorHeightAt(Pit.X, Pit.Z + .4) - KeysSea::SeafloorHeightAt(Pit.X, Pit.Z - .4)) / .8;
+					const double Sx = (KeysReefDen::FloorNear(Pit.X + .4, Pit.Z) - KeysReefDen::FloorNear(Pit.X - .4, Pit.Z)) / .8, Sz = (KeysReefDen::FloorNear(Pit.X, Pit.Z + .4) - KeysReefDen::FloorNear(Pit.X, Pit.Z - .4)) / .8;
 					Scars.Add({Pit, Wide, 0, 300, true, RlD2U(FVector(1, Sx, 0).GetSafeNormal()), RlD2U(FVector(0, Sz, 1).GetSafeNormal())});
 					Digs++;
 					Log(FString::Printf(TEXT("dig: %s dug for %.1f s for what lives in the sand; effect: a pit %.0f cm across left at %.1f, %.1f, %.1f (it fades in 5 min) and the sand it threw up drifting off; it moves on"), *Who(G, A), A.StateT, Wide * 100, Pit.X, Pit.Y, Pit.Z));
@@ -1082,13 +1428,92 @@ namespace KeysReefLife
 				}
 				break;
 			}
+			case SToClean: case SWait: case SClean:
+			{
+				// ---- a client at a cleaning station: waiting its turn off the head, coming in, holding still to be cleaned
+				FGroup* St = FindGroup(A.Station);
+				const int64 K = Pack(G, I);
+				const bool bMine = St && St->StNow == K, bQueued = St && St->StQueue.Contains(K);
+				if (!St || (!bMine && !bQueued) || bSleepNow || (A.State == SWait && A.StateT > 80))
+				{
+					if (A.State != SClean || !St) Log(FString::Printf(TEXT("clean: %s leaves the cleaning station without being cleaned because %s"), *Who(G, A), !St ? TEXT("the station is gone") : bSleepNow ? TEXT("night has come") : A.State == SWait ? TEXT("it waited 80 s") : TEXT("it lost its place")));
+					LeaveStation(G, I, A);
+					break;
+				}
+				if (A.State == SWait && bMine)
+				{
+					A.State = SToClean; A.StateT = 0;
+					Log(FString::Printf(TEXT("queue: %s leaves its place in the queue because the station on the head at %.1f, %.1f is free; effect: it goes in to be cleaned"), *Who(G, A), St->Home.X, St->Home.Z));
+				}
+				const FVector Top = St->Home;
+				FVector Out = RlFlat(A.P - Top);
+				if (!Out.Normalize()) Out = FVector(1, 0, 0);
+				if (A.State == SWait)
+				{
+					const int32 Q = FMath::Max(0, St->StQueue.Find(K));
+					const FVector Spot = Top + Out * (St->HeadR + .9 + .6 * Q) + FVector(0, .3 + .25 * Q, 0);
+					const FVector FaceIn = -Out;
+					Want = (Spot - A.P).GetClampedToMaxSize(1.0) * S.Cruise * 1.2;
+					Move(A, S, B, Want, 1.5, Clear0, (Spot - A.P).Size() < .7 ? &FaceIn : nullptr, TailEase, PecEase * .5, Dt);
+					break;
+				}
+				const FVector Hover = Top + FVector(0, B.HalfH * A.Len + .16, 0);
+				if (A.State == SToClean)
+				{
+					const FVector To = Hover - A.P;
+					const double D = To.Size();
+					Want = D > 1e-3 ? To / D * FMath::Min(S.Cruise, D * 1.5 + .03) : FVector::ZeroVector;
+					Move(A, S, B, Want, 1.5, Clear0 * .6, nullptr, TailEase, PecEase * .6, Dt);
+					if (D < .1 || A.StateT > 30)
+					{
+						A.State = SClean; A.StateT = 0; A.Hold = G.Rng.FRandRange(8.f, 18.f);
+						FVector Fl = RlFlat(A.Fwd).GetSafeNormal();
+						if (Fl.IsNearlyZero()) Fl = FVector(1, 0, 0);
+						const double Tilt = A.Seed > .3 ? 40.0 : -35.0;
+						A.PoseDir = (Fl * FMath::Cos(FMath::DegreesToRadians(Tilt)) + FVector(0, FMath::Sin(FMath::DegreesToRadians(Tilt)), 0)).GetSafeNormal();
+						Cleans++;
+						const int32 NCl = St->M.Num();
+						Log(FString::Printf(TEXT("clean: %s stops over the cleaning station on the coral head at %.1f, %.1f, %.1f and holds still %s %.0f degrees, rolled on its side, fins spread, for %.0f s, because it had gone %.0f s since it was last cleaned (it goes about every %.0f s); effect: the %d neon gobies of the station come off the head and pick it over; %d waiting"),
+							*Who(G, A), Top.X, Top.Y, Top.Z, Tilt > 0 ? TEXT("head-up at") : TEXT("head-down at"), FMath::Abs(Tilt), A.Hold, A.Load, A.LoadMax, NCl, St->StQueue.Num()));
+					}
+					break;
+				}
+				Want = (Hover - A.P) * 1.5;
+				Move(A, S, B, Want, 3, Clear0 * .6, &A.PoseDir, .01, 0, Dt);
+				if (A.StateT > A.Hold)
+				{
+					FGroup* NG = nullptr;
+					const FAnimal* Next = St->StQueue.Num() ? Unpack(St->StQueue[0], NG) : nullptr;
+					Log(FString::Printf(TEXT("clean over: %s leaves the station at %.1f, %.1f after %.0f s, cleaned; effect: the gobies go back to their head%s"), *Who(G, A), Top.X, Top.Z, A.StateT,
+						Next && NG ? *FString::Printf(TEXT(" and %s, next in the queue, comes in"), *Who(*NG, *Next)) : TEXT(", no one waiting")));
+					LeaveStation(G, I, A);
+				}
+				break;
+			}
+			case SCleaning:
+			{
+				// ---- a cleaner on its client: over its flanks and fins, a new place every second or two
+				FGroup* CG = nullptr;
+				const FAnimal* Cl = Unpack(G.StNow, CG);
+				if (!Cl || !CG || Cl->State != SClean) { A.State = SHop; A.StateT = 0; A.Aim = A.Own; break; }
+				A.Hold -= Dt;
+				if (A.Hold <= 0) { A.Hold = G.Rng.FRandRange(1.f, 2.6f); A.Aim = FVector(G.Rng.FRandRange(-.36f, .3f), G.Rng.FRandRange(-.7f, .7f), G.Rng.FRand() < .5 ? -1 : 1); }
+				const FBody& CB = Sp(CG->Sp).Phases[Cl->Phase].Body;
+				const FVector Lc(A.Aim.X * 100, A.Aim.Z * (CB.HalfW * 100 + 1.4 / FMath::Max(.05, Cl->Len)), A.Aim.Y * CB.HalfH * 80);
+				const FVector Wu = Cl->Xf.TransformPosition(Lc);
+				A.P = FMath::Lerp(A.P, FVector(Wu.X / 100, Wu.Z / 100, Wu.Y / 100), FMath::Min(1.0, Dt * 4));
+				A.V = FVector::ZeroVector;
+				A.Fwd = FMath::Lerp(A.Fwd, Cl->Fwd * (A.Seed > .5 ? 1 : -1), FMath::Min(1.0, Dt * 3)).GetSafeNormal(.0001, Cl->Fwd);
+				A.TailAmp = .12; A.TailPh += Dt * 12;
+				break;
+			}
 			case SHop:
 			{
 				const FVector To = A.Aim - A.P;
 				const double D = To.Size();
 				Want = D > 1e-3 ? To / D * FMath::Min(S.Burst * .5, D * 4 + .05) : FVector::ZeroVector;
 				Move(A, S, B, Want, 6, B.HalfH * A.Len + .01, nullptr, .4, PecEase * .4, Dt);
-				if (D < .05 || A.StateT > 4) { A.State = SRove; A.StateT = 0; A.V = FVector::ZeroVector; }
+				if (D < .05 || A.StateT > 4) { A.State = SRove; A.StateT = 0; A.V = FVector::ZeroVector; if (!S.bOnFloor && S.HeadWithin <= 0) A.bFloorOnly = false; }
 				break;
 			}
 			default:
@@ -1096,11 +1521,13 @@ namespace KeysReefLife
 				if (bSleepNow)
 				{
 					bool bHead;
-					SleepSpot(A, B, A.Aim, A.PoseDir, bHead);
-					A.State = SToSleep; A.StateT = 0;
+					SleepSpot(A, B, S, A.Aim, A.PoseDir, bHead);
+					A.State = SToSleep; A.StateT = 0; A.Hold = 0; A.bRest = false;
 					break;
 				}
+				if (A.bSpongeBite) { A.bSpongeBite = false; A.bFloorOnly = false; }
 				const double Act01 = Activity(S);
+				if (A.PoseT <= 0 && LinkStep(G, I, A, S, B, Act01, Dt)) break;
 				double Clear = Clear0, PecA = PecEase * (.45 + .55 * Act01);
 				const FVector* Face = nullptr;
 				FVector FaceV;
@@ -1141,7 +1568,7 @@ namespace KeysReefLife
 					double Fl;
 					const double Tp = TopAt(A.P.X, A.P.Z, &Fl);
 					Clear = B.HalfH * A.Len * (1 - 2 * S.Bury) + .01;
-					Want = FVector(0, ((S.bOnFloor ? Fl : (S.Bury > 0 && Tp <= Fl + .01 ? KeysSea::SeafloorHeightAt(A.P.X, A.P.Z) : Tp)) + Clear - A.P.Y) * 3, 0);
+					Want = FVector(0, ((S.bOnFloor ? Fl : (S.Bury > 0 && Tp <= Fl + .01 ? KeysReefDen::FloorNear(A.P.X, A.P.Z) : Tp)) + Clear - A.P.Y) * 3, 0);
 					PecA = 0;
 					// it lies level, facing the way it faced (left to Move it would point the way it sank: nose down)
 					FaceV = RlFlat(A.Fwd).GetSafeNormal();
@@ -1153,7 +1580,7 @@ namespace KeysReefLife
 						A.PuffT -= Dt * Feeding(S);
 						if (A.PuffT <= 0)
 						{
-							A.State = SDig; A.StateT = 0; A.Hold = 0; A.V = FVector::ZeroVector;
+							A.State = SDig; A.StateT = 0; A.Hold = 0; A.V = FVector::ZeroVector; A.DigFor = G.Rng.FRandRange(10.f, 20.f);
 							Log(FString::Printf(TEXT("dig: %s starts to dig at %.1f, %.1f, %.1f (it digs about every %.0f s at the best of the day; the clock reads %s)"), *Who(G, A), A.P.X, A.P.Y, A.P.Z, S.DigEvery, *KeysFeed::ClockText(Hour)));
 							break;
 						}
@@ -1242,6 +1669,7 @@ namespace KeysReefLife
 			G.GoalT -= Dt;
 			G.ChaseCool -= Dt;
 			const bool bAwake = !SleepTime(S);
+			if (S.bCleaner) TendStation(G);
 			if (G.Role == ERole::Cruiser)
 			{
 				G.Circ += G.CircDir * Dt * S.Cruise / FMath::Max(4.0, S.Roam);
@@ -1266,7 +1694,19 @@ namespace KeysReefLife
 						int32 Ix = -1;
 						double D = S.ChaseR;
 						if (bMale) { D = (O.M[0].P - Me.P).Size(); if (D < S.ChaseR && O.M[0].State != SSleep && O.M[0].State != SFlee) Ix = 0; }
-						else for (int32 k = 0; k < O.M.Num(); k++) { const double Dk = (O.M[k].P - G.Home).Size(); if (Dk < D && O.M[k].Len < Me.Len * 1.5 && O.M[k].State != SSleep) { D = Dk; Ix = k; } }
+						else
+						{
+							// a guard drives off any fish that comes over his ground - a parrotfish three times his size included -
+							// but not the bottom animals, a turtle or a ray, nor the cleaners or one being cleaned
+							const FSpecies& OS = Sp(O.Sp);
+							if (OS.Weight >= 3 || OS.bNoBolt || OS.bOnFloor || OS.bCleaner || OS.Role == ERole::Sitter) continue;
+							for (int32 k = 0; k < O.M.Num(); k++)
+							{
+								const FAnimal& Ok = O.M[k];
+								const double Dk = (Ok.P - G.Home).Size();
+								if (Dk < D && Ok.Len < Me.Len * 4 && Ok.State != SSleep && Ok.State != SToSleep && Ok.State != SFlee && Ok.State != SClean && Ok.State != SChased) { D = Dk; Ix = k; }
+							}
+						}
 						if (Ix < 0) continue;
 						// between two males the one nearer his own ground does the chasing
 						if (bMale && (Me.P - G.Home).Size() > (O.M[0].P - O.Home).Size() + .5) continue;
@@ -1277,8 +1717,8 @@ namespace KeysReefLife
 						if (Ix == 0) O.ChasedBy = G.Id;
 						Chases++;
 						KeysReefAudio::Heard(TEXT("chase"), S.Key, Me.P);   // reefaudio R2: a damselfish pops as it goes
-						Log(FString::Printf(TEXT("chase: %s went for %s because it came within %.1f m of %s (he drives rivals off inside %.1f m); effect: he charges at %.1f m/s, the rival turns and runs"), *Who(G, Me), *Who(O, Him), D,
-							bMale ? TEXT("him and his group") : TEXT("his territory"), S.ChaseR, S.Burst * .72));
+						Log(FString::Printf(TEXT("chase: %s went for %s because it came within %.1f m of %s (he drives rivals off inside %.1f m); effect: he charges at %.1f m/s, the %s turns and runs"), *Who(G, Me), *Who(O, Him), D,
+							bMale ? TEXT("him and his group") : S.bEggs ? TEXT("his eggs on the rock") : TEXT("his territory"), S.ChaseR, S.Burst * .72, bMale ? TEXT("rival") : TEXT("intruder")));
 						break;
 					}
 				}
@@ -1465,7 +1905,7 @@ namespace KeysReefLife
 					StepGroup(G, Sd);
 				}
 				LodT -= Dt;
-				if (LodT <= 0 || bLodPending) { LodT = .2; UpdateLods(); }
+				if (LodT <= 0 || bLodPending) { LodT = .2; UpdateLods(); DrawEggs(); }
 				WritePools();
 				SightT -= Dt;
 				if (SightT <= 0) { SightT = .5; FirstSights(); }
@@ -1488,6 +1928,15 @@ namespace KeysReefLife
 			Log(FString::Printf(TEXT("stats: %d species alive of %d registered, %d groups, %d individuals (%d within 60 m; cap %.0f units, %.0f used, %d groups refused by the cap, %d by a species' own cap), %d instances, %d triangles, cpu %.3f ms a frame avg (worst %.2f), %d chunks held, worst chunk %.2f ms, worst frame after a chunk %.1f ms; %d bites, %d crunches played, %d puffs, %d flees, %d chases, %d gone to sleep, %d woken, %d breaths taken, %d lift-offs, %d pits dug (sleep and wake are logged one by one within 25 m of the camera); clock %s, %s; centre %.0f, %.0f"),
 				SpN, Reg->Num(), Groups.Num(), AliveCount(), Near, BudgetUnits, Units, RefusedCap, RefusedSp, Inst, Tris, CpuN ? CpuAcc / CpuN : 0.0, CpuWorst, Chunks.Num(), ChunkWorstMs, FrameAfterChunkWorst,
 				Bites, Crunches, PuffN, Flees, Chases, Sleeps, Wakes, Breaths, Lifts, Digs, *KeysFeed::ClockText(Hour), bOff ? TEXT("OFF") : TEXT("on"), Centre.X, Centre.Z));
+			// the links (reeflinks): counts since the start
+			int32 Stations = 0, Busy = 0, Queued = 0, Guards = 0;
+			for (const TUniquePtr<FGroup>& Gp : Groups)
+			{
+				if (Sp(Gp->Sp).bCleaner) { Stations++; Busy += Gp->StNow >= 0 ? 1 : 0; Queued += Gp->StQueue.Num(); }
+				if (Gp->bEggRock) Guards++;
+			}
+			Log(FString::Printf(TEXT("links: slept %d in dens, %d at the foot of a head, %d in the open; %d dens taken now; %d sponge nips; %d cleanings, %d waits, %d stations alive (%d busy, %d queued); %d rests under ledges; %d egg patches alive (%d drawn); %d alarms from the dens"),
+				SleepsInDen, SleepsAtHead, SleepsOpen, TakenDens.Num(), Nips, Cleans, Waits, Stations, Busy, Queued, Rests, Guards, EggsDrawn, Alarms));
 			CpuAcc = 0; CpuN = 0; CpuWorst = 0; StatT = 0;
 		}
 
@@ -1667,6 +2116,8 @@ namespace KeysReefLife
 				else if (W.IsValidIndex(1) && (W[1] == TEXT("puff") || W[1] == TEXT("dig"))) { A.PoseT = 0; A.PuffT = 0; }
 				else if (W.IsValidIndex(1) && W[1] == TEXT("breath")) { A.PoseT = 0; A.AirT = 0; }
 				else if (W.IsValidIndex(1) && W[1] == TEXT("lift")) { A.PoseT = 0; G->bPosed = false; Scare(*G, LookIx, A.P - A.Fwd * 1.5, TEXT("the test hook asked (reef:do lift)")); }
+				else if (W.IsValidIndex(1) && W[1] == TEXT("clean")) { A.PoseT = 0; A.Load = A.LoadMax + 1; A.SeekT = 0; }     // due for a cleaning now: where it goes is the game's rule
+				else if (W.IsValidIndex(1) && W[1] == TEXT("rest")) { A.PoseT = 0; A.FedT = A.RestAt + 1; A.SeekT = 0; }       // due for a rest now (by day, with air enough)
 				Log(FString::Printf(TEXT("do %s (test hook): asked of %s"), W.IsValidIndex(1) ? *W[1] : TEXT("?"), *Who(*G, A)));
 			}
 			else if (C == TEXT("rival"))
@@ -1691,6 +2142,47 @@ namespace KeysReefLife
 				for (FAnimal& A : R->M) { A.P += Shift; A.P.Y = FMath::Max(A.P.Y, TopAt(A.P.X, A.P.Z) + .3); }
 				R->Goal = To; R->GoalT = 8; G->ChaseCool = 0; R->ChaseCool = 30; G->bPosed = true; G->M[0].PoseT = 0;
 				Log(FString::Printf(TEXT("rival (test hook): group %d and its male #%d moved %.1f m to stand %.1f m from %s; the chase that follows is the game's own rule"), R->Id, R->M[0].Id, Shift.Size(), S.ChaseR * .8, *Who(*G, G->M[0])));
+			}
+			else if (C == TEXT("clean"))
+			{
+				// the client fish nearest the nearest open station are made due for a cleaning now; what they do then is the
+				// game's own rule (one goes in, the next waits its turn)
+				FGroup* St = NearestStation(Centre, 80);
+				if (!St) { Log(TEXT("clean (test hook): no cleaning station alive near")); return; }
+				TArray<TPair<double, FAnimal*>> Near;
+				for (TUniquePtr<FGroup>& Gp : Groups)
+					if (Sp(Gp->Sp).bClient)
+						for (FAnimal& A : Gp->M)
+							if (A.State == SRove) Near.Add({RlHyp(A.P.X - St->Home.X, A.P.Z - St->Home.Z), &A});
+				Near.Sort([](const TPair<double, FAnimal*>& X, const TPair<double, FAnimal*>& Y) { return X.Key < Y.Key; });
+				const int32 N = FMath::Min(3, Near.Num());
+				for (int32 k = 0; k < N; k++) { Near[k].Value->Load = Near[k].Value->LoadMax + 1 + k * 4; Near[k].Value->SeekT = k * 2.5; }
+				Log(FString::Printf(TEXT("clean (test hook): the station on the head at %.1f, %.1f, %.1f (%d neon gobies); %d client fish within %.1f m made due for a cleaning"), St->Home.X, St->Home.Y, St->Home.Z, St->M.Num(), N, N ? Near[N - 1].Key : 0.0));
+			}
+			else if (C == TEXT("intrude"))
+			{
+				// bring the nearest fish group that a guard drives off to just inside the nearest egg guard's ground; the chase
+				// that follows is the game's own rule
+				FGroup* G = nullptr;
+				double Best = 1e18;
+				for (TUniquePtr<FGroup>& Gp : Groups) { const double D = (Gp->Home - Centre).SizeSquared(); if (Gp->bEggRock && D < Best) { Best = D; G = Gp.Get(); } }
+				if (!G) { Log(TEXT("intrude: no egg guard alive near")); return; }
+				FGroup* R = nullptr;
+				Best = 1e18;
+				for (TUniquePtr<FGroup>& Gp : Groups)
+				{
+					const FSpecies& OS = Sp(Gp->Sp);
+					if (Gp.Get() == G || OS.Weight >= 3 || OS.bNoBolt || OS.bOnFloor || OS.bCleaner || OS.Role == ERole::Sitter || OS.Role == ERole::Territory || !Gp->M.Num()) continue;
+					const double D = (Gp->Centre - G->Home).SizeSquared();
+					if (D < Best) { Best = D; R = Gp.Get(); }
+				}
+				if (!R) { Log(TEXT("intrude: no fish near to bring over")); return; }
+				FVector Dir = RlFlat(R->Centre - G->Home).GetSafeNormal();
+				if (Dir.IsNearlyZero()) Dir = FVector(1, 0, 0);
+				const FVector To = G->Home + Dir * (Sp(G->Sp).ChaseR * .7), Shift = RlFlat(To - R->M[0].P);
+				for (FAnimal& A : R->M) { A.P += Shift; A.P.Y = FMath::Max(TopAt(A.P.X, A.P.Z) + .4, G->Home.Y + .3); if (A.State != SFlee) { A.State = SRove; A.StateT = 0; } }
+				R->Goal = To; R->GoalT = 8; G->ChaseCool = 0;
+				Log(FString::Printf(TEXT("intrude (test hook): group %d (%s) moved %.1f m to stand %.1f m from the eggs of %s; the chase that follows is the game's own rule"), R->Id, *Sp(R->Sp).Key, Shift.Size(), Sp(G->Sp).ChaseR * .7, *Who(*G, G->M[0])));
 			}
 			else if (C == TEXT("role"))
 			{
@@ -1719,6 +2211,8 @@ namespace KeysReefLife
 			else Log(FString::Printf(TEXT("unknown command '%s'"), *In));
 		}
 	};
+	// the live reef life, for the links the dens and the schools call (one actor in the world)
+	static FImpl* GLive = nullptr;
 }
 
 // ================================================================ the actor
@@ -1748,6 +2242,7 @@ void AKeysReefLife::BeginPlay()
 	Super::BeginPlay();
 	Impl = new KeysReefLife::FImpl();
 	Impl->Act = this;
+	KeysReefLife::GLive = Impl;
 	Impl->Reg = &KeysReefLife::Registry();
 	Impl->SpAlive.Init(0, Impl->Reg->Num());
 	Impl->SpRole.Init(-1, Impl->Reg->Num());
@@ -1773,6 +2268,7 @@ void AKeysReefLife::BeginPlay()
 
 void AKeysReefLife::EndPlay(const EEndPlayReason::Type Reason)
 {
+	if (KeysReefLife::GLive == Impl) KeysReefLife::GLive = nullptr;
 	delete Impl;
 	Impl = nullptr;
 	Super::EndPlay(Reason);
@@ -1803,6 +2299,40 @@ void AKeysReefLife::Startle(const FVector& P, double R, const TCHAR* Why)
 }
 
 int32 AKeysReefLife::Alive() const { return Impl ? Impl->AliveCount() : 0; }
+
+// ---- links (reeflinks): what the other systems ask of reef life
+void KeysReefLife::Alarm(const FVector& P, double R, const FString& Why)
+{
+	FImpl* L = GLive;
+	if (!L || L->bOff) return;
+	int32 N = 0;
+	for (TUniquePtr<FGroup>& Gp : L->Groups)
+	{
+		if ((Gp->Centre - P).Size() > R + 12) continue;
+		const FSpecies& S = L->Sp(Gp->Sp);
+		if (S.Weight >= 3 || S.bNoBolt || S.bOnFloor) continue;   // (a turtle or a ray does not run from a moray; the bottom animals cannot)
+		for (int32 i = 0; i < Gp->M.Num(); i++)
+		{
+			const FAnimal& A = Gp->M[i];
+			const double D = (A.P - P).Size();
+			if (D > R || A.State == SFlee || A.State == SSleep || A.State == SToSleep) continue;
+			L->Scare(*Gp, i, P, FString::Printf(TEXT("%s %.1f m from it"), *Why, D));
+			N++;
+		}
+	}
+	L->Alarms++;
+	L->Log(FString::Printf(TEXT("link alarm: %s at %.1f, %.1f, %.1f; effect: %d reef fish within %.1f m bolted"), *Why, P.X, P.Y, P.Z, N, R));
+}
+
+void KeysReefLife::DiggingRays(TArray<FVector>& OutP)
+{
+	FImpl* L = GLive;
+	if (!L) return;
+	for (TUniquePtr<FGroup>& Gp : L->Groups)
+		if (L->Sp(Gp->Sp).bShadows)
+			for (const FAnimal& A : Gp->M)
+				if (A.State == SDig) OutP.Add(A.P);
+}
 
 int32 AKeysReefLife::AliveWithin(double X, double Z, double R) const
 {

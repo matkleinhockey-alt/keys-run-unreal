@@ -123,9 +123,11 @@ namespace KeysReefLifeFishAngels
 		S.Weight = 1;
 		S.Cruise = .3; S.Burst = 2.2; S.Roam = 22; S.Alt[0] = .4; S.Alt[1] = 1.6; S.Spacing = 2.5; S.Cull = 60;
 		S.bRows = true;
-		// nips at the reef as it goes. The framework's bite is at stony coral or reef rock, not at a sponge: see
-		// the request in the status file
+		// nips at sponges as it goes, from the side, at their walls; rock (algae, tunicates) only where no sponge is
+		// in reach (reeflinks)
 		S.bBitesRock = true; S.BiteEvery = 14;
+		S.bSponges = true;
+		S.bClient = true;                   // (reeflinks) visits the cleaning stations by day
 	}
 
 	static FSpecies MakeQueen()

@@ -114,6 +114,8 @@ namespace KeysReefLifeParrot
 		S.bBitesRock = true; S.BiteEvery = 7; S.ScarCm = 3;
 		S.PuffEvery = 50;
 		S.bCocoon = true;
+		S.bSleepsInHoles = true;            // (reeflinks) at night into a hole in the reef, in its cocoon
+		S.bClient = true;                   // (reeflinks) visits the cleaning stations by day
 		S.ChaserPhase = 1; S.ChaseR = 5;
 		S.BiteSound = [](int32 Phase, TArray<FKeysBurst>& Out, FString& What)
 		{

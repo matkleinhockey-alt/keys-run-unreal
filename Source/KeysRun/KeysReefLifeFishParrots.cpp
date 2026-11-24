@@ -113,6 +113,9 @@ namespace KeysReefLifeFishParrots
 		S.bBitesRock = true; S.BiteEvery = 8; S.ScarCm = 5;       // a beak twice the stoplight's: a wider scar
 		S.PuffEvery = 45;
 		S.Cull = 60;
+		S.bSleepsInHoles = true;            // (reeflinks) at night into a hole in the reef, in its cocoon
+		S.bCocoon = true;
+		S.bClient = true;                   // (reeflinks) visits the cleaning stations by day
 	}
 
 	static FSpecies MakeRainbow()
