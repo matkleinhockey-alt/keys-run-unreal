@@ -1602,7 +1602,8 @@ void AKeysBoatPawn::RunDests(TArray<FRunDest>& Out, bool bOnlyFound) const
 	ON_SCOPE_EXIT
 	{
 		// the wrecks, then (for the teleport list) only the places you've been near
-		if (bOnlyFound) Out.RemoveAll([this](const FRunDest& D) { return !SpotsFound.Contains(D.Name); });
+		// (Sombrero Reef is on the list from the outset, like the home port: the owner asked for it, 2026-11-24)
+		if (bOnlyFound) Out.RemoveAll([this](const FRunDest& D) { return !SpotsFound.Contains(D.Name) && D.Name != TEXT("Sombrero Reef"); });
 	};
 	for (const KeysWrecks::FWreck& W : KeysWrecks::Wrecks()) Out.Add({FString(W.Name), TEXT("wreck"), W.X + 30, W.Z});
 	for (const FMarina& M : Marinas()) Out.Add({M.Name, TEXT("marina"), M.SX, M.SZ + M.Dir * 48});
