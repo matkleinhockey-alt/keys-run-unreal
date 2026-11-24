@@ -423,7 +423,7 @@ void AKeysAudio::UpdateLoops(double Dt, double T)
 	else if (S.bFight)
 	{
 		if (S.bFishRunning && !S.bReeling) { Rate = 40 + S.FishStr * 30; Rg = .025 + .012 * S.Drag; }
-		else if (S.bFishRunning) { Rate = 55; Rg = .02 + .01 * S.Drag; Pitch = 3100; }
+		// (and none while you wind against a running fish either: the owner heard it as an annoying click, 2026-11-24)
 		// (no crank ratchet while you wind: the owner found it grating - only the drag sings, when line goes out)
 	}
 	Loops.ReelRate = (float)FMath::Max(1.0, Rate);
@@ -484,7 +484,10 @@ void AKeysAudio::UpdateReelSample(double Dt, bool& bOutHandled)
 	// it takes over as the strike's first run dies away
 	const double Str = FMath::Clamp(S.FishStr, 0.0, 1.5);
 	double Want = 0;
-	if (S.bFishRunning) Want = (S.bReeling ? .45 : .7) + .3 * FMath::Min(1.0, Str);
+	// the clicker sings only while line is going out and the angler is not winding: winding against a running fish
+	// played it at part level, which the owner heard as an annoying click while reeling (2026-11-24)
+	if (S.bFishRunning && !S.bReeling) Want = .7 + .3 * FMath::Min(1.0, Str);
+	if (S.bReeling && ReelStrikeAC->IsPlaying() && StrikeT > .6) ReelStrikeAC->FadeOut(.2f, 0.f);   // the strike's scream dies as soon as you wind
 	const double Hand = FMath::Clamp((StrikeT - 2.6) / 1.4, 0.0, 1.0);   // the strike's run, then the loop
 	ReelLoopVol += (Want * Hand - ReelLoopVol) * FMath::Min(1.0, Dt * (Want > ReelLoopVol ? 9.0 : 3.0));
 	if (ReelLoopVol > .02 && !ReelLoopAC->IsPlaying())
