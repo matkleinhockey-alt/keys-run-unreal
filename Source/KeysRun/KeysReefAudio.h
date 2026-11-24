@@ -33,7 +33,7 @@ namespace KeysReefAudio
 	KEYSRUN_API void Heard(const TCHAR* What, const FString& Who, const FVector& GamePos, double Amount = 1);
 
 	// the caps (criterion 4): notes sounding at once, and shrimp clicks sounding at once; plus three noise layers
-	constexpr int32 MaxNotes = 24;
+	constexpr int32 MaxNotes = 48;
 	constexpr int32 MaxClicks = 12;
 }
 

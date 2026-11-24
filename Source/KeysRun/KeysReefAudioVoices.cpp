@@ -71,7 +71,7 @@ namespace KeysReefAudio
 			const int32 N = Rng.RandRange(4, 7);
 			const float Fc = Rnd(560, 880);
 			float T = 0;
-			for (int32 k = 0; k < N; k++) { Noise(EFilter::Bandpass, Fc * Rnd(.92f, 1.08f), 0, 3, .14f * Rnd(.7f, 1.f), .002f, .022f, T); T += Rnd(.016f, .023f); }
+			for (int32 k = 0; k < N; k++) { Noise(EFilter::Bandpass, Fc * Rnd(.92f, 1.08f), 0, 3, .55f * Rnd(.7f, 1.f), .002f, .022f, T); T += Rnd(.016f, .023f); }
 			Desc = FString::Printf(TEXT("%d pulses of band-passed noise (%.0f Hz, Q 3, 22 ms each, 16-23 ms apart)"), N, Fc);
 		}
 		else if (Name == TEXT("pop"))
@@ -91,8 +91,8 @@ namespace KeysReefAudio
 		else if (Name == TEXT("boom"))
 		{
 			// Real: black, gag and red grouper give a low tonal boom or growl, roughly 70-150 Hz, a third of a second.
-			Tone(EWave::Sine, 96, 0, 70, .24f, .03f, .34f, 0);
-			Tone(EWave::Sine, 192, 0, 140, .05f, .03f, .26f, 0);
+			Tone(EWave::Sine, 96, 0, 70, .10f, .03f, .34f, 0);
+			Tone(EWave::Sine, 192, 0, 140, .02f, .03f, .26f, 0);
 			Desc = TEXT("a sine falling 96 -> 70 Hz, 0.34 s, 30 ms attack, with its octave at a fifth of the level");
 		}
 		else if (Name == TEXT("boomgoliath"))
@@ -102,9 +102,9 @@ namespace KeysReefAudio
 			for (int32 k = 0; k < N; k++)
 			{
 				const float T = k * .42f;
-				Tone(EWave::Sine, 62, 0, 46, .34f, .035f, .5f, T);
-				Tone(EWave::Triangle, 124, 0, 92, .05f, .03f, .4f, T);
-				Noise(EFilter::Lowpass, 130, 60, 0, .12f, .02f, .22f, T);
+				Tone(EWave::Sine, 62, 0, 46, .15f, .035f, .5f, T);
+				Tone(EWave::Triangle, 124, 0, 92, .022f, .03f, .4f, T);
+				Noise(EFilter::Lowpass, 130, 60, 0, .05f, .02f, .22f, T);
 			}
 			Desc = FString::Printf(TEXT("%d boom(s): a sine falling 62 -> 46 Hz, 0.5 s, a triangle an octave up at a seventh of the level, a thump of noise under 130 Hz"), N);
 		}
@@ -114,7 +114,7 @@ namespace KeysReefAudio
 			// stick-slip pulses, broadband, a tenth to a fifth of a second.
 			const int32 N = Rng.RandRange(12, 18);
 			float T = 0;
-			for (int32 k = 0; k < N; k++) { Noise(EFilter::Bandpass, Rnd(2600, 3600), 0, .7f, .13f * Rnd(.6f, 1.f), .0006f, .006f, T); T += Rnd(.007f, .0095f) * (1.f - .25f * k / N); }
+			for (int32 k = 0; k < N; k++) { Noise(EFilter::Bandpass, Rnd(2600, 3600), 0, .7f, .40f * Rnd(.6f, 1.f), .0006f, .006f, T); T += Rnd(.007f, .0095f) * (1.f - .25f * k / N); }
 			Desc = FString::Printf(TEXT("%d ticks of wide band-passed noise (2.6-3.6 kHz, Q 0.7, 6 ms each), 7-9 ms apart and closing up"), N);
 		}
 		else if (Name == TEXT("whistle"))
@@ -125,7 +125,7 @@ namespace KeysReefAudio
 			for (int32 k = 0; k < N; k++)
 			{
 				const float Dur = Rnd(.45f, .9f);
-				FKeysReefNote& W = Tone(EWave::Sine, Rnd(5200, 7800), Rnd(10500, 14500), Rnd(7000, 9500), .06f, .06f, Dur, T, .12f);
+				FKeysReefNote& W = Tone(EWave::Sine, Rnd(5200, 7800), Rnd(10500, 14500), Rnd(7000, 9500), .04f, .06f, Dur, T, .12f);
 				W.Vib = .004f; W.VibHz = 9;
 				T += Dur + Rnd(.12f, .5f);
 			}
@@ -135,9 +135,9 @@ namespace KeysReefAudio
 		{
 			// Real: echolocation clicks, each far shorter than a millisecond and mostly above hearing; what a diver
 			// hears is a train of ticks that runs together into a creak as the dolphin closes on something.
-			const int32 N = Rng.RandRange(26, 44);
+			const int32 N = Rng.RandRange(20, 30);
 			float T = 0;
-			for (int32 k = 0; k < N; k++) { Noise(EFilter::Bandpass, 9000, 0, 1, .08f, .0004f, .004f, T); T += FMath::Lerp(.046f, .011f, float(k) / N); }
+			for (int32 k = 0; k < N; k++) { Noise(EFilter::Bandpass, 9000, 0, 1, .25f, .0004f, .004f, T); T += FMath::Lerp(.046f, .011f, float(k) / N); }
 			Desc = FString::Printf(TEXT("a train of %d ticks (noise round 9 kHz, 4 ms each), 46 ms apart closing to 11 ms"), N);
 		}
 		// ------------------------------------------------------------ above water: calls
@@ -163,7 +163,7 @@ namespace KeysReefAudio
 		else if (Name == TEXT("skeow"))
 		{
 			// Real: a green heron flushes with a sharp, falling "skeow".
-			FKeysReefNote& N = Tone(EWave::Square, 2100, 2400, 1300, .08f, .01f, .2f, 0, .06f);
+			FKeysReefNote& N = Tone(EWave::Square, 2100, 2400, 1300, .035f, .01f, .2f, 0, .06f);
 			N.Fc0 = 2200; N.Q = 1.2f;
 			Desc = TEXT("a square wave up from 2.1 to 2.4 kHz and down to 1.3 kHz in 0.2 s, through a 2.2 kHz band-pass");
 		}
@@ -187,10 +187,9 @@ namespace KeysReefAudio
 			for (int32 k = 0; k < N; k++)
 			{
 				const float T = k * .042f, G = Rnd(.75f, 1.f) * (k < 2 ? .6f : 1.f);
-				Noise(EFilter::Bandpass, FMath::Lerp(3500.f, 2900.f, float(k) / N), 0, 3, .13f * G, .001f, .017f, T);
-				Tone(EWave::Square, 2650, 0, 2400, .025f * G, .001f, .012f, T);
+				Noise(EFilter::Bandpass, FMath::Lerp(3500.f, 2900.f, float(k) / N), 0, 3, .25f * G, .001f, .017f, T);
 			}
-			Desc = FString::Printf(TEXT("%d ticks 42 ms apart (24 a second), each 17 ms of noise through a band-pass sliding 3.5 -> 2.9 kHz over a 12 ms square-wave chirp at 2.65 kHz"), N);
+			Desc = FString::Printf(TEXT("%d ticks 42 ms apart (24 a second), each 17 ms of noise through a band-pass (Q 3) sliding 3.5 -> 2.9 kHz"), N);
 		}
 		else if (Name == TEXT("kree"))
 		{
@@ -206,8 +205,8 @@ namespace KeysReefAudio
 			for (int32 k = 0; k < N; k++)
 			{
 				const float Up = 1.f + .16f * FMath::Sin(UE_PI * float(k) / (N - 1));
-				Tone(EWave::Sine, 2250 * Up, 0, 3300 * Up, .09f, .012f, .1f, k * .15f, .04f);
-				Tone(EWave::Sine, 4500 * Up, 0, 6600 * Up, .018f, .012f, .1f, k * .15f, .04f);
+				Tone(EWave::Sine, 2250 * Up, 0, 3300 * Up, .045f, .012f, .1f, k * .15f, .04f);
+				Tone(EWave::Sine, 4500 * Up, 0, 6600 * Up, .009f, .012f, .1f, k * .15f, .04f);
 			}
 			Desc = FString::Printf(TEXT("%d chirps 0.15 s apart, each a sine rising 2.25 -> 3.3 kHz in 0.1 s with its octave at a fifth of the level; the run is a sixth higher in the middle"), N);
 		}
@@ -240,9 +239,9 @@ namespace KeysReefAudio
 		else if (Name == TEXT("plunge.pelican"))
 		{
 			// Real: a brown pelican (or an osprey) hitting the water from a height: a heavy slap, a boom and falling spray.
-			Noise(EFilter::Lowpass, 1100, 180, 0, .5f, .004f, .7f, 0);
-			Tone(EWave::Sine, 90, 0, 45, .25f, .004f, .25f, 0);
-			Noise(EFilter::Highpass, 2600, 0, 0, .14f, .03f, .9f, .03f);
+			Noise(EFilter::Lowpass, 1100, 180, 0, .18f, .004f, .7f, 0);
+			Tone(EWave::Sine, 90, 0, 45, .09f, .004f, .25f, 0);
+			Noise(EFilter::Highpass, 2600, 0, 0, .05f, .03f, .9f, .03f);
 			Desc = TEXT("noise low-passed from 1.1 kHz down to 180 Hz over 0.7 s, a sine thump falling 90 -> 45 Hz, and 0.9 s of spray (noise above 2.6 kHz)");
 		}
 		else if (Name == TEXT("plunge.small"))
@@ -269,8 +268,8 @@ namespace KeysReefAudio
 		else if (Name == TEXT("roll"))
 		{
 			// Real: a tarpon rolling at the surface to gulp air: a soft gulp and a swirl.
-			Tone(EWave::Sine, 170, 0, 80, .16f, .02f, .2f, 0);
-			Noise(EFilter::Lowpass, 520, 180, 0, .16f, .12f, .6f, .05f);
+			Tone(EWave::Sine, 170, 0, 80, .08f, .02f, .2f, 0);
+			Noise(EFilter::Lowpass, 520, 180, 0, .08f, .12f, .6f, .05f);
 			Desc = TEXT("a sine falling 170 -> 80 Hz in 0.2 s (the gulp) and 0.6 s of noise low-passed from 520 Hz down, swelling in over 0.12 s (the swirl)");
 		}
 		else if (Name == TEXT("crabdrop"))
@@ -289,8 +288,8 @@ namespace KeysReefAudio
 		else if (Name == TEXT("strike"))
 		{
 			// Real: a wading bird's bill going into the water.
-			Noise(EFilter::Bandpass, 2700, 0, 3, .12f, .001f, .04f, 0);
-			Noise(EFilter::Lowpass, 600, 0, 0, .05f, .002f, .08f, 0);
+			Noise(EFilter::Bandpass, 2700, 0, 3, .36f, .001f, .04f, 0);
+			Noise(EFilter::Lowpass, 600, 0, 0, .15f, .002f, .08f, 0);
 			Desc = TEXT("a 40 ms tick of noise at 2.7 kHz over 80 ms of noise below 600 Hz");
 		}
 		else return false;
@@ -324,7 +323,7 @@ namespace KeysReefAudio
 		B.Surge = float(.055 * (.25 + .75 * Cover) * Shallow * Sea * Env * FMath::Exp(-In.DiverDepth / 6));
 		B.SurgeHz = float(190 + 330 * Env);
 		// the deep: the crackle and the surge fall away and a low rumble is left
-		B.Deep = float(.030 * Smooth(6, 28, In.DiverDepth));
+		B.Deep = float(.012 * Smooth(6, 28, In.DiverDepth));
 		B.Lp = float(FMath::Lerp(9000.0, 4200.0, Smooth(3, 30, In.DiverDepth)));
 		B.Master = 1.f;
 		return B;

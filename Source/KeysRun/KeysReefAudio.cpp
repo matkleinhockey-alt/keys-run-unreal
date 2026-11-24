@@ -71,6 +71,8 @@ struct UKeysReefAudioSub::FState
 	bool bBedTest = false;
 	KeysReefAudio::FBedIn BedTest;
 	TArray<TPair<double, FString>> Queue;     // the "all" command: (time, sound)
+	struct FFake { FString What, Who; double M = 5, Until = 0, N = 6; };
+	TArray<FFake> Fakes;                      // the "heard" command: stands in for a hub hook for some seconds
 	FString RecName;
 	// the log
 	double LogT = 0, CpuAcc = 0, CpuMax = 0;
@@ -83,7 +85,7 @@ void KeysReefAudio::Heard(const TCHAR* What, const FString& Who, const FVector& 
 	if (UKeysReefAudioSub* S = GReefAudio.Get()) S->OnHeard(What, Who, GamePos, Amount);
 }
 
-static FAutoConsoleCommand GReefAudioCmd(TEXT("kr.reefaudio"), TEXT("Reef and mangrove sound test hooks: stats, test <sound> [metres], all, list, dump, rec <seconds> [name], force 0|1|2, bed <cover> <water m> <diver m> | bed off"),
+static FAutoConsoleCommand GReefAudioCmd(TEXT("kr.reefaudio"), TEXT("Reef and mangrove sound test hooks: stats, test <sound> [metres], all, list, dump, rec <seconds> [name], heard <what> <who> <metres> [seconds], force 0|1|2, bed <cover> <water m> <diver m> | bed off"),
 	FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args) { if (UKeysReefAudioSub* S = GReefAudio.Get()) S->DebugCmd(FString::Join(Args, TEXT(" "))); }));
 
 bool UKeysReefAudioSub::ShouldCreateSubsystem(UObject* Outer) const
@@ -273,6 +275,15 @@ void UKeysReefAudioSub::Tick(float DeltaTime)
 	S.Bed.Master = S.bBedTest ? 1.f : float(S.bLive ? S.Under : 0.0);
 	Synth->SetBed(S.Bed);
 
+	// (test hook) animals the "heard" command pretends a hub file reported, dead ahead of the camera
+	for (int32 i = S.Fakes.Num() - 1; i >= 0; i--)
+	{
+		const FState::FFake Fk = S.Fakes[i];
+		const FVector FwdUE = FVector::CrossProduct(S.RightUE, FVector::UpVector).GetSafeNormal();
+		OnHeard(*Fk.What, Fk.Who, S.Cam + FVector(FwdUE.X, 0, FwdUE.Y) * Fk.M, Fk.N);
+		if (S.Now >= Fk.Until) S.Fakes.RemoveAt(i);
+	}
+
 	// ---- animals close by, under water
 	if (S.bLive && bUnder)
 	{
@@ -403,7 +414,7 @@ void UKeysReefAudioSub::Tick(float DeltaTime)
 			if (bUnder && !bSplash) { S.Dropped++; continue; }
 			bool bAny = false;
 			for (const TPair<FString, float>& P : Parts)
-				bAny |= ReefAudioPlay(Synth, S.Rng, S.Cam, S.CamUE, S.RightUE, S.Under, P.Key, Where, P.Value, bUnder, FString::Printf(TEXT("mangrove event %s by a %s"), *Ev, KindN), S.Skipped).bOk;
+				bAny |= ReefAudioPlay(Synth, S.Rng, S.Cam, S.CamUE, S.RightUE, S.Under, P.Key, Where, P.Value, bUnder, FString::Printf(TEXT("mangrove event: %s, %s"), *Ev, KindN), S.Skipped).bOk;
 			if (bAny) S.Played++; else S.Dropped++;
 		}
 	}
@@ -493,6 +504,13 @@ void UKeysReefAudioSub::DebugCmd(const FString& Cmd)
 		S.RecName = A.Num() >= 3 ? A[2] : TEXT("rec");
 		Synth->StartRec(FCString::Atod(*A[1]));
 		UE_LOG(LogTemp, Log, TEXT("KRReefAudio rec: recording %.1f s of the reef synth's output as %s"), FCString::Atod(*A[1]), *S.RecName);
+	}
+	else if (C == TEXT("heard") && A.Num() >= 4)
+	{
+		// heard <what> <who> <metres> [seconds]: as if a hub hook had called Heard() (every frame for that long)
+		FState::FFake Fk; Fk.What = A[1]; Fk.Who = A[2]; Fk.M = FCString::Atod(*A[3]); Fk.Until = S.Now + (A.Num() >= 5 ? FCString::Atod(*A[4]) : 0.0);
+		S.Fakes.Add(Fk);
+		UE_LOG(LogTemp, Log, TEXT("KRReefAudio heard (test): %s %s %.1f m ahead for %.1f s; %s, under=%.2f"), *Fk.What, *Fk.Who, Fk.M, Fk.Until - S.Now, S.bLive ? TEXT("live") : *S.WhyNot, S.Under);
 	}
 	else if (C == TEXT("force") && A.Num() >= 2) { S.Force = FCString::Atoi(*A[1]); UE_LOG(LogTemp, Log, TEXT("KRReefAudio force: %d"), S.Force); }
 	else if (C == TEXT("bed"))

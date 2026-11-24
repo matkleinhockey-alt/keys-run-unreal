@@ -136,6 +136,8 @@ void UKeysReefSynth::RenderBlock(float* Out, int32 Frames)
 		// distance: most are faint and far, a few are near and sharp
 		NextClick -= Dt;
 		const float SnapRate = FMath::Clamp(Bed.SnapRate, 0.f, 80.f);
+		// (a wait drawn while the shrimp were few must not hold the crackle back once they are many)
+		if (SnapRate > .01f) NextClick = FMath::Min(NextClick, 3.0 / SnapRate);
 		while (NextClick <= 0)
 		{
 			if (SnapRate < .01f) { NextClick = .25; break; }
