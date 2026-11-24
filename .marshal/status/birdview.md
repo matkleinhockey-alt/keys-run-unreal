@@ -43,7 +43,8 @@ cited was opened; what was not checked is said).
 - [ ] 5. The faults left behind - snag, bookmarks and fiddlers shown; ibis, kingfisher and night heron shown from
   one side only; the pale wash on dark birds in full sun is NOT cured (see "Not right yet").
 - [x] 6. Rookeries are a sight - `rook2` (below).
-- [ ] 7. No slowdown - see section 7 for what was measured and what it is worth.
+- [ ] 7. No slowdown - NOT met as measured: within about 3% where the view is unchanged, but 10% more GPU time
+  at the mangrove flat with the closer look engaged (section 7); and no same-hour build of `main` to compare with.
 - [x] 8. Nothing else moves - `e2_on`, `e2_classic`, `else_before` (below); the "before" half of the reef pair is
   from 23 November's build.
 - [x] 9. Pelicans on the user's pictures - shots below; one shortfall: the brown pelican washes pale in low sun.
@@ -214,7 +215,38 @@ Before, clean branch build of 23 November, Medium, 1600x900, editor capped at 30
 `KREco drawn` before: flat 33-34 birds, 2,496-2,624 bird triangles, 501 instances (53,765 triangles), cpu 0.18-0.22
 ms; rookery 7 96 birds, 7,104 triangles, cpu 0.06 ms; Saddlebunch 49 birds, 3,626 triangles, cpu 0.12 ms.
 
-After: PERF_AFTER
+After, 24 November, the same script (`perf2.sh` in the scratchpad: it also notes every 5 s how many compilers are
+running; `busy_<tag>.txt` beside the logs). Three other lanes were building and running through it, so of four runs
+two are usable: `pf2_before` (`-KRBirdsBefore`: the birds as they were, no closer look; no compiler seen in 18 of
+20 notes) and `pf2_after2` (the lane on; no compiler seen at all). `pf2_after` and `pf2_before2` had 10 to 21
+compilers running and are not used.
+
+| Spot | run | view | game ms | draw ms | GPU ms |
+|---|---|---|---|---|---|
+| flat | `pf2_before` | plain chase | 11.03, 11.23 | 6.35, 6.52 | 30.82, 30.88 |
+| flat | `pf2_after2` | closer look engaged | 11.91 | (waits on the GPU) | 33.97, frame 34.23 ms, 29.2 fps |
+| rookery 7 | `pf2_before` | plain chase | 10.35, 10.80 | 6.52, 6.13 | 24.55, 24.62 |
+| rookery 7 | `pf2_after2` | closer look engaged | 10.73, 10.56 | (waits on the GPU) | 20.32, 20.39 |
+| Saddlebunch | `pf2_before` | plain chase | 11.27, 11.08 | 7.39, 7.22 | 28.71, 29.33 |
+| Saddlebunch | `pf2_after2` | plain chase (nothing to look at) | 10.91, 11.09 | 7.54, 7.65 | 29.71, 29.64 |
+
+What it says, and what it does not:
+- **Where the camera is the same (Saddlebunch): within about 3%**: game -2%, draw +4%, GPU +2% (one run each,
+  0.3 ms apart: about the spread between two samples of one run).
+- **At the mangrove flat with the closer look engaged the GPU time is 10% higher** (34.0 ms against 30.9) and the
+  editor falls just under its 30 fps cap. That is the cost of the view (a low camera looking level through the
+  roots and trees, with more schools awake: 593 instances against 503), not of the birds: with the closer look
+  switched off on 23 November (`pf_off1`) the flat was at 31.2 ms. **This is over the brief's 3% and is not met.**
+  It needs a decision: accept it, or have the closer look hold a higher camera or a shorter root draw distance.
+- At the rookery the closer look's narrow lens is cheaper (20.4 ms against 24.6).
+- `pf2_before` is not `main`: it is this lane's build with the old bird drawing and no closer look, and it still
+  has the white pelicans, the pilings and the whiter rookery mix. Against `main`'s numbers of 23 November (the
+  table above) it reads the same within a millisecond, but that is two days and two machine states apart.
+- `KREco drawn` after (`pf2_after2`): flat 44 birds, 6,102 bird triangles, 593 instances (68,066 triangles), cpu
+  0.33 ms; rookery 7 151 birds, 18,774 triangles, cpu 0.16 ms; Saddlebunch 66 birds, 8,001 triangles, cpu 0.23 ms.
+  Bird triangles are 2.3 to 2.6 times what they were (the dark edge, the pelicans, the day birds at home); the
+  ecosystem's own CPU time is 0.1 to 0.15 ms a frame more.
+- Not done: a build of `main` measured in the same hour, and the packaged-build check on Medium (the marshal's).
 
 ## 8. Nothing else moves
 
@@ -256,7 +288,8 @@ After: PERF_AFTER
 
 ## Blocked
 
-- Not blocked in code. Criterion 7 needs a quiet machine and a build of `main` to compare with (see 7).
+- Not blocked in code. Criterion 7 needs a decision on the closer look's GPU cost at a mangrove shore, and a
+  quiet machine for a same-hour comparison with `main` (see 7).
 
 ## Requests for the marshal
 
