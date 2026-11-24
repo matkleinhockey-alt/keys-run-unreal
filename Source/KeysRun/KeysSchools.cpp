@@ -2033,7 +2033,7 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 			if (LandH(X, Z) >= 0) continue;
 			const double D = DepthFast(X, Z);
 			const FString Zn = ZoneAt(X, Z);
-			const int32 W = (Zn == TEXT("Offshore") && D > 30) ? 0 : (Zn == TEXT("Reef") && D > 7) ? 1 : Zn == TEXT("Hawk Channel") ? 2 : (Zn == TEXT("Flats") || Zn == TEXT("Backcountry") || Zn == TEXT("Bridge")) ? 3 : -1;
+			const int32 W = (Zn == TEXT("Offshore") && D > 30) ? 0 : (Zn == TEXT("Reef") && D > 7 && D <= 30) ? 1 : Zn == TEXT("Hawk Channel") ? 2 : (Zn == TEXT("Flats") || Zn == TEXT("Backcountry") || Zn == TEXT("Bridge")) ? 3 : -1;
 			if (W < 0 || Wants[W].Got.Num() >= Wants[W].N) continue;
 			if (Wants[W].Got.ContainsByPredicate([&](const FVector2D& G) { return Hyp(G.X - X, G.Y - Z) < 1200; })) continue;
 			Wants[W].Got.Add(FVector2D(X, Z));
@@ -2128,7 +2128,9 @@ void AKeysSchools::DebugCmd(const FString& Cmd)
 		if (Dir.IsNearlyZero()) Dir = FVector(1, 0, 0);
 		const FVector P = S->Center - Dir * (S->Radius + (A.IsNumeric() ? FCString::Atod(*A) : 7.0));
 		Dv->DebugCmd(TEXT("at"), FString::Printf(TEXT("%f,%f"), P.X, P.Z));
-		Dv->DebugCmd(TEXT("depth"), FString::Printf(TEXT("%f"), FMath::Max(1.0, SurfY - S->Center.Y + .5)));
+		const FString Dep = FString::Printf(TEXT("%f"), FMath::Max(1.0, SurfY - S->Center.Y + .5));
+		Dv->DebugCmd(TEXT("depth"), Dep);
+		Dv->DebugCmd(TEXT("hold"), Dep);   // (and stays there)
 		DebugCmd(TEXT("look"));
 		UE_LOG(LogTemp, Log, TEXT("KRBait toball %s #%d: %d fish, %.1f m down, work %.2f"), Specs[S->Sp].Key, S->Id, S->Fish.Num(), SurfY - S->Center.Y, S->Work);
 	}
