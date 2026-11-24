@@ -29,7 +29,7 @@ once).
 | `reefaudio` | Sound for the reef and the mangroves, synthesised (brief written by the marshal) | `lane/reefaudio` | `../KeysRun-reefaudio` | merged 2026-11-24 |
 | `reefreal` | Realism clean-up: halibut out, gulf flounder, no kelp, audit; black marlin stays at the user's word (brief written by the marshal) | `lane/reefreal` | `../KeysRun-reefreal` | merged 2026-11-24 |
 | `rootlife` | Under the mangrove roots: thick schools, growth on the roots, snook and snapper in view (brief written by the marshal) | `lane/rootlife` | `../KeysRun-rootlife` | running since 2026-11-24 (background agent) |
-| `reeflinks` | Reef behaviour links and the reef lanes' loose ends (brief written by the marshal) | `lane/reeflinks` | `../KeysRun-reeflinks` | running since 2026-11-24 (background agent) |
+| `reeflinks` | Reef behaviour links and the reef lanes' loose ends (brief written by the marshal) | `lane/reeflinks` | `../KeysRun-reeflinks` | merged 2026-11-24 |
 | `baitballs` | More bait balls in deep water, worked by big fish (brief written by the marshal) | `lane/baitballs` | `../KeysRun-baitballs` | running since 2026-11-24 (background agent) |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
@@ -356,3 +356,15 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   `reeflinks` is the only lane not yet opened; then the release.
 - 2026-11-24: Sombrero Reef is a teleport destination from the outset; pushed to GitHub at the user's word; "v1.44" on the main menu and a release build packaged in `Saved/Release58` (self-contained, `-package -archive`), then HELD at the user's word ("Wait before you do thqt"): nothing published. The marshal's screenshots under the mangrove roots were weak; the user asked for thicker schools, growth on the roots and snook and snapper in view: `lane/rootlife`. `lane/reeflinks` opened beside it (the last lane before the release). Both created from `main` (this entry).
 - 2026-11-24: the user: "can you do more baitballs but with bigger fish in the deep water": `lane/baitballs` created from `main` (this entry). The user switched the session to Opus 5.5 ("keep working in opus 5.5"): commits now end with `Co-Authored-By: Claude Opus 5.5`.
+- 2026-11-24: `reeflinks` merged on the marshal's call (lane at 321dbf9, status IN PROGRESS after two rounds) with
+  R1 (the `reef-creature` skill's mistakes section, replacing the placeholder) and R2 (`KeysSchools.cpp`: jacks and
+  blue runners within 40 m shadow a digging ray; `baitballs` owns that file now, expect to join it). In the game:
+  parrotfish sleep in a cocoon at the foot of a head or in a den within 30 m; turtles rest under ledges by day and
+  breathe at the surface; the sergeant major's guard chases intruders off a purple egg patch; hoverers hold over a
+  head; neon goby cleaning stations with a queue; angelfish nip sponges; grouper-and-moray hunts; the octopus shows
+  only arm tips by day; the den's nurse shark is broader and curved. Switch `-KRNoReefLinks`. Marshal's runs:
+  real map `tpcheck` 48, 0 bad, dock audit 545, a goliath speared, 100 link lines in one run; classic map
+  `tpcheck` 19, 0 bad. Perf NOT settled: the lane's on/off samples were inside noise (draw +5%, GPU +5.5% on the
+  means); the user's packaged game was running during every lane run today. Still without a picture: gobies on a
+  client, an angelfish biting a sponge, a turtle under a ledge, a cave den from above; small fish bolting from a
+  hunt never seen.
