@@ -48,7 +48,7 @@ struct FKeysMesh;
 // chunks are dealt first, so what is left out is always the far edge. reef:stats says how many were refused.
 //
 // TEST COMMANDS (DebugCmd, routed from -KRScript as reef:<command>): stats, find <key> [phase], look <key> [phase]
-// [metres] | look off, census [metres], hab, pins 0|1, on, off, role <key> <0..5>, rival, do <bite|puff>.
+// [metres] | look off, census [metres], hab, pins 0|1, on, off, role <key> <0..5>, rival, do <bite|puff|breath|lift|dig>.
 namespace KeysReefLife
 {
 	enum class ERole : uint8 { Grazer, Pair, Territory, Hoverer, Sitter, Cruiser };
@@ -76,6 +76,7 @@ namespace KeysReefLife
 		double TailFork = 0;                     // + a crescent or fork (the middle cut in), - rounded
 		double Dor0 = .3, Dor1 = .9, DorH = .07; // dorsal fin: from, to, height
 		double An0 = .62, An1 = .9, AnH = .055;  // anal fin
+		double DorTrail = 0, AnTrail = 0;        // > 0: the fin rises toward its rear and the tip is drawn out this far behind its base (angelfish)
 		double PecU = .27, PecV = -.15, PecLen = .17, PecW = .09;   // pectoral fin: where its root is, length, width
 		double PelU = .34, PelLen = .09;         // pelvic fins
 		double EyeU = .1, EyeV = .4, EyeR = .022;
@@ -84,6 +85,17 @@ namespace KeysReefLife
 	struct FPhase { FString Name; double LenMin = .2, LenMax = .3; FBody Body; };
 	// a kind of group: Weight is how often it is dealt; NA of phase A and NB of phase B (B < 0: none)
 	struct FMix { double Weight = 1; int32 A = 0, AMin = 1, AMax = 1, B = -1, BMin = 0, BMax = 0; };
+
+	// what the bottom is at a point (game metres): Zones is one EZone bit, or 0 where reef life never goes (land,
+	// canals, mangrove creeks, dredged ground)
+	struct FHabitat { double Depth = 0, FloorY = 0, Reef = 0, Hard = 0, Grass = 0, Relief = 0; uint32 Zone = 0; };
+
+	// ---- bottom animals and others that are not fish-shaped (a species file may test this macro)
+	#define KEYS_REEFLIFE_BOTTOM_HOOKS 1
+	// what a species' own Pose is told about one animal, and what it may change: the body's transform, the two part
+	// transforms (the Kind 3 mesh, drawn twice near: rowing fins, eye stalks) and the eight M_KR_Boid floats
+	struct FPoseIn { int32 Phase = 0; double Len = .3, Seed = 0, Now = 0, Hour = 12, DiverDist = 1e9, Speed = 0, StateT = 0; bool bHop = false; FVector P = FVector::ZeroVector, Fwd = FVector(1, 0, 0); };
+	struct FPoseOut { FTransform Xf, Part[2]; float Data[8] = {0, 0, 0, 0, 0, 0, 1, 0}; };
 
 	struct FSpecies
 	{
@@ -112,6 +124,35 @@ namespace KeysReefLife
 		// the bite's sound: fill Out with one-shots for AKeysAudio::Burst and say in What exactly what they are
 		TFunction<void(int32 Phase, TArray<FKeysBurst>& Out, FString& What)> BiteSound;
 		FString FirstSight;          // the toast the first time the diver sees one
+		// ---- animals that are not fish-shaped (a ray, a turtle; a generated model later)
+		// Its own body. Fills M for one level of detail (Kind 0 near, 1 mid, 2 far, 3 one limb) in the body builder's
+		// frame: nose +X, back +Z, the whole animal 1 long (FKeysMesh::AddVert turns that into 100 units). When set,
+		// BuildBody and BuildPectoral are not used and FBody only gives behaviour its sizes (HalfH, HalfW). A model
+		// replaces the animal's looks by replacing this function and nothing else.
+		TFunction<void(FKeysMesh& M, int32 Phase, int32 Kind)> Build;
+		// With bRows: where its two limbs (the Kind 3 mesh) are in the body's frame (Unreal units, 100 = its length),
+		// from the stroke's running phase (cycles) and its effort 0..1. Side 0 right, 1 left. Unset: a fish's rowing fins.
+		TFunction<FTransform(int32 Phase, int32 Side, double Stroke, double Effort)> Limb;
+		double LimbWave = 0;         // > 0: the limbs are bent by the material's wave (a ray's wings): its amplitude at full effort
+		bool bBitesBottom = false;   // with bBitesRock: feeds off any bottom of its zones (seagrass, sand), not rock alone
+		double BiteTilt = 50;        // how far it tips nose-down to bite, degrees
+		double BreathEvery = 0;      // > 0: breathes air: goes up to the surface about this often (s), stays BreathSecs, goes down again
+		double BreathSecs = 4;
+		double Bury = 0;             // > 0 (a Sitter): lies sunk this fraction of its body depth in the sand; a cloud of sand when it bolts
+		double DigEvery = 0;         // > 0 (a Sitter): digs for food about this often (s) at the best of the day: sand clouds, and a pit left behind
+		// ---- not fish-shaped (all unset by default)
+		// its own mesh in place of the fish builder: Kind 0..2 a level of detail, 3 the part drawn twice near (needs
+		// bRows). Unreal local frame, +X ahead, +Y right, +Z up, in body lengths (FKeysMesh::AddVert). False: the fish.
+		TFunction<bool(int32 Phase, int32 Kind, FKeysMesh& M)> Mesh;
+		// called after the framework has posed the animal, each time it is stepped
+		TFunction<void(const FPoseIn& In, FPoseOut& Out)> Pose;
+		// its own say in where it lives: multiplies the suitability of a dealt point (0 never .. 1)
+		TFunction<double(double X, double Z, const FHabitat& Hab)> Where;
+		bool bNoBolt = false;        // never bolts: not from the diver, the boat or a spear
+		bool bOnFloor = false;       // lies on the floor itself, never on top of a coral head
+		double HeadWithin = 0;       // > 0: lives at the foot of a stony coral head: each is put against the nearest
+		                             // within this many metres of where it was dealt; with none, the group is not spawned
+		bool bHomeOnHead = false;    // the group's home is the top of the nearest coral head within 8 m (a nest on a rock, a station over a head)
 	};
 
 	using FMake = FSpecies (*)();
@@ -120,9 +161,6 @@ namespace KeysReefLife
 	const TArray<FSpecies>& Registry();      // built on first use, sorted by Key
 	int32 FindSpecies(const FString& Key);
 
-	// what the bottom is at a point (game metres): Zones is one EZone bit, or 0 where reef life never goes (land,
-	// canals, mangrove creeks, dredged ground)
-	struct FHabitat { double Depth = 0, FloorY = 0, Reef = 0, Hard = 0, Grass = 0, Relief = 0; uint32 Zone = 0; };
 	FHabitat HabitatAt(double X, double Z);
 	const TCHAR* ZoneName(uint32 Zone);
 

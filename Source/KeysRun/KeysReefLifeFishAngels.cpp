@@ -109,7 +109,8 @@ namespace KeysReefLifeFishAngels
 		B.TailLen = .16; B.TailH = .3; B.TailFork = -.2;
 		// (the builder's fin is a hump: the tall soft fins are set as far back as it lets them go; see the request
 		// for a trailing lobe in the status file)
-		B.Dor0 = .3; B.Dor1 = 1; B.DorH = .17; B.An0 = .52; B.An1 = 1; B.AnH = .16;
+		B.Dor0 = .24; B.Dor1 = 1; B.DorH = .17; B.An0 = .5; B.An1 = 1; B.AnH = .16;
+		B.DorTrail = .2; B.AnTrail = .18;
 		B.PecU = .31; B.PecV = -.25; B.PecLen = .16; B.PecW = .08; B.PelU = .36; B.PelLen = .12;
 		B.EyeU = .13; B.EyeV = .35; B.EyeR = .022;
 		return B;

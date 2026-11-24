@@ -169,7 +169,7 @@ namespace KeysReefLife
 			const int32 N = Lod == 0 ? 9 : Lod == 1 ? 4 : 2;
 			for (int32 Fin = 0; Fin < 2; Fin++)
 			{
-				const double U0 = Fin ? B.An0 : B.Dor0, U1 = Fin ? B.An1 : B.Dor1, Ht = Fin ? B.AnH : B.DorH, Sg = Fin ? -1 : 1;
+				const double U0 = Fin ? B.An0 : B.Dor0, U1 = Fin ? B.An1 : B.Dor1, Ht = Fin ? B.AnH : B.DorH, Sg = Fin ? -1 : 1, Trail = Fin ? B.AnTrail : B.DorTrail;
 				if (Ht <= 0 || U1 <= U0) continue;
 				TArray<FVector> P;
 				TArray<FLinearColor> C;
@@ -177,9 +177,10 @@ namespace KeysReefLife
 				for (int32 k = 0; k < N; k++)
 				{
 					const double T = double(k) / (N - 1), U = FMath::Lerp(U0, U1, T);
-					const double Zb = BodyPt(B, U, Sg * HALF_PI).Z * .93, Hp = Ht * FMath::Pow(FMath::Sin(PI * (.05 + .9 * T)), .4);
+					// a trailing fin: low over the spines in front, tallest at the rear, the tip swept back past the base
+					const double Zb = BodyPt(B, U, Sg * HALF_PI).Z * .93, Hp = Trail > 0 ? Ht * (.3 + .7 * FMath::Pow(T, 1.5)) : Ht * FMath::Pow(FMath::Sin(PI * (.05 + .9 * T)), .4);
 					P[k] = FVector(BodyX(B, U), 0, Zb);
-					P[N + k] = FVector(BodyX(B, U) - Hp * .35, 0, Zb + Sg * Hp);
+					P[N + k] = FVector(BodyX(B, U) - Hp * .35 - Trail * T * T * T, 0, Zb + Sg * Hp);
 					C[k] = Col(Fin ? PAnal : PDorsal, T, 0, k, 0, 1);
 					C[N + k] = Col(Fin ? PAnal : PDorsal, T, 1, k, 1, 1);
 				}

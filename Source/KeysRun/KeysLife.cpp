@@ -24,7 +24,7 @@ using KeysData::FZoneRow;
 // ---------------------------------------------------------------- species looks (JS VIS / SHAPE tables)
 enum class EKeysKind : uint8 { Fish, Tuna, Shark, Ray, Turtle, Manatee, Dolphin };
 enum class EKeysPat : uint8 { None, Bars, Dots, Gspots, Lbars, Line, Mottle, Spot, Spots, Wbars, Yline, Ystripe };
-enum class EKeysAct : uint8 { None, Tail, Roll, Breathe, Porpoise, Bust, Glide, Blow };
+enum class EKeysAct : uint8 { None, Tail, Roll, Breathe, Porpoise, Bust, Glide, Blow, Root };
 enum class EKeysTail : uint8 { Fork, Lunate, Truncate, Round, Lyre, Hetero, Flukes };
 enum class EKeysFin : uint8 { Tri, Sickle, Long, Sail, Spiny, Round, Filament, Trail };
 
@@ -114,7 +114,7 @@ namespace
 	{ FKeysVis& V = Add(TEXT("mangrove")); V.Kind = EKeysKind::Fish; V.Len = 0.42; V.H = 0.14; V.W = 0.08; V.Back = LHex(0x7b4b40); V.Belly = LHex(0xd9b3a7); V.Fin = LHex(0xa2584a); V.Finlet = V.Fin; V.Level = 1; V.Speed = 1.1; V.SMin = 6; V.SMax = 12; V.Spread = 2.8; V.DMin = 1.5; V.DMax = 20; }
 	{ FKeysVis& V = Add(TEXT("yellowtail")); V.Kind = EKeysKind::Fish; V.Len = 0.42; V.H = 0.12; V.W = 0.07; V.Back = LHex(0x5f7aa0); V.Belly = LHex(0xe8eef4); V.Fin = LHex(0xf2cc2f); V.Finlet = V.Fin; V.Pattern = EKeysPat::Yline; V.Level = 1; V.Speed = 1.5; V.SMin = 8; V.SMax = 14; V.Spread = 3.2; V.DMin = 2; V.DMax = 40; }
 	{ FKeysVis& V = Add(TEXT("mutton")); V.Kind = EKeysKind::Fish; V.Len = 0.65; V.H = 0.22; V.W = 0.11; V.Back = LHex(0x7a6b4e); V.Belly = LHex(0xefcfc4); V.Fin = LHex(0xd3684f); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.9; V.SMin = 1; V.SMax = 3; V.Spread = 2; V.DMin = 2; V.DMax = 40; }
-	{ FKeysVis& V = Add(TEXT("hogfish")); V.Kind = EKeysKind::Fish; V.Len = 0.6; V.H = 0.27; V.W = 0.11; V.Back = LHex(0xd68f73); V.Belly = LHex(0xf5ddd2); V.Fin = LHex(0xb25e45); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.8; V.SMin = 1; V.SMax = 2; V.Spread = 2; V.DMin = 2.5; V.DMax = 40; }
+	{ FKeysVis& V = Add(TEXT("hogfish")); V.Kind = EKeysKind::Fish; V.Len = 0.6; V.H = 0.27; V.W = 0.11; V.Back = LHex(0xd68f73); V.Belly = LHex(0xf5ddd2); V.Fin = LHex(0xb25e45); V.Finlet = V.Fin; V.Level = 2; V.Speed = 0.8; V.SMin = 1; V.SMax = 2; V.Spread = 2; V.DMin = 2.5; V.DMax = 40; V.Act = EKeysAct::Root; }
 	{ FKeysVis& V = Add(TEXT("grouper")); V.Kind = EKeysKind::Fish; V.Len = 1.15; V.H = 0.38; V.W = 0.3; V.Back = LHex(0x4c4a43); V.Belly = LHex(0x8c8778); V.Fin = LHex(0x3a3833); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.5; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 3; V.DMax = 60; }
 	{ FKeysVis& V = Add(TEXT("parrotfish")); V.Kind = EKeysKind::Fish; V.Len = 0.55; V.H = 0.2; V.W = 0.12; V.Back = LHex(0x2f8f8a); V.Belly = LHex(0x7fd3c3); V.Fin = LHex(0xd26aa0); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.9; V.SMin = 2; V.SMax = 5; V.Spread = 2.5; V.DMin = 2; V.DMax = 30; }
 	{ FKeysVis& V = Add(TEXT("angelfish")); V.Kind = EKeysKind::Fish; V.Len = 0.38; V.H = 0.4; V.W = 0.06; V.Back = LHex(0x2c5fa8); V.Belly = LHex(0xe8c33a); V.Fin = LHex(0xf2d23b); V.Finlet = V.Fin; V.Level = 1; V.Speed = 0.7; V.SMin = 1; V.SMax = 2; V.Spread = 1; V.DMin = 2; V.DMax = 30; }
@@ -134,7 +134,7 @@ namespace
 	{ FKeysVis& V = Add(TEXT("sheepshead")); V.Kind = EKeysKind::Fish; V.Len = 0.55; V.H = 0.3; V.W = 0.1; V.Back = LHex(0xc9c9c0); V.Belly = LHex(0xeeeeea); V.Fin = LHex(0x3a3a38); V.Finlet = V.Fin; V.Pattern = EKeysPat::Bars; V.Level = 2; V.Speed = 0.8; V.SMin = 2; V.SMax = 6; V.Spread = 2.5; V.DMin = 2; V.DMax = 20; }
 	{ FKeysVis& V = Add(TEXT("pompano")); V.Kind = EKeysKind::Fish; V.Len = 0.42; V.H = 0.2; V.W = 0.07; V.Back = LHex(0x9aa9ad); V.Belly = LHex(0xf1e9b0); V.Fin = LHex(0xe5c84a); V.Finlet = V.Fin; V.Level = 1; V.Speed = 1.6; V.SMin = 3; V.SMax = 7; V.Spread = 3; V.DMin = 0.8; V.DMax = 8; }
 	{ FKeysVis& V = Add(TEXT("tripletail")); V.Kind = EKeysKind::Fish; V.Len = 0.65; V.H = 0.32; V.W = 0.12; V.Back = LHex(0x4e4434); V.Belly = LHex(0x6b5e47); V.Fin = LHex(0x3b3226); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 0; V.Speed = 0.3; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 2; V.DMax = 100000; }
-	{ FKeysVis& V = Add(TEXT("lionfish")); V.Kind = EKeysKind::Fish; V.Len = 0.35; V.H = 0.2; V.W = 0.1; V.Back = LHex(0xa5432e); V.Belly = LHex(0xf2e3d6); V.Fin = LHex(0xc25a40); V.Finlet = V.Fin; V.Pattern = EKeysPat::Wbars; V.Level = 2; V.Speed = 0.4; V.SMin = 1; V.SMax = 2; V.Spread = 1.5; V.DMin = 3; V.DMax = 60; }
+	{ FKeysVis& V = Add(TEXT("lionfish")); V.Kind = EKeysKind::Fish; V.Len = 0.35; V.H = 0.2; V.W = 0.1; V.Back = LHex(0xa5432e); V.Belly = LHex(0xf2e3d6); V.Fin = LHex(0xc25a40); V.Finlet = V.Fin; V.Pattern = EKeysPat::Wbars; V.Level = 2; V.Speed = 0.12; V.SMin = 1; V.SMax = 2; V.Spread = 1.5; V.DMin = 3; V.DMax = 60; }
 	{ FKeysVis& V = Add(TEXT("goliath")); V.Kind = EKeysKind::Fish; V.Len = 2.2; V.H = 0.8; V.W = 0.62; V.Back = LHex(0x6b5c3e); V.Belly = LHex(0x9a8a64); V.Fin = LHex(0x5a4d33); V.Finlet = V.Fin; V.Pattern = EKeysPat::Mottle; V.Level = 2; V.Speed = 0.3; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 4; V.DMax = 60; }
 	{ FKeysVis& V = Add(TEXT("graytrigger")); V.Kind = EKeysKind::Fish; V.Len = 0.45; V.H = 0.26; V.W = 0.08; V.Back = LHex(0x6f6f68); V.Belly = LHex(0xa8a79d); V.Fin = LHex(0x5d5d56); V.Finlet = V.Fin; V.Level = 1; V.Speed = 0.7; V.SMin = 1; V.SMax = 3; V.Spread = 2; V.DMin = 3; V.DMax = 100000; }
 	{ FKeysVis& V = Add(TEXT("bullshark")); V.Kind = EKeysKind::Shark; V.Len = 2.3; V.H = 0.46; V.W = 0.46; V.Back = LHex(0x6b6f68); V.Belly = LHex(0xeceeea); V.Fin = LHex(0x5f635c); V.Finlet = V.Fin; V.Level = 1; V.Speed = 1.3; V.SMin = 1; V.SMax = 1; V.Spread = 0; V.DMin = 1.5; V.DMax = 40; }
@@ -314,8 +314,8 @@ namespace
 		Z(TEXT("Flats"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.2}, {TEXT("sawfish"), 0.012}, {TEXT("bonefish"), 5}, {TEXT("permit"), 2.2}, {TEXT("stingray"), 3}, {TEXT("redfish"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("blacktip"), 1.5}, {TEXT("lemonshark"), 1}, {TEXT("eagleray"), 1}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.2}, {TEXT("palometa"), 3}, {TEXT("bluerunner"), 2}, {TEXT("manatee"), 0.7}});
 		Z(TEXT("Backcountry"), {{TEXT("flounder"), 2.5}, {TEXT("sole"), 1.8}, {TEXT("sawfish"), 0.01}, {TEXT("redfish"), 4}, {TEXT("snook"), 3}, {TEXT("trout"), 3}, {TEXT("mangrove"), 2.5}, {TEXT("tarpon"), 2}, {TEXT("bonefish"), 1.5}, {TEXT("permit"), 1}, {TEXT("barracuda"), 1.2}, {TEXT("manatee"), 1.2}, {TEXT("stingray"), 2.2}, {TEXT("jackcrevalle"), 2}, {TEXT("ladyfish"), 3}, {TEXT("pompano"), 1.5}, {TEXT("tripletail"), 0.6}, {TEXT("dolphin"), 1.5}});
 		Z(TEXT("Bridge"), {{TEXT("flounder"), 1.5}, {TEXT("tarpon"), 5}, {TEXT("snook"), 2}, {TEXT("mangrove"), 3}, {TEXT("eagleray"), 1}, {TEXT("sheepshead"), 3}, {TEXT("goliath"), 0.6}, {TEXT("jackcrevalle"), 1.5}, {TEXT("nurse"), 1}, {TEXT("cobia"), 1}, {TEXT("barracuda"), 1}, {TEXT("dolphin"), 1.2}, {TEXT("lookdown"), 3.5}, {TEXT("bluerunner"), 4}, {TEXT("schoolmaster"), 2}, {TEXT("manatee"), 0.9}});
-		Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("eagleray"), 2}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 2}, {TEXT("nurse"), 1.5}, {TEXT("mutton"), 2}, {TEXT("dolphin"), 1.8}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("graytrigger"), 1.2}, {TEXT("jackcrevalle"), 1.8}, {TEXT("yellowtail"), 1.5}, {TEXT("sheepshead"), 1.2}, {TEXT("tarpon"), 1.6}, {TEXT("goliath"), 0.5}, {TEXT("bullshark"), 0.35}, {TEXT("bluerunner"), 4.5}, {TEXT("lanesnapper"), 3}, {TEXT("spanishmack"), 3}, {TEXT("lookdown"), 1.5}, {TEXT("schoolmaster"), 2}});
-		Z(TEXT("Reef"), {{TEXT("cubera"), 0.5}, {TEXT("yellowtail"), 5}, {TEXT("angelfish"), 2}, {TEXT("hogfish"), 2}, {TEXT("grouper"), 2}, {TEXT("gag"), 1.2}, {TEXT("redgrouper"), 1.2}, {TEXT("nurse"), 1}, {TEXT("turtle"), 1.5}, {TEXT("barracuda"), 1.5}, {TEXT("mutton"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("cero"), 2}, {TEXT("goliath"), 1.1}, {TEXT("hammerhead"), 0.3}, {TEXT("bullshark"), 0.3}, {TEXT("tarpon"), 1.2}, {TEXT("dolphin"), 1}, {TEXT("schoolmaster"), 4.5}, {TEXT("lanesnapper"), 3.5}, {TEXT("bluerunner"), 4}, {TEXT("vermilion"), 2}, {TEXT("spanishmack"), 2}});
+		Z(TEXT("Hawk Channel"), {{TEXT("mangrove"), 4}, {TEXT("eagleray"), 2}, {TEXT("barracuda"), 2}, {TEXT("nurse"), 1.5}, {TEXT("mutton"), 2}, {TEXT("dolphin"), 1.8}, {TEXT("cero"), 2}, {TEXT("pompano"), 1.5}, {TEXT("cobia"), 1}, {TEXT("graytrigger"), 1.2}, {TEXT("jackcrevalle"), 1.8}, {TEXT("yellowtail"), 1.5}, {TEXT("sheepshead"), 1.2}, {TEXT("tarpon"), 1.6}, {TEXT("goliath"), 0.5}, {TEXT("bullshark"), 0.35}, {TEXT("bluerunner"), 4.5}, {TEXT("lanesnapper"), 3}, {TEXT("spanishmack"), 3}, {TEXT("lookdown"), 1.5}, {TEXT("schoolmaster"), 2}});
+		Z(TEXT("Reef"), {{TEXT("cubera"), 0.5}, {TEXT("yellowtail"), 5}, {TEXT("hogfish"), 2}, {TEXT("grouper"), 2}, {TEXT("gag"), 1.2}, {TEXT("redgrouper"), 1.2}, {TEXT("nurse"), 1}, {TEXT("barracuda"), 1.5}, {TEXT("mutton"), 2}, {TEXT("lionfish"), 1.5}, {TEXT("graytrigger"), 2}, {TEXT("cero"), 2}, {TEXT("goliath"), 1.1}, {TEXT("hammerhead"), 0.3}, {TEXT("bullshark"), 0.3}, {TEXT("tarpon"), 1.2}, {TEXT("dolphin"), 1}, {TEXT("schoolmaster"), 4.5}, {TEXT("lanesnapper"), 3.5}, {TEXT("bluerunner"), 4}, {TEXT("vermilion"), 2}, {TEXT("spanishmack"), 2}});
 		// the reef wall's top and ledges (12-20 m) and the deep wall and wrecks (20 m+): the web game's ReefWall and DeepWall
 		// tables (content/creatures.ts), which the Reef zone hands off to by depth (LifeHabitat) so the wall feels different
 		Z(TEXT("ReefWall"), {{TEXT("cubera"), .7}, {TEXT("tigershark"), .12}, {TEXT("grouper"), 3}, {TEXT("gag"), 2}, {TEXT("redgrouper"), 2}, {TEXT("yellowtail"), 4}, {TEXT("mutton"), 2.5}, {TEXT("amberjack"), 2}, {TEXT("kingfish"), 1.5}, {TEXT("cero"), 1.5}, {TEXT("nurse"), 1}, {TEXT("goliath"), .6}, {TEXT("graytrigger"), 1.2}, {TEXT("lionfish"), 1}, {TEXT("hammerhead"), .8}, {TEXT("bullshark"), .5}, {TEXT("cobia"), 1}, {TEXT("dolphin"), 1.3}, {TEXT("vermilion"), 5}, {TEXT("bluerunner"), 3}, {TEXT("schoolmaster"), 2}});
@@ -371,11 +371,11 @@ namespace
 
 	double LifeActDur(EKeysAct A)
 	{
-		switch (A) { case EKeysAct::Tail: return 2.6; case EKeysAct::Roll: return 1.4; case EKeysAct::Breathe: return 3.5; case EKeysAct::Porpoise: return 1.2; case EKeysAct::Bust: return .7; case EKeysAct::Blow: return 4.5; default: return 1; }
+		switch (A) { case EKeysAct::Tail: return 2.6; case EKeysAct::Roll: return 1.4; case EKeysAct::Breathe: return 3.5; case EKeysAct::Porpoise: return 1.2; case EKeysAct::Bust: return .7; case EKeysAct::Blow: return 4.5; case EKeysAct::Root: return 3.2; default: return 1; }
 	}
 	double LifeActCooldown(EKeysAct A)
 	{
-		switch (A) { case EKeysAct::Tail: return LRand(3, 9); case EKeysAct::Roll: return LRand(4, 12); case EKeysAct::Breathe: return LRand(8, 20); case EKeysAct::Porpoise: return LRand(1.5, 4); case EKeysAct::Bust: return LRand(2, 8); case EKeysAct::Blow: return LRand(24, 65); default: return 5; }
+		switch (A) { case EKeysAct::Tail: return LRand(3, 9); case EKeysAct::Roll: return LRand(4, 12); case EKeysAct::Breathe: return LRand(8, 20); case EKeysAct::Porpoise: return LRand(1.5, 4); case EKeysAct::Bust: return LRand(2, 8); case EKeysAct::Blow: return LRand(24, 65); case EKeysAct::Root: return LRand(5, 14); default: return 5; }
 	}
 
 	// ---------------------------------------------------------------- model templates, in the JS frame (game meters)
@@ -728,7 +728,7 @@ namespace
 			{TEXT("cero"), TEXT("kingfish")}, {TEXT("spanishmack"), TEXT("kingfish")},
 			{TEXT("albacore"), TEXT("blackfin")}, {TEXT("skipjack"), TEXT("blackfin")}, {TEXT("goldbluefin"), TEXT("bluefin")},
 			{TEXT("blacktip"), TEXT("mako")}, {TEXT("lemonshark"), TEXT("mako")}, {TEXT("bullshark"), TEXT("mako")}, {TEXT("tigershark"), TEXT("mako")},
-			{TEXT("greatwhite"), TEXT("mako")}, {TEXT("nurse"), TEXT("mako")},
+			{TEXT("greatwhite"), TEXT("mako")},   // (the nurse shark is built from its own shape: a mako's pointed snout and crescent tail are not a nurse shark's)
 		};
 		FString Src = V.Key;
 		FString Path = FPaths::ProjectContentDir() / TEXT("KeysRun/Fish") / (Src + TEXT(".krfish"));
@@ -2449,6 +2449,8 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 		}
 		if (V->Act == EKeysAct::Glide && G.Glide <= 0 && FMath::FRand() < Dt * .03) G.Glide = LRand(1.6, 3.4);
 		double Sp = V->Speed;
+		// a nurse shark lies on the bottom by day and hunts at night; a lionfish hangs almost still
+		if (G.Type == TEXT("nurse") && ActHour > 6.5 && ActHour < 18.5) Sp *= .04;
 		if (G.Flee > 0) { G.Flee -= Dt; G.H = LAngLerp(G.H, G.FleeH, Dt * 4); Sp *= G.FleeMul > 0 ? G.FleeMul : V->Level == 2 ? 1.8 : 3.2; }
 		else { G.FleeMul = 0; G.H += (FMath::Sin(T * .37 + G.Ph) * .35 + FMath::Sin(T * .11 + G.Ph * 2) * .2) * Dt; }
 		// tuna run down a bait sitting in blue water
@@ -2561,6 +2563,7 @@ void AKeysLife::UpdateCreatures(double Dt, double T)
 						Pitch = -.95 * K; Y = LLerp(Y, Surf - .08, K);
 						if (bDraw && K > .6 && FMath::FRand() < Dt * 4) SpawnDrop(FVector(Mx - Fx * .5, Surf + .05, Mz - Fz * .5), FVector::ZeroVector, 1.2, .25, false);
 						break;
+					case EKeysAct::Root: Pitch = -.75 * K; Y = LLerp(Y, Floor + .12, K); break;   // a hogfish rooting in the sand with its snout
 					case EKeysAct::Roll: Y = Surf - .9 + K * 1.15; Pitch = FMath::Cos(P * PI) * .7; if (P > .45 && !M.bSpl) { M.bSpl = true; Splash(Mx, Mz, 7, .6); } break;
 					case EKeysAct::Bust: Y = Surf - .5 + K * .75; Pitch = FMath::Cos(P * PI) * .6; if (P > .4 && !M.bSpl) { M.bSpl = true; Splash(Mx, Mz, 9, .8); } break;
 					case EKeysAct::Breathe: Y = LLerp(Y, Surf - .1, K); Pitch = .22 * K; break;
@@ -2928,7 +2931,9 @@ void AKeysLife::SpearTargetsNear(double X, double Y, double Z, double R, TArray<
 		if (!V || LHyp(G.CX - X, G.CZ - Z) > R + 40) continue;
 		const KeysData::FSpecies* Sp = KeysData::Species(G.Type);
 		if (!Sp) continue;   // ambient-only creatures have no catch
-		const bool bCatchable = V->Kind != EKeysKind::Dolphin && V->Kind != EKeysKind::Turtle && V->Kind != EKeysKind::Manatee && !V->bNoCatch;
+		// (a species that may only be released cannot be released off a spear: goliath grouper, tarpon, bonefish, billfish and
+		// the protected sharks are seen, not shot)
+		const bool bCatchable = V->Kind != EKeysKind::Dolphin && V->Kind != EKeysKind::Turtle && V->Kind != EKeysKind::Manatee && !V->bNoCatch && KeysData::ReleaseOnlyReason(G.Type).IsEmpty();
 		const double Fx = -FMath::Sin(G.H), Fz = -FMath::Cos(G.H);
 		double Spd = V->Speed;
 		if (G.Flee > 0) Spd *= G.FleeMul > 0 ? G.FleeMul : 3.2;
