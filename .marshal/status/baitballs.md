@@ -16,7 +16,12 @@ Branch: lane/baitballs at a5132d1
 - Status file.
 
 ## In progress
-- First build (background), reading KeysSchools / KeysLife.
+- First scripted run of the deep balls (built clean).
+
+## Baseline (main code, this worktree, Medium, editor, 1600x900; log_perf_before2.log)
+- offshore trolling: frame 33.61 / 34.62 ms, game 16.82 / 25.79, draw 10.10 / 17.53, GPU 25.93 / 28.27 (noisy: two samples disagree by 50% on game)
+- bait_ball (reef dive, silverside ball put ahead): frame 21.30 / 20.55, game 19.47 / 18.75, draw 19.40 / 19.68, GPU 19.75 / 19.54
+- fish: offshore 13-15 schools, ~3040 fish (bait share full: herring/silverside); reef dive 60 schools, 3510 fish
 
 ## Blocked
 - none
