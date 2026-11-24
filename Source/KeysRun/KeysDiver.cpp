@@ -1279,6 +1279,22 @@ void AKeysDiver::UpdateCamera(double Dt, double T)
 		CamPosUE = G2U(Pos);
 		CamRotUE = (G2U(FVector(S.X, S.Y + .15, S.Z)) - CamPosUE).Rotation();
 	}
+	if (ExFix > 0)
+	{
+		// Never a lens sitting in the surface itself: within a few centimetres of it the sea is drawn from one side and
+		// the look from the other (a frame of black slab and bare sand). Her swimming has a flat sea at 0; the drawn one
+		// heaves. Floating at the surface her head rides the swell, eyes out of the water; below it the lens is kept
+		// 0.2 m clear of the waves on the side it is on, so it crosses once, cleanly, as she comes up or goes down.
+		FVector Cg = U2G(CamPosUE);
+		const double Sf = WaveH(Cg.X, Cg.Z, T, AmpAt(Cg.X, Cg.Z), false), Rel = Cg.Y - Sf;
+		if (S.Depth() <= KeysDive::SurfaceEps && !S.bBlackedOut) Cg.Y = Sf + .2 + FMath::Max(0.0, Cg.Y - .15);
+		else
+		{
+			const bool bSideUnder = bCamUnder ? Rel < 0 : Rel < -.25;
+			Cg.Y = bSideUnder ? FMath::Min(Cg.Y, Sf - .2) : FMath::Max(Cg.Y, Sf + .2);
+		}
+		CamPosUE = G2U(Cg);
+	}
 	if (bDbgTopside)
 	{
 		// test hook: standing in the boat, looking over the side at the water above her
