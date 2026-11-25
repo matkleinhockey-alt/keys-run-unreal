@@ -1,0 +1,3 @@
+marina	Medium	1920x1080	23.4 fps	frame 42.82 ms	game 28.28	draw 8.33	gpu 42.16	worst 82.6 ms	117 frames
+mangroves	Medium	1920x1080	26.2 fps	frame 38.19 ms	game 9.08	draw 6.57	gpu 37.60	worst 79.6 ms	132 frames
+mangroves	High	1920x1080	12.8 fps	frame 78.03 ms	game 13.22	draw 8.74	gpu 78.18	worst 252.9 ms	65 frames
