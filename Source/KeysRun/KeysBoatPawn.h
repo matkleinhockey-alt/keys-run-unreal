@@ -292,7 +292,7 @@ public:
 	struct FSvcCard { FString Kind, Title; TArray<FString> Lines; TArray<FString> Cells; int32 Prize = 0; double Age = 0, Life = 9; bool bOn = false; };
 	FSvcCard SvcCard;
 	double SleepT = -1;                // the motel's fade, seconds since it started (-1: none)
-	double ReboardT = -1;              // J from far off while diving: the fade back aboard, seconds since it started (-1: none)
+	double ReboardT = -1;              // (no longer used: J from far off is a cut now, KeysBoatPawn ToggleDive; kept for the HUD's fade)
 	double ReboardAlpha() const { return ReboardT < 0 ? 0 : ReboardT < .4 ? ReboardT / .4 : FMath::Max(0.0, 1 - (ReboardT - .4) / .4); }
 	bool bSleepBlack = false;
 	double SleepAlpha() const;
@@ -321,6 +321,27 @@ public:
 	bool bWasInChair = false;
 	double ChairIntroAge = 0;
 	int32 ChairIntroJump = 0;   // 0 none yet, 1 the first jump is on, 2 it's over
+	// test log (ftlog=<seconds>): one KRStrike line a frame, frame times and what the camera did
+	double FtLogUntil = -1;
+	// the trolling strike (UpdateStrikeCam): out on the water with the fish from the hit through its first jump, the boat
+	// beyond it in the frame, on damped springs; then one cut to the chair, and an eased glide into first person
+	bool bStrikeCam = false, bStrikeInit = false;
+	double StrikeSide = 1;
+	FVector StrikeP = FVector::ZeroVector, StrikeL = FVector::ZeroVector, StrikePV = FVector::ZeroVector, StrikeLV = FVector::ZeroVector;   // game metres
+	double StrikeFov = 60;
+	void UpdateStrikeCam(double Dt, double T);
+	// the chair shot's aim and lens, eased (it used to follow the fish's bearing frame by frame)
+	bool bChairInit = false;
+	FVector ChairLookS = FVector::ZeroVector, ChairLookV = FVector::ZeroVector;
+	double ChairFovS = 46;
+	mutable bool bChairSideFlip = false;
+	bool bCutNow = false;           // a deliberate cut this frame (SmoothCameraCuts)
+	int32 StrikeFix = 1;            // test switch (strikefix=0): the old strike sequence
+	FVector ShakeOffset(double T) const;   // the boat's shake as a quick smooth wobble
+	double CamFloorS = -1e9;        // the chase camera's floor over the waves, eased
+	FVector FtLastLoc = FVector::ZeroVector;
+	FQuat FtLastRot = FQuat::Identity;
+	void LogStrikeFrame(double T);
 	double Fuel = 1, DiscoverT = 0;
 	TArray<FString> SpotsFound;        // teleport destinations you've been within 200 m of
 	void UpdateFuel(double Dt);
@@ -519,6 +540,7 @@ private:
 	// a fish in the air
 	bool bJumping = false, bJumpLow = false;
 	double JT = 0, JDur = 1, JX = 0, JZ = 0, JDX = 0, JDZ = 0, JRun = 0, JH = 0, JSpin = 0;
+	double JW0 = 0, JY0 = 0;   // the sea's height where it left the water, and its own depth then (the arc rides the swell)
 	// jump cinematics: the camera zooms in and swings toward a fish in the air
 	float JumpFov = 88.f;
 	double JumpLook = 0;
