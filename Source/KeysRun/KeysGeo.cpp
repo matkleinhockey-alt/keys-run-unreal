@@ -1604,6 +1604,9 @@ namespace KeysGeo
 			// (a boat on plane leaves a solid white column that stays white for a good 150 m)
 			L.F0 = A.S * FMath::Exp(-AgeA / 8.0) * FadeEnd; L.F1 = B.S * FMath::Exp(-AgeB / 8.0);
 			L.A0 = A.S * FMath::Exp(-AgeA / 13) * FadeEnd; L.A1 = B.S * FMath::Exp(-AgeB / 13);
+			// (a fish's splash, sources from 900000, leaves white water but no aerated streak: the streak warp in the ocean
+			// material aliased into squares across a small patch seen close, at the trolling strike; smooth R2 stop-gap)
+			if (B.Source >= 900000) L.A0 = L.A1 = 0;
 			L.G0 = AgeA; L.G1 = AgeB; L.S0 = A.S; L.S1 = B.S;
 			// (room for the crest lines peeling off either side, which spread faster than the wash)
 			const double Reach = WM * 1.5 + FMath::Max(AgeA, AgeB) * 2.6 + 2;
