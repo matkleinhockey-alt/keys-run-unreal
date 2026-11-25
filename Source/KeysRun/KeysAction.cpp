@@ -24,7 +24,7 @@
 bool AKeysBoatPawn::ContextAction(FString& OutPrompt, bool bDo)
 {
 	OutPrompt.Reset();
-	if (!bRunning || Menu != EMenu::None || bBoardOpen || bLoginOpen || bGearOpen) return false;
+	if (!bRunning || Menu != EMenu::None || bBoardOpen || bLoginOpen || bGearOpen || bPhoneOpen) return false;   // (on the phone E chooses a row)
 	if (const AKeysHandgun* Pistol = AKeysHandgun::Get(this); Pistol && Pistol->IsOut()) return false;
 	// a fish on the card has its own keys (K, Space, T)
 	if (FState == EKeysFish::Caught) return false;
