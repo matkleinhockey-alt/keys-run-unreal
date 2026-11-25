@@ -908,7 +908,9 @@ FVector AKeysDiver::MuzzleWorld() const
 
 bool AKeysDiver::TryFire()
 {
-	if (Shot.bAlive || Speared.bOn) return false;
+	// FishMode: the fish from the last shot is still coming to the hand or held up (4.5 s, longer than the reload). A
+	// second fish speared in that time took its place and the first was never landed
+	if (Shot.bAlive || Speared.bOn || FishMode != 0) return false;
 	if (!CanFire(Gun)) { Nudge = .6; return false; }
 	if (S.Air <= 0 || S.bBlackedOut) return false;
 	const FVector Origin = MuzzleWorld();

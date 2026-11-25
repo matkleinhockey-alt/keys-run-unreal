@@ -283,10 +283,12 @@ void AKeysAudio::HandleKeys()
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (!PC) return;
 	// menus and the login box have the keyboard (typing a name with an N in it shouldn't mute the game)
-	if (const AKeysBoatPawn* BP = Cast<AKeysBoatPawn>(PC->GetPawn()); BP && BP->IsCapturingKeys()) return;
+	const AKeysBoatPawn* BP = Cast<AKeysBoatPawn>(PC->GetPawn());
+	if (BP && BP->IsCapturingKeys()) return;
 	if (PC->WasInputKeyJustPressed(EKeys::P)) MusicToggle();
 	if (PC->WasInputKeyJustPressed(EKeys::N)) ToggleSound();
-	if (PC->WasInputKeyJustPressed(EKeys::I)) ToggleEngines();
+	// the motors are switched at the helm: not from the water or the dock
+	if (PC->WasInputKeyJustPressed(EKeys::I) && !(BP && (BP->IsDiving() || BP->IsAshore()))) ToggleEngines();
 }
 
 void AKeysAudio::UpdateListener()

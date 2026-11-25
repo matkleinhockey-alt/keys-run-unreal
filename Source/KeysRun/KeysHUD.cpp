@@ -516,7 +516,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("J"), TEXT("Jump in / back aboard (from anywhere)")}, {TEXT("W A S D + mouse"), TEXT("Swim where you look")},
 		{TEXT("Space / C (Ctrl)"), TEXT("Ascend / descend")}, {TEXT("Shift"), TEXT("Sprint (burns air)")},
 		{TEXT("Click"), TEXT("Fire the speargun")}, {TEXT("Reload"), TEXT("A fresh spear goes in by hand after each shot")},
-		{TEXT("Hold S"), TEXT("Haul a speared fish in")}, {TEXT("1"), TEXT("Dive mask / chase view")}, {TEXT("F"), TEXT("Prise open a wreck's box (treasure)")}};
+		{TEXT("1"), TEXT("Dive mask / chase view")}, {TEXT("F"), TEXT("Prise open a wreck's box (treasure)")}};
 	const float ColW = W * .5f, Row = 23.2f * U;
 	auto Block = [&](const TCHAR* Head, const FRow* Rows, int32 N, float BX, float BY)
 	{
@@ -1200,7 +1200,7 @@ void AKeysHUD::DrawDiving(AKeysBoatPawn* P, AKeysDiver* D)
 		Text(FString::Printf(TEXT("%d m"), FMath::RoundToInt(F.Dist)), Cx, Y + 124 * U, .85f, FLinearColor::White, nullptr, true);
 	}
 	else if (!P->Toast.IsEmpty() && GetWorld()->GetTimeSeconds() < P->ToastUntil) {}
-	else Text(TEXT("Click fire  -  R reload  -  Space / C up / down  -  J back aboard (from anywhere)"), Cx, SH - 44 * U, .85f, Dim, nullptr, true);
+	else Text(TEXT("Click fire  -  Space / C up / down  -  J back aboard (from anywhere)"), Cx, SH - 44 * U, .85f, Dim, nullptr, true);
 }
 
 void AKeysHUD::DrawCard(AKeysBoatPawn* P)

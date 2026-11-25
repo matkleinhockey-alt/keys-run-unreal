@@ -330,8 +330,6 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Space / C (or Ctrl) | ascend / descend |
 | Shift | sprint |
 | Click | fire the speargun |
-| R | haul the bands back (reload) |
-| hold S | haul a speared fish in |
 | 1 | dive mask / chase view |
 | Mouse drag | orbit the camera, or look around in first person |
 | F (under water) | prise open a wreck's box |

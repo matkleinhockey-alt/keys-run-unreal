@@ -2,6 +2,7 @@
 #include "KeysAudio.h"
 #include "KeysSpeech.h"
 #include "KeysDiver.h"
+#include "KeysHandgun.h"
 #include "EngineUtils.h"
 #include "KeysBoatPawn.h"
 #include "KeysData.h"
@@ -133,11 +134,13 @@ void AKeysExtras::Tick(float DeltaSeconds)
 		CamX = C.X / 100;
 		CamZ = C.Y / 100;
 	}
-	if (bHandleKeys && P->bRunning && !P->IsCapturingKeys() && !P->IsDiving())
+	if (bHandleKeys && P->bRunning && !P->IsCapturingKeys() && !P->IsDiving() && !P->IsAshore())
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
 			if (PC->WasInputKeyJustPressed(EKeys::Y)) ToggleBuddy();
-			if (PC->WasInputKeyJustPressed(EKeys::Z)) ToggleShower();   // J is diving now, as in the web game
+			// with the pistol out Z is the flare (KeysHandgun.cpp)
+			const AKeysHandgun* Gun = AKeysHandgun::Get(this);
+			if (PC->WasInputKeyJustPressed(EKeys::Z) && !(Gun && Gun->IsOut())) ToggleShower();   // J is diving now, as in the web game
 		}
 
 	UpdateCrew(Dt, T);

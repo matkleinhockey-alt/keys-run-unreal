@@ -1282,11 +1282,16 @@ void AKeysBoatPawn::ToggleDive()
 			return Left;
 		};
 		D->EnterWater(X, Z, H);
-		if (D->OnScuba()) ShowToast(TEXT("Overboard on scuba - WASD and the mouse to swim and look, Space / C up / down (you hover when you let go), Shift to sprint. Hold G for the gauge, T the dive light, X swaps cylinders at the boat. Click to fire, R to reload. J to get back aboard."), 6);
-		else if (KeysScuba::HasSet(this) && KeysScuba::WantScuba()) ShowToast(TEXT("The cylinder is empty, so you are over on a breath (Scuba Steve's fills it). WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
-		else ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
+		if (D->OnScuba()) ShowToast(TEXT("Overboard on scuba - WASD and the mouse to swim and look, Space / C up / down (you hover when you let go), Shift to sprint. Hold G for the gauge, T the dive light, X swaps cylinders at the boat. Click to fire (a fresh spear goes in by itself). J to get back aboard."), 6);
+		else if (KeysScuba::HasSet(this) && KeysScuba::WantScuba()) ShowToast(TEXT("The cylinder is empty, so you are over on a breath (Scuba Steve's fills it). WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire (a fresh spear goes in by itself). J to get back aboard from anywhere."), 6);
+		else ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire (a fresh spear goes in by itself). J to get back aboard from anywhere."), 6);
 	}
-	else if (D->RequestReboard()) { SyncChaseCam(); bCamInit = false; }
+	else if (const bool bHadFish = D->HasFishOnLine(); D->RequestReboard())
+	{
+		SyncChaseCam();
+		bCamInit = false;
+		if (bHadFish) ShowToast(TEXT("Lost the fish - back aboard"), 3);   // as the far-off J says below
+	}
 	else if (!D->IsBlackedOut())
 	{
 		// out of reach of the ladder: straight back aboard, wherever you were. A cut (the diver's ExitToBoat marks it):
@@ -1432,7 +1437,7 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 		if (FState == EKeysFish::Caught)
 		{
 			if (Hit(EKeys::K) && GetWorld()->GetTimeSeconds() - CaughtT > .7) KeepFish();
-			else if (Hit(EKeys::T) && GetWorld()->GetTimeSeconds() - CaughtT > .7) TagAndRelease();
+			else if (Hit(EKeys::T) && GetWorld()->GetTimeSeconds() - CaughtT > 1.6) TagAndRelease();   // T was the drag a moment ago
 		}
 		if (Hit(EKeys::T) && FState == EKeysFish::Fight)
 			Drag = FMath::Clamp(Drag + (Down(EKeys::LeftShift) || Down(EKeys::RightShift) ? -1 : 1), 1, 5);
@@ -1931,6 +1936,9 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	auto Down = [PC](const FKey& K) { return PC->IsInputKeyDown(K); };
 	auto Hit = [PC](const FKey& K) { return PC->WasInputKeyJustPressed(K); };
 	const double T = GetWorld()->GetTimeSeconds();
+	// the trim and tab keys are read afresh further down, in the boat's own block: cleared here so that a key held as a
+	// panel opens, or as you go over the side or ashore, doesn't leave the trim or a tab running
+	bTrimUp = bTrimDn = bTabLeft = bTabRight = false;
 
 	// online login panel: typing goes into the name or crew code, nothing else reacts
 	if (bLoginOpen)
@@ -2061,7 +2069,14 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (!bRunning) return;
 	if (IsDiving()) { HandleDiveInput(PC, Dt); return; }
 	if (IsAshore()) { HandleWalkInput(PC, Dt); return; }
-	if (Hit(EKeys::J)) { ToggleDive(); return; }
+	if (Hit(EKeys::J))
+	{
+		// only the key is held to this (the test script's dive step is not): over the side at speed left the boat
+		// coasting away from where she went in. The same limit as tying up (AKeysWalker::TryEnter)
+		if (!IsDiving() && FMath::Abs(Speed) > 1.6) ShowToast(TEXT("Slow the boat right down before you go over the side."));
+		else ToggleDive();
+		return;
+	}
 	if (Hit(EKeys::Two) && KeysScuba::Cylinders(this) > 0) ShowToast(KeysScuba::ToggleMode(this), 4);   // scuba or a breath, chosen before going over
 	if (Hit(EKeys::Q)) { ToggleAshore(); return; }
 
@@ -2115,7 +2130,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 				ShowToast(TEXT("No races in Free Fish - switch to Charter Captain on the main menu for timed events."));
 			else { StopTroll(true); Ev->ToggleRace(); }   // the Marathon race (web game/race)
 		}
-	if (Hit(EKeys::T) && FState == EKeysFish::Caught) { if (T - CaughtT > .7) TagAndRelease(); }
+	if (Hit(EKeys::T) && FState == EKeysFish::Caught) { if (T - CaughtT > 1.6) TagAndRelease(); }   // T was the drag a moment ago: the same wait as Space's release
 	else if (Hit(EKeys::T))
 	{
 		if (FState == EKeysFish::Fight)
