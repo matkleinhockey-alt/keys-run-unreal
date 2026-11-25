@@ -310,8 +310,9 @@ void AKeysExtras::BuildLayout()
 void AKeysExtras::UpdateCrew(double Dt, double T)
 {
 	const double Sp = PawnSpeed();
-	// in the helm view the camera is where the captain stands
-	if (const AKeysBoatPawn* P = PawnRef.Get()) Captain.bVisible = !P->bDriveOn;
+	// in the helm view the camera is where the captain stands. He is you: while you are in the water or ashore there is
+	// nobody at the wheel (the diver and the walker are drawn where you are)
+	if (const AKeysBoatPawn* P = PawnRef.Get()) Captain.bVisible = !P->bDriveOn && !P->IsDiving() && !P->IsAshore();
 	Captain.IdleUpdate(T, Sp);
 	Crew.IdleUpdate(T, Sp);
 	for (FKeysPartyGoer& G : Party) G.H.IdleUpdate(T, Sp);

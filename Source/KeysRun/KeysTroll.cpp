@@ -189,7 +189,7 @@ void AKeysBoatPawn::TrollCommit()
 	BuildHookedMesh();
 	SetHook();
 	ShowToast(FString::Printf(TEXT("LINE OUT! %s - %d lb on the %s."), *S->Name, FMath::RoundToInt(Weight), *TrollSideName(Stn).ToLower()), 5);
-	FightSub = TEXT("Off the troll and out of gear - hold S (or Space) to reel, ease off when the bar runs red.");
+	FightSub = TEXT("Off the troll and out of gear - hold the Down arrow (or Space) to reel, ease off when the bar runs red.");
 	// a trolled fish comes up: SetHook has rolled its jumps on the strike already (JumpHabit); a billfish or a tarpon
 	// on the spread always shows itself
 	if ((IsBillfish(Key) || Key == TEXT("tarpon")) && JumpQ == 0) { JumpQ = IsBillfish(Key) ? 3 : 2; JumpWait = .3; }

@@ -513,7 +513,11 @@ void AKeysBoatPawn::OnHudClick(FName Box)
 	FString Id;
 	if (B.Split(TEXT(":"), nullptr, &Id))
 	{
-		if (B.StartsWith(TEXT("m:"))) MenuActivate(FName(*Id));
+		if (B.StartsWith(TEXT("ph:"))) { if (bPhoneOpen) PhoneClick(FCString::Atoi(*Id)); }
+		else if (B.StartsWith(TEXT("ph<:"))) { if (bPhoneOpen) PhoneClick(FCString::Atoi(*Id), -1); }
+		else if (B.StartsWith(TEXT("ph>:"))) { if (bPhoneOpen) PhoneClick(FCString::Atoi(*Id), 1); }
+		else if (B.StartsWith(TEXT("phb:"))) { if (bPhoneOpen) PhoneBack(); }
+		else if (B.StartsWith(TEXT("m:"))) MenuActivate(FName(*Id));
 		else if (B.StartsWith(TEXT("m<:"))) MenuActivate(FName(*Id), -1);
 		else if (B.StartsWith(TEXT("m>:"))) MenuActivate(FName(*Id), 1);
 		else if (B.StartsWith(TEXT("tab:"))) BoardTab = FCString::Atoi(*Id);
@@ -530,6 +534,12 @@ void AKeysBoatPawn::OnHudHover(FName Box)
 	// hovering a menu row selects it, so the mouse and the keyboard always agree
 	FString Id;
 	if (!Box.ToString().Split(TEXT(":"), nullptr, &Id)) return;
+	if (Box.ToString().StartsWith(TEXT("ph")))
+	{
+		// the phone's rows and apps (the back chevron is not one)
+		if (bPhoneOpen && !Box.ToString().StartsWith(TEXT("phb"))) PhoneSel = FCString::Atoi(*Id);
+		return;
+	}
 	TArray<FMenuItem> Items;
 	GetMenuItems(Items);
 	for (int32 i = 0; i < Items.Num(); i++) if (Items[i].Id == FName(*Id)) MenuSel = i;
@@ -673,6 +683,11 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd.StartsWith(TEXT("seastate="))) SetSeaState(FMath::Clamp(FCString::Atoi(*Cmd.Mid(9)), 0, SeaStates().Num() - 1));
 		else if (Cmd == TEXT("esc")) { Menu = EMenu::Pause; MenuSel = 0; }
+		// the phone (KeysPhone.cpp): phone takes it out or puts it away; phone=weather opens an app; phsel=2 picks a row; phgo chooses it
+		else if (Cmd == TEXT("phone")) { if (bPhoneOpen) ClosePhone(); else if (CanUsePhone()) OpenPhone(); }
+		else if (Cmd.StartsWith(TEXT("phone="))) { if (!bPhoneOpen && CanUsePhone()) OpenPhone(); if (bPhoneOpen) { PhoneApp = NAME_None; PhoneActivate(FName(*(TEXT("app:") + Cmd.Mid(6)))); } }
+		else if (Cmd.StartsWith(TEXT("phsel="))) { PhoneSel = FCString::Atoi(*Cmd.Mid(6)); PhoneTop = FMath::Max(0, PhoneSel - PhoneVisRows + 1); }
+		else if (Cmd == TEXT("phgo")) { if (bPhoneOpen) PhoneClick(PhoneSel); }
 		else if (Cmd.StartsWith(TEXT("sel="))) MenuSel = FCString::Atoi(*Cmd.Mid(4));
 		else if (Cmd == TEXT("login")) { bLoginOpen = true; LoginField = 0; LoginName = TEXT("Mat"); LoginCrew = TEXT("keys"); }
 		else if (Cmd == TEXT("closeall")) { bLoginOpen = bBoardOpen = false; }
@@ -1120,7 +1135,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			}
 		}
 		else if (Cmd == TEXT("scubamode")) { const FString R = KeysScuba::ToggleMode(this); ShowToast(R, 4); UE_LOG(LogTemp, Log, TEXT("KRScuba mode: %s"), *R); }   // the 2 key, as pressed
-		else if (Cmd.StartsWith(TEXT("runto="))) RunTo(FCString::Atoi(*Cmd.Mid(6)));
+		else if (Cmd.StartsWith(TEXT("runto="))) RunTo(FCString::Atoi(*Cmd.Mid(6)), false);
 		else if (Cmd == TEXT("slots")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(!Sl->bOpen); }
 		else if (Cmd == TEXT("spin")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Spin(); }
 		else if (Cmd.StartsWith(TEXT("view="))) View = FCString::Atoi(*Cmd.Mid(5));
@@ -1282,11 +1297,16 @@ void AKeysBoatPawn::ToggleDive()
 			return Left;
 		};
 		D->EnterWater(X, Z, H);
-		if (D->OnScuba()) ShowToast(TEXT("Overboard on scuba - WASD and the mouse to swim and look, Space / C up / down (you hover when you let go), Shift to sprint. Hold G for the gauge, T the dive light, X swaps cylinders at the boat. Click to fire, R to reload. J to get back aboard."), 6);
-		else if (KeysScuba::HasSet(this) && KeysScuba::WantScuba()) ShowToast(TEXT("The cylinder is empty, so you are over on a breath (Scuba Steve's fills it). WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
-		else ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire, R to reload. J to get back aboard from anywhere."), 6);
+		if (D->OnScuba()) ShowToast(TEXT("Overboard on scuba - WASD and the mouse to swim and look, Space / C up / down (you hover when you let go), Shift to sprint. Hold G for the gauge, T the dive light, X swaps cylinders at the boat. Click to fire (a fresh spear goes in by itself). J to get back aboard."), 6);
+		else if (KeysScuba::HasSet(this) && KeysScuba::WantScuba()) ShowToast(TEXT("The cylinder is empty, so you are over on a breath (Scuba Steve's fills it). WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire (a fresh spear goes in by itself). J to get back aboard from anywhere."), 6);
+		else ShowToast(TEXT("Overboard - WASD and the mouse to swim and look, Space / C to ascend / descend, Shift to sprint. Click to fire (a fresh spear goes in by itself). J to get back aboard from anywhere."), 6);
 	}
-	else if (D->RequestReboard()) { SyncChaseCam(); bCamInit = false; }
+	else if (const bool bHadFish = D->HasFishOnLine(); D->RequestReboard())
+	{
+		SyncChaseCam();
+		bCamInit = false;
+		if (bHadFish) ShowToast(TEXT("Lost the fish - back aboard"), 3);   // as the far-off J says below
+	}
 	else if (!D->IsBlackedOut())
 	{
 		// out of reach of the ladder: straight back aboard, wherever you were. A cut (the diver's ExitToBoat marks it):
@@ -1329,6 +1349,7 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 	if (Hit(EKeys::X)) { const FString Sw = D->SwapCylinder(); if (!Sw.IsEmpty()) ShowToast(Sw, 4); }
 	if (Hit(EKeys::J)) ToggleDive();
 	if (Hit(EKeys::F)) if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen();   // prise open a wreck's box (sim/treasure.ts)
+	if (Hit(EKeys::E)) { FString Act; ContextAction(Act, true); }   // the action key: the box in reach, or the ladder (KeysAction.cpp)
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) ShowToast(D->CycleView() + TEXT(" - press 1 to switch"));
 	// a speared catch: K keeps it, Space releases it (once the card has been up a moment)
 	if (FState == EKeysFish::Caught)
@@ -1337,14 +1358,6 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 		else if (Hit(EKeys::SpaceBar) && GetWorld()->GetTimeSeconds() - CaughtT > 1.6) ReleaseFish();
 	}
 	if (Hit(EKeys::M)) bBigMap = !bBigMap;
-	if (Hit(EKeys::H))
-	{
-		const int32 I = (SeaIndex() + 1) % SeaStates().Num();
-		SetSeaState(I);
-		ShowToast(SeaStates()[I].Name + TEXT(" - ") + SeaStates()[I].Desc);
-	}
-	if (Hit(EKeys::O))
-		if (AKeysWorld* W = World()) { W->ToggleSunset(); ShowToast(W->IsSunset() ? TEXT("Sunset mode - golden hour over the Seven Mile Bridge.") : TEXT("Back to daylight.")); }
 }
 
 void AKeysBoatPawn::LandSpeared(const FString& InKey, double InWeight, double InFX, double InFZ)
@@ -1432,7 +1445,7 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 		if (FState == EKeysFish::Caught)
 		{
 			if (Hit(EKeys::K) && GetWorld()->GetTimeSeconds() - CaughtT > .7) KeepFish();
-			else if (Hit(EKeys::T) && GetWorld()->GetTimeSeconds() - CaughtT > .7) TagAndRelease();
+			else if (Hit(EKeys::T) && GetWorld()->GetTimeSeconds() - CaughtT > 1.6) TagAndRelease();   // T was the drag a moment ago
 		}
 		if (Hit(EKeys::T) && FState == EKeysFish::Fight)
 			Drag = FMath::Clamp(Drag + (Down(EKeys::LeftShift) || Down(EKeys::RightShift) ? -1 : 1), 1, 5);
@@ -1479,10 +1492,9 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 	}
 	if (Hit(EKeys::Q)) ToggleAshore();
 	if (Hit(EKeys::F)) WalkInteract();
+	if (Hit(EKeys::E)) { FString Act; ContextAction(Act, true); }   // the action key: what the prompt names (KeysAction.cpp)
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne) || Hit(EKeys::V)) ShowToast(W->CycleView() + TEXT(" - press 1 to switch"));
 	if (Hit(EKeys::M)) bBigMap = !bBigMap;
-	if (Hit(EKeys::O))
-		if (AKeysWorld* Wd = World()) { Wd->ToggleSunset(); ShowToast(Wd->IsSunset() ? TEXT("Sunset over the harbour - the neon comes on.") : TEXT("Back to daylight.")); }
 }
 
 void AKeysBoatPawn::WalkInteract()
@@ -1734,7 +1746,7 @@ bool AKeysBoatPawn::TeleportSpot(const FRunDest& D, double& OX, double& OZ) cons
 	return false;
 }
 
-void AKeysBoatPawn::RunTo(int32 I)
+void AKeysBoatPawn::RunTo(int32 I, bool bFade)
 {
 	TArray<FRunDest> Ds;
 	RunDests(Ds, true);
@@ -1747,13 +1759,25 @@ void AKeysBoatPawn::RunTo(int32 I)
 	if (!Why.IsEmpty()) { Menu = EMenu::None; ShowToast(Why); return; }
 	double NX, NZ;
 	if (!TeleportSpot(Ds[I], NX, NZ)) { Menu = EMenu::None; ShowToast(FString::Printf(TEXT("No clear water to put the boat at %s."), *Ds[I].Name)); return; }
+	Menu = EMenu::None;
+	WarpX = NX; WarpZ = NZ; WarpName = Ds[I].Name;
+	// from the menu the screen goes to black first and the boat moves under it (Tick), so the new place does not pop in
+	if (bFade) { bWarpPending = true; ReboardT = 0; return; }
+	FinishWarp();
+}
+
+void AKeysBoatPawn::FinishWarp()
+{
+	bWarpPending = false;
+	if (IsDiving() || IsAshore()) return;   // gone over the side or ashore while the screen was fading
+	if (bCharging || IsLineOut()) ReelIn(FString());
+	bCharging = false;
 	StopTroll(true);
-	X = NX; Z = NZ;
+	X = WarpX; Z = WarpZ;
 	Speed = Thr = DVX = DVZ = 0;
 	bCamInit = false;
 	if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
-	Menu = EMenu::None;
-	ShowToast(FString::Printf(TEXT("Teleported to %s."), *Ds[I].Name));
+	ShowToast(FString::Printf(TEXT("Teleported to %s."), *WarpName));
 }
 
 void AKeysBoatPawn::PrepareToLeaveHelm()
@@ -1931,6 +1955,9 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	auto Down = [PC](const FKey& K) { return PC->IsInputKeyDown(K); };
 	auto Hit = [PC](const FKey& K) { return PC->WasInputKeyJustPressed(K); };
 	const double T = GetWorld()->GetTimeSeconds();
+	// the trim and tab keys are read afresh further down, in the boat's own block: cleared here so that a key held as a
+	// panel opens, or as you go over the side or ashore, doesn't leave the trim or a tab running
+	bTrimUp = bTrimDn = bTabLeft = bTabRight = false;
 
 	// online login panel: typing goes into the name or crew code, nothing else reacts
 	if (bLoginOpen)
@@ -1953,6 +1980,8 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		if (Hit(EKeys::Enter)) SubmitLogin();
 		return;
 	}
+	// the phone (P, KeysPhone.cpp): while it is out it has the keys
+	if (HandlePhoneInput(PC)) { bCharging = false; return; }
 	if (Hit(EKeys::L) && !bBoardOpen) { ToggleOnline(); return; }
 
 	// the leaderboard is modal, like the JS panel: B (or Esc) closes it, Tab / Left / Right switch tabs
@@ -2061,7 +2090,14 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (!bRunning) return;
 	if (IsDiving()) { HandleDiveInput(PC, Dt); return; }
 	if (IsAshore()) { HandleWalkInput(PC, Dt); return; }
-	if (Hit(EKeys::J)) { ToggleDive(); return; }
+	if (Hit(EKeys::J))
+	{
+		// only the key is held to this (the test script's dive step is not): over the side at speed left the boat
+		// coasting away from where she went in. The same limit as tying up (AKeysWalker::TryEnter)
+		if (!IsDiving() && FMath::Abs(Speed) > 1.6) ShowToast(TEXT("Slow the boat right down before you go over the side."));
+		else ToggleDive();
+		return;
+	}
 	if (Hit(EKeys::Two) && KeysScuba::Cylinders(this) > 0) ShowToast(KeysScuba::ToggleMode(this), 4);   // scuba or a breath, chosen before going over
 	if (Hit(EKeys::Q)) { ToggleAshore(); return; }
 
@@ -2090,22 +2126,6 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		bAction = false;
 		if (bCharging) { bCharging = false; CastLine(Charge); }
 	}
-	if (Hit(EKeys::X))
-	{
-		// travel to Miami and back
-		double NX, NZ, NH;
-		FString Msg;
-		if (AKeysExtras::MiamiDestination(X, Z, Spec().Draft, NX, NZ, NH, Msg))
-		{
-			if (IsLineOut()) ReelIn(TEXT(""));
-			StopTroll(true);
-			X = NX; Z = NZ; H = NH;
-			Speed = Thr = DVX = DVZ = 0;
-			bCamInit = false;
-			if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
-		}
-		ShowToast(Msg, 5);
-	}
 	if (Hit(EKeys::R) && (FState == EKeysFish::Waiting || FState == EKeysFish::Casting || FState == EKeysFish::Nibble)) ReelIn(TEXT("Line reeled in."));
 	else if (Hit(EKeys::R) && FState == EKeysFish::Idle && !bCharging)
 		if (AKeysEvents* Ev = AKeysEvents::Get(this))
@@ -2115,7 +2135,7 @@ void AKeysBoatPawn::HandleInput(float Dt)
 				ShowToast(TEXT("No races in Free Fish - switch to Charter Captain on the main menu for timed events."));
 			else { StopTroll(true); Ev->ToggleRace(); }   // the Marathon race (web game/race)
 		}
-	if (Hit(EKeys::T) && FState == EKeysFish::Caught) { if (T - CaughtT > .7) TagAndRelease(); }
+	if (Hit(EKeys::T) && FState == EKeysFish::Caught) { if (T - CaughtT > 1.6) TagAndRelease(); }   // T was the drag a moment ago: the same wait as Space's release
 	else if (Hit(EKeys::T))
 	{
 		if (FState == EKeysFish::Fight)
@@ -2134,39 +2154,23 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::K) && T - CaughtT > .7) KeepFish();
 	if (Hit(EKeys::Equals) || Hit(EKeys::Add)) ToggleTroll();
 	if (Hit(EKeys::Nine)) if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle();   // the boat pistol
-	if (Hit(EKeys::Semicolon)) ToggleLights();   // the web game's L (which logs in here)
 	if (Hit(EKeys::E))
 	{
-		if (NearMarina(X, Z) && FMath::Abs(Speed) < 2.5) WeighIn();
-		else if (NearMarina(X, Z)) ShowToast(TEXT("Slow down to tie up at the dock."));
-	}
-	if (Hit(EKeys::H))
-	{
-		const int32 I = (SeaIndex() + 1) % SeaStates().Num();
-		SetSeaState(I);
-		ShowToast(SeaStates()[I].Name + TEXT(" - ") + SeaStates()[I].Desc);
+		// the action key (KeysAction.cpp): weigh in, tie up, or over the side, as the prompt says. A notice ("Slow down
+		// to tie up") when there is something here but not yet
+		FString Act;
+		if (ContextAction(Act, true)) return;
+		if (!Act.IsEmpty()) ShowToast(Act);
 	}
 	if (Hit(EKeys::F))
 	{
 		bAutoChase = !bAutoChase;
 		ShowToast(bAutoChase ? TEXT("Auto-chase on - the boat will follow hooked fish.") : TEXT("Auto-chase off - you drive during the fight."));
 	}
+	// (the sea state, sunset, the gearbox, the lights and the Miami run had keys of their own here - H, O, U, ; and X:
+	// they are rows on the phone now, KeysPhone.cpp)
 	if (Hit(EKeys::M)) bBigMap = !bBigMap;
 	if (Hit(EKeys::C)) CamZoom = CamZoom > 1.4 ? 1 : 1.9;
-	if (Hit(EKeys::O))
-	{
-		if (AKeysWorld* W = World())
-		{
-			W->ToggleSunset();
-			ShowToast(W->IsSunset() ? TEXT("Sunset mode - golden hour over the Seven Mile Bridge.") : TEXT("Back to daylight."));
-		}
-	}
-	if (Hit(EKeys::U))
-	{
-		Gear = (Gear + 1) % 3;
-		if (AKeysAudio* A = AKeysAudio::Get(this)) A->GearShift();
-		ShowToast(Gear == 0 ? TEXT("In gear - forward.") : Gear == 1 ? TEXT("Neutral - W revs the motors.") : TEXT("Reverse - W backs you down."));
-	}
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) CycleView();
 	if (Hit(EKeys::V))
 	{
@@ -4330,7 +4334,7 @@ FString AKeysBoatPawn::Hint() const
 	if (bDriveOn && FState == EKeysFish::Idle) return TEXT("G shows the chartplotter and fish finder - [ ] zoom the chart - 1 switches view");
 	switch (FState)
 	{
-		case EKeysFish::Idle: return Kn > 3 ? TEXT("W/S throttle - A/D steer - H changes the sea state - O for sunset") : TEXT("Hold Space to power a cast - drag the mouse to aim");
+		case EKeysFish::Idle: return Kn > 3 ? TEXT("W/S throttle - A/D steer - P takes out the phone: travel, weather, radio") : TEXT("Hold Space to power a cast - drag the mouse to aim");
 		case EKeysFish::Casting:
 		case EKeysFish::Waiting: return TEXT("Watch the float - hold the down arrow to retrieve - R reels in");
 		case EKeysFish::Nibble: return TEXT("Nibble... wait for the float to go under");
@@ -4364,6 +4368,14 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	const bool bWantPause = bRunning && Menu != EMenu::None;
 	if (bWantPause != UGameplayStatics::IsGamePaused(this)) UGameplayStatics::SetGamePaused(this, bWantPause);
 	if (bWantPause) return;
+	// a teleport's fade (RunTo): to black in 0.4 s, the boat moved under it, back up in 0.4 s (the HUD draws
+	// ReboardAlpha). The step is capped so that the long frame in which the new place is built does not eat the fade-in
+	if (ReboardT >= 0)
+	{
+		ReboardT += FMath::Min(double(DeltaSeconds), .05);
+		if (bWarpPending && ReboardT >= .4) FinishWarp();
+		if (ReboardT >= .8) ReboardT = -1;
+	}
 	if (AKeysOnline* O = AKeysOnline::Get(this))
 	{
 		// log back in automatically if you were online last time

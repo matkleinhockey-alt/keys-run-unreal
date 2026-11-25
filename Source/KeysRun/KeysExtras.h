@@ -72,7 +72,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 
-	// ---- input. With bHandleKeys the actor polls Y (buddy) and J (shower) itself.
+	// ---- input. (The buddy boat and the shower had keys once; they are rows on the phone now, KeysPhone.cpp.)
 	bool bHandleKeys = true;
 	void ToggleBuddy();
 	void ToggleShower();

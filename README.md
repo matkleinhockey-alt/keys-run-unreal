@@ -33,15 +33,13 @@ Everyone who types the same crew code is in the same crew. You'll see their boat
 | Hold Space | cast; Space strikes when a fish bites |
 | R | reel in |
 | K / Space | keep / release a landed fish |
-| E | weigh in at a marina dock |
+| E | action: does what the prompt on screen says (weigh in, tie up and step ashore, dive in, climb aboard, use a counter) |
 | M | chart |
 | G | chartplotter and fish finder |
 | B | leaderboard |
 | L | log in / out of online play |
 | Esc | pause menu (settings, controls, leaderboard, quit) |
-| H | sea state |
-| O | sunset |
-| P | radio |
+| P | phone: travel (teleports), chart, radio, weather, boat switches, camera, crew, events, friends, gear, land office, settings |
 | 1 / V | helm view / first-person fishing view |
 
 ## Building it yourself

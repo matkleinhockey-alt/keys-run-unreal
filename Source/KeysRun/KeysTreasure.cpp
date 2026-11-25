@@ -209,7 +209,7 @@ void AKeysTreasure::Tick(float DeltaSeconds)
 	if (Reach < 0) return;
 	const FBox& B = All[Reach];
 	const TCHAR* What = B.Kind == EKind::Strongbox ? TEXT("strongbox") : B.Kind == EKind::Coins ? TEXT("coin spill") : B.Kind == EKind::Crate ? TEXT("cargo crate") : TEXT("ammunition can");
-	if (ReachDist <= ReachM) { Prompt = FString::Printf(TEXT("F  Prise open the %s"), What); bPromptKey = true; }
+	if (ReachDist <= ReachM) { Prompt = FString::Printf(TEXT("E  Prise open the %s"), What); bPromptKey = true; }
 	else
 	{
 		const TCHAR* Far = B.Kind == EKind::Coins ? TEXT("Coins in the sand") : B.Kind == EKind::AmmoCan ? TEXT("An ammunition can") : B.Kind == EKind::Crate ? TEXT("A cargo crate") : TEXT("A strongbox");

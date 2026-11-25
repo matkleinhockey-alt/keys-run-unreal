@@ -283,10 +283,11 @@ void AKeysAudio::HandleKeys()
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (!PC) return;
 	// menus and the login box have the keyboard (typing a name with an N in it shouldn't mute the game)
-	if (const AKeysBoatPawn* BP = Cast<AKeysBoatPawn>(PC->GetPawn()); BP && BP->IsCapturingKeys()) return;
-	if (PC->WasInputKeyJustPressed(EKeys::P)) MusicToggle();
-	if (PC->WasInputKeyJustPressed(EKeys::N)) ToggleSound();
-	if (PC->WasInputKeyJustPressed(EKeys::I)) ToggleEngines();
+	const AKeysBoatPawn* BP = Cast<AKeysBoatPawn>(PC->GetPawn());
+	if (BP && BP->IsCapturingKeys()) return;
+	// (P was the radio and N the sound: P is the phone now, and both are rows in its Radio app. KeysPhone.cpp)
+	// the motors are switched at the helm: not from the water or the dock
+	if (PC->WasInputKeyJustPressed(EKeys::I) && !(BP && (BP->IsDiving() || BP->IsAshore()))) ToggleEngines();
 }
 
 void AKeysAudio::UpdateListener()
@@ -540,7 +541,7 @@ void AKeysAudio::MusicOff()
 
 void AKeysAudio::MusicToggle()
 {
-	if (!bMusicOn) { bUserOff = false; PlayStation(2); AddToast(TEXT("Beno Bonanza - house music, four on the floor. P changes the station.")); }
+	if (!bMusicOn) { bUserOff = false; PlayStation(2); AddToast(TEXT("Beno Bonanza - house music, four on the floor. The phone (P) has the other stations.")); }
 	else if (Station == 2) { PlayStation(0); AddToast(TEXT("Margaritaville - easygoing island songs.")); }
 	else if (Station == 0) { PlayStation(1); AddToast(TEXT("Hip-hop station - boom-bap beats on the boat speakers.")); }
 	else if (Station == 1 && KeysUserMusic::Scan() > 0) PlayMyMusic();
