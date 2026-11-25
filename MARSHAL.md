@@ -31,7 +31,7 @@ once).
 | `rootlife` | Under the mangrove roots: thick schools, growth on the roots, snook and snapper in view (brief written by the marshal) | `lane/rootlife` | `../KeysRun-rootlife` | merged 2026-11-24 |
 | `reeflinks` | Reef behaviour links and the reef lanes' loose ends (brief written by the marshal) | `lane/reeflinks` | `../KeysRun-reeflinks` | merged 2026-11-24 |
 | `baitballs` | More bait balls in deep water, worked by big fish (brief written by the marshal) | `lane/baitballs` | `../KeysRun-baitballs` | merged 2026-11-24 |
-| `smooth` | Surfacing goes dark; the trolling strike smoother and sharper (brief written by the marshal) | `lane/smooth` | `../KeysRun-smooth` | running since 2026-11-24 (background agent) |
+| `smooth` | Surfacing goes dark; the trolling strike smoother and sharper (brief written by the marshal) | `lane/smooth` | `../KeysRun-smooth` | merged 2026-11-24 |
 
 Map Phase 3 becomes a lane after `upperkeys` merges. `docks` has no order against `upperkeys`: whichever is ready
 first merges first.
@@ -386,3 +386,17 @@ Lanes never edit these. They ask with the `marshal-request` skill.
   (as before the lane). Open: the shower and birds read small from the boat; the sounder never seen; Key Largo's
   root wall thin; growth pieces low-poly; open water between balls offshore is emptier (500-900 fish).
 - 2026-11-24: the user: surfacing "goes dark the screen", and the trolling strike should be "smoother and less pixelated". The marshal reproduced the first (J from the deep: the water stays dark about 7 s; exposure snap and camera cuts did not help, reverted) and opened `lane/smooth` from `main` (this entry) for both.
+- 2026-11-24: `smooth` merged (lane at 01be6c2, IN PROGRESS by its own status) with R2's stop-gap on `main`
+  (`KeysGeo.cpp` `GatherTrails`: a fish's splash, trail sources from 900000, leaves white water with no aerated
+  streak; the full fix, blending noise results in `OCEAN_FOAM` in `init_unreal.py`, is still open). Cause of the
+  dark surfacing, found by the lane: `M_KR_Underwater` divides its haze by the eye adaptation, so free auto exposure
+  under water ran away (1.5 to 0.05 in 10 s) and the deck took about 7 s to climb back; `KeysDiver` now holds the
+  exposure under water at the last deck value (switch `dv:exfix=0`), turns the underwater look off at once on
+  leaving the water and marks a camera cut. Marshal's run: J from 6 m gives 151-152 brightness at once (deck 149;
+  was 20 then 54-97 for 7 s). The trolling strike: a damped strike camera beyond the fish with the boat in frame,
+  one deliberate cut to the chair, eased aim and field of view, a 1.3 s glide to first person, jumps at the
+  swell's height, a smooth shake (switch `strikefix=0`); shown by the lane's runs, not re-run by the marshal (the
+  `trollraise=` hook needs lines out). Diving now holds deck exposure, so the reef no longer goes to silhouettes
+  after about 10 s. `tpcheck` 48, 0 bad; a goliath speared. Open: the strike at High; the first-person chair view
+  runs the render thread about 75 ms in the editor (also before the lane); trolling perf not settled (a 155-463
+  ms stall on the gull's text-to-speech line).
