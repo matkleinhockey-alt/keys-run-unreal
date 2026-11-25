@@ -250,7 +250,15 @@ public:
 	int32 RunSel = 0;
 	bool bGearOpen = false;   // the gear screen (Tab; web ui/gear.ts)
 	double LineBreakNow() const { return LineBreakAt(); }
-	void RunTo(int32 I);
+	void RunTo(int32 I, bool bFade = true);   // bFade: through black (the menu); the test script's runto= moves at once
+	// the action key (E, KeysAction.cpp): what it would do here and the words for the HUD; bDo does it
+	bool ContextAction(FString& OutPrompt, bool bDo = false);
+	bool bWarpPending = false;         // a teleport waiting for the screen to go black (ReboardT)
+	double WarpX = 0, WarpZ = 0;
+	FString WarpName;
+	void FinishWarp();
+	double BerthCheckT = -1;           // ContextAction's berth search, a few times a second
+	bool bBerthNear = false;
 	bool HasGear(const TCHAR* Effect) const { return Owned.Contains(Effect); }
 	void ShopBuy(int32 Index);
 	void ShopClose();
@@ -292,7 +300,7 @@ public:
 	struct FSvcCard { FString Kind, Title; TArray<FString> Lines; TArray<FString> Cells; int32 Prize = 0; double Age = 0, Life = 9; bool bOn = false; };
 	FSvcCard SvcCard;
 	double SleepT = -1;                // the motel's fade, seconds since it started (-1: none)
-	double ReboardT = -1;              // (no longer used: J from far off is a cut now, KeysBoatPawn ToggleDive; kept for the HUD's fade)
+	double ReboardT = -1;              // a teleport's fade through black (RunTo; advanced in Tick, drawn by the HUD). J from far off is a cut
 	double ReboardAlpha() const { return ReboardT < 0 ? 0 : ReboardT < .4 ? ReboardT / .4 : FMath::Max(0.0, 1 - (ReboardT - .4) / .4); }
 	bool bSleepBlack = false;
 	double SleepAlpha() const;

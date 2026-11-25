@@ -295,12 +295,12 @@ void AKeysWalker::FindInteract()
 		const double D = FMath::Sqrt(FMath::Square(U - I.U) + FMath::Square(V - I.V));
 		if (D > I.R || D >= Best) continue;
 		Best = D;
-		PromptText = TEXT("F  ") + I.Prompt;
+		PromptText = TEXT("E  ") + I.Prompt;
 		NearInteract = I.Id;
 		NearVenueId = I.Venue;
 		NearPlaque = I.Text;
 	}
-	if (NearInteract.IsEmpty() && BoardDistance() <= BoardReach) PromptText = TEXT("Q  Back aboard");
+	if (NearInteract.IsEmpty() && BoardDistance() <= BoardReach) PromptText = TEXT("E  Step aboard");
 }
 
 FString AKeysWalker::PlaceName() const

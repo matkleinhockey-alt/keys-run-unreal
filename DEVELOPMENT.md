@@ -300,7 +300,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | = | trolling: outriggers and lines out, hold trolling speed / lines in |
 | R (lines in) | Marathon race: start / abandon |
 | Esc, Fishing tournament | start / quit a fishing tournament |
-| E | weigh in at a marina dock |
+| E | action: does what the prompt on screen says (weigh in, tie up and step ashore, dive in, climb aboard, use a counter) |
 | F | auto-chase on/off |
 | H | sea state: sets the base wind the sea builds from (Calm, Choppy, Haulover, Big swell) |
 | O | sunset |

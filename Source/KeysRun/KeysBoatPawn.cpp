@@ -1120,7 +1120,7 @@ void AKeysBoatPawn::RunTestScript(double T)
 			}
 		}
 		else if (Cmd == TEXT("scubamode")) { const FString R = KeysScuba::ToggleMode(this); ShowToast(R, 4); UE_LOG(LogTemp, Log, TEXT("KRScuba mode: %s"), *R); }   // the 2 key, as pressed
-		else if (Cmd.StartsWith(TEXT("runto="))) RunTo(FCString::Atoi(*Cmd.Mid(6)));
+		else if (Cmd.StartsWith(TEXT("runto="))) RunTo(FCString::Atoi(*Cmd.Mid(6)), false);
 		else if (Cmd == TEXT("slots")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Open(!Sl->bOpen); }
 		else if (Cmd == TEXT("spin")) { if (AKeysSlots* Sl = AKeysSlots::Get(this)) Sl->Spin(); }
 		else if (Cmd.StartsWith(TEXT("view="))) View = FCString::Atoi(*Cmd.Mid(5));
@@ -1334,6 +1334,7 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 	if (Hit(EKeys::X)) { const FString Sw = D->SwapCylinder(); if (!Sw.IsEmpty()) ShowToast(Sw, 4); }
 	if (Hit(EKeys::J)) ToggleDive();
 	if (Hit(EKeys::F)) if (AKeysTreasure* Tr = AKeysTreasure::Get(this)) Tr->TryOpen();   // prise open a wreck's box (sim/treasure.ts)
+	if (Hit(EKeys::E)) { FString Act; ContextAction(Act, true); }   // the action key: the box in reach, or the ladder (KeysAction.cpp)
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) ShowToast(D->CycleView() + TEXT(" - press 1 to switch"));
 	// a speared catch: K keeps it, Space releases it (once the card has been up a moment)
 	if (FState == EKeysFish::Caught)
@@ -1484,6 +1485,7 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 	}
 	if (Hit(EKeys::Q)) ToggleAshore();
 	if (Hit(EKeys::F)) WalkInteract();
+	if (Hit(EKeys::E)) { FString Act; ContextAction(Act, true); }   // the action key: what the prompt names (KeysAction.cpp)
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne) || Hit(EKeys::V)) ShowToast(W->CycleView() + TEXT(" - press 1 to switch"));
 	if (Hit(EKeys::M)) bBigMap = !bBigMap;
 	if (Hit(EKeys::O))
@@ -1739,7 +1741,7 @@ bool AKeysBoatPawn::TeleportSpot(const FRunDest& D, double& OX, double& OZ) cons
 	return false;
 }
 
-void AKeysBoatPawn::RunTo(int32 I)
+void AKeysBoatPawn::RunTo(int32 I, bool bFade)
 {
 	TArray<FRunDest> Ds;
 	RunDests(Ds, true);
@@ -1752,13 +1754,25 @@ void AKeysBoatPawn::RunTo(int32 I)
 	if (!Why.IsEmpty()) { Menu = EMenu::None; ShowToast(Why); return; }
 	double NX, NZ;
 	if (!TeleportSpot(Ds[I], NX, NZ)) { Menu = EMenu::None; ShowToast(FString::Printf(TEXT("No clear water to put the boat at %s."), *Ds[I].Name)); return; }
+	Menu = EMenu::None;
+	WarpX = NX; WarpZ = NZ; WarpName = Ds[I].Name;
+	// from the menu the screen goes to black first and the boat moves under it (Tick), so the new place does not pop in
+	if (bFade) { bWarpPending = true; ReboardT = 0; return; }
+	FinishWarp();
+}
+
+void AKeysBoatPawn::FinishWarp()
+{
+	bWarpPending = false;
+	if (IsDiving() || IsAshore()) return;   // gone over the side or ashore while the screen was fading
+	if (bCharging || IsLineOut()) ReelIn(FString());
+	bCharging = false;
 	StopTroll(true);
-	X = NX; Z = NZ;
+	X = WarpX; Z = WarpZ;
 	Speed = Thr = DVX = DVZ = 0;
 	bCamInit = false;
 	if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
-	Menu = EMenu::None;
-	ShowToast(FString::Printf(TEXT("Teleported to %s."), *Ds[I].Name));
+	ShowToast(FString::Printf(TEXT("Teleported to %s."), *WarpName));
 }
 
 void AKeysBoatPawn::PrepareToLeaveHelm()
@@ -2152,8 +2166,11 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::Semicolon)) ToggleLights();   // the web game's L (which logs in here)
 	if (Hit(EKeys::E))
 	{
-		if (NearMarina(X, Z) && FMath::Abs(Speed) < 2.5) WeighIn();
-		else if (NearMarina(X, Z)) ShowToast(TEXT("Slow down to tie up at the dock."));
+		// the action key (KeysAction.cpp): weigh in, tie up, or over the side, as the prompt says. A notice ("Slow down
+		// to tie up") when there is something here but not yet
+		FString Act;
+		if (ContextAction(Act, true)) return;
+		if (!Act.IsEmpty()) ShowToast(Act);
 	}
 	if (Hit(EKeys::H))
 	{
@@ -4379,6 +4396,14 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	const bool bWantPause = bRunning && Menu != EMenu::None;
 	if (bWantPause != UGameplayStatics::IsGamePaused(this)) UGameplayStatics::SetGamePaused(this, bWantPause);
 	if (bWantPause) return;
+	// a teleport's fade (RunTo): to black in 0.4 s, the boat moved under it, back up in 0.4 s (the HUD draws
+	// ReboardAlpha). The step is capped so that the long frame in which the new place is built does not eat the fade-in
+	if (ReboardT >= 0)
+	{
+		ReboardT += FMath::Min(double(DeltaSeconds), .05);
+		if (bWarpPending && ReboardT >= .4) FinishWarp();
+		if (ReboardT >= .8) ReboardT = -1;
+	}
 	if (AKeysOnline* O = AKeysOnline::Get(this))
 	{
 		// log back in automatically if you were online last time

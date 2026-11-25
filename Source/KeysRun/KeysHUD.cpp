@@ -352,6 +352,21 @@ void AKeysHUD::DrawGame()
 	}
 	const FString Hint = bDive || bAshore || bGun ? FString() : P->Hint();
 	if (!Hint.IsEmpty()) Text(Hint, Canvas->SizeX * .5f, Canvas->SizeY - 44 * U, .95f, Dim, nullptr, true);
+	// the action key's prompt at the helm (KeysAction.cpp), above the hint: what E does here, or why not yet. Under
+	// water and ashore the prompts that were already there carry it; the touch layout has its own buttons
+	if (!bDive && !bAshore && !bGun && !TouchMode())
+	{
+		FString Act;
+		const bool bCan = P->ContextAction(Act);
+		if (!Act.IsEmpty())
+		{
+			float ActW = 0, ActH = 0;
+			GetTextSize(Act, ActW, ActH, GEngine->GetMediumFont(), 1.1f * U);
+			const float ActX = Canvas->SizeX * .5f, ActY = Canvas->SizeY - 104 * U;
+			Panel(ActX - ActW * .5f - 18 * U, ActY - 8 * U, ActW + 36 * U, ActH + 16 * U, .55f);
+			Text(Act, ActX, ActY, 1.1f, bCan ? Gold : Dim, nullptr, true);
+		}
+	}
 	if (P->bBoardOpen) DrawBoard(P);
 	if (P->bLoginOpen) DrawLogin(P);
 	DrawPanels(P);
@@ -497,7 +512,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 	static const FRow Fish[] = {
 		{TEXT("Hold Space"), TEXT("Power up a cast, release to throw")}, {TEXT("Space"), TEXT("Strike when a fish bites")},
 		{TEXT("Hold Space or Down arrow"), TEXT("Reel during the fight")}, {TEXT("T / Shift+T"), TEXT("Drag tighter / looser")}, {TEXT("R"), TEXT("Reel in")},
-		{TEXT("K / Space / T"), TEXT("Keep / release / tag and release the fish")}, {TEXT("E"), TEXT("Weigh in at a marina dock")}, {TEXT("F / V"), TEXT("Auto-chase / first-person view")},
+		{TEXT("K / Space / T"), TEXT("Keep / release / tag and release the fish")}, {TEXT("E"), TEXT("Action: what the prompt says")}, {TEXT("F / V"), TEXT("Auto-chase / first-person view")},
 		{TEXT("="), TEXT("Troll: riggers out, lines out, hold 5 kn")},
 		{TEXT("Cast at a wreck"), TEXT("Wreck fish (the crossed hulls on the chart)")}, {TEXT("Space, ashore"), TEXT("Fish from a pier, a dock or the marina's planks")}};
 	static const FRow More[] = {
@@ -1169,7 +1184,7 @@ void AKeysHUD::DrawDiving(AKeysBoatPawn* P, AKeysDiver* D)
 		if (bCrit) Text(TEXT("SURFACE NOW"), Cx, SH * .2f, 2.2f, FLinearColor(Red.R, Red.G, Red.B, Pulse), GEngine->GetLargeFont(), true);
 	}
 	else if (S.bNarcosis) Text(TEXT("Narcosis - the deep plays tricks down here"), PX + 18 * U, Yw, .82f, FLinearColor(.8f, .6f, 1.f));
-	if (D->CanReboard()) Text(TEXT("Press J to climb aboard"), Cx, SH - 120 * U, 1.2f, Gold, nullptr, true);
+	if (D->CanReboard()) Text(TEXT("Press E to climb aboard"), Cx, SH - 120 * U, 1.2f, Gold, nullptr, true);
 
 	// the reload prompt: brace, then press R to haul the bands back
 	if (!D->IsLoaded() && !D->HasSpeared() && !D->ShotInFlight())

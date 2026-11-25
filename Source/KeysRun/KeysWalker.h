@@ -48,6 +48,7 @@ public:
 	FVector Pos() const { return FVector(X, Y, Z); }
 	double BodyYaw() const { return Yaw; }
 	const FString& Prompt() const { return PromptText; }
+	bool PromptBoards() const { return !PromptText.IsEmpty() && NearInteract.IsEmpty(); }   // the prompt is the boat (KeysAction.cpp)
 	const FString& NearId() const { return NearInteract; }
 	const FString& NearVenue() const { return NearVenueId; }
 	const FString& NearText() const { return NearPlaque; }
