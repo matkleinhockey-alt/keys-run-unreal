@@ -1358,14 +1358,6 @@ void AKeysBoatPawn::HandleDiveInput(APlayerController* PC, float Dt)
 		else if (Hit(EKeys::SpaceBar) && GetWorld()->GetTimeSeconds() - CaughtT > 1.6) ReleaseFish();
 	}
 	if (Hit(EKeys::M)) bBigMap = !bBigMap;
-	if (Hit(EKeys::H))
-	{
-		const int32 I = (SeaIndex() + 1) % SeaStates().Num();
-		SetSeaState(I);
-		ShowToast(SeaStates()[I].Name + TEXT(" - ") + SeaStates()[I].Desc);
-	}
-	if (Hit(EKeys::O))
-		if (AKeysWorld* W = World()) { W->ToggleSunset(); ShowToast(W->IsSunset() ? TEXT("Sunset mode - golden hour over the Seven Mile Bridge.") : TEXT("Back to daylight.")); }
 }
 
 void AKeysBoatPawn::LandSpeared(const FString& InKey, double InWeight, double InFX, double InFZ)
@@ -1503,8 +1495,6 @@ void AKeysBoatPawn::HandleWalkInput(APlayerController* PC, float Dt)
 	if (Hit(EKeys::E)) { FString Act; ContextAction(Act, true); }   // the action key: what the prompt names (KeysAction.cpp)
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne) || Hit(EKeys::V)) ShowToast(W->CycleView() + TEXT(" - press 1 to switch"));
 	if (Hit(EKeys::M)) bBigMap = !bBigMap;
-	if (Hit(EKeys::O))
-		if (AKeysWorld* Wd = World()) { Wd->ToggleSunset(); ShowToast(Wd->IsSunset() ? TEXT("Sunset over the harbour - the neon comes on.") : TEXT("Back to daylight.")); }
 }
 
 void AKeysBoatPawn::WalkInteract()
@@ -2136,22 +2126,6 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		bAction = false;
 		if (bCharging) { bCharging = false; CastLine(Charge); }
 	}
-	if (Hit(EKeys::X))
-	{
-		// travel to Miami and back
-		double NX, NZ, NH;
-		FString Msg;
-		if (AKeysExtras::MiamiDestination(X, Z, Spec().Draft, NX, NZ, NH, Msg))
-		{
-			if (IsLineOut()) ReelIn(TEXT(""));
-			StopTroll(true);
-			X = NX; Z = NZ; H = NH;
-			Speed = Thr = DVX = DVZ = 0;
-			bCamInit = false;
-			if (AKeysWorld* Wd = World()) { Wd->FocusX = X; Wd->FocusZ = Z; }
-		}
-		ShowToast(Msg, 5);
-	}
 	if (Hit(EKeys::R) && (FState == EKeysFish::Waiting || FState == EKeysFish::Casting || FState == EKeysFish::Nibble)) ReelIn(TEXT("Line reeled in."));
 	else if (Hit(EKeys::R) && FState == EKeysFish::Idle && !bCharging)
 		if (AKeysEvents* Ev = AKeysEvents::Get(this))
@@ -2180,7 +2154,6 @@ void AKeysBoatPawn::HandleInput(float Dt)
 	if (Hit(EKeys::K) && T - CaughtT > .7) KeepFish();
 	if (Hit(EKeys::Equals) || Hit(EKeys::Add)) ToggleTroll();
 	if (Hit(EKeys::Nine)) if (AKeysHandgun* Gun = AKeysHandgun::Get(this)) Gun->Toggle();   // the boat pistol
-	if (Hit(EKeys::Semicolon)) ToggleLights();   // the web game's L (which logs in here)
 	if (Hit(EKeys::E))
 	{
 		// the action key (KeysAction.cpp): weigh in, tie up, or over the side, as the prompt says. A notice ("Slow down
@@ -2189,33 +2162,15 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		if (ContextAction(Act, true)) return;
 		if (!Act.IsEmpty()) ShowToast(Act);
 	}
-	if (Hit(EKeys::H))
-	{
-		const int32 I = (SeaIndex() + 1) % SeaStates().Num();
-		SetSeaState(I);
-		ShowToast(SeaStates()[I].Name + TEXT(" - ") + SeaStates()[I].Desc);
-	}
 	if (Hit(EKeys::F))
 	{
 		bAutoChase = !bAutoChase;
 		ShowToast(bAutoChase ? TEXT("Auto-chase on - the boat will follow hooked fish.") : TEXT("Auto-chase off - you drive during the fight."));
 	}
+	// (the sea state, sunset, the gearbox, the lights and the Miami run had keys of their own here - H, O, U, ; and X:
+	// they are rows on the phone now, KeysPhone.cpp)
 	if (Hit(EKeys::M)) bBigMap = !bBigMap;
 	if (Hit(EKeys::C)) CamZoom = CamZoom > 1.4 ? 1 : 1.9;
-	if (Hit(EKeys::O))
-	{
-		if (AKeysWorld* W = World())
-		{
-			W->ToggleSunset();
-			ShowToast(W->IsSunset() ? TEXT("Sunset mode - golden hour over the Seven Mile Bridge.") : TEXT("Back to daylight."));
-		}
-	}
-	if (Hit(EKeys::U))
-	{
-		Gear = (Gear + 1) % 3;
-		if (AKeysAudio* A = AKeysAudio::Get(this)) A->GearShift();
-		ShowToast(Gear == 0 ? TEXT("In gear - forward.") : Gear == 1 ? TEXT("Neutral - W revs the motors.") : TEXT("Reverse - W backs you down."));
-	}
 	if (Hit(EKeys::One) || Hit(EKeys::NumPadOne)) CycleView();
 	if (Hit(EKeys::V))
 	{
@@ -4379,7 +4334,7 @@ FString AKeysBoatPawn::Hint() const
 	if (bDriveOn && FState == EKeysFish::Idle) return TEXT("G shows the chartplotter and fish finder - [ ] zoom the chart - 1 switches view");
 	switch (FState)
 	{
-		case EKeysFish::Idle: return Kn > 3 ? TEXT("W/S throttle - A/D steer - H changes the sea state - O for sunset") : TEXT("Hold Space to power a cast - drag the mouse to aim");
+		case EKeysFish::Idle: return Kn > 3 ? TEXT("W/S throttle - A/D steer - P takes out the phone: travel, weather, radio") : TEXT("Hold Space to power a cast - drag the mouse to aim");
 		case EKeysFish::Casting:
 		case EKeysFish::Waiting: return TEXT("Watch the float - hold the down arrow to retrieve - R reels in");
 		case EKeysFish::Nibble: return TEXT("Nibble... wait for the float to go under");

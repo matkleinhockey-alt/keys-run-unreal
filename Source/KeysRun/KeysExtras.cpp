@@ -134,14 +134,7 @@ void AKeysExtras::Tick(float DeltaSeconds)
 		CamX = C.X / 100;
 		CamZ = C.Y / 100;
 	}
-	if (bHandleKeys && P->bRunning && !P->IsCapturingKeys() && !P->IsDiving() && !P->IsAshore())
-		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
-		{
-			if (PC->WasInputKeyJustPressed(EKeys::Y)) ToggleBuddy();
-			// with the pistol out Z is the flare (KeysHandgun.cpp)
-			const AKeysHandgun* Gun = AKeysHandgun::Get(this);
-			if (PC->WasInputKeyJustPressed(EKeys::Z) && !(Gun && Gun->IsOut())) ToggleShower();   // J is diving now, as in the web game
-		}
+	// (the buddy boat and the shower had keys here, Y and Z: they are on the phone's Crew app now, KeysPhone.cpp)
 
 	UpdateCrew(Dt, T);
 	CommitCrew(T);
@@ -188,8 +181,8 @@ bool AKeysExtras::MiamiDestination(double BoatX, double BoatZ, double Draft, dou
 	if (!bOk) { OutMsg = TEXT("Couldn't find open water there."); return false; }
 	OutH = bToMiami ? PI * .5 : 0;
 	OutMsg = bToMiami
-		? TEXT("Biscayne Bay - downtown Miami and Brickell off your bow, Miami Beach to the east. X runs you back to the Keys.")
-		: TEXT("Back in Boot Key Harbor, Marathon. X runs you up to Miami.");
+		? TEXT("Biscayne Bay - downtown Miami and Brickell off your bow, Miami Beach to the east. The phone's Travel app runs you back to the Keys.")
+		: TEXT("Back in Boot Key Harbor, Marathon. The phone's Travel app runs you up to Miami.");
 	return true;
 }
 
@@ -270,14 +263,14 @@ void AKeysExtras::ToggleBuddy()
 		BuddyBuild();
 		BuddyPlaceNear();
 		BuddyMesh->SetVisibility(true, true);
-		Toast(TEXT("Buddy is out - he'll keep his distance. Y sends him home."));
+		Toast(TEXT("Buddy is out - he'll keep his distance. The phone's Crew app sends him home."));
 	}
 	else
 	{
 		BuddyMesh->SetVisibility(false, true);
 		BuddyFish->SetVisibility(false);
 		bBJump = false;
-		Toast(TEXT("Your buddy headed back to the dock. Y calls him back out."));
+		Toast(TEXT("Your buddy headed back to the dock. The phone's Crew app calls him back out."));
 	}
 }
 

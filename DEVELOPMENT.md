@@ -129,7 +129,7 @@ so there are no hand-made assets. The editor script creates the materials and th
 - **The living sea:** pelican flocks, gulls, terns and frigatebirds; 40 bird piles that cycle into feeding frenzies; sargassum weedlines;
   four oil rigs you can fish (and hit); and visible schools of all the species with tuna that run down a bait left soaking offshore.
   Casting into a school bites faster and bigger, and rigs and weedlines have their own fish tables. All of it is marked on the chart.
-- **Extras:** the buddy boat (Y), the shower (Z), travel to Miami and back (X), the crew, party and flags on deck, Caelen the parrot,
+- **Extras:** the buddy boat, the shower and travel to Miami and back (all on the phone, P), the crew, party and flags on deck, Caelen the parrot,
   and Luigi mode: trim all the way up at speed and see what happens.
 - **Sky:** physically based sky, clouds, fog, and O for sunset over the Seven Mile Bridge. At sunset Sombrero Key Light's lens
   turns (`world/lighthouse.ts`: a bright narrow beam and a wide faint one, front and back, every 9 s, 620 m out) and the town
@@ -290,7 +290,6 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | W / S | throttle / reverse |
 | Down arrow (hold) | reel (and wind the float back in); backs the boat down only with no line out |
 | A / D | steer |
-| U | gear D → N → R |
 | T | trim mode (Up/Down trims); during a fight, T / Shift+T sets drag |
 | Space (hold) | power a cast |
 | Space | strike on the bite; hold to reel during a fight; release a landed fish |
@@ -302,8 +301,6 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Esc, Fishing tournament | start / quit a fishing tournament |
 | E | action: does what the prompt on screen says (weigh in, tie up and step ashore, dive in, climb aboard, use a counter) |
 | F | auto-chase on/off |
-| H | sea state: sets the base wind the sea builds from (Calm, Choppy, Haulover, Big swell) |
-| O | sunset |
 | M | big chart |
 | 1 | third person / first person from the helm |
 | V | first-person fishing view on / off |
@@ -312,11 +309,9 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | B | leaderboard (Tab or A / D switch tabs, B or Esc closes) |
 | I | motors on / off |
 | P | the phone (KeysPhone.cpp): a handset with a grid of apps. Travel (the teleport list), Chart, Radio, Weather, Boat, Camera, Crew, Events, Friends, Gear, Land, Settings. Arrows or W A S D move, Enter / Space / E choose, Left / Right change a setting, Esc back, the mouse works on every row. Not under water or with a fish on. Test script: `phone`, `phone=weather`, `phsel=N`, `phgo` |
+| P > an app | what had keys of their own before the phone: sea state (H), sunset (O), gearbox (U), sound (N), buddy boat (Y), shower (Z), the Miami run (X), underwater and cockpit lights (;). All are rows on the phone; sea state, sunset and sound are also in Esc > Settings |
 | L | log in to play online with friends / log out |
 | Esc | pause menu |
-| N | sound on / off |
-| Y | buddy boat |
-| Z | shower |
 | J | jump in to dive / back aboard (from anywhere) |
 | Q | tie up at a dock and go ashore / back aboard (twice when far: a cab back to the dock) |
 | **Ashore:** W A S D + mouse | walk where you look (Shift runs, arrow keys turn) |
@@ -324,7 +319,6 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | Space (on a pier, a dock or the marina's planks, facing the water) | cast from the shore; S reels, R reels in |
 | Up / Down + Enter, or 1-9 | pick and buy at a counter (F or Esc walks away) |
 | 1 | third person / first person |
-| X | travel to Miami and back |
 | C / mouse wheel | zoom |
 | **Diving:** W A S D + mouse | swim where you look |
 | Space / C (or Ctrl) | ascend / descend |
@@ -339,7 +333,6 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | R / Z | reload / fire a parachute flare |
 | , (comma) | the land office: Up / Down a lot, Left / Right the region, Enter buys or edits, Tab the build sheet |
 | Tab | gear screen |
-| ; (semicolon) | underwater and cockpit lights (the web game's L) |
 | Esc > Run to | Left / Right a destination, Enter goes |
 | **Casino counter**, F | a slot machine: Space spins, Left / Right the bet, Esc or F gets up |
 

@@ -507,7 +507,7 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 {
 	struct FRow { const TCHAR* K; const TCHAR* A; };
 	static const FRow Drive[] = {
-		{TEXT("W / S"), TEXT("Throttle / reverse")}, {TEXT("A / D"), TEXT("Steer")}, {TEXT("U"), TEXT("Gear: drive, neutral, reverse")},
+		{TEXT("W / S"), TEXT("Throttle / reverse")}, {TEXT("A / D"), TEXT("Steer")},
 		{TEXT("T, then Up / Down"), TEXT("Trim")}, {TEXT("I"), TEXT("Motors on / off")}, {TEXT("M"), TEXT("Chart")},
 		{TEXT("G"), TEXT("Chartplotter and fish finder ([ ] zoom)")}, {TEXT("1"), TEXT("Chase, helm or tuna tower camera")}, {TEXT("Mouse drag / wheel"), TEXT("Look around / zoom")}};
 	static const FRow Fish[] = {
@@ -517,11 +517,12 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("="), TEXT("Troll: riggers out, lines out, hold 5 kn")},
 		{TEXT("Cast at a wreck"), TEXT("Wreck fish (the crossed hulls on the chart)")}, {TEXT("Space, ashore"), TEXT("Fish from a pier, a dock or the marina's planks")}};
 	static const FRow More[] = {
-		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
-		{TEXT("O"), TEXT("Sunset: lighthouse beam, neon")}, {TEXT("P"), TEXT("Phone: travel, radio, weather, boat, camera")}, {TEXT("N"), TEXT("Sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
-		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}, {TEXT("R (lines in)"), TEXT("Marathon race; Esc for a tournament")},
-		{TEXT(", (comma)"), TEXT("Land office: buy and build on a lot")}, {TEXT("Tab"), TEXT("Gear: owned, carried, what it adds up to")},
-		{TEXT("; (semicolon)"), TEXT("Underwater and cockpit lights")}, {TEXT("P > Travel"), TEXT("Teleport to a marina, a reef, a hump, a rig")}};
+		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")},
+		{TEXT("P"), TEXT("Phone: everything below, and the settings")}, {TEXT("P > Travel"), TEXT("Teleport to a marina, a reef, a hump, a rig; Miami")},
+		{TEXT("P > Weather"), TEXT("Sea state; sunset (lighthouse beam, neon)")}, {TEXT("P > Radio"), TEXT("Stations; sound on / off")},
+		{TEXT("P > Boat"), TEXT("Gearbox, trim, lights, troll, fuel")}, {TEXT("P > Crew"), TEXT("Buddy boat, deck shower, pistol")},
+		{TEXT("R (lines in)"), TEXT("Marathon race; Esc for a tournament")},
+		{TEXT(", (comma)"), TEXT("Land office: buy and build on a lot")}, {TEXT("Tab"), TEXT("Gear: owned, carried, what it adds up to")}};
 	static const FRow Ashore[] = {
 		{TEXT("Q"), TEXT("Tie up and go ashore / back aboard")}, {TEXT("W A S D + mouse, 1"), TEXT("Walk (Shift runs), first / third person")},
 		{TEXT("F, then 1-9 / Enter"), TEXT("Use a counter, buy, read a sign")}, {TEXT("Casino counter"), TEXT("A slot machine: Space spins, Left / Right bets")}};
