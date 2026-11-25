@@ -311,7 +311,7 @@ To ship a standalone app: Platforms → Mac → Package Project.
 | [ / ] | chart range in / out |
 | B | leaderboard (Tab or A / D switch tabs, B or Esc closes) |
 | I | motors on / off |
-| P | radio station / off |
+| P | the phone (KeysPhone.cpp): a handset with a grid of apps. Travel (the teleport list), Chart, Radio, Weather, Boat, Camera, Crew, Events, Friends, Gear, Land, Settings. Arrows or W A S D move, Enter / Space / E choose, Left / Right change a setting, Esc back, the mouse works on every row. Not under water or with a fish on. Test script: `phone`, `phone=weather`, `phsel=N`, `phgo` |
 | L | log in to play online with friends / log out |
 | Esc | pause menu |
 | N | sound on / off |

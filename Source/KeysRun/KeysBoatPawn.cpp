@@ -513,7 +513,11 @@ void AKeysBoatPawn::OnHudClick(FName Box)
 	FString Id;
 	if (B.Split(TEXT(":"), nullptr, &Id))
 	{
-		if (B.StartsWith(TEXT("m:"))) MenuActivate(FName(*Id));
+		if (B.StartsWith(TEXT("ph:"))) { if (bPhoneOpen) PhoneClick(FCString::Atoi(*Id)); }
+		else if (B.StartsWith(TEXT("ph<:"))) { if (bPhoneOpen) PhoneClick(FCString::Atoi(*Id), -1); }
+		else if (B.StartsWith(TEXT("ph>:"))) { if (bPhoneOpen) PhoneClick(FCString::Atoi(*Id), 1); }
+		else if (B.StartsWith(TEXT("phb:"))) { if (bPhoneOpen) PhoneBack(); }
+		else if (B.StartsWith(TEXT("m:"))) MenuActivate(FName(*Id));
 		else if (B.StartsWith(TEXT("m<:"))) MenuActivate(FName(*Id), -1);
 		else if (B.StartsWith(TEXT("m>:"))) MenuActivate(FName(*Id), 1);
 		else if (B.StartsWith(TEXT("tab:"))) BoardTab = FCString::Atoi(*Id);
@@ -530,6 +534,12 @@ void AKeysBoatPawn::OnHudHover(FName Box)
 	// hovering a menu row selects it, so the mouse and the keyboard always agree
 	FString Id;
 	if (!Box.ToString().Split(TEXT(":"), nullptr, &Id)) return;
+	if (Box.ToString().StartsWith(TEXT("ph")))
+	{
+		// the phone's rows and apps (the back chevron is not one)
+		if (bPhoneOpen && !Box.ToString().StartsWith(TEXT("phb"))) PhoneSel = FCString::Atoi(*Id);
+		return;
+	}
 	TArray<FMenuItem> Items;
 	GetMenuItems(Items);
 	for (int32 i = 0; i < Items.Num(); i++) if (Items[i].Id == FName(*Id)) MenuSel = i;
@@ -673,6 +683,11 @@ void AKeysBoatPawn::RunTestScript(double T)
 		}
 		else if (Cmd.StartsWith(TEXT("seastate="))) SetSeaState(FMath::Clamp(FCString::Atoi(*Cmd.Mid(9)), 0, SeaStates().Num() - 1));
 		else if (Cmd == TEXT("esc")) { Menu = EMenu::Pause; MenuSel = 0; }
+		// the phone (KeysPhone.cpp): phone takes it out or puts it away; phone=weather opens an app; phsel=2 picks a row; phgo chooses it
+		else if (Cmd == TEXT("phone")) { if (bPhoneOpen) ClosePhone(); else if (CanUsePhone()) OpenPhone(); }
+		else if (Cmd.StartsWith(TEXT("phone="))) { if (!bPhoneOpen && CanUsePhone()) OpenPhone(); if (bPhoneOpen) { PhoneApp = NAME_None; PhoneActivate(FName(*(TEXT("app:") + Cmd.Mid(6)))); } }
+		else if (Cmd.StartsWith(TEXT("phsel="))) { PhoneSel = FCString::Atoi(*Cmd.Mid(6)); PhoneTop = FMath::Max(0, PhoneSel - PhoneVisRows + 1); }
+		else if (Cmd == TEXT("phgo")) { if (bPhoneOpen) PhoneClick(PhoneSel); }
 		else if (Cmd.StartsWith(TEXT("sel="))) MenuSel = FCString::Atoi(*Cmd.Mid(4));
 		else if (Cmd == TEXT("login")) { bLoginOpen = true; LoginField = 0; LoginName = TEXT("Mat"); LoginCrew = TEXT("keys"); }
 		else if (Cmd == TEXT("closeall")) { bLoginOpen = bBoardOpen = false; }
@@ -1975,6 +1990,8 @@ void AKeysBoatPawn::HandleInput(float Dt)
 		if (Hit(EKeys::Enter)) SubmitLogin();
 		return;
 	}
+	// the phone (P, KeysPhone.cpp): while it is out it has the keys
+	if (HandlePhoneInput(PC)) { bCharging = false; return; }
 	if (Hit(EKeys::L) && !bBoardOpen) { ToggleOnline(); return; }
 
 	// the leaderboard is modal, like the JS panel: B (or Esc) closes it, Tab / Left / Right switch tabs

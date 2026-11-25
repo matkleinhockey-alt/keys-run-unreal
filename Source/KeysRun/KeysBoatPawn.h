@@ -148,7 +148,23 @@ public:
 	void OnHudClick(FName Box);                    // a click on any HUD button (menus, leaderboard tabs, login box)
 	void OnHudHover(FName Box);
 	// true while a menu, the leaderboard or the login box owns the keyboard
-	bool IsCapturingKeys() const { return Menu != EMenu::None || bLoginOpen || bBoardOpen; }
+	bool IsCapturingKeys() const { return Menu != EMenu::None || bLoginOpen || bBoardOpen || bPhoneOpen; }
+	// ---- the phone (P, KeysPhone.cpp): a handset with a grid of apps; an app is a list of rows. Everything that used
+	// to be a key of its own (sea state, sunset, gearbox, lights, buddy boat, the teleports...) lives on it
+	static constexpr int32 PhoneCols = 3;       // the home screen's grid
+	static constexpr int32 PhoneVisRows = 9;    // rows of a list on the screen at once
+	bool bPhoneOpen = false;
+	FName PhoneApp;                 // none: the home screen
+	int32 PhoneSel = 0, PhoneTop = 0, PhoneHomeSel = 0;   // the row or app picked, a list's first row on screen, the app to come back to
+	double PhoneOpenT = 0;          // real seconds, when it came out (the HUD slides it up)
+	bool CanUsePhone() const;       // not under water, not with a fish on or a panel up
+	void OpenPhone();
+	void ClosePhone();
+	void PhoneBack();               // an app back to the grid, the grid away
+	void GetPhoneItems(TArray<FMenuItem>& Out) const;    // the apps on the home screen, or the open app's rows
+	void PhoneActivate(FName Id, int32 Dir = 0);         // Dir as MenuActivate's
+	void PhoneClick(int32 I, int32 Dir = 0);
+	bool HandlePhoneInput(class APlayerController* PC);  // true when the phone took this frame's keys
 	int32 BaitLeft() const { return BaitCasts; }
 
 	// ---- online (L): log in with a name and a crew code

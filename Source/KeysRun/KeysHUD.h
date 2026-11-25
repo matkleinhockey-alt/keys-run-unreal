@@ -109,6 +109,12 @@ private:
 	void DrawEstates(AKeysBoatPawn* P);
 	void DrawSlots(AKeysBoatPawn* P);
 	void DrawGear(AKeysBoatPawn* P);
+	// the phone (KeysPhone.cpp): the handset, its wallpaper, an app's drawn icon, a box with round corners
+	void DrawPhone(AKeysBoatPawn* P);
+	void BuildPhoneWallpaper();
+	void PhoneIcon(FName App, float X, float Y, float S);
+	void PhoneRound(float X, float Y, float W, float H, float R, const FLinearColor& C);
+	UPROPERTY() TObjectPtr<UTexture2D> PhoneWall;
 	UPROPERTY() TObjectPtr<UTexture2D> VignetteTex;
 	TArray<FColor> GpsPx;
 	double GpsCX = 0, GpsCZ = 0, GpsRange = -1, GpsT = 0;   // where the GPS texture was last drawn

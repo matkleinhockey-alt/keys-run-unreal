@@ -372,6 +372,7 @@ void AKeysHUD::DrawGame()
 	DrawPanels(P);
 	DrawServices(P);
 	DrawCharter(P);
+	if (P->bPhoneOpen) DrawPhone(P);   // KeysPhone.cpp
 	Contacts.Reset();
 }
 
@@ -517,10 +518,10 @@ void AKeysHUD::DrawControlsTable(float X, float Y, float W)
 		{TEXT("Cast at a wreck"), TEXT("Wreck fish (the crossed hulls on the chart)")}, {TEXT("Space, ashore"), TEXT("Fish from a pier, a dock or the marina's planks")}};
 	static const FRow More[] = {
 		{TEXT("Esc"), TEXT("Menu")}, {TEXT("B"), TEXT("Leaderboard")}, {TEXT("L"), TEXT("Play online / log out")}, {TEXT("H"), TEXT("Sea state")},
-		{TEXT("O"), TEXT("Sunset: lighthouse beam, neon")}, {TEXT("P / N"), TEXT("Radio / sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
+		{TEXT("O"), TEXT("Sunset: lighthouse beam, neon")}, {TEXT("P"), TEXT("Phone: travel, radio, weather, boat, camera")}, {TEXT("N"), TEXT("Sound")}, {TEXT("X"), TEXT("Travel to Miami and back")},
 		{TEXT("Y / Z"), TEXT("Buddy boat / shower")}, {TEXT("R (lines in)"), TEXT("Marathon race; Esc for a tournament")},
 		{TEXT(", (comma)"), TEXT("Land office: buy and build on a lot")}, {TEXT("Tab"), TEXT("Gear: owned, carried, what it adds up to")},
-		{TEXT("; (semicolon)"), TEXT("Underwater and cockpit lights")}, {TEXT("Esc > Run to"), TEXT("Run to a marina, a reef, a hump, a rig")}};
+		{TEXT("; (semicolon)"), TEXT("Underwater and cockpit lights")}, {TEXT("P > Travel"), TEXT("Teleport to a marina, a reef, a hump, a rig")}};
 	static const FRow Ashore[] = {
 		{TEXT("Q"), TEXT("Tie up and go ashore / back aboard")}, {TEXT("W A S D + mouse, 1"), TEXT("Walk (Shift runs), first / third person")},
 		{TEXT("F, then 1-9 / Enter"), TEXT("Use a counter, buy, read a sign")}, {TEXT("Casino counter"), TEXT("A slot machine: Space spins, Left / Right bets")}};

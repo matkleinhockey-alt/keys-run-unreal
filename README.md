@@ -41,7 +41,7 @@ Everyone who types the same crew code is in the same crew. You'll see their boat
 | Esc | pause menu (settings, controls, leaderboard, quit) |
 | H | sea state |
 | O | sunset |
-| P | radio |
+| P | phone: travel (teleports), chart, radio, weather, boat switches, camera, crew, events, friends, gear, land office, settings |
 | 1 / V | helm view / first-person fishing view |
 
 ## Building it yourself

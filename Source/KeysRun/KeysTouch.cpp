@@ -109,6 +109,8 @@ void AKeysHUD::BuildTouch(AKeysBoatPawn* P, TArray<FTouchCtl>& Out)
 	// modal panels first, in the order HandleInput gives them the keys
 	if (P->bLoginOpen) { PanelPad(false, TEXT("JOIN"), EKeys::Enter, TEXT("CLOSE"), EKeys::Escape); Side(1, TEXT("NEXT"), {EKeys::Tab}); return; }
 	if (P->bBoardOpen) { Main(TEXT("CLOSE"), {EKeys::B}); Side(0, TEXT("<"), {EKeys::Left}); Side(1, TEXT(">"), {EKeys::Right}); return; }
+	// the phone: its apps and rows are tapped directly; Back goes from an app to the grid, and from the grid away
+	if (P->bPhoneOpen) { Btn(TEXT("BACK"), G, G, Sm * 1.6f, Sm * .8f, {EKeys::Escape}); return; }
 	if (!P->bRunning || P->Menu != AKeysBoatPawn::EMenu::None)
 	{
 		// the menu rows are tapped directly; Back where there is somewhere to go back to
@@ -166,7 +168,7 @@ void AKeysHUD::BuildTouch(AKeysBoatPawn* P, TArray<FTouchCtl>& Out)
 		Main(TEXT("CAST"), {EKeys::SpaceBar}, Go);
 		Side(0, TEXT("USE"), {EKeys::F}, Warn);
 		Side(1, TEXT("RUN"), {EKeys::LeftShift});
-		Top(TEXT("ABOARD"), {EKeys::Q}); Top(TEXT("VIEW"), {EKeys::One}); Top(TEXT("MAP"), {EKeys::M}); Top(TEXT("GEAR"), {EKeys::Tab});
+		Top(TEXT("ABOARD"), {EKeys::Q}); Top(TEXT("VIEW"), {EKeys::One}); Top(TEXT("MAP"), {EKeys::M}); Top(TEXT("GEAR"), {EKeys::Tab}); Top(TEXT("PHONE"), {EKeys::P});
 		return;
 	}
 
@@ -184,7 +186,7 @@ void AKeysHUD::BuildTouch(AKeysBoatPawn* P, TArray<FTouchCtl>& Out)
 		Side(2, TEXT("WEIGH"), {EKeys::E}, Warn);
 	}
 	Top(TEXT("VIEW"), {EKeys::One}); Top(TEXT("ROD"), {EKeys::V}); Top(TEXT("MAP"), {EKeys::M}); Top(TEXT("SONAR"), {EKeys::G});
-	Top(TEXT("GEAR"), {EKeys::Tab}); Top(TEXT("DIVE"), {EKeys::J}); Top(TEXT("ASHORE"), {EKeys::Q});
+	Top(TEXT("GEAR"), {EKeys::Tab}); Top(TEXT("DIVE"), {EKeys::J}); Top(TEXT("ASHORE"), {EKeys::Q}); Top(TEXT("PHONE"), {EKeys::P});
 }
 
 // ---------------------------------------------------------------- fingers to keys, and drawing
