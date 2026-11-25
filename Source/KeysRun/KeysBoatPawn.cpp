@@ -1008,8 +1008,16 @@ void AKeysBoatPawn::RunTestScript(double T)
 			LureCamN = P.Num() ? FCString::Atoi(*P[0]) : -1;
 			if (P.Num() >= 4) LureCamOff = FVector(FCString::Atod(*P[1]), FCString::Atod(*P[2]), FCString::Atod(*P[3]));
 		}
+		else if (Cmd.StartsWith(TEXT("strikefix="))) StrikeFix = FCString::Atoi(*Cmd.Mid(10));   // 0: the old strike sequence (A/B)
+		else if (Cmd.StartsWith(TEXT("ftlog="))) FtLogUntil = GetWorld()->GetRealTimeSeconds() + FCString::Atod(*Cmd.Mid(6));   // KRStrike lines, one a frame
 		else if (Cmd == TEXT("trollin")) { if (bTrolling) ToggleTroll(); }
-		else if (Cmd == TEXT("trollraise")) { if (bTrolling && PendKey.IsEmpty()) TrollRaise(.9); }   // a fish comes up on the spread now
+		else if (Cmd == TEXT("trollraise") || Cmd.StartsWith(TEXT("trollraise=")))
+		{
+			// a fish comes up on the spread now (trollraise=<species>: that one), and eats in its own time
+			DbgTrollKey = Cmd.Len() > 11 ? Cmd.Mid(11) : FString();
+			if (bTrolling && PendKey.IsEmpty()) TrollRaise(.9);
+			DbgTrollKey.Reset();
+		}
 		else if (Cmd == TEXT("trollstrike") || Cmd.StartsWith(TEXT("trollstrike=")))
 		{
 			// trollstrike=<species>: that species takes the spread
@@ -1796,6 +1804,13 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		// first person (V): the seated angler's own view down the rod (UpdateCamera) once the opening shot is done;
 		// otherwise the cinematic below
 		if (bFpPref && ChairIntroT <= 0) return false;
+		if (bStrikeCam && StrikeFix > 0)
+		{
+			OutPos = ToUE(StrikeP.X, StrikeP.Y, StrikeP.Z);
+			OutRot = (ToUE(StrikeL.X, StrikeL.Y, StrikeL.Z) - OutPos).Rotation();
+			OutFov = float(StrikeFov);
+			return true;
+		}
 		// the chair fight from outside the boat, low off the stern quarter: side-on to the angler, so he, the chair and
 		// the bent rod fill the shot with the hull and the wake behind, and nothing (hardtop, tower, riggers) between.
 		// The lens sits on the side away from the fish, so the rod and line run off into the frame, holding that side
@@ -1804,7 +1819,7 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		const double Sole = KeysMesh::SoleAt(S, Base.X);
 		const FVector FishL = BT.InverseTransformPosition(FishW) / 100.0;
 		if (ChairCamSide == 0) ChairCamSide = FishL.Y > 0 ? 1 : -1;
-		else if (FishL.Y * ChairCamSide < -6) ChairCamSide = -ChairCamSide;
+		else if (FishL.Y * ChairCamSide < -6) { ChairCamSide = -ChairCamSide; bChairSideFlip = true; }
 		const double A = ChairYaw + ChairCamSide * 2.1, R = 8.0;
 		FVector LocalCam(Base.X + FMath::Cos(A) * R, Base.Y + FMath::Sin(A) * R, Sole + 3.0);
 		LocalCam.X = FMath::Min(LocalCam.X, Base.X + 2.6);   // never forward, toward the console and hardtop
@@ -1816,6 +1831,16 @@ bool AKeysBoatPawn::ExternalCamera(FVector& OutPos, FRotator& OutRot, float& Out
 		const FVector Look = Head + ToFish * 120.0;
 		OutRot = (Look - OutPos).Rotation();
 		OutFov = 46.f;
+		if (StrikeFix > 0)
+		{
+			// swing the aim part of the way toward the fish when it is near enough the frame, and open the lens to hold
+			// the angler and the line running out to it (UpdateCamera eases both)
+			const FVector DH = (Look - OutPos).GetSafeNormal(), DF = (FishW - OutPos).GetSafeNormal();
+			const double Ang = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(DH, DF), -1.0, 1.0)));
+			const double K = .4 * (1 - FMath::Clamp((Ang - 45) / 20, 0.0, 1.0));
+			OutRot = FQuat::Slerp(DH.ToOrientationQuat(), DF.ToOrientationQuat(), float(K)).Rotator();
+			OutFov = float(FMath::Clamp(2 * (1 - K) * Ang * (K > 0 ? 1.0 : 0.0) + 22, 46.0, 72.0));
+		}
 		return true;
 	}
 	ChairCamSide = 0;
@@ -2485,7 +2510,12 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	// a trolled fish on: a few seconds of the chair shot (your buddy strapping in, rod bent) before first person takes over
 	{
 		const bool bChair = InChair();
-		if (bChair && !bWasInChair) { ChairIntroT = 1.5; ChairIntroAge = 0; ChairIntroJump = 0; }   // the hit: third person, then first person
+		if (bChair && !bWasInChair)
+		{
+			// the hit: third person, then first person
+			ChairIntroT = 1.5; ChairIntroAge = 0; ChairIntroJump = 0;
+			bStrikeCam = StrikeFix > 0; bStrikeInit = false; bChairInit = false;
+		}
 		bWasInChair = bChair;
 		// watch the first jump in third person, then 1.5 s on the guy in the chair (later jumps, a tail-walk, don't hold it;
 		// and never more than 6 s in all)
@@ -2497,11 +2527,35 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 			if (ChairIntroAge > 6) ChairIntroT = 0;
 		}
 		ChairIntroT = FMath::Max(0.0, ChairIntroT - Dt);
+		// out on the water with the fish through the hit and its first jump (or 3 s if it doesn't jump); then the one cut
+		// of the sequence, to the angler in the chair for the beat before first person
+		if (bStrikeCam)
+		{
+			const bool bEnd = !bChair || ChairIntroJump == 2 || (ChairIntroJump == 0 && ChairIntroAge > 3.0) || ChairIntroAge > 4.5;
+			if (bEnd)
+			{
+				bStrikeCam = false;
+				if (bChair && ChairIntroAge <= 6) { ChairIntroT = FMath::Max(ChairIntroT, 1.5); bCutNow = true; }
+			}
+			else { ChairIntroT = FMath::Max(ChairIntroT, .2); UpdateStrikeCam(Dt, T); }
+		}
 	}
 	if (InChair() && (!bFpPref || ChairIntroT > 0)) bFpOn = false;   // the chair cinematic: the angler is in the shot, not your own rod and hands
 	{
 		FVector EP; FRotator ER; float EF;
 		bExtCam = ExternalCamera(EP, ER, EF);
+		if (bExtCam && StrikeFix > 0 && InChair() && !bStrikeCam && !bDbgCam)
+		{
+			// the chair shot rides the boat, but its aim and lens follow the fish on springs, not frame by frame
+			const FVector Lw = EP + ER.Vector() * 1000.0;
+			if (!bChairInit || bCutNow) { ChairLookS = Lw; ChairLookV = FVector::ZeroVector; ChairFovS = EF; bChairInit = true; }
+			const double W = 3.5, Dd = FMath::Min(Dt, .05);
+			ChairLookV += ((Lw - ChairLookS) * (W * W) - ChairLookV * (2 * W)) * Dd;
+			ChairLookS += ChairLookV * Dd;
+			ChairFovS = FMath::Lerp(ChairFovS, double(EF), 1 - FMath::Exp(-Dt * 2.0));
+			ER = (ChairLookS - EP).Rotation();
+			EF = float(ChairFovS);
+		}
 		if (bExtCam) { Camera->SetWorldLocationAndRotation(EP, ER); Camera->SetFieldOfView(EF); return; }
 	}
 	const FBoatSpec& S = Spec();
@@ -2577,7 +2631,7 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 		FVector P = BT.TransformPosition(Eye * 100.0);
 		if (!bDragging) { DYaw *= 1 - FMath::Min(1.0, Dt * 1.2); DPitch *= 1 - FMath::Min(1.0, Dt * 1.2); }
 		const FQuat Look = FRotator(FMath::RadiansToDegrees(DPitch + LookDown), -FMath::RadiansToDegrees(DYaw), 0).Quaternion();
-		if (Shake > 0) P += FVector(FMath::FRand() - .5, FMath::FRand() - .5, FMath::FRand() - .5) * Shake * 15;
+		if (Shake > 0) P += ShakeOffset(T) * Shake * 15;
 		Camera->SetWorldLocationAndRotation(P, (BT.GetRotation() * Look).Rotator());
 		return;
 	}
@@ -2806,10 +2860,19 @@ void AKeysBoatPawn::UpdateCamera(double Dt, double T)
 	const bool bFishCam = ApplyFishCam(Dt, T, ShotPos, ShotLook);
 	// keep the lens out of the water (but for the fish cam, which is meant to be under it)
 	const double Surf = WaveH(CamPos.X, CamPos.Z, T, AmpAt(CamPos.X, CamPos.Z), false);
-	if (CamPos.Y < Surf + .6) CamPos.Y = Surf + .6;
+	if (StrikeFix > 0)
+	{
+		// eased: low over a swell (the raise shot beside a lure) the floor came up a metre in a frame as each crest
+		// passed under the lens
+		const double Fl = Surf + .75;
+		if (CamFloorS < -1e8) CamFloorS = Fl;
+		CamFloorS = FMath::Lerp(CamFloorS, Fl, 1 - FMath::Exp(-Dt / (Fl > CamFloorS ? .1 : .45)));
+		if (CamPos.Y < CamFloorS) CamPos.Y = CamFloorS;
+	}
+	else if (CamPos.Y < Surf + .6) CamPos.Y = Surf + .6;
 	if (!bFishCam) { ShotPos = CamPos; ShotLook = CamLook; }
 	FVector P = ToUE(ShotPos.X, ShotPos.Y, ShotPos.Z);
-	if (Shake > 0) P += FVector(FMath::FRand() - .5, FMath::FRand() - .5, FMath::FRand() - .5) * Shake * 60;
+	if (Shake > 0) P += ShakeOffset(T) * Shake * 60;
 	const FVector L = ToUE(ShotLook.X, ShotLook.Y, ShotLook.Z);
 	Camera->SetWorldLocationAndRotation(P, (L - P).Rotation());
 	// the landing close-up fills the frame with white deck in full sun: stop the lens down for it, and ease the bloom
@@ -2838,6 +2901,25 @@ void AKeysBoatPawn::SmoothCameraCuts(double Dt)
 	// (and never through the surface: a shot that starts or ends under the water - the hooked fish's underwater cam -
 	// cuts, as a lens can't glide out of the sea)
 	auto Under = [this](const FVector& U) { return U.Z / 100.0 < WaveH(U.X / 100.0, U.Y / 100.0, GetWorld()->GetTimeSeconds(), AmpAt(U.X / 100.0, U.Y / 100.0)) - .05; };
+	if (bCutNow)
+	{
+		// the one cut of the trolling strike (from the water to the chair): a clean one, the upscaler's history dropped
+		bCutNow = false;
+		CutT = -1;
+		LastCamMode = Mode;
+		LastCamLoc = WantLoc; LastCamRot = WantRot; LastCamFov = WantFov;
+		bHaveLastCam = true;
+		bChairSideFlip = false;
+		if (APlayerController* PC = Cast<APlayerController>(GetController())) if (PC->PlayerCameraManager) PC->PlayerCameraManager->SetGameCameraCutThisFrame();
+		return;
+	}
+	if (bChairSideFlip && bHaveLastCam && StrikeFix > 0 && Mode == LastCamMode && CutT < 0)
+	{
+		// the chair shot changing sides as the fish crosses: glide round, don't jump
+		CutFromLoc = LastCamLoc; CutFromRot = LastCamRot; CutFromFov = LastCamFov;
+		CutT = 0; CutDur = 1.4;
+	}
+	bChairSideFlip = false;
 	if (bHaveLastCam && Mode != LastCamMode && FVector::Dist(WantLoc, LastCamLoc) < 6000 && !Under(WantLoc) && !Under(LastCamLoc))
 	{
 		// glide from wherever the lens was this instant (mid-glide too) to the new shot: quicker into the landing, which
@@ -2845,6 +2927,7 @@ void AKeysBoatPawn::SmoothCameraCuts(double Dt)
 		CutFromLoc = LastCamLoc; CutFromRot = LastCamRot; CutFromFov = LastCamFov;
 		CutT = 0;
 		CutDur = (Mode & 8) ? .55 : .85;
+		if (StrikeFix > 0 && (Mode & 2) && (LastCamMode & 1) && InChair()) CutDur = 1.3;   // out of the chair shot into his eyes, gently
 	}
 	LastCamMode = Mode;
 	FVector Loc = WantLoc;
@@ -2865,6 +2948,84 @@ void AKeysBoatPawn::SmoothCameraCuts(double Dt)
 	}
 	LastCamLoc = Loc; LastCamRot = Rot; LastCamFov = Fov;
 	bHaveLastCam = true;
+}
+
+void AKeysBoatPawn::UpdateStrikeCam(double Dt, double T)
+{
+	const FVector Fu = FishMesh->GetComponentLocation() / 100.0;
+	const FVector Fish(Fu.X, Fu.Z, Fu.Y);   // game metres
+	const double Wf = WaveH(Fish.X, Fish.Z, T, AmpAt(Fish.X, Fish.Z));
+	// under the surface it is framed at the surface; in the air the aim follows it up
+	const FVector Aim(Fish.X, FMath::Max(Fish.Y, Wf - .2), Fish.Z);
+	const FVector Boat(X, Y + 1.6, Z);
+	FVector2D Away(Fish.X - X, Fish.Z - Z);
+	const double Dl = Away.Size();
+	Away = Dl > 1 ? Away / Dl : FVector2D(FMath::Sin(H), FMath::Cos(H));   // (astern)
+	const FVector2D Side(-Away.Y, Away.X);
+	if (!bStrikeInit)
+	{
+		// from wherever the lens is (the raise shot beside the lure, or the chase camera), on whichever side it is
+		const FVector Cu = Camera->GetComponentLocation() / 100.0, Fw = Camera->GetForwardVector();
+		StrikeP = FVector(Cu.X, Cu.Z, Cu.Y);
+		StrikeL = StrikeP + FVector(Fw.X, Fw.Z, Fw.Y) * FMath::Max(3.0, FVector::Dist(StrikeP, Aim));
+		StrikePV = StrikeLV = FVector::ZeroVector;
+		StrikeFov = Camera->FieldOfView;
+		StrikeSide = FVector2D::DotProduct(FVector2D(StrikeP.X - Fish.X, StrikeP.Z - Fish.Z), Side) >= 0 ? 1 : -1;
+		bStrikeInit = true;
+	}
+	auto Ease = [](double V) { V = FMath::Clamp(V, 0.0, 1.0); return V * V * (3 - 2 * V); };
+	// beyond the fish from the boat and off to the side, easing back and up as the fight opens, so the boat comes into
+	// the frame behind it
+	const double U = Ease(ChairIntroAge / 2.5), Fl = FMath::Max(1.0, FishLen);
+	const double D = FMath::Lerp(7.0 + Fl * 1.5, 11.0 + Fl * 3.0, U), Ht = FMath::Lerp(2.2, 3.4 + Fl * .4, U);
+	const double A = FMath::DegreesToRadians(38.0);
+	const FVector2D Dir = Away * FMath::Cos(A) + Side * (StrikeSide * FMath::Sin(A));
+	FVector WantP(Fish.X + Dir.X * D, Wf + Ht, Fish.Z + Dir.Y * D);
+	WantP.Y = FMath::Max(WantP.Y, WaveH(WantP.X, WantP.Z, T, AmpAt(WantP.X, WantP.Z)) + 1.2);
+	// aimed between the fish and the boat (more on the fish), so both are in
+	const FVector DF = (Aim - StrikeP).GetSafeNormal(), DB = (Boat - StrikeP).GetSafeNormal();
+	const FVector WantL = StrikeP + (DF * .65 + DB * .35).GetSafeNormal() * FMath::Max(3.0, FVector::Dist(StrikeP, Aim));
+	// critically damped springs: no jolt when it hits or leaps
+	auto Spring = [Dt](FVector& P, FVector& V, const FVector& Goal, double W)
+	{
+		const double Dd = FMath::Min(Dt, .05);
+		V += ((Goal - P) * (W * W) - V * (2 * W)) * Dd;
+		P += V * Dd;
+	};
+	Spring(StrikeP, StrikePV, WantP, 2.6);
+	Spring(StrikeL, StrikeLV, WantL, 4.0);
+	StrikeP.Y = FMath::Max(StrikeP.Y, WaveH(StrikeP.X, StrikeP.Z, T, AmpAt(StrikeP.X, StrikeP.Z)) + .8);
+	// a lens wide enough for both (horizontal degrees), eased
+	const FVector Ld = (StrikeL - StrikeP).GetSafeNormal();
+	auto AngTo = [&](const FVector& P) { return FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Ld, (P - StrikeP).GetSafeNormal()), -1.0, 1.0))); };
+	const double WantFov = FMath::Clamp(2 * FMath::Max(AngTo(Boat), AngTo(Aim)) + 18, 40.0, 75.0);
+	StrikeFov = FMath::Lerp(StrikeFov, WantFov, 1 - FMath::Exp(-Dt * 2.5));
+}
+
+// the jolt of a strike, a wave slap, a gust: a quick wobble of the lens, each axis within +-0.5. It was a new random
+// offset every frame, which the temporal upscaler cannot follow (the whole frame breaks up into its raw pixels)
+FVector AKeysBoatPawn::ShakeOffset(double T) const
+{
+	if (StrikeFix <= 0) return FVector(FMath::FRand() - .5, FMath::FRand() - .5, FMath::FRand() - .5);
+	auto W = [T](double F1, double P1, double F2, double P2) { return (FMath::Sin(T * F1 + P1) + .5 * FMath::Sin(T * F2 + P2)) / 3.0; };
+	return FVector(W(21, .3, 47, 1.1), W(19, 2.0, 43, .7), W(23, 4.0, 51, 2.9));
+}
+
+void AKeysBoatPawn::LogStrikeFrame(double T)
+{
+	if (!Camera) return;
+	if (GetWorld()->GetRealTimeSeconds() > FtLogUntil) { FtLogUntil = -1; return; }
+	const FVector L = Camera->GetComponentLocation();
+	const FQuat Q = Camera->GetComponentQuat();
+	const double Moved = FVector::Dist(L, FtLastLoc), Turned = FMath::RadiansToDegrees(Q.AngularDistance(FtLastRot));
+	FtLastLoc = L; FtLastRot = Q;
+	const FVector F = FishMesh ? FishMesh->GetComponentLocation() : FVector::ZeroVector;
+	const FRotator R = Q.Rotator();
+	UE_LOG(LogTemp, Log, TEXT("KRStrike t %.3f dt %.1f game %.1f draw %.1f gpu %.1f | cam %.0f %.0f %.0f yaw %.1f pitch %.1f fov %.1f moved %.0f cm turned %.1f deg | ext %d fp %d chairT %.2f jumpN %d jumping %d look %.2f cut %.2f fishcam %.2f raise %.2f state %d | fish %.1f m up %.2f m jq %d"),
+		T, FApp::GetDeltaTime() * 1000, FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()),
+		L.X, L.Y, L.Z, R.Yaw, R.Pitch, Camera->FieldOfView, Moved, Turned,
+		bExtCam ? 1 : 0, bFpOn ? 1 : 0, ChairIntroT, ChairIntroJump, bJumping ? 1 : 0, JumpLook, CutT, FishCamT, RaiseCamT, int32(FState), FVector::Dist(F, L) / 100,
+		F.Z / 100 - WaveH(F.X / 100, F.Y / 100, GetWorld()->GetTimeSeconds(), AmpAt(F.X / 100, F.Y / 100)), JumpQ);
 }
 
 void AKeysBoatPawn::TriggerFishCam(double Hold)
@@ -3112,6 +3273,8 @@ void AKeysBoatPawn::StartJump(bool bLow)
 	JRun = bLow ? Lf * 1.6 : 3 + Lf;
 	JH = bLow ? .5 + Lf * .22 : 1.6 + Lf * .9;
 	JSpin = Rand(-1, 1);
+	JW0 = WaveH(FX, FZ, GetWorld()->GetTimeSeconds(), AmpAt(FX, FZ));
+	JY0 = FishLen * .09 + Deep;
 	if (!bLow && JumpStyle == 2)
 	{
 		// a skyrocket: straight up out of the water, well clear of it, and back down nearly where it left
@@ -3143,7 +3306,13 @@ void AKeysBoatPawn::UpdateJump(double Dt)
 		if (AKeysLife* L = AKeysLife::Get(this)) L->Splash(FX, FZ, bJumpLow ? 30 : 60 + FMath::RoundToInt(FishLen * 14), bJumpLow ? 1.2 : 1.9 + FishLen * .25);
 		return;
 	}
-	const double PX = JX + JDX * JRun * P, PZ = JZ + JDZ * JRun * P, PY = -.5 + 4 * JH * P * (1 - P);
+	const double PX = JX + JDX * JRun * P, PZ = JZ + JDZ * JRun * P;
+	// out of the sea where it was (riding the swell, as it swims) and back into the sea where it comes down: offshore
+	// the swell is taller than a greyhounding leap, and an arc over the flat sea level hid most jumps under it and
+	// snapped the fish down by the swell's height on the takeoff
+	const double PY = StrikeFix > 0
+		? FMath::Lerp(JW0, WaveH(PX, PZ, GetWorld()->GetTimeSeconds(), AmpAt(PX, PZ)), P) - FMath::Lerp(JY0, .5, P) + 4 * JH * P * (1 - P)
+		: -.5 + 4 * JH * P * (1 - P);
 	// a tail-walk throws spray the whole way
 	if (bJumpLow && PY < .7 && FMath::FRand() < Dt * 14)
 		if (AKeysLife* L = AKeysLife::Get(this)) L->Splash(PX, PZ, 5, .7);
@@ -3983,6 +4152,8 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 {
 	// the chair fight's own cameras take the jump cam too (it swings and zooms from where they put the lens)
 	if (IsDiving() || (bExtCam && (!InChair() || bDbgCam))) return;
+	// the trolling strike's shots frame the jump themselves (the zoom swung the lens off the angler onto a fish 70 m out)
+	if (StrikeFix > 0 && bExtCam && InChair()) { JumpLook = 0; JumpFov = Camera->FieldOfView; return; }
 	// only once the fish is breaking the surface (zooming onto it under water just fills the frame with sea)
 	bool bOn = bJumping && FState == EKeysFish::Fight;
 	if (bOn)
@@ -3993,7 +4164,9 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 	// after the hit's first jump: 1.5 s on the guy in the chair, unzoomed, before first person takes over
 	const bool bChairBeat = InChair() && ChairIntroJump == 2 && ChairIntroT > 0;
 	if (bChairBeat) bOn = false;
-	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, bOn ? 3.0 : bChairBeat ? 5.0 : 1.2);
+	// (in the chair, first person: a gentler swing onto the jump than a cast fish's)
+	const double SwingK = StrikeFix > 0 && InChair() ? .55 : 1.0;
+	JumpLook = FMath::FInterpConstantTo(JumpLook, bOn ? 1.0 : 0.0, Dt, (bOn ? 3.0 : bChairBeat ? 5.0 : 1.2) * SwingK);
 	// the chair cameras set their own field of view each frame: start the zoom from it and hand it back after
 	if (bExtCam && !bOn && JumpLook < .001) { JumpFov = Camera->FieldOfView; return; }
 	float Want = bExtCam ? Camera->FieldOfView : KeysMangroveEco::CloserFov();   // (88 but in the closer look at a mangrove shore)
@@ -4020,7 +4193,7 @@ void AKeysBoatPawn::UpdateJumpCam(double Dt)
 		const float MinFov = IsFirstPerson() ? 32.f : 11.f;
 		Want = FMath::Clamp(float(FMath::RadiansToDegrees(2 * FMath::Atan(Across * .5 / FMath::Max(D, 1.0)))), MinFov, 88.f);
 	}
-	JumpFov = FMath::FInterpTo(JumpFov, Want, Dt, bOn ? 4.f : 1.8f);
+	JumpFov = FMath::FInterpTo(JumpFov, Want, Dt, (bOn ? 4.f : 1.8f) * float(SwingK));
 	Camera->SetFieldOfView(JumpFov);
 	if (JumpLook > .001)
 	{
@@ -4250,6 +4423,7 @@ void AKeysBoatPawn::Tick(float DeltaSeconds)
 	EndShoreSwap();
 	UpdateSpread(Dt, T);
 	UpdateReleaseAnim(Dt);
+	if (FtLogUntil >= 0) LogStrikeFrame(T);
 	if (LureCamN >= 0 && LureCamN < NumStations && bSpreadOut)
 	{
 		// test only (lurecam=N): sit just off the side of a trolled lure, looking at it
